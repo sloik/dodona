@@ -13,7 +13,7 @@ dodona is a tool an AI agent can ask that question, so nobody has to take the ag
 | | |
 |---|---|
 | **Stage** | Design. There is no kernel and nothing to run yet |
-| **Exists** | Architecture, data model, 24 proposed decisions, draft protocol schemas, two formal models |
+| **Exists** | Architecture, data model, 25 proposed decisions, draft protocol schemas, two formal models |
 | **Checked so far** | 6 of 36 design claims, by a bounded model check of a small instance. That says nothing yet about any implementation; see [the claims table](spec/CLAIMS.md) |
 | **Guarded by** | Automatic checks on every change: a gap that is found becomes a check ([list](docs/gap-checks.md)) |
 | **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |

@@ -52,3 +52,4 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0022](0022-open-project-published-as-it-evolves.md) | An open project, published as it evolves | proposed, owner direction |
 | [0023](0023-stage-0-checks-run-in-ci-with-disposable-helpers.md) | Stage-0 checks run in CI, with disposable helpers | proposed, owner direction |
 | [0024](0024-separation-is-graded-not-enforced.md) | Separation of the checker from the work is graded, not enforced | proposed, owner direction |
+| [0025](0025-the-first-seed-kernel.md) | The first seed kernel, its language and what it may claim | proposed, owner direction |
