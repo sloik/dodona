@@ -47,7 +47,7 @@ Verifiers, builders and conformance checkers never start tools ([decision 0007](
 
 Every run in the loop is recorded in the evidence. A provider may add declared inputs only before the first run is submitted, because the evidence key is fixed at that point. Every later run in the same check may name only tools and inputs already in the key; anything else ends the check in `error`.
 
-A **run description** names: the program as an exact file inside a pinned tool tree, the argument list, the input files, the declared outputs, limits, the target platform, and the tool digests expected. The executor's final report names the platform and tool digests it actually ran; any difference is an `error`.
+A **run description** (see [messages.schema.json](messages.schema.json)) names: the program as an exact file inside a pinned tool tree, the argument list, the input files, the declared outputs, limits, the target platform, and the tool digests expected. The executor's final report names the platform and tool digests it actually ran; any difference is an `error`.
 
 ## Schemas
 
@@ -57,8 +57,14 @@ A **run description** names: the program as an exact file inside a pinned tool t
 | [provider-manifest.schema.json](provider-manifest.schema.json) | What a provider announces |
 | [evidence-record.schema.json](evidence-record.schema.json) | One ledger entry |
 | [act-record.schema.json](act-record.schema.json) | One act of judgement, with what is needed to grade how separate the actor was from the work |
+| [messages.schema.json](messages.schema.json) | Every line on the wire: hello, the manifest answer, request, result, error and shutdown envelopes; the request and result body of every capability; the run description and the executor's report; what the indexers and enumeration return |
+| [lock.schema.json](lock.schema.json) | The lock: providers and tools pinned to exact versions, one digest and entry point per platform, upstream source, requirement closure |
+| [policy.schema.json](policy.schema.json) | What must pass: required obligations and intents, minimum evidence, the gate floor, acceptable providers, executors and record origins, the separation floor per kind of act |
+| [status.schema.json](status.schema.json) | The result of the agent-facing `status` command, with its error object and error codes |
 
-Still to be written: request and result messages per capability, the run description, the submission and outcome ledger entries, the lock, policy, the configuration reference, the canonical encoding with its test vectors, the normative path check with its test vectors, and the agent interface.
+Two documents sit beside the schemas: the [configuration reference](../docs/configuration.md) for `dodona.toml`, and [writing a provider](../docs/writing-a-provider.md), a walkthrough with a worked session whose every JSON line validates against these schemas.
+
+Still to be written: the submission and outcome ledger entries, the canonical encoding with its test vectors, the normative path check with its test vectors, the agent interface beyond `status` (the shapes of `resolve`, `index`, `plan`, `run`, `explain`, `review` and `reproduce`), the file format and location of the lock and the policy, and a conformance kit that judges a provider. The shapes in the new schemas have not been run against a kernel; none exists.
 
 ## Rules for every message
 

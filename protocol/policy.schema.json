@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sloik/dodona/protocol/policy.schema.json",
+  "title": "Policy",
+  "description": "Draft 0.2. What must pass, and how strongly (decisions 0014, 0018, 0020, 0024). Kept apart from the configuration the working agent edits. A field left out means the policy states nothing on that point; where the documents decide what then happens, the description of the field says so, and where they do not it says not decided. The policy's identity is the hash of this file, computed by the kernel. How policy is protected from the agent it constrains is not decided. Top-level objects accept extra fields under an x- prefix; nested objects are closed.",
+  "type": "object",
+  "required": [
+    "policy"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "policy": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "Policy format version."
+    },
+    "required": {
+      "type": "object",
+      "description": "With no obligation and no intent required, project status is nothing-required and never a pass.",
+      "additionalProperties": false,
+      "properties": {
+        "obligations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/required_obligation"
+          },
+          "description": "Obligations that must be passed."
+        },
+        "intents": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/name"
+          },
+          "description": "Intents whose obligations, over all descendants, must be passed, and which must be delivered."
+        },
+        "reproducibility": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/obligation_ref"
+          },
+          "description": "Obligations for which the kernel derives a reproducibility obligation: records with one core key on at least two platforms must agree at the level chosen in configuration."
+        }
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/platform"
+      },
+      "description": "Platforms on which an obligation is required when it does not say. Default: the platform of the executor bound to it (MODEL.md section 4)."
+    },
+    "minimum": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strength_rank": {
+          "enum": [
+            "exhaustive",
+            "bounded",
+            "sampled",
+            "documented"
+          ],
+          "description": "Least rank of evidence accepted, strongest first: exhaustive, bounded, sampled, documented. A status reports the weakest rank among its records."
+        },
+        "shown": {
+          "type": "object",
+          "description": "Least shown level (weakest evidence link) a criterion needs, by gate, for it to count in the score and for a hard gate to count as passed at the demanded level. The scale runs proven, bounded, sampled, observed, asserted, none, strongest first.",
+          "additionalProperties": false,
+          "properties": {
+            "hard": {
+              "$ref": "common.schema.json#/$defs/assurance"
+            },
+            "soft": {
+              "$ref": "common.schema.json#/$defs/assurance"
+            },
+            "deferred": {
+              "$ref": "common.schema.json#/$defs/assurance"
+            }
+          }
+        },
+        "non_vacuity": {
+          "type": "boolean",
+          "description": "Every planted defect of a required obligation must itself be passed. Default false."
+        },
+        "isolation": {
+          "$ref": "common.schema.json#/$defs/isolation",
+          "description": "Least isolation level of the runs. Scale: enforced, best-effort, none, strongest first. Default none, which asks nothing."
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "description": "The floor an owner's choices cannot go below without it showing. An intent below it is unguarded.",
+      "additionalProperties": false,
+      "properties": {
+        "min_hard": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Fewest hard gates an intent and its descendants must have, in total."
+        },
+        "min_hard_percent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Smallest share of criteria, over an intent and its descendants, that must have a hard gate. Whole per cent."
+        },
+        "max_deferred_days": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Longest limit, in days, a deferred gate may have."
+        },
+        "varying": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_runs": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Fewest runs for a check on something that varies."
+            },
+            "min_agree_percent": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Least share of those runs that must agree. Whole per cent."
+            }
+          }
+        }
+      }
+    },
+    "accept": {
+      "type": "object",
+      "description": "Who and what is acceptable.",
+      "additionalProperties": false,
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Provider names whose records count. Left out: not decided."
+        },
+        "executors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Executor names whose runs count. Left out: not decided."
+        },
+        "record_origins": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "writer",
+              "key"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "writer": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string",
+                "description": "Identifier of the key whose signature must verify."
+              }
+            }
+          },
+          "description": "Origins, other than this kernel installation, whose records are reusable. Left out: only records this kernel wrote are reusable (ARCHITECTURE section 7)."
+        },
+        "attestors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "harness",
+              "key"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "harness": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Harnesses whose signature makes a fact attested. Left out: nothing is attested, so no fact is better than declared."
+        },
+        "platform_independence": {
+          "type": "boolean",
+          "description": "Whether a verified platform-independence claim lets a record from another platform stand in. Default false."
+        }
+      }
+    },
+    "separation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "floor": {
+          "type": "object",
+          "description": "The least separation, and the least fact source, at which each kind of act takes effect. Below it: confirm-baseline leaves the intent a draft, match-check caps the criterion at asserted, grant-amendment is recorded and does not take effect, close-deferred leaves the gate open, change-policy does not take effect. Left out for a kind: the sensible default of decision 0024, which is apart for grant-amendment and change-policy, helper for close-deferred, and self for the other two, with source declared.",
+          "additionalProperties": false,
+          "properties": {
+            "confirm-baseline": {
+              "$ref": "#/$defs/floor"
+            },
+            "match-check": {
+              "$ref": "#/$defs/floor"
+            },
+            "grant-amendment": {
+              "$ref": "#/$defs/floor"
+            },
+            "close-deferred": {
+              "$ref": "#/$defs/floor"
+            },
+            "change-policy": {
+              "$ref": "#/$defs/floor"
+            }
+          }
+        }
+      }
+    },
+    "reference": {
+      "type": "string",
+      "description": "The line of the project whose policy file is the reference policy. The kernel reports any difference between the policy in force and it (decision 0014). Default: the main line. dodona.toml also has a reference key; which of the two governs is not decided."
+    }
+  },
+  "patternProperties": {
+    "^x-": {}
+  },
+  "$defs": {
+    "obligation_ref": {
+      "type": "object",
+      "required": [
+        "binding",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "name": {
+          "$ref": "common.schema.json#/$defs/name"
+        }
+      }
+    },
+    "required_obligation": {
+      "type": "object",
+      "required": [
+        "binding",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "name": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/platform"
+          },
+          "description": "Platforms this obligation is required on."
+        }
+      }
+    },
+    "floor": {
+      "type": "object",
+      "required": [
+        "level"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "$ref": "common.schema.json#/$defs/separation"
+        },
+        "source": {
+          "$ref": "common.schema.json#/$defs/fact_source",
+          "description": "Least fact source, strongest first: checked, attested, declared."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sloik/dodona/protocol/messages.schema.json",
+  "title": "Provider protocol messages",
+  "description": "Draft 0.2. Every line exchanged between kernel and provider is one of these messages. Top-level objects accept extra fields under an x- prefix; nested objects are closed. Bulk data never travels in a message: files are referred to by relative path in the working directory of the request, with their identity. Below protocol 1.0 there is no compatibility promise.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/hello"
+    },
+    {
+      "$ref": "#/$defs/manifest_message"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/result"
+    },
+    {
+      "$ref": "#/$defs/error"
+    },
+    {
+      "$ref": "#/$defs/shutdown"
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Chosen by the kernel, unique within a session. The answer carries the same id."
+    },
+    "file_ref": {
+      "type": "object",
+      "description": "A file in the working directory of the request, by relative path, with the identity of its bytes. Bulk data never travels in a message; this is how it is referred to.",
+      "required": [
+        "path",
+        "identity"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "common.schema.json#/$defs/relpath"
+        },
+        "identity": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "name": {
+          "$ref": "common.schema.json#/$defs/name",
+          "description": "Optional: the definition, artifact or other node this file materialises."
+        }
+      }
+    },
+    "tool_tree": {
+      "type": "object",
+      "description": "A pinned tool tree made available to the request.",
+      "required": [
+        "name",
+        "version",
+        "digest",
+        "root"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Tool name as in the lock."
+        },
+        "version": {
+          "type": "string",
+          "description": "Exact version from the lock."
+        },
+        "digest": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "root": {
+          "$ref": "common.schema.json#/$defs/relpath",
+          "description": "Directory in the working directory that holds the pinned tool tree."
+        }
+      }
+    },
+    "tool_digest": {
+      "type": "object",
+      "required": [
+        "name",
+        "digest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "common.schema.json#/$defs/identity"
+        }
+      }
+    },
+    "evidence_link": {
+      "enum": [
+        "specification-code",
+        "code-runs",
+        "runs-world"
+      ],
+      "description": "The three evidence links of MODEL.md section 5: specification to code, code to what runs, what runs to the world."
+    },
+    "rejected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "code"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "$ref": "common.schema.json#/$defs/relpath"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "Stable machine-readable code: lowercase words joined by hyphens."
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Every file the provider could not index, with a reason code. A file is never dropped silently."
+    },
+    "definition": {
+      "type": "object",
+      "required": [
+        "name",
+        "identity",
+        "depends_on",
+        "granularity",
+        "files"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "identity": {
+          "$ref": "common.schema.json#/$defs/identity",
+          "description": "A function of content alone: never of time, location or machine (decision 0004)."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/name"
+          },
+          "description": "Names this definition depends on, sorted by UTF-8 bytes. Names are scoped by the binding that indexed them. A dependency on a name indexed by another binding is not decided."
+        },
+        "granularity": {
+          "enum": [
+            "definition",
+            "module",
+            "file"
+          ],
+          "description": "The granularity actually achieved for this definition."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/relpath"
+          },
+          "description": "Files that materialise the definition for a tool to read, sorted by UTF-8 bytes."
+        }
+      }
+    },
+    "obligation": {
+      "type": "object",
+      "description": "One obligation as enumerated by a provider (MODEL.md section 3).",
+      "required": [
+        "name",
+        "kind",
+        "specified_by",
+        "targets",
+        "expect",
+        "config"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "common.schema.json#/$defs/name",
+          "description": "Stable locator within the binding. Survives edits to the content."
+        },
+        "kind": {
+          "enum": [
+            "check",
+            "build",
+            "conformance"
+          ],
+          "description": "reproducibility obligations are derived by the kernel and never enumerated by a provider."
+        },
+        "specified_by": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/name"
+          },
+          "description": "Definition names, sorted."
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/name"
+          },
+          "description": "Definition or artifact names, sorted."
+        },
+        "expect": {
+          "enum": [
+            "holds",
+            "violated"
+          ]
+        },
+        "defect_of": {
+          "$ref": "common.schema.json#/$defs/name",
+          "description": "For a planted defect: the name, in the same binding, of the obligation whose check it must break. Present exactly when expect is violated."
+        },
+        "config": {
+          "type": "object",
+          "description": "Bounds, flags, seeds, worker counts and limits. Provider-defined; integers, strings, booleans, arrays and objects only, no floating point. The kernel hashes it into the core key."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "expect": {
+                "const": "violated"
+              }
+            },
+            "required": [
+              "expect"
+            ]
+          },
+          "then": {
+            "required": [
+              "defect_of"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "defect_of"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "obligation_in_check": {
+      "type": "object",
+      "description": "The obligation to decide, as the provider enumerated it, with its binding.",
+      "required": [
+        "binding",
+        "name",
+        "kind",
+        "specified_by",
+        "targets",
+        "expect",
+        "config"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "name": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "kind": {
+          "enum": [
+            "check",
+            "build",
+            "conformance"
+          ]
+        },
+        "specified_by": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/name"
+          }
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/name"
+          }
+        },
+        "expect": {
+          "enum": [
+            "holds",
+            "violated"
+          ]
+        },
+        "config": {
+          "type": "object"
+        }
+      }
+    },
+    "run_limits": {
+      "type": "object",
+      "required": [
+        "wall_ms",
+        "output_bytes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "wall_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Longest the run may take, in milliseconds on a monotonic clock."
+        },
+        "memory_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "output_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Most captured output kept."
+        }
+      }
+    },
+    "run_description": {
+      "type": "object",
+      "description": "What to run (decision 0007). A verifier describes a run; it never starts one.",
+      "required": [
+        "program",
+        "args",
+        "inputs",
+        "outputs",
+        "limits",
+        "platform",
+        "tools"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "program": {
+          "type": "object",
+          "description": "The program to start, as a relative path inside a pinned tool tree.",
+          "required": [
+            "tool",
+            "path"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "tool": {
+              "type": "string",
+              "description": "Name of a tool in the pinned closure."
+            },
+            "path": {
+              "$ref": "common.schema.json#/$defs/relpath",
+              "description": "Exact file inside that tool's tree."
+            }
+          }
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Argument list. Never a string meant for a shell."
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "description": "Input files in the run's working directory, sorted by path."
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "$ref": "common.schema.json#/$defs/relpath"
+              },
+              "optional": {
+                "type": "boolean",
+                "default": false
+              }
+            }
+          },
+          "description": "Output files the run is expected to leave, sorted by path. A missing non-optional output is an error."
+        },
+        "limits": {
+          "$ref": "#/$defs/run_limits"
+        },
+        "platform": {
+          "$ref": "common.schema.json#/$defs/platform",
+          "description": "The platform the run targets."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tool_digest"
+          },
+          "description": "Digests of every tool in the closure the run expects, including runtimes, sorted by name. The executor reports what it actually ran; any difference is an error."
+        }
+      }
+    },
+    "run_report": {
+      "type": "object",
+      "description": "The executor's final report on a run. The kernel compares platform and tools_ran with the run description; a difference is an error, never a result.",
+      "required": [
+        "handle",
+        "end",
+        "platform",
+        "tools_ran",
+        "isolation",
+        "captured_output",
+        "outputs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "handle": {
+          "type": "string",
+          "description": "The executor's handle for the run."
+        },
+        "end": {
+          "enum": [
+            "exited",
+            "timed-out",
+            "cancelled",
+            "limit-exceeded"
+          ],
+          "description": "How the run ended. Anything but exited ends the check in error."
+        },
+        "exit_status": {
+          "type": "integer",
+          "description": "Present when end is exited."
+        },
+        "platform": {
+          "$ref": "common.schema.json#/$defs/platform",
+          "description": "The platform the run actually executed on."
+        },
+        "tools_ran": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tool_digest"
+          },
+          "description": "Tool digests actually run."
+        },
+        "isolation": {
+          "$ref": "common.schema.json#/$defs/isolation"
+        },
+        "captured_output": {
+          "$ref": "#/$defs/file_ref",
+          "description": "The raw captured output. Its identity is the output digest in the evidence record."
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "description": "The declared output files that exist, by relative path and identity."
+        }
+      },
+      "if": {
+        "properties": {
+          "end": {
+            "const": "exited"
+          }
+        },
+        "required": [
+          "end"
+        ]
+      },
+      "then": {
+        "required": [
+          "exit_status"
+        ]
+      }
+    },
+    "final_check": {
+      "type": "object",
+      "description": "A final verdict. strength is required for passed and failed.",
+      "required": [
+        "verdict"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "verdict": {
+          "enum": [
+            "passed",
+            "failed",
+            "error",
+            "unsupported"
+          ],
+          "description": "The verdicts a provider may give. pending and unavailable are never the provider's to give."
+        },
+        "reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "For error and unsupported: why."
+        },
+        "trusted_base": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Assumptions specific to this result, such as axioms a proof used."
+        },
+        "summary": {
+          "type": "object",
+          "description": "Provider-defined. Only fields the manifest lists as comparable are compared across platforms."
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "description": "Logs, counterexamples and diagnostics. A failure found by a tool carries its counterexample here."
+        },
+        "strength": {
+          "$ref": "common.schema.json#/$defs/strength"
+        }
+      },
+      "if": {
+        "properties": {
+          "verdict": {
+            "enum": [
+              "passed",
+              "failed"
+            ]
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "required": [
+          "strength"
+        ]
+      }
+    },
+    "final_build": {
+      "type": "object",
+      "description": "Final result of a build. The manifest gives artifact.build no strength, so none is carried here.",
+      "required": [
+        "verdict"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "verdict": {
+          "enum": [
+            "passed",
+            "failed",
+            "error",
+            "unsupported"
+          ],
+          "description": "The verdicts a provider may give. pending and unavailable are never the provider's to give."
+        },
+        "reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "For error and unsupported: why."
+        },
+        "trusted_base": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Assumptions specific to this result, such as axioms a proof used."
+        },
+        "summary": {
+          "type": "object",
+          "description": "Provider-defined. Only fields the manifest lists as comparable are compared across platforms."
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "description": "Logs, counterexamples and diagnostics. A failure found by a tool carries its counterexample here."
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "description": "Build outputs by relative path and identity. Each becomes an artifact node named by the producing obligation and the path."
+        },
+        "deterministic": {
+          "type": "boolean",
+          "description": "Whether this build is byte-identical on repeat. Honoured only if the manifest allows artifact reproducibility."
+        }
+      },
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "passed"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "required": [
+          "outputs",
+          "deterministic"
+        ]
+      }
+    },
+    "declared": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/file_ref"
+      },
+      "description": "Further inputs the provider declares. Allowed only in the answer that carries the first run of a check; the evidence key is fixed when that run is submitted. Later runs may name only tools and inputs already in the key."
+    },
+    "run_result_request": {
+      "type": "object",
+      "description": "Sent by the kernel after a run described by next has ended. The output files named in the report are in the working directory.",
+      "required": [
+        "op",
+        "report"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "run.result"
+        },
+        "report": {
+          "$ref": "#/$defs/run_report"
+        }
+      }
+    },
+    "check_start": {
+      "type": "object",
+      "required": [
+        "op",
+        "obligation",
+        "inputs",
+        "tools",
+        "platform"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "start"
+        },
+        "obligation": {
+          "$ref": "#/$defs/obligation_in_check"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "description": "Materialised inputs: specification and target files, and input artifacts, sorted by path."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tool_tree"
+          },
+          "description": "Pinned tool trees available, sorted by name."
+        },
+        "platform": {
+          "$ref": "common.schema.json#/$defs/platform",
+          "description": "The platform the run will target."
+        }
+      }
+    },
+    "conformance_start": {
+      "type": "object",
+      "required": [
+        "op",
+        "obligation",
+        "inputs",
+        "tools",
+        "platform",
+        "mapping"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "start"
+        },
+        "obligation": {
+          "$ref": "#/$defs/obligation_in_check"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "description": "Materialised inputs: specification and target files, and input artifacts, sorted by path."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tool_tree"
+          },
+          "description": "Pinned tool trees available, sorted by name."
+        },
+        "platform": {
+          "$ref": "common.schema.json#/$defs/platform",
+          "description": "The platform the run will target."
+        },
+        "mapping": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "minItems": 1,
+          "description": "Files that map the specification onto the implementation, with their identities."
+        }
+      }
+    },
+    "check_request": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/check_start"
+        },
+        {
+          "$ref": "#/$defs/run_result_request"
+        }
+      ]
+    },
+    "conformance_request": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/conformance_start"
+        },
+        {
+          "$ref": "#/$defs/run_result_request"
+        }
+      ]
+    },
+    "check_result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Run this, then send the report back as a run.result request.",
+          "required": [
+            "next"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "next": {
+              "$ref": "#/$defs/run_description"
+            },
+            "declared": {
+              "$ref": "#/$defs/declared"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "The check is decided.",
+          "required": [
+            "final"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "final": {
+              "$ref": "#/$defs/final_check"
+            }
+          }
+        }
+      ],
+      "description": "Exactly one of next or final."
+    },
+    "build_result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Run this, then send the report back as a run.result request.",
+          "required": [
+            "next"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "next": {
+              "$ref": "#/$defs/run_description"
+            },
+            "declared": {
+              "$ref": "#/$defs/declared"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "The check is decided.",
+          "required": [
+            "final"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "final": {
+              "$ref": "#/$defs/final_build"
+            }
+          }
+        }
+      ],
+      "description": "Exactly one of next or final."
+    },
+    "conformance_result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Run this, then send the report back as a run.result request.",
+          "required": [
+            "next"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "next": {
+              "$ref": "#/$defs/run_description"
+            },
+            "declared": {
+              "$ref": "#/$defs/declared"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "The check is decided.",
+          "required": [
+            "final"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "final": {
+              "$ref": "#/$defs/final_check"
+            }
+          }
+        }
+      ],
+      "description": "Exactly one of next or final."
+    },
+    "criterion": {
+      "type": "object",
+      "required": [
+        "id",
+        "statement",
+        "gate",
+        "links"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/name",
+          "description": "Unique within the intent."
+        },
+        "statement": {
+          "type": "string"
+        },
+        "gate": {
+          "$ref": "common.schema.json#/$defs/gate"
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "An obligation that checks this criterion.",
+            "required": [
+              "binding",
+              "obligation"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "binding": {
+                "$ref": "common.schema.json#/$defs/name"
+              },
+              "obligation": {
+                "$ref": "common.schema.json#/$defs/name"
+              },
+              "varying": {
+                "type": "object",
+                "description": "Declared in advance for a check on something that varies: how many runs, and how many must agree (decision 0018). agree is at most runs.",
+                "required": [
+                  "runs",
+                  "agree"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "runs": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "agree": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          },
+          "description": "checked-by links, sorted by binding then obligation. An empty list means the criterion is uncovered."
+        },
+        "condition": {
+          "type": "string",
+          "description": "Deferred gates only: what is to be observed, in plain words."
+        },
+        "limit_days": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Deferred gates only: days after the intent is first reported delivered by which the observation must be made. The kernel derives the due date; no date takes part in identity."
+        },
+        "not_applicable": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence_link"
+          },
+          "description": "Evidence links the owner declared not applicable. Honoured only in a confirmed baseline."
+        }
+      },
+      "if": {
+        "properties": {
+          "gate": {
+            "const": "deferred"
+          }
+        },
+        "required": [
+          "gate"
+        ]
+      },
+      "then": {
+        "required": [
+          "condition",
+          "limit_days"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "condition"
+              ]
+            },
+            {
+              "required": [
+                "limit_days"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "intent": {
+      "type": "object",
+      "description": "An intent as read from a file. The kernel computes the intent's identity from these fields over the canonical encoding (protocol/canonical-encoding.md); the provider does not supply one.",
+      "required": [
+        "name",
+        "file",
+        "statement",
+        "owner",
+        "criteria",
+        "children",
+        "touches"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "common.schema.json#/$defs/name",
+          "description": "The intent's id."
+        },
+        "file": {
+          "$ref": "common.schema.json#/$defs/relpath"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "person",
+                "agent"
+              ]
+            }
+          }
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/criterion"
+          }
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/name"
+          },
+          "description": "Names of child intents, sorted."
+        },
+        "touches": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/name"
+          },
+          "description": "What the intent expects to touch: definition names or path prefixes, sorted."
+        },
+        "confirmation": {
+          "type": "object",
+          "description": "The owner's record that confirms a baseline. baseline is the intent identity that was confirmed. Absent means the intent is a draft.",
+          "required": [
+            "baseline",
+            "by"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "baseline": {
+              "$ref": "common.schema.json#/$defs/identity"
+            },
+            "by": {
+              "type": "string"
+            },
+            "ticket": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "amendment": {
+      "type": "object",
+      "description": "A recorded change to criteria or gates (decision 0020). The separation level of the act is computed by the kernel from the act record, never taken from here.",
+      "required": [
+        "name",
+        "intent",
+        "changes",
+        "reason",
+        "granted_by"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "intent": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "what",
+              "from",
+              "to"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "what": {
+                "type": "string",
+                "description": "Which part changed, as a path such as criteria/2/gate."
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            }
+          },
+          "minItems": 1
+        },
+        "reason": {
+          "type": "string"
+        },
+        "granted_by": {
+          "type": "string"
+        },
+        "ticket": {
+          "type": "string"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": [
+        "name",
+        "identity",
+        "file",
+        "status",
+        "governs",
+        "supersedes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "identity": {
+          "$ref": "common.schema.json#/$defs/identity",
+          "description": "Hash of the record, chosen by the provider as a function of content alone."
+        },
+        "file": {
+          "$ref": "common.schema.json#/$defs/relpath"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "proposed",
+            "accepted",
+            "superseded",
+            "rejected"
+          ],
+          "description": "The provider maps its own vocabulary onto these four (decision 0001)."
+        },
+        "governs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "common.schema.json#/$defs/name"
+              },
+              "identity": {
+                "$ref": "common.schema.json#/$defs/identity",
+                "description": "The identity the governed name had when the decision was written."
+              }
+            }
+          }
+        },
+        "supersedes": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/name"
+          }
+        }
+      }
+    },
+    "req_intent_index": {
+      "type": "object",
+      "required": [
+        "binding",
+        "files"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "description": "Claimed files, sorted by path."
+        }
+      }
+    },
+    "req_decision_index": {
+      "type": "object",
+      "required": [
+        "binding",
+        "files"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "description": "Claimed files, sorted by path."
+        }
+      }
+    },
+    "req_definition_index": {
+      "type": "object",
+      "required": [
+        "binding",
+        "files"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          },
+          "description": "Claimed files, sorted by path."
+        }
+      }
+    },
+    "res_intent_index": {
+      "type": "object",
+      "required": [
+        "intents",
+        "amendments",
+        "rejected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "intents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/intent"
+          }
+        },
+        "amendments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/amendment"
+          }
+        },
+        "rejected": {
+          "$ref": "#/$defs/rejected"
+        }
+      }
+    },
+    "res_decision_index": {
+      "type": "object",
+      "required": [
+        "decisions",
+        "rejected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/decision"
+          }
+        },
+        "rejected": {
+          "$ref": "#/$defs/rejected"
+        }
+      }
+    },
+    "res_definition_index": {
+      "type": "object",
+      "required": [
+        "definitions",
+        "rejected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "definitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/definition"
+          }
+        },
+        "rejected": {
+          "$ref": "#/$defs/rejected"
+        }
+      }
+    },
+    "req_obligation_enumerate": {
+      "type": "object",
+      "description": "The binding and its indexed definitions, with the materialising files in the working directory.",
+      "required": [
+        "binding",
+        "definitions",
+        "files"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "definitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/definition"
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file_ref"
+          }
+        }
+      }
+    },
+    "res_obligation_enumerate": {
+      "type": "object",
+      "required": [
+        "obligations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "obligations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/obligation"
+          }
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "code"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "common.schema.json#/$defs/name"
+              },
+              "code": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$",
+                "description": "Stable machine-readable code: lowercase words joined by hyphens."
+              },
+              "detail": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Definitions the provider could not turn into an obligation, with a reason code."
+        }
+      }
+    },
+    "req_obligation_check": {
+      "$ref": "#/$defs/check_request"
+    },
+    "res_obligation_check": {
+      "$ref": "#/$defs/check_result"
+    },
+    "req_artifact_build": {
+      "$ref": "#/$defs/check_request"
+    },
+    "res_artifact_build": {
+      "$ref": "#/$defs/build_result"
+    },
+    "req_conformance_check": {
+      "$ref": "#/$defs/conformance_request"
+    },
+    "res_conformance_check": {
+      "$ref": "#/$defs/conformance_result"
+    },
+    "req_run_submit": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "key",
+            "run"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "submit"
+            },
+            "key": {
+              "$ref": "common.schema.json#/$defs/identity",
+              "description": "Identifies the submission. A repeated submission with the same key is the same run."
+            },
+            "run": {
+              "$ref": "#/$defs/run_description"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "handle"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "poll"
+            },
+            "handle": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "handle"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "cancel"
+            },
+            "handle": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "description": "Executor requests. An executor that cannot run a request answers with an error whose code is unavailable (or unsupported); there is no fallback."
+    },
+    "res_run_submit": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Answer to submit.",
+          "required": [
+            "handle"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "handle": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Answer to poll, not finished.",
+          "required": [
+            "state"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "const": "running"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Answer to poll or cancel: the run has ended.",
+          "required": [
+            "state",
+            "report"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "const": "finished"
+            },
+            "report": {
+              "$ref": "#/$defs/run_report"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Answer to cancel: the run was stopped. The report has end cancelled.",
+          "required": [
+            "state",
+            "report"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "const": "cancelled"
+            },
+            "report": {
+              "$ref": "#/$defs/run_report"
+            }
+          }
+        }
+      ]
+    },
+    "req_tool_resolve": {
+      "type": "object",
+      "required": [
+        "name",
+        "constraint",
+        "platform"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "constraint": {
+          "type": "string"
+        },
+        "platform": {
+          "$ref": "common.schema.json#/$defs/platform"
+        },
+        "tree_into": {
+          "$ref": "common.schema.json#/$defs/relpath",
+          "description": "If present, also place the tree here in the working directory."
+        }
+      }
+    },
+    "res_tool_resolve": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "resolved"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "resolved": {
+              "type": "object",
+              "required": [
+                "name",
+                "version",
+                "platform",
+                "digest",
+                "requires",
+                "upstream"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                },
+                "platform": {
+                  "$ref": "common.schema.json#/$defs/platform"
+                },
+                "digest": {
+                  "$ref": "common.schema.json#/$defs/identity",
+                  "description": "Digest of the tool tree for this platform."
+                },
+                "requires": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "constraint"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "constraint": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "upstream": {
+                  "$ref": "lock.schema.json#/$defs/upstream"
+                },
+                "entry": {
+                  "$ref": "common.schema.json#/$defs/relpath",
+                  "description": "Optional entry point inside the tree."
+                },
+                "tree": {
+                  "$ref": "common.schema.json#/$defs/relpath",
+                  "description": "Where the tree was placed, when asked for."
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "no-build-for-platform makes the obligations that need it unsupported on that platform.",
+          "required": [
+            "unresolved"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "unresolved": {
+              "type": "object",
+              "required": [
+                "code"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "enum": [
+                    "no-build-for-platform",
+                    "no-version-matches",
+                    "unreachable"
+                  ]
+                },
+                "detail": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "req_store_blob": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "file"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "put"
+            },
+            "file": {
+              "$ref": "common.schema.json#/$defs/relpath"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "identity",
+            "into"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "get"
+            },
+            "identity": {
+              "$ref": "common.schema.json#/$defs/identity"
+            },
+            "into": {
+              "$ref": "common.schema.json#/$defs/relpath"
+            }
+          }
+        }
+      ]
+    },
+    "res_store_blob": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Answer to put.",
+          "required": [
+            "identity"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "identity": {
+              "$ref": "common.schema.json#/$defs/identity"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Answer to get.",
+          "required": [
+            "file"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "file": {
+              "$ref": "common.schema.json#/$defs/relpath"
+            }
+          }
+        }
+      ]
+    },
+    "hello": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocol",
+        "limits",
+        "echo"
+      ],
+      "properties": {
+        "type": {
+          "const": "hello"
+        },
+        "protocol": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+$"
+          },
+          "minItems": 1,
+          "description": "Protocol versions the kernel speaks. The provider picks one and names it in its manifest."
+        },
+        "limits": {
+          "type": "object",
+          "required": [
+            "max_line_bytes",
+            "deadline_ms"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "max_line_bytes": {
+              "type": "integer",
+              "minimum": 1024,
+              "description": "A longer line ends the session."
+            },
+            "deadline_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Time the provider has to answer hello, in milliseconds on a monotonic clock."
+            }
+          }
+        },
+        "echo": {
+          "type": "string",
+          "description": "A string with non-ASCII and control characters (escaped in JSON). The provider returns it unchanged in its manifest answer, so an encoding fault ends the session before any work."
+        }
+      },
+      "patternProperties": {
+        "^x-": {}
+      },
+      "additionalProperties": false
+    },
+    "manifest_message": {
+      "type": "object",
+      "required": [
+        "type",
+        "echo",
+        "manifest"
+      ],
+      "properties": {
+        "type": {
+          "const": "manifest"
+        },
+        "echo": {
+          "type": "string"
+        },
+        "manifest": {
+          "$ref": "provider-manifest.schema.json"
+        }
+      },
+      "patternProperties": {
+        "^x-": {}
+      },
+      "additionalProperties": false
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "type",
+        "id",
+        "deadline_ms",
+        "capability",
+        "body"
+      ],
+      "properties": {
+        "type": {
+          "const": "request"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "deadline_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Time the provider has to answer, in milliseconds on a monotonic clock, counted from when the kernel sent the line. An answer after it is logged and dropped."
+        },
+        "capability": {
+          "$ref": "common.schema.json#/$defs/capability"
+        },
+        "body": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "intent.index"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/req_intent_index"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "decision.index"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/req_decision_index"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "definition.index"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/req_definition_index"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "artifact.build"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/req_artifact_build"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "obligation.enumerate"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/req_obligation_enumerate"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "obligation.check"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/req_obligation_check"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "conformance.check"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/req_conformance_check"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "run.submit"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/req_run_submit"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "tool.resolve"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/req_tool_resolve"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "store.blob"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/req_store_blob"
+              }
+            }
+          }
+        }
+      ],
+      "patternProperties": {
+        "^x-": {}
+      },
+      "additionalProperties": false
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "type",
+        "id",
+        "capability",
+        "body"
+      ],
+      "properties": {
+        "type": {
+          "const": "result"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "capability": {
+          "$ref": "common.schema.json#/$defs/capability"
+        },
+        "body": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "intent.index"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/res_intent_index"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "decision.index"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/res_decision_index"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "definition.index"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/res_definition_index"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "artifact.build"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/res_artifact_build"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "obligation.enumerate"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/res_obligation_enumerate"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "obligation.check"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/res_obligation_check"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "conformance.check"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/res_conformance_check"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "run.submit"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/res_run_submit"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "tool.resolve"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/res_tool_resolve"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "store.blob"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "body": {
+                "$ref": "#/$defs/res_store_blob"
+              }
+            }
+          }
+        }
+      ],
+      "patternProperties": {
+        "^x-": {}
+      },
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "type",
+        "id",
+        "code"
+      ],
+      "properties": {
+        "type": {
+          "const": "error"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "code": {
+          "enum": [
+            "invalid-request",
+            "unsupported",
+            "unavailable",
+            "internal"
+          ],
+          "description": "unsupported gives the check the verdict unsupported, unavailable the verdict unavailable, the others error."
+        },
+        "detail": {
+          "type": "string",
+          "description": "For the log. Never interpreted."
+        }
+      },
+      "patternProperties": {
+        "^x-": {}
+      },
+      "additionalProperties": false
+    },
+    "shutdown": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "shutdown"
+        }
+      },
+      "patternProperties": {
+        "^x-": {}
+      },
+      "additionalProperties": false
+    }
+  }
+}
