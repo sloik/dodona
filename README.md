@@ -1,32 +1,141 @@
 # dodona
 
-Tooling for building software where the code, the proof that it is correct, and the reason it exists stay linked.
+**Was what was defined actually built and delivered, and how sure is that?**
+
+dodona is a tool an AI agent can ask that question, so nobody has to take the agent's word for it. It is built for agents, including less capable ones.
 
 > In the myth, the Argo carried a beam of oak from Dodona in its prow. The beam could speak, and it told the crew the truth.
 
-**Status:** design stage. There is an architecture, decision records, a first formal model and draft protocol schemas. There is no kernel and nothing to run yet.
+| | |
+|---|---|
+| **Stage** | Design. There is no kernel and nothing to run yet |
+| **Exists** | Architecture, data model, 22 proposed decisions, draft protocol schemas, one formal model |
+| **Checked so far** | Nothing yet. The first model check is partly run; see [the claims table](spec/CLAIMS.md) |
+| **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-## The idea
+## The chain dodona watches
 
-Three things usually live apart and drift: the decision record that explains why something was built, the formal specification that says what it must do, and the code that does it. dodona keeps them connected:
+Work starts as plain words and ends as something running. Meaning can be lost at every step. dodona keeps the steps linked and says how strong each link is.
 
-- **Decision records as first-class nodes.** Each architecture decision record (ADR) links to the definitions it governs by name, records the content hash each had when the decision was written, and keeps its supersedes history. When a definition changes, the decisions that depend on it are known.
-- **Formal verification.** Behaviour is specified formally and checked by a machine, by model checking or proof, instead of relying on tests alone.
-- **Compiled implementations.** The code that results is built by a real compiler of the project's choosing, and the build is tracked like any other check.
-- **Selective reruns.** Definitions are content-addressed, so a check or proof runs again only when something it depends on has changed.
+```mermaid
+flowchart LR
+    I["<b>Intent</b><br/>plain words"] -->|"did the owner<br/>confirm it?"| D["<b>Definition</b><br/>criteria"]
+    D -->|"how much is<br/>stated formally?"| S["<b>Specification</b><br/>what must hold"]
+    S -->|"how was the code<br/>checked against it?"| C["<b>Code</b>"]
+    C -->|"is what shipped<br/>what was checked?"| R["<b>What runs</b>"]
+    R -->|"was it seen<br/>working live?"| W["<b>The world</b>"]
+```
 
-## Design
+Every link gets a level from one scale, strongest first:
 
-- **One question.** Was what was defined actually built and delivered, and how sure is that? dodona answers it for an agent, including a less capable one, and shows the weakest link in the chain from what was meant to what runs.
-- **Refuse by default, with honest ways through.** Unproven work is not reported as delivered. What cannot be checked up front, such as live behaviour or results that vary, has declared gates and recorded exceptions that leave a mark.
+| Level | Meaning |
+|---|---|
+| `proven` | Shown for all cases |
+| `bounded` | Shown for all cases within stated limits |
+| `sampled` | Shown for some cases, with the count |
+| `observed` | Seen working live |
+| `asserted` | Someone says so, and dodona records who |
+| `none` | Nothing behind it |
 
-- **The user is an agent.** dodona is driven by AI agents through structured commands; people read the results.
-- **Nothing is built in.** The decision format, specification language, checker, compiler and the place checks run are all replaceable providers, and a project can mix them.
-- **Only a pass is a pass.** A check that was queued, timed out or could not start is reported as exactly that.
-- **Reproducible across platforms.** A committed lock pins every tool by digest per platform. macOS first, then Linux, then Windows.
-- **Built with itself.** dodona's own decisions and formal specification are the source of truth; an implementation is a derived artifact that must conform to them.
+**The score is the weakest link, never an average.** A chain is as strong as its weakest part, and dodona shows which part that is.
 
-Start with [ARCHITECTURE.md](ARCHITECTURE.md); terms are defined in [MODEL.md](MODEL.md). The reasons are in [decisions/](decisions/README.md), the formal models and what they do and do not show are in [spec/](spec/README.md), and the provider protocol is in [protocol/](protocol/README.md). What dodona is meant to do, in plain words, is in [intents/](intents/README.md). Agents working here follow [AGENTS.md](AGENTS.md); to take part, see [CONTRIBUTING.md](CONTRIBUTING.md).
+## Only a pass is a pass
+
+A check that was queued, timed out or could not start is reported as exactly that. And a pass never outranks a failure recorded for the same inputs.
+
+```mermaid
+flowchart TB
+    Q{"records for the<br/>current inputs?"}
+    Q -->|"none"| U["<b>unknown</b><br/>never run, pending,<br/>unreachable, error"]
+    Q -->|"all pass"| P["<b>passed</b>"]
+    Q -->|"all fail"| F["<b>failed</b>"]
+    Q -->|"they disagree"| X["<b>conflict</b><br/>not a pass"]
+    classDef good fill:#d9f2e3,stroke:#2e8555,color:#123
+    classDef bad fill:#fbe0e0,stroke:#c0392b,color:#311
+    classDef grey fill:#eceff3,stroke:#7a8594,color:#223
+    class P good
+    class F,X bad
+    class U grey
+```
+
+When something changes, only the checks that depended on it become stale and run again. Everything else keeps its recorded result.
+
+## Refuse by default, with honest ways through
+
+Unproven work is not reported as delivered. But some things can only be seen on a live system, some cannot be mocked, and some results vary from run to run. Each criterion therefore has a gate, declared up front:
+
+| Gate | Blocks delivery? | For |
+|---|---|---|
+| **Hard** (default) | Yes | Anything that can be checked before delivery |
+| **Soft** | No, but lowers the stated level | Useful signals that should not stop work |
+| **Deferred** | No, but blocks *fulfilled* | What can only be checked after delivery, by a stated limit |
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> uncovered
+    uncovered --> open: every criterion has a check
+    open --> delivered: every hard gate passed
+    delivered --> fulfilled: every deferred gate closed
+    delivered --> overdue: a deferred gate ran out of time
+    overdue --> fulfilled: the late gate closed
+    delivered --> open: something changed and a check is stale
+    fulfilled --> open: something changed and a check is stale
+```
+
+Nobody sets these states by hand. They follow from evidence.
+
+**Exceptions leave a mark.** Changing a criterion or loosening a gate is a recorded amendment, granted only by the owner of the intent, human or agent. Best practice: the one who grants an exception is never the one whose work is being judged. An exception an agent grants to itself is shown first in every report, and a project can rule such exceptions out entirely.
+
+## Nothing is built in
+
+dodona chooses no tools. The kernel knows no language and no checker; every other part is a separate, replaceable program, and a project mixes them freely.
+
+```mermaid
+flowchart TB
+    A(["AI agent"]) <-->|"structured commands<br/>and results"| K
+    subgraph K["kernel: knows no tool, no language"]
+        direction LR
+        G["graph"] ~~~ ID["identity"] ~~~ PL["planner"] ~~~ L["ledger"] ~~~ PO["policy"]
+    end
+    K <-->|"provider protocol"| P
+    subgraph P["providers: every one replaceable"]
+        direction LR
+        P1["intent<br/>format"] ~~~ P2["decision<br/>format"] ~~~ P3["language<br/>and compiler"] ~~~ P4["checker"]
+        P5["spec-to-code<br/>conformance"] ~~~ P6["where<br/>checks run"] ~~~ P7["tool<br/>pinning"] ~~~ P8["storage"]
+    end
+```
+
+- **Bring your own** decision-record format, specification language, model checker or prover, test runner and compiler.
+- **Same answers on every platform.** A committed lock pins every tool by digest per platform. macOS first, then Linux, then Windows.
+- **dodona judges; it does not plan or do the work.**
+
+## Built with itself
+
+No implementation language is chosen. dodona's own intents, decisions and formal specification are the source of truth; a kernel is a derived artifact that must conform to them, and can be replaced by another that also conforms.
+
+```mermaid
+flowchart LR
+    S0["<b>0</b> design<br/>and models"] --> S1["<b>1</b> conformance kit"] --> S2["<b>2</b> seed kernel"] --> S3["<b>3</b> seed checks<br/>dodona"] --> S4["<b>4</b> seed builds<br/>its successor"] --> S5["<b>5</b> second,<br/>independent kernel"]
+    classDef now fill:#fff3cd,stroke:#b8860b,color:#332
+    class S0 now
+```
+
+The project is at stage 0. A kernel checking itself adds no trust in itself; that is what the independent second kernel is for.
+
+## Where to go next
+
+| If you want | Read |
+|---|---|
+| The design | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| The terms and rules, precisely | [MODEL.md](MODEL.md) |
+| What dodona is meant to do, as a roadmap | [intents/](intents/README.md) |
+| Why it is designed this way | [decisions/](decisions/README.md) |
+| What has actually been checked | [spec/CLAIMS.md](spec/CLAIMS.md) |
+| How providers talk to the kernel | [protocol/](protocol/README.md) |
+| What reviewers found wrong | [docs/reviews/](docs/reviews/2026-11-17-draft-0.1.md) |
+| To take part | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Rules for agents working here | [AGENTS.md](AGENTS.md) |
 
 ## Licence
 
