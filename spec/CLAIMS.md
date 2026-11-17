@@ -119,27 +119,34 @@ Bounds: one obligation; at most two edits, two outages and two runs that end wit
 
 | # | Claim | Decision | Check | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C37 | The seed kernel gives the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states, in CI | Each of five defects planted in the kernel made between 1,515 and 34,020 states disagree | **checked**, run 6 |
+| C37 | The seed kernel gives the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states, in CI | Each of five defects planted in the kernel made between 1,515 and 34,020 states disagree | unchecked since the kernel changed; run 6 was of the earlier kernel |
 
 This ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
+
+## Shown by the conformance kit, not by a model
+
+These claims are not checked by a model. Each is exercised on every change by the tools named, on the kernels that exist. That is evidence at the level `sampled`: it shows the cases that were tried. None of these counts as checked.
+
+| # | Claim | Decision | Exercised by | What that does and does not show | Status |
+|---|---|---|---|---|---|
+| C7 | The same content has the same identity on every platform, and a path is accepted on all platforms or none | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md), [0009](../decisions/0009-platform-order-and-portability-rules.md) | `tools/run_vectors.py`, `tools/run_path_vectors.py`, `tools/path_differential.py` | The vectors and random paths that were tried, on macOS, Linux and Windows. Not every content or path. Only the kernels that were judged | sampled by the kit |
+| C13 | No malformed, late or out-of-order provider message leads to a pass | [0003](../decisions/0003-providers-are-separate-processes.md) | `tools/run_provider_cases.py`, `tools/run_check_cases.py` | The stage-0 hosts, against a provider that breaks one rule at a time. No kernel hosts a provider yet, so this says nothing about a kernel. Late and out-of-order messages across several requests in flight are not covered | sampled by the kit |
+| C18 | A record no trusted kernel wrote is never reused; a torn ledger write never changes a status silently | [0015](../decisions/0015-ledger-integrity-and-record-trust.md) | `tools/run_ledger_cases.py`, `tools/run_kit.py` | A ledger damaged in each listed way, cut at every byte of its last entry, and written by two kernels at once; and status scenarios with records from another writer, another platform and a key that does not match. A crash in the middle of a write is imitated by cutting the file, not caused | sampled by the kit |
+| C20 | The conformance kit rejects kernels with known defects. Measured, not modelled: `tools/kit_adequacy.py` plants 15 defects in the seed kernel and the kit rejects 15 | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | `tools/kit_adequacy.py` | The listed defects, which the authors of the kit and of the kernel chose. A defect nobody thought of is not on the list | sampled by the kit |
+| C36 | A separation level is never shown without its weakest source, and a fact not covered by a valid attestation is treated as declared | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `tools/run_kit.py`, `tools/run_attest_check.py` | Kernels grading act records, with check values written into the kit and others made at test time. The key is a published fixture. No harness exists, so nothing real is vouched for | sampled by the kit |
 
 ## Not yet modelled
 
 | # | Claim | Decision | Intended check | Planted defect that must fail |
 |---|---|---|---|---|
-| C7 | The same content has the same identity on every platform, and a path is accepted on all platforms or none | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md), [0009](../decisions/0009-platform-order-and-portability-rules.md) | Conformance vectors for the encoding and the path check | A checker that folds case with the platform's own rules |
 | C11 | A check never runs on an executor the configuration did not name, and a mismatch between requested and reported tools or platform is never a result | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | Model, plus scenarios with the executor down and with a lying executor | Kernel with a silent local fallback |
 | C12 | A run is not submitted twice and not lost across a kernel restart | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | Model with handles and restart | Kernel that resubmits on restart |
-| C13 | No malformed, late or out-of-order provider message leads to a pass | [0003](../decisions/0003-providers-are-separate-processes.md) | The misbehaving test provider | Kernel that defaults a missing verdict to passed |
 | C14 | Adding a platform to the lock changes no existing entry | [0008](../decisions/0008-reproducibility-levels.md) | Scenario: resolve on one platform, add a second | Resolver that re-resolves existing entries |
 | C17 | A change that weakens policy is always visible in the report | [0014](../decisions/0014-policy-is-separate-from-configuration.md) | Scenarios: lowered bound, removed obligation, weaker provider | Kernel that judges against the edited policy only |
-| C18 | A record no trusted kernel wrote is never reused; a torn ledger write never changes a status silently | [0015](../decisions/0015-ledger-integrity-and-record-trust.md) | Model with two writers and crash points, plus scenarios | Kernel that accepts any record with a valid hash |
-| C20 | The conformance kit rejects kernels with known defects. Measured, not modelled: `tools/kit_adequacy.py` plants 15 defects in the seed kernel and the kit rejects 15 | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | Run defective kernels against the kit; report the fraction rejected | A kit with a scenario removed |
 | C21 | Two independent kernels agree on real project states, and any disagreement is reported as a conflict | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | Differential runs beyond the kit | A kernel carrying a defect the kit does not target |
 | C26 | A varying check is never reported from fewer runs than it declared | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Scenarios with declared sample sizes | Kernel that stops at the first passing run |
 | C27 | Two intents that touch the same definition are reported as colliding before work starts | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Scenarios | Index that compares declared paths only as text |
 | C32 | A status is never shown without its headline, and a self-granted exception or unverified independence is always in it | [0019](../decisions/0019-assurance-is-stated-per-link.md), [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Scenarios on the agent interface | Interface that returns the status word alone |
-| C36 | A separation level is never shown without its weakest source, and a fact not covered by a valid attestation is treated as declared | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | Scenarios | Kernel that trusts an unsigned attestation |
 
 ## Recorded runs
 

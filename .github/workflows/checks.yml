@@ -43,6 +43,8 @@ jobs:
           .venv-examples/bin/python tools/check_examples.py
       - name: Judge the reference host with the misbehaving provider
         run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.python }} tools/provider_host.py
+      - name: Judge the stage-0 host with a checker that breaks one rule at a time
+        run: ${{ matrix.python }} tools/run_check_cases.py
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Kernel unit tests
@@ -53,6 +55,12 @@ jobs:
         run: ${{ matrix.python }} tools/run_vectors.py -- kernel/target/release/dodona-kernel canonical
       - name: Judge the kernel with the path vectors
         run: ${{ matrix.python }} tools/run_path_vectors.py -- kernel/target/release/dodona-kernel path path-set
+      - name: Judge the kernel with the core-key vectors
+        run: ${{ matrix.python }} tools/run_key_vectors.py -- kernel/target/release/dodona-kernel key
+      - name: Judge the kernel's ledger, with damage at every byte and two writers at once
+        run: ${{ matrix.python }} tools/run_ledger_cases.py -- kernel/target/release/dodona-kernel
+      - name: Check the kernel against values the reference signer makes now
+        run: ${{ matrix.python }} tools/run_attest_check.py -- kernel/target/release/dodona-kernel scenario
       - name: Compare the kernel's path check with the reference on random paths
         run: ${{ matrix.python }} tools/path_differential.py -- kernel/target/release/dodona-kernel
       - name: Plant known defects and check the kit rejects each

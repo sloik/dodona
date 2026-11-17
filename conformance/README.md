@@ -30,7 +30,7 @@ Every scenario names the claim it bears on and the model cases it covers. Each p
 
 ## How a kernel is judged
 
-`tools/run_kit.py -- <kernel command>` starts the kernel once per scenario, with the scenario as JSON on standard input. The kernel is shown what happens in each step and nothing else: the expected results and the notes about the scenario are removed first. The kernel prints `{"results": [...]}` with one result per step. A scenario matches when every field its steps expect is present and equal. A crash, a timeout or anything else is a mismatch.
+`tools/run_kit.py -- <kernel command>` starts the kernel once per scenario, with the scenario as JSON on standard input. The kernel is shown what happens in each step and nothing else: the expected results and the notes about the scenario are removed first. The kernel prints `{"results": [...]}` with one result per step. Every step shown in the tables below is valid at any point of a scenario, in any order and any number of times; where a step has nothing to act on, the section says what happens. A scenario matches when every field its steps expect is present and equal. A crash, a timeout or anything else is a mismatch.
 
 ### Evidence scenarios
 
@@ -50,6 +50,7 @@ The result after each step is an object with one entry per obligation: `{"status
 - `status` is `passed`, `failed`, `conflict` or `unknown`, by the rule in [the data model](../MODEL.md#4-status). Only results recorded for the current inputs count: the content of everything the obligation depends on, and the tool.
 - `reason` is `pending` if a run on the current inputs is in flight; otherwise the outcome of the most recent attempt on the current inputs that left no result, `unavailable` or `error`; otherwise `never-run`.
 - Recorded results take precedence over a run in flight: an obligation that has passed stays `passed` while it is being checked again.
+- A run is in flight from the `submit` that started it until it is completed or lost. A `complete` or `lose` naming a run that is not in flight changes nothing. A `submit` under a name that is in flight changes nothing, whatever the backend. Once a run has ended its name may be used again.
 
 ### Intent scenarios
 
@@ -225,6 +226,18 @@ Two more things are judged, each by its own tool.
 
 `tools/provider_host.py` is a small reference host, there to show the session rules can be kept on macOS, Linux and Windows. It checks framing, encoding, line length, deadlines and message envelopes, and ends every process the provider started. It does not validate message bodies against the schemas, and it is not part of any kernel yet.
 
+### Rules a schema cannot express
+
+`tools/run_check_cases.py` judges `tools/host.py`, the stage-0 program that takes a check from a provider to a verdict ([decision 0026](../decisions/0026-the-first-host-and-status-are-stage-0-helpers.md)). `provider/misbehaving_checker.py` sends only well-formed messages and breaks one rule in each mode: a verdict with no run behind it, more strength than its manifest declares, a tool it never declared, a path that leaves its tool or its working directory, an input that is not in the key. `provider/check-cases.json` lists what the host must do. In every case but the control nothing may be recorded as passed, and where a run would have been dangerous it must not have started.
+
+This judges that one host. No kernel hosts a provider yet.
+
+## Two kernels compared
+
+`tools/kernel_differential.py --a <kernel> --b <kernel>` replays every scenario with its steps drawn again at random, repeated, dropped and reordered, and requires the two kernels to give the same answer in full, not only in the fields a scenario names. A difference, or an input neither answers, becomes a scenario. Agreement is not correctness: two kernels can be wrong the same way, and these two were both written by AI models of one vendor family for part of their code.
+
+`tools/run_attest_check.py -- <kernel> scenario` has a kernel grade act records whose check values are made at test time by the reference signer, `tools/attest.py`, and requires it to stop accepting them once the record is changed.
+
 ## Rules for the kit
 
 - A scenario is added before the behaviour it tests, and is committed before any kernel that will be judged by it.
@@ -234,7 +247,7 @@ Two more things are judged, each by its own tool.
 
 ## Not yet in the kit
 
-- Messages that are well-formed and wrong in content: a verdict with no run behind it, a result that fails its schema. The reference host does not validate bodies.
+- A kernel that hosts providers. The rules for provider messages are judged on two stage-0 hosts only.
 - Kit adequacy: running kernels with known defects against the kit and reporting the fraction it rejects.
 - Anything not modelled: the ledger's crash behaviour, time limits, varying checks, executors, the lock, more than one level of child intents.
 - The intent and attempts scenarios take a claim and its source as given. Working both out from an act record is in the acts and status scenarios.

@@ -276,6 +276,13 @@ def collect(args) -> int:
         except KeyError as err:
             raise SystemExit(f"this site has no file for {err}; add it to tool_files") from None
         cases.append({"name": item["obligation"]["name"], "cwd": run.get("cwd", "."), "argv": argv})
+    if args.dumps:
+        # Not obligations yet: two models also write out every state they reach, for tools/check_states.py.
+        for config in sorted(ROOT.glob("spec/*/dump.cfg")):
+            folder = config.parent.relative_to(ROOT).as_posix()
+            cases.append({"name": f"{config.parent.name}/dump", "cwd": folder, "keep": ["states.dump"],
+                          "argv": [where["java/bin/java"], "-cp", where["tla2tools/tla2tools.jar"], "tlc2.TLC",
+                                   "-workers", "1", "-config", "dump.cfg", "-dump", "states", "MCDump.tla"]})
     measure = sorted(set(where.values()))
     (bundle / "manifest.json").write_text(json.dumps({"out": "out", "cases": cases, "measure": measure}, indent=1), encoding="utf-8")
     values = {"source": str(bundle), "dest": str(dest), "timeout": str(site.get("batch_timeout_seconds", 3600))}
@@ -373,6 +380,7 @@ def main() -> int:
     one = sub.add_parser("collect")
     one.add_argument("--site", type=pathlib.Path, required=True)
     one.add_argument("--out", type=pathlib.Path, required=True)
+    one.add_argument("--dumps", action="store_true", help="also have each model that has a dump.cfg write out its states")
     two = sub.add_parser("conclude")
     two.add_argument("--runs", type=pathlib.Path, required=True)
     two.add_argument("--ledger", type=pathlib.Path, required=True)

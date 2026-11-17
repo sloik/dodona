@@ -53,3 +53,5 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0023](0023-stage-0-checks-run-in-ci-with-disposable-helpers.md) | Stage-0 checks run in CI, with disposable helpers | proposed, owner direction |
 | [0024](0024-separation-is-graded-not-enforced.md) | Separation of the checker from the work is graded, not enforced | proposed, owner direction |
 | [0025](0025-the-first-seed-kernel.md) | The first seed kernel, its language and what it may claim | proposed, owner direction |
+| [0026](0026-the-first-host-and-status-are-stage-0-helpers.md) | The first host and status command are stage-0 helpers, and a result is keyed by what was measured to have run | proposed |
+| [0027](0027-vouching-is-a-keyed-check-value-and-nothing-vouches-yet.md) | Vouching for an act is a keyed check value under a key policy lists, policy is read from the protected branch, and nothing vouches yet | proposed |

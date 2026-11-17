@@ -1,0 +1,168 @@
+{
+  "kind": "evidence",
+  "name": "steps_out_of_turn_change_nothing",
+  "claim": "C1",
+  "covers": [],
+  "why": "Finishing a run that is not in flight changes nothing: not one never started, and not one already finished, so a pass cannot be turned into a conflict by reporting the same run twice. Starting a run under a name still in flight changes nothing either, even with the backend down. A name is free again once its run has ended. Found by comparing two kernels on reshuffled steps: the contract was silent and one kernel crashed.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "lose": {
+          "run": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "backend": {
+          "to": "down"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "backend": {
+          "to": "up"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "lose": {
+          "run": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "conflict"
+        }
+      }
+    }
+  ]
+}

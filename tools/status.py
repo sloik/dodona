@@ -14,6 +14,7 @@ import argparse
 import fnmatch
 import json
 import pathlib
+import subprocess
 import sys
 import tomllib
 
@@ -54,8 +55,26 @@ def read_intents(obligations: list[str]) -> dict:
     return intents
 
 
-def scenario(ledger_entries: list[dict], writer: str) -> dict:
-    policy = tomllib.loads((ROOT / "policy.toml").read_text(encoding="utf-8"))
+def anchored_policy(ref: str) -> tuple[dict, str]:
+    """The policy as the protected reference has it, and a sentence saying where it came from.
+
+    The bar a project is held to, and the keys allowed to vouch for an act,
+    must not be editable by the agent being judged. So the policy is read from
+    the reference branch, not from the working copy, whenever that is possible.
+    """
+    here = (ROOT / "policy.toml").read_text(encoding="utf-8")
+    try:
+        done = subprocess.run(["git", "-C", str(ROOT), "show", f"{ref}:policy.toml"], capture_output=True, timeout=30)
+        there = done.stdout.decode("utf-8") if done.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired):
+        there = None
+    if there is None:
+        return tomllib.loads(here), f"policy: the working copy. Not anchored: {ref} could not be read, so whoever can edit this copy can lower the bar"
+    note = f"policy: as on {ref}" + ("" if there == here else ". The working copy differs and is not used")
+    return tomllib.loads(there), note
+
+
+def scenario(ledger_entries: list[dict], writer: str, policy: dict) -> dict:
     tools, _ = host.lock_tools()
     session = host.Session([sys.executable, str(ROOT / "providers" / "tlc" / "provider.py")], ROOT, [])
     try:
@@ -74,8 +93,8 @@ def scenario(ledger_entries: list[dict], writer: str) -> dict:
                      [{"do": {"change": {"obligation": next(iter(sorted(obligations))), "preimage": obligations[next(iter(sorted(obligations)))]["preimage"]}}}]}
 
 
-def render(report: dict, torn: bool, entries: int) -> str:
-    lines = [f"project: {report['project']['status']}",
+def render(report: dict, torn: bool, entries: int, note: str) -> str:
+    lines = [f"project: {report['project']['status']}", note,
              f"ledger: {entries} entries" + (", ending in an entry that was cut short" if torn else "")
              + (f", {report['rejected']} rejected" if report.get("rejected") else "")]
     tally: dict[str, int] = {}
@@ -95,15 +114,18 @@ def main() -> int:
     ap.add_argument("--ledger", type=pathlib.Path, required=True)
     ap.add_argument("--writer", required=True)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--policy-ref", default="origin/main", help="the protected branch the policy is read from")
     ap.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     args = ap.parse_args()
     read = host.kernel(args.kernel, "ledger-read", {"ledger": str(args.ledger)})
     if "refused" in read:
         print(f"the ledger is damaged at line {read.get('at')}; no status is reported")
         return 1
-    answer = host.kernel(args.kernel, "scenario", scenario(read["entries"], args.writer))
+    policy, note = anchored_policy(args.policy_ref)
+    answer = host.kernel(args.kernel, "scenario", scenario(read["entries"], args.writer, policy))
     report = answer["results"][-1]
-    print(json.dumps(report, indent=1, sort_keys=True) if args.json else render(report, read["torn"], len(read["entries"])))
+    report["policy_source"] = note
+    print(json.dumps(report, indent=1, sort_keys=True) if args.json else render(report, read["torn"], len(read["entries"]), note))
     return 0
 
 
