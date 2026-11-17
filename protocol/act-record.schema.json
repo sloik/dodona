@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sloik/dodona/protocol/act-record.schema.json",
+  "title": "Act record",
+  "description": "One act that rests on someone's judgement, with what is needed to grade how separate the actor was from the work (decision 0024). The level is computed by the kernel from these fields and is never taken from the record.",
+  "type": "object",
+  "required": [
+    "ticket",
+    "kind",
+    "target",
+    "actor",
+    "worker"
+  ],
+  "patternProperties": {
+    "^x-": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "ticket": {
+      "type": "string",
+      "description": "Issued by the kernel before the attempt. An issued ticket with no closing record counts as a failed attempt."
+    },
+    "kind": {
+      "enum": [
+        "confirm-baseline",
+        "match-check",
+        "grant-amendment",
+        "close-deferred",
+        "change-policy"
+      ]
+    },
+    "target": {
+      "$ref": "common.schema.json#/$defs/identity",
+      "description": "Identity of what was judged. Attempts are counted per target and kind."
+    },
+    "result": {
+      "enum": [
+        "agreed",
+        "refused"
+      ],
+      "description": "Absent while the attempt is open."
+    },
+    "actor": {
+      "type": "object",
+      "required": [
+        "id",
+        "session"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "started_by": {
+          "type": "string",
+          "description": "Who started the actor. The worker here means at most helper."
+        },
+        "make": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "vendor": {
+              "type": "string"
+            },
+            "family": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "tool": {
+              "type": "string"
+            }
+          },
+          "description": "Model family and vendor, or the name of a deterministic tool."
+        }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "make": {
+          "type": "object"
+        }
+      }
+    },
+    "brief": {
+      "type": "object",
+      "required": [
+        "issued_by",
+        "content"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "issued_by": {
+          "enum": [
+            "kernel",
+            "owner",
+            "worker",
+            "other"
+          ]
+        },
+        "content": {
+          "$ref": "common.schema.json#/$defs/identity"
+        }
+      }
+    },
+    "given": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/identity"
+      },
+      "description": "Everything placed in the actor's context or made readable to it, by content hash. Anything the worker wrote about its own reasoning here means at most helper."
+    },
+    "fresh_context": {
+      "type": "boolean",
+      "description": "The actor started with no history from the worker."
+    },
+    "known_bad": {
+      "type": "object",
+      "required": [
+        "case",
+        "rejected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "case": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "rejected": {
+          "type": "boolean"
+        }
+      },
+      "description": "A case known to be wrong, shown to the actor, and whether it was rejected. Needed for tested."
+    },
+    "attempt": {
+      "type": "object",
+      "required": [
+        "number",
+        "prior"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "prior": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tickets of earlier attempts on the same target and kind."
+        }
+      }
+    },
+    "transcript": {
+      "$ref": "common.schema.json#/$defs/identity"
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "common.schema.json#/$defs/fact_source"
+      },
+      "description": "For each field above, who stands behind it. A field missing here is declared."
+    },
+    "attestation": {
+      "type": "object",
+      "required": [
+        "harness",
+        "key",
+        "signature",
+        "covers"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "harness": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "covers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "A harness signature over the listed fields. Fields it does not cover fall back to declared."
+    }
+  }
+}

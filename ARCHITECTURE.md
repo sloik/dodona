@@ -216,7 +216,7 @@ The same rule is part of the product: an obligation can carry planted defects, a
 
 ## 11. Open questions
 
-- How an owner's identity is established, so that an exception can be shown to come from the owner and not from the worker.
+- How identities are bound to something a working agent cannot create, which the top separation level needs.
 - How much of a plain-words criterion a formal statement covers, and who judges that.
 - The signing scheme for records shared between machines.
 - Whether providers may also be loaded as sandboxed modules, in addition to separate processes.

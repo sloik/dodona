@@ -5,6 +5,7 @@ Exit status is 0 only if every check passed.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import re
@@ -75,12 +76,178 @@ def check_model_cases() -> None:
                 problems.append(f"{expected.parent.name}: root module {root} is missing")
 
 
+def check_claims_match_runs() -> None:
+    """A claim may be marked checked only while a recorded run still matches the model files."""
+    claims = (ROOT / "spec" / "CLAIMS.md").read_text(encoding="utf-8")
+    index = json.loads((ROOT / "spec" / "runs" / "index.json").read_text(encoding="utf-8"))
+    current = {}
+    for run in index["runs"]:
+        folder = ROOT / "spec" / run["model"]
+        current[run["id"]] = all(
+            (folder / name).exists()
+            and hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest
+            for name, digest in run["files"].items()
+        ) and (ROOT / "spec" / "runs" / run["outputs"]).is_dir()
+    supported = set()
+    for run in index["runs"]:
+        if current[run["id"]] and all(current.get(n) for n in run.get("needs", [])):
+            supported.update(run["claims"])
+    for row in re.findall(r"^\| (C\d+) \|.*\*\*checked\*\*.*$", claims, flags=re.M):
+        if row not in supported:
+            problems.append(f"spec/CLAIMS.md marks {row} as checked, but no recorded run matches the current model files")
+
+
 def check_indexes() -> None:
     for folder in ("decisions", "intents"):
         index = (ROOT / folder / "README.md").read_text(encoding="utf-8")
         for path in sorted((ROOT / folder).glob("[0-9]*.md")):
             if f"({path.name})" not in index:
                 problems.append(f"{folder}/README.md does not list {path.name}")
+
+
+# ---------------------------------------------------------------------------
+# Gap checks. Each one exists because a gap was found once, by a review or by
+# a mistake. The rule (AGENTS.md): a gap that is found becomes a check here.
+# docs/gap-checks.md lists each check with the gap behind it.
+
+
+def _claims_rows() -> list[tuple[str, str]]:
+    text = (ROOT / "spec" / "CLAIMS.md").read_text(encoding="utf-8")
+    return [(m.group(1), m.group(0)) for m in re.finditer(r"^\| (C\d+) \|.*$", text, flags=re.M)]
+
+
+def gap_readme_counts() -> None:
+    """The README once said 9 claims were checked after a model change left 6."""
+    rows = _claims_rows()
+    checked = sum(1 for _, row in rows if "**checked**" in row)
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    m = re.search(r"\| \*\*Checked so far\*\* \| (\d+) of (\d+) design claims", readme)
+    if not m:
+        problems.append("README.md: the 'Checked so far' line is missing or reworded")
+    elif (int(m.group(1)), int(m.group(2))) != (checked, len(rows)):
+        problems.append(f"README.md says {m.group(1)} of {m.group(2)} claims checked; CLAIMS.md has {checked} of {len(rows)}")
+    decisions = len(list((ROOT / "decisions").glob("[0-9]*.md")))
+    m = re.search(r"(\d+) proposed decisions", readme)
+    if not m or int(m.group(1)) != decisions:
+        problems.append(f"README.md decision count does not match the {decisions} records in decisions/")
+    ids = [cid for cid, _ in rows]
+    if len(ids) != len(set(ids)):
+        problems.append("spec/CLAIMS.md lists a claim id twice")
+
+
+def gap_claims_name_real_properties() -> None:
+    """A claim pointed at properties and defect cases that did not exist."""
+    text = (ROOT / "spec" / "CLAIMS.md").read_text(encoding="utf-8")
+    for section in re.split(r"^## ", text, flags=re.M):
+        m = re.match(r"Modelled in `(\w+)/(\w+)\.tla`", section)
+        if not m:
+            continue
+        model = (ROOT / "spec" / m.group(1) / f"{m.group(2)}.tla").read_text(encoding="utf-8")
+        table = section.split("\n## ")[0]
+        for row in re.findall(r"^\| C\d+ \|.*$", table, flags=re.M):
+            cells = [c.strip() for c in row.strip("|").split("|")]
+            for prop in re.findall(r"`(\w+)`", cells[3]):
+                if not re.search(rf"^{prop}\b.*==", model, flags=re.M):
+                    problems.append(f"spec/CLAIMS.md {cells[0]}: property {prop} is not defined in {m.group(2)}.tla")
+
+
+def gap_every_property_has_a_defect() -> None:
+    """A property was once listed with no planted defect, so it could not be seen to fail."""
+    for expected in sorted(ROOT.glob("spec/*/expected.json")):
+        spec = json.loads(expected.read_text(encoding="utf-8"))
+        guarded = {c["of"] for c in spec["cases"] if c["expect"] == "violation"}
+        for case in spec["cases"]:
+            if case["expect"] != "no-violation":
+                continue
+            cfg = (expected.parent / case["config"]).read_text(encoding="utf-8")
+            for line in cfg.splitlines():
+                if line.startswith("INVARIANT"):
+                    for prop in line.split()[1:]:
+                        if prop not in guarded and prop != "TypeOK" and not prop.startswith("Never"):
+                            problems.append(f"{expected.parent.name}: {prop} is checked in {case['config']} but no case shows it can fail")
+
+
+def gap_decisions_are_well_formed() -> None:
+    """Decisions were marked accepted that the owner had not read; one lacked a falsifier."""
+    allowed = {"proposed", "accepted", "superseded", "rejected"}
+    for path in sorted((ROOT / "decisions").glob("[0-9]*.md")):
+        text = path.read_text(encoding="utf-8")
+        m = re.search(r"^status: (\w+)$", text, flags=re.M)
+        if not m or m.group(1) not in allowed:
+            problems.append(f"decisions/{path.name}: status is missing or not one of {sorted(allowed)}")
+        for heading in ("## Context", "## Decision", "## What would show this wrong"):
+            if heading not in text:
+                problems.append(f"decisions/{path.name}: no '{heading}' section")
+        if not re.search(rf'^id: "{path.name[:4]}"$', text, flags=re.M):
+            problems.append(f"decisions/{path.name}: id does not match the file name")
+
+
+def gap_vocabulary_is_the_same_everywhere() -> None:
+    """Capability and level names drifted between the schema and the prose."""
+    common = json.loads((ROOT / "protocol" / "common.schema.json").read_text(encoding="utf-8"))["$defs"]
+    prose = "".join((ROOT / f).read_text(encoding="utf-8") for f in ("ARCHITECTURE.md", "MODEL.md", "protocol/README.md"))
+    for cap in common["capability"]["enum"]:
+        if f"`{cap}`" not in prose:
+            problems.append(f"capability {cap} is in the schema but not described in the documents")
+    for cap in set(re.findall(r"`([a-z]+\.[a-z]+)`", prose)):
+        if cap.split(".")[0] in {"intent", "decision", "definition", "artifact", "obligation", "conformance", "run", "tool", "store"}:
+            if cap not in common["capability"]["enum"] and cap not in {"run.poll", "run.cancel"}:
+                problems.append(f"capability {cap} is described in the documents but not in the schema")
+    model = (ROOT / "MODEL.md").read_text(encoding="utf-8")
+    for key in ("separation", "assurance", "gate", "verdict", "status"):
+        for value in common[key]["enum"]:
+            explained = f"`{value}`" in model or f"`{value}`" in prose
+            if key == "gate":  # gates are written as plain words in the tables
+                explained = re.search(rf"\b{value}\b", model, flags=re.I) is not None
+            if not explained:
+                problems.append(f"{key} value {value} is in the schema but not explained in the documents")
+
+
+def gap_nothing_private_or_unportable() -> None:
+    """The repository is public and must run on three platforms."""
+    private = re.compile(r"/Users/|/home/[a-z]|\bC:\\\\Users")
+    for path in sorted(ROOT.glob("**/*")):
+        rel = path.relative_to(ROOT).as_posix()
+        if ".git/" in rel or rel.startswith(".git") and not rel.startswith(".github") and not rel.startswith(".gitattributes") and not rel.startswith(".gitignore"):
+            continue
+        if not path.is_file() or rel.startswith("spec/runs/"):
+            continue
+        if path.suffix in {".sh", ".bat", ".cmd", ".ps1"}:
+            problems.append(f"{rel}: shell scripts are not allowed (decision 0009)")
+        if path.suffix in {".md", ".json", ".toml", ".py", ".yml", ".tla", ".cfg"} and rel != "tools/check_repo.py":
+            if private.search(path.read_text(encoding="utf-8", errors="replace")):
+                problems.append(f"{rel}: contains a private or absolute path")
+
+
+def gap_workflows_are_safe() -> None:
+    """Self-hosted runners must never run code from a pull request; actions are pinned."""
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        text = path.read_text(encoding="utf-8")
+        for use in re.findall(r"uses: (\S+)", text):
+            if not re.search(r"@[0-9a-f]{40}$", use):
+                problems.append(f"{path.name}: action {use} is not pinned to a commit")
+        if "self-hosted" in text:
+            trigger = text.split("jobs:")[0]
+            if "pull_request" in trigger:
+                problems.append(f"{path.name}: runs on a self-hosted runner and is triggered by pull requests")
+            if "github.ref == 'refs/heads/main'" not in text or "github.repository == 'sloik/dodona'" not in text:
+                problems.append(f"{path.name}: self-hosted job is not restricted to this repository's main branch")
+        if "permissions:" not in text:
+            problems.append(f"{path.name}: no explicit permissions")
+
+
+def gap_every_check_is_listed() -> None:
+    """A gap check that nobody can find the reason for will be deleted by mistake."""
+    listed = (ROOT / "docs" / "gap-checks.md").read_text(encoding="utf-8")
+    for name in GAP_CHECKS:
+        if f"`{name.__name__}`" not in listed:
+            problems.append(f"docs/gap-checks.md does not list {name.__name__}")
+
+
+GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
+              gap_every_property_has_a_defect, gap_decisions_are_well_formed,
+              gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
+              gap_workflows_are_safe, gap_every_check_is_listed]
 
 
 class JudgeTests(unittest.TestCase):
@@ -118,6 +285,10 @@ class JudgeTests(unittest.TestCase):
     def test_other_violation_is_not_a_match(self):
         self.assertFalse(check_models.judge(self.viol, 12, "Error: Invariant TypeOK is violated.\n")["match"])
 
+    def test_executor_refusal_is_not_a_match(self):
+        self.assertFalse(check_models.judge(self.hold, 75, "")["match"])
+        self.assertFalse(check_models.judge(self.viol, 75, "")["match"])
+
     def test_crash_is_not_the_expected_violation(self):
         self.assertFalse(check_models.judge(self.viol, 255, "java.io.IOException: File too large\n")["match"])
 
@@ -129,7 +300,8 @@ class JudgeTests(unittest.TestCase):
 
 
 def main() -> int:
-    for check in (check_json_and_toml, check_links, check_line_endings, check_model_cases, check_indexes):
+    for check in [check_json_and_toml, check_links, check_line_endings, check_model_cases,
+                  check_indexes] + GAP_CHECKS:
         check()
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(JudgeTests)
     result = unittest.TextTestRunner(verbosity=1).run(suite)

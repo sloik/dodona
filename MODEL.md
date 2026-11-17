@@ -119,7 +119,7 @@ This is the layer that answers the question dodona exists for: *was what was def
 | Soft | No; lowers stated assurance | Before delivery |
 | Deferred | No; blocks *fulfilled* | After delivery, by a stated limit, typically on a live system |
 
-Policy sets the floor that an owner's choices cannot go below without it showing: the minimum number or share of hard gates, the longest limit a deferred gate may have, and the minimum number of runs and agreement for a check on something that varies. A deferred gate is closed by an observation; an observation made by the party that did the work is marked as such.
+Policy sets the floor that an owner's choices cannot go below without it showing: the minimum number or share of hard gates, the longest limit a deferred gate may have, the minimum number of runs and agreement for a check on something that varies, and the least separation at which each kind of act takes effect. A deferred gate is closed by an observation, graded for separation like any other act.
 
 **Intent status**, always derived:
 
@@ -141,19 +141,20 @@ A parent needs its children delivered and its own criteria met. Gate counts and 
 delivered · gates: 4 hard, 1 soft, 1 deferred (open, due 2027-01-31)
           · shown: bounded (weakest evidence link: specification → code)
           · agreed: criteria confirmed by <who>; checks matched to criteria by <who>
-          · exceptions: 1, self-granted: 0 · independence: verified | unverified
+          · separation: apart (declared), 5 of 6 acts apart or better; weakest: exception, helper
+          · exceptions: 1
 ```
 
 **Two kinds of link.** Between plain words and a running system there are links of two different kinds, and dodona never mixes them into one figure.
 
-*Judgement links* can only ever be someone's word. dodona records whose word, and whether that party is independent of the work.
+*Judgement links* can only ever be someone's word. dodona records whose word, and grades how separate that party was from the work.
 
 | Link | Whose word |
 |---|---|
 | Intent → criteria: do the criteria say what was meant? | The owner, by confirming the baseline |
-| Criterion → check: does this check really test this criterion? | A named reviewer. If that reviewer did the work, it is marked self-reviewed |
+| Criterion → check: does this check really test this criterion? | A named reviewer |
 
-dodona cannot judge either of these, and says so. What it can do is make sure the answer is on record, tied to an exact identity, and visibly independent or not.
+dodona cannot judge either of these, and says so. What it can do is make sure the answer is on record, tied to an exact identity, with its separation graded.
 
 *Evidence links* have a level from one scale, strongest first:
 
@@ -169,9 +170,36 @@ Every evidence link is always evaluated. One with nothing reported is `none`; a 
 
 A criterion's **shown** level is its weakest evidence link. An intent's score is a count: criteria whose shown level is at or above what policy demands for their gate, out of all criteria.
 
-**Amendment.** Any difference from the baseline: a changed criterion, gate, limit, sample size, threshold, link to a check, or child. Granted only by the intent owner, recorded with what changed, why and by whom, never erased. An amended criterion is at most `asserted` for the part amended. An amendment granted by the party that did the work is **self-granted**: shown in the headline of every report, and not counted at all where policy requires an independent approver, which is the recommended setting.
+**Separation.** How separate the party behind an act was from the work ([0024](decisions/0024-separation-is-graded-not-enforced.md)). dodona cannot enforce independence, so it grades it:
 
-**Independence is only as good as identity.** Whether owner, reviewer and worker are really different parties depends on how identities are established, which is not designed yet. Until an owner's identity is bound to something the working agent cannot create, every report says `independence: unverified`.
+`self` < `helper` < `apart` < `tested` < `cross-make` < `credentialed`
+
+| Level | In one line |
+|---|---|
+| `self` | The worker did it, or nothing is recorded. The default |
+| `helper` | Someone else, but started, briefed or informed by the worker |
+| `apart` | A fresh session that saw only the thing to judge and the criteria, briefed by someone other than the worker |
+| `tested` | `apart`, and it rejected a known-bad case, with every attempt on record |
+| `cross-make` | `tested`, and a different make from the worker: another model family, vendor or a deterministic tool |
+| `credentialed` | `cross-make`, signed with a credential the worker cannot create. Not available yet |
+
+Each fact behind a level is `checked` by dodona, `attested` by a harness whose key policy lists, or `declared`. A level is always shown with its weakest source. dodona lowers a claimed level when the record does not support it and never raises one.
+
+Separation is graded for the acts that rest on someone's word:
+
+| Act | Below policy's floor |
+|---|---|
+| Confirming an intent's criteria and gates | The intent stays a `draft` |
+| Saying that a check tests a criterion | The criterion is capped at `asserted` |
+| Granting an amendment | The amendment is recorded and does not take effect |
+| Closing a deferred gate by observation | The gate stays open |
+| Changing policy | The change does not take effect |
+
+It is not graded for a check anyone can run again from locked inputs; the evidence scale covers that. Separation is a separate axis: it is never multiplied into the evidence level. The headline shows the weakest separation among the acts a result rests on, which act that is, and a count of acts at `apart` or better out of all of them. Anything resting on an act at `self` is at most `asserted`.
+
+Trying again is recorded: a checker takes a ticket before each attempt, an attempt with no result counts as a failure, the worst result on an unchanged target counts, and a pass after a failure without a change is flagged and graded no higher than `helper`.
+
+**Amendment.** Any difference from the baseline: a changed criterion, gate, limit, sample size, threshold, link to a check, or child. Granted only by the intent owner, recorded with what changed, why, by whom and at what separation, never erased. An amended criterion is at most `asserted` for the part amended. An amendment takes effect only at or above the separation floor policy sets; `apart` is the recommended floor.
 
 ## 6. Trusted base
 
@@ -191,7 +219,7 @@ Assumed by the kernel's design:
 10. Whoever can change policy is authorised to.
 11. An intent's owner is who the record says, and an owner confirming criteria has read them.
 12. A reviewer who says a check tests a criterion is right.
-13. Owner, reviewer and worker are the separate parties the records say they are.
+13. A declared separation level is true, and a harness that attests to one is honest and controls its own key.
 
 Declared by each provider in its manifest, for example: the model checker is correct, the language runtime under it is correct, the foreign-function shell is not covered by the proof.
 

@@ -1,0 +1,27 @@
+name: Static checks on the project runner
+# Every gap check, on the project's own runner, for every change to main.
+# The same checks run for pull requests on hosted machines (checks.yml).
+#
+# Never triggered by pull requests: code from a fork must not execute on the
+# project runner. Skipped until the repository variable MODEL_RUNNER is "ready".
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: oracle-static-main
+  cancel-in-progress: true
+jobs:
+  static:
+    if: github.repository == 'sloik/dodona' && github.ref == 'refs/heads/main' && vars.MODEL_RUNNER == 'ready'
+    runs-on: [self-hosted, Linux, ARM64, oracle, dodona]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout maintained main revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run every static and gap check
+        run: python3 tools/check_repo.py

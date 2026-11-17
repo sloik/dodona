@@ -20,31 +20,37 @@
     "12": "safety violation found",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "three criteria (two hard, one deferred), at most two amendments",
+  "bounds": "two or three criteria (hard and deferred), at most one or two amendments, three separation levels",
   "cases": [
     {
-      "config": "design_separate_owner.cfg",
+      "config": "design_three_criteria.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "Owner and worker are different parties, independent approver required."
+      "purpose": "Three criteria, one amendment at most: every property holds."
     },
     {
-      "config": "design_same_party_strict.cfg",
+      "config": "design_two_criteria.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "Owner also does the work, independent approver required: no amendment can take effect."
+      "purpose": "Two criteria, two amendments at most: every property holds."
     },
     {
-      "config": "design_same_party_lenient.cfg",
+      "config": "design_low_floor.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "Owner also does the work, no independent approver required: self-granted amendments take effect and are marked."
+      "purpose": "A policy that accepts any separation: every property still holds, and levels are still recorded and shown."
+    },
+    {
+      "config": "floor_blocks_weak_grantor.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "When the grantor can record at most `helper` and policy demands `apart`, no amendment opens the way to delivery."
     },
     {
       "config": "reach_delivered.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Delivery is reachable with hard gates still in place.",
+      "purpose": "Delivery is reachable.",
       "of": "NeverDelivered"
     },
     {
@@ -58,42 +64,64 @@
       "config": "reach_delivered_by_amendment.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "An owner's amendment can open the way to delivery, so amendments are not dead rules.",
+      "purpose": "A sufficiently separate owner's amendment can open the way to delivery, so amendments are live rules.",
       "of": "NeverDeliveredByAmendment"
-    },
-    {
-      "config": "strict_blocks_self_amendment.cfg",
-      "expect": "no-violation",
-      "expect_exit": 0,
-      "purpose": "With an independent approver required and owner equal to worker, no amendment opens the way to delivery."
     },
     {
       "config": "mutant_worker_can_amend.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: the worker's amendment is accepted.",
+      "purpose": "Planted defect: the worker's amendment takes effect.",
       "of": "OnlyOwnerAmends"
     },
     {
-      "config": "mutant_self_counts.cfg",
+      "config": "mutant_worker_keeps_level.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a self-granted amendment takes effect although an independent approver is required.",
-      "of": "NoSelfWhenIndependent"
+      "purpose": "Planted defect: the worker granting to itself keeps the separation level it wrote down.",
+      "of": "WorkerIsSelf"
     },
     {
-      "config": "mutant_hide_self.cfg",
+      "config": "mutant_below_floor_counts.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a self-granted amendment is not marked.",
-      "of": "SelfShown"
+      "purpose": "Planted defect: an amendment below the policy's separation floor takes effect.",
+      "of": "FloorHolds"
     },
     {
-      "config": "mutant_silent_change.cfg",
+      "config": "mutant_missing_is_apart.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a gate changes with no amendment on record.",
+      "purpose": "Planted defect: an amendment with no separation recorded is treated as a high level.",
+      "of": "DefaultIsLowest"
+    },
+    {
+      "config": "mutant_hide_level.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the report shows a higher separation level than the one recorded.",
+      "of": "LevelShown"
+    },
+    {
+      "config": "mutant_edit_keeps_confirmation.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a gate is edited directly and the intent stays confirmed.",
       "of": "GateProvenance"
+    },
+    {
+      "config": "mutant_draft_delivers.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: an intent the owner never confirmed is reported delivered.",
+      "of": "DeliveredConfirmed"
+    },
+    {
+      "config": "mutant_unguarded_delivers.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: an intent with no hard gate is reported delivered.",
+      "of": "DeliveredGuarded"
     },
     {
       "config": "mutant_delivered_ignores_unknown.cfg",

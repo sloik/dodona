@@ -13,8 +13,9 @@ dodona is a tool an AI agent can ask that question, so nobody has to take the ag
 | | |
 |---|---|
 | **Stage** | Design. There is no kernel and nothing to run yet |
-| **Exists** | Architecture, data model, 22 proposed decisions, draft protocol schemas, two formal models |
-| **Checked so far** | 9 of 32 design claims, by a bounded model check of a small instance. That says nothing yet about any implementation; see [the claims table](spec/CLAIMS.md) |
+| **Exists** | Architecture, data model, 24 proposed decisions, draft protocol schemas, two formal models |
+| **Checked so far** | 6 of 36 design claims, by a bounded model check of a small instance. That says nothing yet about any implementation; see [the claims table](spec/CLAIMS.md) |
+| **Guarded by** | Automatic checks on every change: a gap that is found becomes a check ([list](docs/gap-checks.md)) |
 | **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ## The chain dodona watches
@@ -51,7 +52,8 @@ The status is never one word. Every result leads with the whole picture:
 delivered · gates: 4 hard, 1 soft, 1 deferred (open)
           · shown: bounded (weakest link: specification → code)
           · agreed: criteria confirmed by the owner; checks matched by a reviewer
-          · exceptions: 1, self-granted: 0 · independence: verified
+          · separation: apart (declared), 5 of 6 acts apart or better
+          · exceptions: 1
 ```
 
 ## Only a pass is a pass
@@ -101,7 +103,22 @@ stateDiagram-v2
 
 Nobody sets these states by hand. They follow from evidence. An intent with no hard gate is reported as `unguarded` and can never be delivered, so declaring everything soft is not a way through.
 
-**Exceptions leave a mark.** Changing a criterion or loosening a gate is a recorded amendment, granted only by the owner of the intent, human or agent. Best practice: the one who grants an exception is never the one whose work is being judged. An exception an agent grants to itself is shown first in every report, and a project can rule such exceptions out entirely.
+**Exceptions leave a mark.** Changing a criterion or loosening a gate is a recorded amendment, granted only by the owner of the intent, human or agent. Best practice: the one who grants an exception is never the one whose work is being judged.
+
+## How separate was the checker?
+
+Agents can and should start other agents to check their work. dodona cannot make a checker independent, and does not pretend to. It grades how separate the checker was, and shows the grade next to every result:
+
+| Level | Meaning |
+|---|---|
+| `self` | The worker checked its own work, or nothing is recorded |
+| `helper` | Someone else, but started, briefed or informed by the worker |
+| `apart` | A fresh session that saw only the work and the criteria |
+| `tested` | Apart, and it was shown a known-bad case and rejected it |
+| `cross-make` | Tested, and a different model family, vendor or a plain tool |
+| `credentialed` | Signed with a credential the worker cannot create (not available yet) |
+
+Nothing recorded means `self`. A project sets the lowest level at which an exception or a confirmation counts.
 
 ## Nothing is built in
 

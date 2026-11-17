@@ -56,6 +56,7 @@ A **run description** names: the program as an exact file inside a pinned tool t
 | [common.schema.json](common.schema.json) | Identities, names, platforms, verdicts, status, strength, isolation, capability names |
 | [provider-manifest.schema.json](provider-manifest.schema.json) | What a provider announces |
 | [evidence-record.schema.json](evidence-record.schema.json) | One ledger entry |
+| [act-record.schema.json](act-record.schema.json) | One act of judgement, with what is needed to grade how separate the actor was from the work |
 
 Still to be written: request and result messages per capability, the run description, the submission and outcome ledger entries, the lock, policy, the configuration reference, the canonical encoding with its test vectors, the normative path check with its test vectors, and the agent interface.
 

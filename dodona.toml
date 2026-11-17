@@ -73,7 +73,7 @@ provider = "dodona.store.local"
 [policy]
 path = "policy.toml"
 reference = "main"
-independent_approver = true   # exceptions granted by whoever did the work do not count (decision 0020)
+exception_separation = "apart"   # least separation at which an exception takes effect (decision 0024)
 
 [[binding]]
 name = "intents"

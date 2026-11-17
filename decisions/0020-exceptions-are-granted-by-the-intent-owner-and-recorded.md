@@ -23,18 +23,16 @@ Only the owner of the intent can grant one. The owner may be a person or an agen
 
 **Best practice: the one who grants an exception is never the one whose work is being judged.** Give the intent an owner that is separate from whoever does the work: a person, or a different agent with no part in the work.
 
-dodona supports that practice in three ways. An amendment granted by the party that did the work is marked **self-granted**, and that mark is shown first, not buried, in every report that rests on it. A self-granted amendment caps the affected criterion at the lowest level above nothing, `asserted`, and the report says the claim is unreviewed. And a project's policy can require an independent approver, in which case a self-granted amendment does not count at all and the gate stays closed. Requiring one is the recommended setting, and dodona's own repository uses it.
+dodona supports that practice by grading it ([0024](0024-separation-is-graded-not-enforced.md)). Every amendment carries a **separation** level: how separate its grantor was from the work, from `self` up. The level leads every report that rests on the amendment. An amendment granted at `self` caps the affected criterion at `asserted`. And a project's policy sets the lowest level at which an amendment takes effect; below it the amendment is recorded and the gate stays closed. `apart` is the recommended floor, and dodona's own repository uses it.
 
-Amendments are never erased and never applied silently. A report on an intent states how many amendments it rests on and which criteria they touched, and the assurance of an amended criterion can be no higher than `asserted` for the part the amendment covers.
-
-**Independence is only as good as identity.** An agent that can invent a second identity can approve its own work under another name. How identities are established is not designed yet. Until an owner's identity is bound to something the working agent cannot create, every report states `independence: unverified`.
+**Independence is only as good as identity.** An agent that can invent a second identity can approve its own work under another name. How identities are established is not designed yet. Until an owner's identity is bound to something the working agent cannot create, the top level of the scale cannot be granted and levels above `helper` are usually marked `declared`.
 
 ## Consequences
 
 - There is an honest way through every gate, and it leaves a mark.
 - The authority to lower the bar belongs to whoever set it, which answers who may change what must pass.
-- A self-granted exception can never look like an independent one, and a project can rule it out entirely.
-- Where independence is not required, the guarantee is weaker, and every report says so.
+- A self-granted exception can never look like a separate one, and a project can rule it out entirely.
+- Where the floor is low, the guarantee is weaker, and every report says so.
 
 ## Alternatives rejected
 
@@ -44,4 +42,4 @@ Amendments are never erased and never applied silently. A report on an intent st
 
 ## What would show this wrong
 
-A gate is passed, moved or dropped with no amendment on record, a report rests on an amendment without saying so, or a self-granted amendment is shown without its mark.
+A gate is passed, moved or dropped with no amendment on record, a report rests on an amendment without saying so, or an amendment is shown at a higher separation level than the one it was granted at.

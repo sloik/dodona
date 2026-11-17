@@ -1,0 +1,37 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 37 and seed 7754637520545366392 with 1 worker on 1 cores with 494MB heap and 64MB offheap memory [pid: 4141269] (Linux 7.0.0-1013-oracle aarch64, Ubuntu 21.0.13.0.3 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /work/MC.tla
+Parsing file /work/EvidenceReuse.tla
+Parsing file /tmp/TLC.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/FiniteSets.tla
+Parsing file /tmp/Sequences.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module EvidenceReuse
+Semantic processing of module TLC
+Semantic processing of module MC
+Starting... (2026-11-17 13:49:50)
+Computing initial states...
+Computed 2 initial states...
+Computed 4 initial states...
+Finished computing initial states: 8 distinct states generated at 2026-11-17 13:49:51.
+Progress(9) at 2026-11-17 13:49:54: 79,277 states generated (79,277 s/min), 21,803 distinct states found (21,803 ds/min), 11,622 states left on queue.
+Progress(15) at 2026-11-17 13:50:54: 2,905,465 states generated (2,826,188 s/min), 554,271 distinct states found (532,468 ds/min), 185,374 states left on queue.
+Progress(17) at 2026-11-17 13:51:54: 5,634,722 states generated (2,729,257 s/min), 987,509 distinct states found (433,238 ds/min), 269,311 states left on queue.
+Progress(18) at 2026-11-17 13:52:54: 8,210,191 states generated (2,575,469 s/min), 1,368,441 distinct states found (380,932 ds/min), 320,221 states left on queue.
+Progress(19) at 2026-11-17 13:53:54: 10,775,613 states generated (2,565,422 s/min), 1,723,703 distinct states found (355,262 ds/min), 343,401 states left on queue.
+Progress(20) at 2026-11-17 13:54:54: 13,234,366 states generated (2,458,753 s/min), 2,048,218 distinct states found (324,515 ds/min), 348,927 states left on queue.
+Progress(21) at 2026-11-17 13:55:54: 15,714,855 states generated (2,480,489 s/min), 2,352,869 distinct states found (304,651 ds/min), 329,861 states left on queue.
+Error: TLC threw an unexpected exception.
+This was probably caused by an error in the spec or model.
+See the User Output or TLC Console for clues to what happened.
+The exception was a java.lang.RuntimeException
+: java.io.IOException: File too large
+17611514 states generated, 2581743 distinct states found, 310237 states left on queue.
+The depth of the complete state graph search is 21.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 6 and the 95th percentile is 3).
+Finished in 06min 51s at (2026-11-17 13:56:41)

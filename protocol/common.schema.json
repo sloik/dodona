@@ -146,6 +146,25 @@
         "none"
       ],
       "description": "Ordered, strongest first (decision 0019)."
+    },
+    "separation": {
+      "enum": [
+        "self",
+        "helper",
+        "apart",
+        "tested",
+        "cross-make",
+        "credentialed"
+      ],
+      "description": "Ordered, weakest first (decision 0024). The default when nothing is recorded is self."
+    },
+    "fact_source": {
+      "enum": [
+        "checked",
+        "attested",
+        "declared"
+      ],
+      "description": "Who stands behind a fact: dodona recomputed it; a harness whose key policy lists signed it; someone says so."
     }
   }
 }

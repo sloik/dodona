@@ -4,7 +4,7 @@ Each claim the architecture makes, the check that could show it false, and wheth
 
 Status values:
 
-- **checked**: every case of the check ran to completion with the expected outcome, including its planted defects. The run is listed under [Recorded runs](#recorded-runs).
+- **checked**: every case of the check ran to completion with the expected outcome, including its planted defects, against the model files as they are now. The run is listed under [Recorded runs](#recorded-runs) and in [runs/index.json](runs/index.json); the repository checks fail if a claim is marked checked and its model files have changed since.
 - **modelled, unchecked**: a model exists; no completed run is recorded.
 - **not yet modelled**: the claim is only prose so far.
 
@@ -29,15 +29,20 @@ C6 does not show the assumptions hold. It shows they are load-bearing, which is 
 
 ## Modelled in `intent/IntentGates.tla`
 
-Bounds: one intent with three criteria (two hard, one deferred) and at most two amendments.
+Bounds: one intent with two or three criteria (hard and deferred), at most one or two amendments, three separation levels.
 
-This model is narrow, and a review said so. It takes the declared gates and the identities of the parties as given, so it says nothing about a baseline, about an intent with no hard gate, or about an agent inventing a second identity. `DeliveredSound` and `FulfilledSound` can only catch a kernel that computes the report wrongly; they do not model deriving status from evidence. `GateProvenance` does not require the amendment to come before the change. Also not covered: child intents, assurance levels, time limits and checks that vary between runs.
+This model is narrow. It takes a recorded separation level as given and checks only what the kernel does with it; whether the level is true is outside it. `DeliveredSound`, `DeliveredConfirmed`, `DeliveredGuarded` and `FulfilledSound` can only catch a kernel that computes the report wrongly. `GateProvenance` does not require the amendment to come before the change. Not covered: child intents, the text of criteria, assurance levels, time limits and checks that vary between runs.
+
+The model was rewritten on 2026-11-17 to add the baseline, the unguarded rule and graded separation. **Run 3 was of the earlier version and no longer supports any claim.** Every status below is unchecked until the new version has been run.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | **checked**, run 3 |
-| C25 | A gate changes only through an amendment on record granted by the owner; a self-granted amendment is always marked, and takes no effect where an independent approver is required | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends`, `NoSelfWhenIndependent`, `SelfShown` | Silent gate change; worker's amendment accepted; self-granted amendment takes effect; self-granted amendment not marked | **checked**, run 3 |
-| C28 | Amendments are live rules: an owner's amendment can open the way to delivery, and under an independent-approver policy a self-granted one cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence in the strict case | (reachability) | **checked**, run 3 |
+| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | modelled, unchecked |
+| C25 | While an intent is confirmed, a gate differs from the baseline only through an amendment on record that took effect, and only the owner's amendments take effect | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends` | A gate is edited and the intent stays confirmed; the worker's amendment takes effect | modelled, unchecked |
+| C28 | Amendments are live rules: a sufficiently separate owner's amendment can open the way to delivery, and one below the floor cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence when the grantor cannot reach the floor | (reachability) | modelled, unchecked |
+| C29 | An intent the owner has not confirmed, or that was edited since, is never reported delivered | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `DeliveredConfirmed` | An unconfirmed intent is reported delivered | modelled, unchecked |
+| C30 | An intent with fewer hard gates than policy demands is never reported delivered. Children are not modelled | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredGuarded` | An intent with no hard gate is reported delivered | modelled, unchecked |
+| C33 | An act with no separation recorded is graded `self`, as is the worker granting to itself; an amendment below policy's floor does not take effect; the level reported is the level used | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `DefaultIsLowest`, `WorkerIsSelf`, `FloorHolds`, `LevelShown` | Nothing recorded treated as a high level; the worker keeps the level it wrote down; an amendment below the floor takes effect; a higher level shown than recorded | modelled, unchecked |
 
 ## Not yet modelled
 
@@ -62,10 +67,11 @@ This model is narrow, and a review said so. It takes the declared gates and the 
 | C24 | A criterion's reported assurance is never above its weakest link | [0019](../decisions/0019-assurance-is-stated-per-link.md) | Model, plus scenarios | Kernel that averages the links |
 | C26 | A varying check is never reported from fewer runs than it declared | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Scenarios with declared sample sizes | Kernel that stops at the first passing run |
 | C27 | Two intents that touch the same definition are reported as colliding before work starts | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Scenarios | Index that compares declared paths only as text |
-| C29 | An intent that was never confirmed, or changed since, is never delivered; any difference from the confirmed baseline is an amendment | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Model with a baseline identity | Kernel that hashes the statement and not the gates |
-| C30 | An intent with no hard gate, or fewer than policy demands, is never delivered, including when the hard criterion was moved into a child | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Model with children and a policy floor | Kernel that counts gates per intent instead of over descendants |
 | C31 | An evidence link with nothing reported counts as none, and never raises a score | [0019](../decisions/0019-assurance-is-stated-per-link.md) | Scenarios | Kernel that takes the weakest of the reported links only |
 | C32 | A status is never shown without its headline, and a self-granted exception or unverified independence is always in it | [0019](../decisions/0019-assurance-is-stated-per-link.md), [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Scenarios on the agent interface | Interface that returns the status word alone |
+| C34 | Moving a hard criterion into a child intent, or removing a child, never turns an undeliverable intent into a deliverable one | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Model with children and totals over descendants | Kernel that counts gates per intent |
+| C35 | A pass that follows a failure on an unchanged target is flagged and graded no higher than `helper`; an attempt with no result counts as a failure | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | Model with tickets and attempts | Kernel that keeps only the latest attempt |
+| C36 | A separation level is never shown without its weakest source, and a fact not covered by a valid attestation is treated as declared | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | Scenarios | Kernel that trusts an unsigned attestation |
 
 ## Recorded runs
 
@@ -108,7 +114,9 @@ With run 1, all 14 cases of this model now match. C1 to C6 are checked, for the 
 
 The soundness of using a state view is an argument, not something the checker verified. It is the weakest step in this result.
 
-### Run 3: `intent/IntentGates.tla`, 2026-11-17
+### Run 3: `intent/IntentGates.tla`, 2026-11-17 (superseded)
+
+**This run was of an earlier version of the model. The model has since been rewritten, so this run supports no current claim.** It is kept as a record.
 
 Checker: TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802), one worker. Model files (SHA-256): `IntentGates.tla` `164207df042124401ac7e40852621eb6ef8d25eec9ff9f2b983da53216039cfa`, `MC.tla` `858ad6b8f3cbb0b0efae74ac7a6dc208b248a3b955de0b5866b68d7cf1e7f9a5`.
 

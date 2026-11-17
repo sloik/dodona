@@ -1,0 +1,54 @@
+{
+  "about": "Which recorded run supports which claim, and the exact files it was run on. tools/check_repo.py fails if a claim is marked checked in CLAIMS.md and no run listed here still matches the files.",
+  "runs": [
+    {
+      "id": "run-1",
+      "date": "2026-11-17",
+      "model": "kernel",
+      "outputs": "run-1-kernel",
+      "files": {
+        "EvidenceReuse.tla": "3d4b878a24d6e96d925b4c7d0406041eb42648974db8a59b4792a2d480312c20",
+        "MC.tla": "85f57a901972d333d7939e49da4d89a91851c09c6cd26e1a0b6ec060b5b56c8c"
+      },
+      "claims": [
+        "C4",
+        "C5",
+        "C6"
+      ],
+      "note": "13 of 14 cases matched; the design case did not complete."
+    },
+    {
+      "id": "run-2",
+      "date": "2026-11-17",
+      "model": "kernel",
+      "outputs": "run-2-kernel-design",
+      "files": {
+        "EvidenceReuse.tla": "3d4b878a24d6e96d925b4c7d0406041eb42648974db8a59b4792a2d480312c20",
+        "MC.tla": "85f57a901972d333d7939e49da4d89a91851c09c6cd26e1a0b6ec060b5b56c8c",
+        "MCDesign.tla": "0506b653fb859765ffbbb46ce34e713137826240c571361ba9792228eff3439b",
+        "design.cfg": "c214becbb3978d011b9d1f890f9f84d967858aeede311d85fcf46ec0edaaa451"
+      },
+      "claims": [
+        "C1",
+        "C2",
+        "C3"
+      ],
+      "needs": [
+        "run-1"
+      ],
+      "note": "The design case, completed with a state view."
+    },
+    {
+      "id": "run-3",
+      "date": "2026-11-17",
+      "model": "intent",
+      "outputs": "run-3-intent",
+      "files": {
+        "IntentGates.tla": "164207df042124401ac7e40852621eb6ef8d25eec9ff9f2b983da53216039cfa",
+        "MC.tla": "858ad6b8f3cbb0b0efae74ac7a6dc208b248a3b955de0b5866b68d7cf1e7f9a5"
+      },
+      "claims": [],
+      "note": "Superseded: the model was rewritten after this run."
+    }
+  ]
+}

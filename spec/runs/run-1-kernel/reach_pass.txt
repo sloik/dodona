@@ -1,0 +1,57 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 68 and seed -6749496284371419159 with 1 worker on 1 cores with 494MB heap and 64MB offheap memory [pid: 18579] (Linux 7.0.0-1013-oracle aarch64, Ubuntu 21.0.13.0.3 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /work/MC.tla
+Parsing file /work/EvidenceReuse.tla
+Parsing file /tmp/TLC.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/FiniteSets.tla
+Parsing file /tmp/Sequences.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module EvidenceReuse
+Semantic processing of module TLC
+Semantic processing of module MC
+Starting... (2026-11-17 14:09:16)
+Computing initial states...
+Computed 2 initial states...
+Computed 4 initial states...
+Finished computing initial states: 8 distinct states generated at 2026-11-17 14:09:17.
+Error: Invariant NeverPassed is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ completed = {}
+/\ running = {}
+/\ defHash = [d1 |-> 0, d2 |-> 0]
+/\ backend = "up"
+/\ toolHash = 0
+/\ changed = {}
+/\ ledger = {}
+
+State 2: <Submit line 113, col 5 to line 123, col 67 of module EvidenceReuse>
+/\ completed = {}
+/\ running = { [ dh |-> [d1 |-> 0],
+    th |-> 0,
+    ob |-> "o1",
+    key |-> [deps |-> [d1 |-> 0], tool |-> 0] ] }
+/\ defHash = [d1 |-> 0, d2 |-> 0]
+/\ backend = "up"
+/\ toolHash = 0
+/\ changed = {}
+/\ ledger = {}
+
+State 3: <Next line 153, col 8 to line 153, col 48 of module EvidenceReuse>
+/\ completed = {[ob |-> "o1", key |-> [deps |-> [d1 |-> 0], tool |-> 0], verdict |-> "passed"]}
+/\ running = {}
+/\ defHash = [d1 |-> 0, d2 |-> 0]
+/\ backend = "up"
+/\ toolHash = 0
+/\ changed = {}
+/\ ledger = {[ob |-> "o1", key |-> [deps |-> [d1 |-> 0], tool |-> 0], verdict |-> "passed"]}
+
+68 states generated, 37 distinct states found, 26 states left on queue.
+The depth of the complete state graph search is 3.
+The average outdegree of the complete state graph is 3 (minimum is 0, the maximum 3 and the 95th percentile is 3).
+Finished in 01s at (2026-11-17 14:09:17)

@@ -13,14 +13,17 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# A newer push waits for the run in progress. Cancelling would leave its jobs
+# behind on the shared queue.
 concurrency:
   group: models-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   models:
     if: github.repository == 'sloik/dodona' && github.ref == 'refs/heads/main' && vars.MODEL_RUNNER == 'ready'
     runs-on: [self-hosted, Linux, ARM64, oracle, dodona]
-    timeout-minutes: 180
+    # Long, because the shared queue may be busy with other projects' work.
+    timeout-minutes: 720
     steps:
       - name: Checkout maintained main revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
