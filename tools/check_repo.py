@@ -76,7 +76,7 @@ def check_model_cases() -> None:
         for name in sorted(present - listed):
             problems.append(f"{expected.parent.name}: {name} exists but has no expected outcome")
         for case in spec["cases"]:
-            if case["expect"] == "violation" and "of" not in case:
+            if case["expect"] in ("violation", "temporal-violation") and "of" not in case:
                 problems.append(f"{expected.parent.name}: {case['config']} expects a violation of nothing")
             root = case.get("model", spec["model"])
             if not (expected.parent / root).exists():
@@ -162,13 +162,13 @@ def gap_every_property_has_a_defect() -> None:
     """A property was once listed with no planted defect, so it could not be seen to fail."""
     for expected in sorted(ROOT.glob("spec/*/expected.json")):
         spec = json.loads(expected.read_text(encoding="utf-8"))
-        guarded = {c["of"] for c in spec["cases"] if c["expect"] == "violation"}
+        guarded = {c["of"] for c in spec["cases"] if c["expect"] in ("violation", "temporal-violation")}
         for case in spec["cases"]:
             if case["expect"] != "no-violation":
                 continue
             cfg = (expected.parent / case["config"]).read_text(encoding="utf-8")
             for line in cfg.splitlines():
-                if line.startswith("INVARIANT"):
+                if line.startswith(("INVARIANT", "PROPERTY")):
                     for prop in line.split()[1:]:
                         if prop not in guarded and prop != "TypeOK" and not prop.startswith("Never"):
                             problems.append(f"{expected.parent.name}: {prop} is checked in {case['config']} but no case shows it can fail")
@@ -427,6 +427,13 @@ class JudgeTests(unittest.TestCase):
     def test_executor_refusal_is_not_a_match(self):
         self.assertFalse(check_models.judge(self.hold, 75, "")["match"])
         self.assertFalse(check_models.judge(self.viol, 75, "")["match"])
+
+    def test_temporal_violation(self):
+        live = {"config": "c.cfg", "expect": "temporal-violation", "expect_exit": 13, "of": "P"}
+        self.assertTrue(check_models.judge(live, 13, "Error: Temporal properties were violated.\n")["match"])
+        self.assertFalse(check_models.judge(live, 0, self.done)["match"])
+        self.assertFalse(check_models.judge(live, 12, "Error: Invariant Sound is violated.\n")["match"])
+        self.assertFalse(check_models.judge(self.hold, 13, "Error: Temporal properties were violated.\n")["match"])
 
     def test_crash_is_not_the_expected_violation(self):
         self.assertFalse(check_models.judge(self.viol, 255, "java.io.IOException: File too large\n")["match"])

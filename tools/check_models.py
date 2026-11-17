@@ -32,11 +32,15 @@ def judge(case: dict, exit_code: int | None, output: str) -> dict:
     result = {"config": case["config"], "expected": want, "exit": exit_code}
     if exit_code is None:
         return {**result, "outcome": "did-not-run", "match": False}
+    if want == "temporal-violation":
+        ok = exit_code == case["expect_exit"] and "Temporal properties were violated." in output
+        outcome = "temporal violation" if ok else ("no-violation" if NO_ERROR in output else "did-not-complete")
+        return {**result, "outcome": outcome, "match": ok}
     if want == "no-violation":
         complete = NO_ERROR in output and ", 0 states left on queue." in output
         ok = exit_code == case["expect_exit"] and complete
         outcome = "no-violation" if ok else "did-not-complete"
-        if "is violated" in output:
+        if "is violated" in output or "were violated" in output:
             outcome = "violation"
         return {**result, "outcome": outcome, "match": ok}
     # The checker words a violation found in the very first state differently.
@@ -82,12 +86,17 @@ def main() -> int:
     mode.add_argument("--site", type=pathlib.Path, help="JSON file describing the site's executor")
     mode.add_argument("--replay", type=pathlib.Path, help="judge recorded outputs instead of running")
     ap.add_argument("--report", type=pathlib.Path, help="write the JSON report here")
+    ap.add_argument("--only", action="append", default=[], metavar="MODEL",
+                    help="run only this model directory under spec/ (may be repeated)")
+    ap.add_argument("--save", type=pathlib.Path, help="keep each case's raw output under this directory")
     args = ap.parse_args()
 
     site = json.loads(args.site.read_text(encoding="utf-8")) if args.site else None
     report = []
     for expected in sorted(ROOT.glob("spec/*/expected.json")):
         model_dir = expected.parent
+        if args.only and model_dir.name not in args.only:
+            continue
         spec = json.loads(expected.read_text(encoding="utf-8"))
         for case in spec["cases"]:
             name = case["config"].removesuffix(".cfg")
@@ -104,6 +113,9 @@ def main() -> int:
                 argv = command_for(site, model_dir, spec, case)
                 done = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace")
                 output, exit_code = done.stdout, done.returncode
+            if args.save and exit_code is not None:
+                (args.save / model_dir.name).mkdir(parents=True, exist_ok=True)
+                (args.save / model_dir.name / f"{name}.txt").write_text(output, encoding="utf-8")
             verdict = judge(case, exit_code, output)
             verdict.update(model=model_dir.name, states=state_counts(output))
             report.append(verdict)
