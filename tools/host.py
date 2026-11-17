@@ -223,9 +223,9 @@ def list_project(session: Session, root: pathlib.Path) -> tuple[list[dict], list
 
 
 def lock_tools() -> tuple[list[dict], dict]:
-    """The tools as the lock pins them. A tool that is not pinned yet has a digest of zeros,
+    """The tools as this site's pins give them (not yet a lock: decision 0026). A tool that is not pinned yet has a digest of zeros,
     which no measurement can equal, so nothing recorded in that state counts later."""
-    lock = json.loads((ROOT / "dodona.lock").read_text(encoding="utf-8"))
+    lock = json.loads((ROOT / ".github" / "site" / "pins.json").read_text(encoding="utf-8"))
     pinned = {t["name"]: t for t in lock["tools"]}
     return [{"name": n, "version": pinned[n]["version"], "digest": "sha256:" + (pinned[n]["sha256"] or "0" * 64)} for n in sorted(pinned)], pinned
 
@@ -296,11 +296,28 @@ def collect(args) -> int:
         print("the executor returned nothing; every run is recorded as unavailable:", (done.stderr or done.stdout)[-300:].strip())
     seen = json.loads((fetched / "measured.json").read_text(encoding="utf-8")) if (fetched / "measured.json").exists() else {}
     measured = {name: seen.get(path) for name, path in where.items()}
-    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "pending": pending, "measured": measured,
+    marker = fetched / "complete.json"
+    complete = reachable and marker.exists() and json.loads(marker.read_text(encoding="utf-8")).get("cases") == [c["name"] for c in cases]
+    if reachable and not complete:
+        print("the job did not run to its end; nothing from it will be recorded as a result")
+    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "complete": complete, "pending": pending, "measured": measured,
                                                "executor": site.get("executor_name", "site")}, indent=1) + "\n", encoding="utf-8")
     (out / "transcript-collect.json").write_text(json.dumps(transcript, indent=1) + "\n", encoding="utf-8")
-    print(json.dumps({"obligations": len(pending), "reachable": reachable}))
+    print(json.dumps({"obligations": len(pending), "reachable": reachable, "complete": complete}))
     return 0
+
+
+def proves_nothing(runs: dict, unmeasured: list, mismatched: list) -> str | None:
+    """Why no run of this job may become a verdict, or None if the job can be read."""
+    if not runs.get("reachable"):
+        return "unavailable"
+    if not runs.get("complete"):
+        return "job-incomplete"  # a job stopped part of the way proves nothing, whatever it left behind
+    if unmeasured:
+        return "tool-unmeasured"  # never to be confused with a tool that is merely not pinned
+    if mismatched:
+        return "tool-mismatch"
+    return None
 
 
 def kernel(command: list[str], sub: str, payload: dict) -> dict:
@@ -317,6 +334,7 @@ def conclude(args) -> int:
     transcript: list = []
     tools, pinned = lock_tools()
     measured = runs["measured"]
+    unmeasured = [n for n in sorted(pinned) if not measured.get(pinned[n]["file"])]
     ran = [{"name": n, "digest": "sha256:" + (measured.get(pinned[n]["file"]) or "0" * 64)} for n in sorted(pinned)]
     unpinned = [n for n in sorted(pinned) if pinned[n]["sha256"] is None]
     mismatched = [n for n in sorted(pinned) if pinned[n]["sha256"] is not None and measured.get(pinned[n]["file"]) != pinned[n]["sha256"]]
@@ -333,10 +351,9 @@ def conclude(args) -> int:
             made_with = preimage(obligation, inputs, ran, session.manifest)
 
             def report_for(number, description, name=name):
-                if not runs["reachable"]:
-                    return {"end": "unavailable"}
-                if mismatched:
-                    return {"end": "tool-mismatch"}
+                nothing = proves_nothing(runs, unmeasured, mismatched)
+                if nothing:
+                    return {"end": nothing}
                 if name not in stored or stored[name]["run"] != description:
                     raise Refused("run-changed")
                 captured = args.runs / "outputs" / f"{name}.txt"
@@ -369,7 +386,7 @@ def conclude(args) -> int:
     finally:
         session.close()
     (args.runs / "transcript-conclude.json").write_text(json.dumps(transcript, indent=1) + "\n", encoding="utf-8")
-    counts.update(unpinned_tools=unpinned, mismatched_tools=mismatched)
+    counts.update(unpinned_tools=unpinned, mismatched_tools=mismatched, unmeasured_tools=unmeasured, job_complete=bool(runs.get("complete")))
     print(json.dumps(counts))
     return 0
 

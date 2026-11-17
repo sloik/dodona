@@ -7,7 +7,7 @@ governs:
   - tools/host.py
   - tools/status.py
   - providers/tlc/
-  - dodona.lock
+  - .github/site/pins.json
 supersedes: []
 ---
 
@@ -27,7 +27,11 @@ A kernel could work out status from a scenario, and a model checker ran in CI, b
 
 **A result is keyed by what was measured.** The executor measures the digest of each tool file it ran. The key of an evidence record is built from those measurements, not from what was asked for. Status builds the key it looks for from the lock. So a result made with a tool the lock does not pin, or pins differently, is in the ledger and never counts. A tool pinned differently from what was measured ends every run of the job as `tool-mismatch` before the provider is asked anything.
 
-**The lock is a draft.** `dodona.lock` is written by hand, pins single files and not whole tool trees, and has no resolver behind it. The Java runtime is whatever the executor has; only its launcher file is measured, which says little about the runtime. This is stated in the file and in every record made while a tool is unpinned.
+**There is no lock yet.** The site keeps a list of the files its executor must be measured to run, `.github/site/pins.json`. It is written by hand and pins single files. It is not the lock of [0008](0008-reproducibility-levels.md): that pins whole tool trees by a digest verified against upstream, and nothing computes one yet. The Java runtime is whatever the executor has; only its launcher file is measured, which says little about the runtime.
+
+**Three ways a job proves nothing.** The executor measures its tools before the first run and writes a marker after the last. If the marker is missing the job did not finish, and every run of it ends as `job-incomplete`, whatever outputs it left. If a measurement is missing the runs end as `tool-unmeasured`. If a measurement differs from a pin they end as `tool-mismatch`. None of these reaches the provider, and none can become a verdict.
+
+**The shapes are smaller than the protocol's.** The evidence entries the host writes, the status report the kernels give, and the pins file do not yet have the shape of `protocol/evidence-record.schema.json`, `protocol/status.schema.json` and `protocol/lock.schema.json`. They hold what the kit's status rules need and no more. Growing them into the protocol's shapes is tracked as its own piece of work; until then those three schemas describe a target, not what runs.
 
 **Protocol changes this forced.** A run description may give the directory a program starts in, and may name a file of a tool in an argument as `${tool:NAME}/PATH`; a tool tree need not be placed in the working directory; a check request carries the link from a planted defect to what it must break. Three rules were added to those a schema cannot express, each with a case in `conformance/provider/check-cases.json`.
 

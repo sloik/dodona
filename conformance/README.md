@@ -249,6 +249,8 @@ This judges that one host. No kernel hosts a provider yet.
 
 ## Not yet in the kit
 
+- Two rules for provider messages have no case: that every file a provider names is hashed again, and that each run of a check is submitted under its own key.
+- The evidence entries and the status report in the kit are smaller than `protocol/evidence-record.schema.json` and `protocol/status.schema.json` describe. Those schemas are the target, and nothing validates a kernel's output against them yet.
 - A kernel that hosts providers. The rules for provider messages are judged on two stage-0 hosts only.
 - Kit adequacy: running kernels with known defects against the kit and reporting the fraction it rejects.
 - Anything not modelled: the ledger's crash behaviour, time limits, varying checks, executors, the lock, more than one level of child intents.

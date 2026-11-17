@@ -52,6 +52,16 @@ def main() -> int:
         return 78
     manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
     out = pathlib.Path(manifest["out"])
+    out.mkdir(parents=True, exist_ok=True)
+    # What is about to be run: the digest of each program and library the site asked to have
+    # measured. Done before the first case, so it is there even if the job is stopped later.
+    measured = {}
+    for path in manifest.get("measure", []):
+        try:
+            measured[path] = hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+        except OSError:
+            measured[path] = None
+    (out / "measured.json").write_text(json.dumps(measured, indent=1), encoding="utf-8")
     for case in manifest["cases"]:
         target = out / case["name"]
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -70,14 +80,9 @@ def main() -> int:
         # The checker leaves its working files behind. Left to pile up over many
         # cases they would exhaust the space a job is allowed.
         shutil.rmtree(pathlib.Path(case["cwd"]) / "states", ignore_errors=True)
-    # What was actually run: the digest of each program and library the site asked to have measured.
-    measured = {}
-    for path in manifest.get("measure", []):
-        try:
-            measured[path] = hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
-        except OSError:
-            measured[path] = None
-    (out / "measured.json").write_text(json.dumps(measured, indent=1), encoding="utf-8")
+    # Written last, so a job that was stopped part of the way has no such file
+    # and nothing from it can be taken for the result of a whole job.
+    (out / "complete.json").write_text(json.dumps({"cases": [case["name"] for case in manifest["cases"]]}), encoding="utf-8")
     return 0
 
 

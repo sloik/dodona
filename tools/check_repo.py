@@ -197,6 +197,23 @@ def gap_driver_refuses_outside_the_queue() -> None:
                                 + (" when given a made-up job marker" if extra else ""))
 
 
+def gap_an_unfinished_job_proves_nothing() -> None:
+    """Results were once recorded from a job the queue had stopped part of the way, and a tool nobody measured looked the same as one not yet pinned."""
+    import host
+    cases = [({"reachable": False, "complete": False}, [], [], "unavailable"),
+             ({"reachable": True, "complete": False}, [], [], "job-incomplete"),
+             ({"reachable": True}, [], [], "job-incomplete"),
+             ({"reachable": True, "complete": True}, ["java"], [], "tool-unmeasured"),
+             ({"reachable": True, "complete": True}, [], ["java"], "tool-mismatch"),
+             ({"reachable": True, "complete": True}, [], [], None)]
+    for runs, unmeasured, mismatched, want in cases:
+        if host.proves_nothing(runs, unmeasured, mismatched) != want:
+            problems.append(f"tools/host.py: a job with {runs}, unmeasured {unmeasured}, mismatched {mismatched} must give {want}")
+    driver = (ROOT / ".github" / "site" / "batch_driver.py").read_text(encoding="utf-8")
+    if not (driver.find("measured.json") < driver.find("subprocess.run(case") < driver.find("complete.json")):
+        problems.append(".github/site/batch_driver.py must measure its tools before the first case and write its marker after the last")
+
+
 def gap_one_reader_of_checker_output() -> None:
     """The provider and the older model tool each had their own reading of the checker's output and could have disagreed."""
     provider = (ROOT / "providers" / "tlc" / "provider.py").read_text(encoding="utf-8")
@@ -468,7 +485,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_own_policy_fits_the_schema, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
-              gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output]
+              gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
+              gap_an_unfinished_job_proves_nothing]
 
 
 class JudgeTests(unittest.TestCase):

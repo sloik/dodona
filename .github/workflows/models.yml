@@ -11,7 +11,7 @@ on:
     branches: [main]
     # Records of runs and the claims table are not inputs to a run; changing them
     # must not start another one on the shared queue.
-    paths: ["spec/**", "!spec/runs/**", "!spec/CLAIMS.md", "!spec/README.md", "tools/check_models.py", "tools/check_states.py", "tools/host.py", "tools/status.py", "providers/**", "dodona.lock", "kernel/**", "kernel2/**", ".github/site/**", ".github/workflows/models.yml"]
+    paths: ["spec/**", "!spec/runs/**", "!spec/CLAIMS.md", "!spec/README.md", "tools/check_models.py", "tools/check_states.py", "tools/host.py", "tools/status.py", "providers/**", "kernel/**", "kernel2/**", ".github/site/**", ".github/workflows/models.yml"]
   workflow_dispatch:
 permissions:
   contents: read

@@ -28,6 +28,7 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_generated_kit_files_are_current` | Kit files that hold hashes and keyed check values are generated. Edited by hand, or left behind by a change to the generator, they would be wrong unseen |
 | `gap_driver_refuses_outside_the_queue` | The one file that starts the model checker could be run by hand anywhere. It must refuse, even when given a made-up job marker |
 | `gap_one_reader_of_checker_output` | The provider and the older model tool each read the checker's output their own way and could have disagreed about what a violation is |
+| `gap_an_unfinished_job_proves_nothing` | Six claims were marked checked from a job the queue had stopped part of the way, and a tool nobody had measured was indistinguishable from one not yet pinned. A job with no end marker, or a tool with no measurement, may never yield a verdict |
 
 More checks run as their own tools in CI, because they need to build or install something:
 
