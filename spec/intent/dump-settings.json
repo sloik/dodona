@@ -1,0 +1,6 @@
+{
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  }
+}

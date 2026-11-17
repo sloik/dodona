@@ -15,6 +15,7 @@ nothing; tools/check_models.py does that from the files.
 """
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 
@@ -36,6 +37,10 @@ def main() -> int:
             source = pathlib.Path(case["cwd"]) / extra
             if source.exists():
                 (out / (case["name"] + "." + extra)).write_bytes(source.read_bytes())
+                source.unlink()
+        # The checker leaves its working files behind. Left to pile up over many
+        # cases they would exhaust the space a job is allowed.
+        shutil.rmtree(pathlib.Path(case["cwd"]) / "states", ignore_errors=True)
     return 0
 
 
