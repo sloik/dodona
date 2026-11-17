@@ -15,6 +15,11 @@ const assurance = require('./assurance');
 const tree = require('./tree');
 const attempts = require('./attempts');
 const platforms = require('./platforms');
+const acts = require('./acts');
+const status = require('./status');
+const identity = require('./identity');
+const ledger = require('./ledger');
+const crypto = require('node:crypto');
 const decisions = require('./decisions');
 const { judgeStates } = require('./states');
 
@@ -138,28 +143,114 @@ test('tree status', () => {
 });
 
 test('attempts: refusal then agreement is shopping', () => {
-  const taken = (...states) => states.map((state) => ({ state }));
+  const taken = (...states) => states.map((state, target) => ({ state, target: 0, ticket: String(target) }));
   assert.equal(attempts.overallResult([]), 'none');
   assert.equal(attempts.overallResult(taken('agreed', 'open')), 'refused');
   assert.equal(attempts.isShopped(taken('refused', 'agreed')), true);
   assert.equal(attempts.isShopped(taken('agreed', 'refused')), false);
-  assert.deepEqual(attempts.judge(taken('refused', 'agreed'), 2), { result: 'refused', shopped: true, cap: 'helper', attempts: 2 });
+  assert.deepEqual(attempts.judge(taken('refused', 'agreed'), 0, 'apart'),
+    { result: 'refused', shopped: true, cap: 'helper', attempts: 2, retried: true, granted: 'helper' });
+  assert.equal(attempts.grantedLevel('self', true), 'self'); // the cap never raises
 });
 
 test('platforms: verified claim, reproducibility', () => {
-  const verdicts = { k1: { p1: 'passed', p2: 'passed' }, k2: { p1: 'passed' } };
-  assert.equal(platforms.claimVerified(verdicts, ['k1', 'k2']), true);
-  assert.equal(platforms.claimVerified({ k1: { p1: 'passed', p2: 'failed' } }, ['k1']), false);
-  assert.equal(platforms.reproducibility(verdicts, 'k1'), 'passed');
-  assert.equal(platforms.reproducibility(verdicts, 'k2'), 'unknown');
-  assert.equal(platforms.reproducibility({ k: { p1: 'passed', p2: 'failed' } }, 'k'), 'failed');
+  const record = (entries) => new Map(Object.entries(entries).map(([key, byPlatform]) => [key,
+    new Map(Object.entries(byPlatform).map(([platform, verdicts]) => [platform, new Set(verdicts)]))]));
+  const recorded = record({ k1: { p1: ['passed'], p2: ['passed'] }, k2: { p1: ['passed'] } });
+  assert.equal(platforms.claimVerified(recorded, ['k1', 'k2']), true);
+  assert.equal(platforms.claimVerified(record({ k1: { p1: ['passed'], p2: ['failed'] } }), ['k1']), false);
+  assert.equal(platforms.claimVerified(record({ k1: { p1: ['failed'], p2: ['failed'] } }), ['k1']), true);
+  assert.equal(platforms.reproducibility(recorded, 'k1'), 'agrees');
+  assert.equal(platforms.reproducibility(recorded, 'k2'), 'unknown');
+  assert.equal(platforms.reproducibility(record({ k: { p1: ['passed', 'failed'] } }), 'k'), 'differs');
 });
 
-test('decisions follow the name, not the content', () => {
+test('decisions follow the names, not the content', () => {
   const names = new Map([['n1', 'c'], ['n2', 'a']]);
-  assert.equal(decisions.isFlagged(names, 'n1', 'a'), true);
-  assert.equal(decisions.isFlagged(names, 'n1', 'c'), false);
-  assert.equal(decisions.isFlagged(new Map(), 'n1', 'a'), true);
+  assert.equal(decisions.isFlagged(names, ['n1'], new Map([['n1', 'a']])), true);
+  assert.equal(decisions.isFlagged(names, ['n1'], new Map([['n1', 'c']])), false);
+  assert.equal(decisions.isFlagged(names, ['n1', 'n2'], new Map([['n1', 'c'], ['n2', 'b']])), true);
+  assert.equal(decisions.isFlagged(new Map(), ['n1'], new Map([['n1', 'a']])), true);
+});
+
+const KEY = '6b65792d666f722d7468652d6b69742d6f6e6c792d6e6f742d612d736563726574';
+const policy = { attestors: { h: KEY }, makes: [['a/x'], ['b/y']] };
+const record = () => ({
+  ticket: 't', kind: 'match-check', target: 'sha256:00',
+  actor: { id: 'c', session: 's2', started_by: 'h', make: { vendor: 'b', family: 'y' } },
+  worker: { id: 'w', session: 's1', make: { vendor: 'a', family: 'x' } },
+  brief: { issued_by: 'kernel', content: 'sha256:01' },
+  given: [{ role: 'work', content: 'sha256:02' }],
+  fresh_context: true,
+  transcript: 'sha256:03',
+});
+const attest = (rec, covers) => {
+  const fields = {};
+  for (const name of covers) fields[name] = rec[name];
+  const mac = crypto.createHmac('sha256', Buffer.from(KEY, 'hex')).update(canonicalize(JSON.stringify({ covers, fields })).canonical).digest('hex');
+  return { ...rec, attestation: { harness: 'h', key: 'h', covers, mac } };
+};
+const ALL = ['actor', 'worker', 'brief', 'given', 'fresh_context', 'transcript'];
+
+test('acts: a claim alone earns helper, a vouched record earns its level', () => {
+  assert.deepEqual(acts.gradeAct(record(), policy), { claims: 'apart', level: 'helper', source: 'declared' });
+  assert.deepEqual(acts.gradeAct(attest(record(), ALL), policy), { claims: 'apart', level: 'apart', source: 'attested' });
+});
+
+test('acts: a bad mac, an unlisted key or an uncovered field vouches for nothing', () => {
+  const good = attest(record(), ALL);
+  assert.equal(acts.gradeAct({ ...good, attestation: { ...good.attestation, mac: '0'.repeat(64) } }, policy).level, 'helper');
+  assert.equal(acts.gradeAct({ ...good, attestation: { ...good.attestation, key: 'other' } }, policy).level, 'helper');
+  assert.equal(acts.gradeAct(attest(record(), ALL.filter((name) => name !== 'transcript')), policy).level, 'helper');
+});
+
+test('acts: the worker is never separate, a missing started_by is not "started"', () => {
+  const same = record();
+  same.actor.id = 'w';
+  assert.equal(acts.gradeAct(same, policy).claims, 'self');
+  const unstarted = record();
+  delete unstarted.actor.started_by;
+  assert.equal(acts.gradeAct(unstarted, policy).claims, 'helper');
+});
+
+test('acts: tested needs the known items among given', () => {
+  const rec = record();
+  rec.known_bad = { wrong: 'sha256:w', right: 'sha256:r', supplied_by: 'owner', criterion: 'c', rejected_wrong: true, accepted_right: true };
+  assert.equal(acts.factsOf(rec, policy).tested, false);
+  rec.given.push({ role: 'known-wrong', content: 'sha256:w' }, { role: 'known-right', content: 'sha256:r' });
+  assert.equal(acts.factsOf(rec, policy).tested, true);
+  assert.equal(acts.claimedLevel(acts.factsOf(rec, policy)), 'cross-make');
+});
+
+test('core keys: sets must be sorted, the platform stays out', () => {
+  const preimage = (inputs) => JSON.stringify({ obligation: 'sha256:a', kind: 'check', inputs, provider: { name: 'p', version: '1', protocol: '0.2' } });
+  assert.equal(identity.coreKey(preimage({ targets: ['sha256:a', 'sha256:b'] })).core_key.startsWith('sha256:'), true);
+  assert.deepEqual(identity.coreKey(preimage({ targets: ['sha256:b', 'sha256:a'] })), { refused: 'unsorted-set' });
+  assert.deepEqual(identity.coreKey(preimage({ closure: ['sha256:a', 'sha256:a'] })), { refused: 'unsorted-set' });
+  assert.deepEqual(identity.coreKey(preimage({ platform: {} })), { refused: 'platform-in-core-key' });
+});
+
+test('status: baseline and pairing targets are identities of their objects', () => {
+  const intent = { owner: 'o', worker: 'w', children: ['b', 'a'], criteria: { c: { gate: 'hard', checked_by: ['y', 'x'] } } };
+  const same = { ...intent, children: ['a', 'b'], criteria: { c: { gate: 'hard', checked_by: ['x', 'y'] } } };
+  assert.equal(status.baselineOf(intent), status.baselineOf(same));
+  assert.notEqual(status.baselineOf(intent), status.baselineOf({ ...intent, owner: 'p' }));
+  assert.equal(status.pairingTarget('i', 'c', 'o'), identity.identityOf({ intent: 'i', criterion: 'c', obligation: 'o' }));
+});
+
+test('ledger: entries chain, a torn tail is dropped, damage is refused with a line number', () => {
+  const first = ledger.encodeEntry({ previous: null, kind: 'evidence', body: { n: 1 } });
+  const second = ledger.encodeEntry({ previous: first.identity, kind: 'act', body: { n: 2 } });
+  const whole = Buffer.concat([first.line, second.line]);
+  const read = ledger.readLedger(whole);
+  assert.equal(read.entries.length, 2);
+  assert.equal(read.torn, false);
+  const torn = ledger.readLedger(whole.subarray(0, whole.length - 5));
+  assert.equal(torn.entries.length, 1);
+  assert.equal(torn.torn, true);
+  assert.deepEqual(ledger.readLedger(Buffer.concat([second.line, first.line])), { refused: 'corrupt', at: 1 });
+  assert.deepEqual(ledger.readLedger(Buffer.concat([first.line, Buffer.from('junk\n')])), { refused: 'corrupt', at: 2 });
+  assert.equal(ledger.readLedger(Buffer.alloc(0)).entries.length, 0);
 });
 
 test('states: one rule for scenarios and states', () => {

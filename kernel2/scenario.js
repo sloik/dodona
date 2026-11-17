@@ -10,6 +10,8 @@ const runners = {
   attempts: require('./attempts'),
   platforms: require('./platforms'),
   decisions: require('./decisions'),
+  acts: require('./acts'),
+  status: require('./status'),
 };
 
 // Returns { results: [...] }, or throws if the kind is not known.

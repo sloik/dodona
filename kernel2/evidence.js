@@ -51,7 +51,7 @@ function runScenario(scenario) {
     backend: scenario.start.backend,
   };
   const ledger = { records: [], running: [], outcomes: [] };
-  const dependsOn = (obligation) => scenario.obligations[obligation].depends_on;
+  const dependsOn = (obligation) => (scenario.obligations[obligation] || {}).depends_on;
   const results = [];
 
   for (const { do: step } of scenario.steps) {
@@ -61,7 +61,9 @@ function runScenario(scenario) {
       state.tool = step.repin.to;
     } else if (step.backend) {
       state.backend = step.backend.to;
-    } else if (step.submit) {
+    } else if (step.submit && dependsOn(step.submit.obligation) !== undefined
+        && !ledger.running.some((run) => run.run === step.submit.as)) {
+      // A submit under a name that is in flight, or for an unknown obligation, changes nothing.
       const obligation = step.submit.obligation;
       const entry = { obligation, inputs: inputsOf(state.definitions, dependsOn(obligation)), tool: state.tool };
       if (state.backend === 'up') {

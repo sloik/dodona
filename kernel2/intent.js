@@ -34,11 +34,12 @@ function judgeAmendment(policy, amendment) {
 
 // Intent status. `criteria` maps a criterion to { gate, check }.
 function intentStatus(policy, confirmed, criteria) {
+  const minimum = Math.max(1, policy.min_hard_gates); // a floor below 1 is 1
   const all = Object.values(criteria);
   const hard = all.filter((criterion) => criterion.gate === 'hard');
   const deferred = all.filter((criterion) => criterion.gate === 'deferred');
   if (!confirmed) return 'draft';
-  if (hard.length < policy.min_hard_gates) return 'unguarded';
+  if (hard.length < minimum) return 'unguarded';
   if (hard.some((criterion) => criterion.check !== 'passed')) return 'open';
   if (deferred.every((criterion) => criterion.check === 'passed')) return 'fulfilled';
   return 'delivered';
@@ -53,16 +54,19 @@ function runScenario(scenario) {
 
   for (const { do: step } of scenario.steps) {
     let amendment = null;
+    const known = (name) => Object.hasOwn(criteria, name);
     if (step.confirm) {
       confirmed = true;
-    } else if (step.check) {
+    } else if (step.check && known(step.check.criterion)) {
       criteria[step.check.criterion].check = step.check.status;
-    } else if (step.edit) {
-      criteria[step.edit.criterion].gate = step.edit.to;
-      confirmed = false;
+    } else if (step.edit && known(step.edit.criterion)) {
+      if (criteria[step.edit.criterion].gate !== step.edit.to) {
+        criteria[step.edit.criterion].gate = step.edit.to;
+        confirmed = false;
+      }
     } else if (step.amend) {
       const judged = judgeAmendment(scenario.policy, step.amend);
-      if (judged.takes_effect) criteria[step.amend.criterion].gate = step.amend.to;
+      if (judged.takes_effect && known(step.amend.criterion)) criteria[step.amend.criterion].gate = step.amend.to;
       amendment = { takes_effect: judged.takes_effect, level: judged.level };
     }
     const result = { status: intentStatus(scenario.policy, confirmed, criteria) };

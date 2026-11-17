@@ -2,7 +2,7 @@
 'use strict';
 // The second dodona kernel. Reads standard input, prints one JSON object.
 //
-//     node dodona-kernel2.js scenario | canonical | path | path-set | states
+//     node dodona-kernel2.js scenario | canonical | key | path | path-set | states | ledger-append | ledger-read
 //
 // This file is the only one that touches input and output.
 
@@ -11,6 +11,8 @@ const { runScenario } = require('./scenario');
 const { judgeStates } = require('./states');
 const { canonicalize } = require('./canonical');
 const { checkPath, findCollisions } = require('./paths');
+const { coreKey } = require('./identity');
+const ledgerFile = require('./ledger-file');
 
 function decodeText(bytes) {
   try {
@@ -35,13 +37,19 @@ const commands = {
     return text === null ? { refused: 'not-json' } : canonicalize(text);
   },
   path: (bytes) => checkPath(parseHex(JSON.parse(bytes.toString('utf8')).hex)),
+  key: (bytes) => {
+    const text = decodeText(bytes);
+    return text === null ? { refused: 'not-json' } : coreKey(text);
+  },
+  'ledger-append': (bytes) => ledgerFile.append(JSON.parse(bytes.toString('utf8'))),
+  'ledger-read': (bytes) => ledgerFile.read(JSON.parse(bytes.toString('utf8'))),
   'path-set': (bytes) => ({ collisions: findCollisions(JSON.parse(bytes.toString('utf8')).paths) }),
 };
 
 function main() {
   const command = commands[process.argv[2]];
   if (command === undefined) {
-    process.stderr.write('usage: dodona-kernel2.js scenario | canonical | path | path-set | states\n');
+    process.stderr.write('usage: dodona-kernel2.js scenario | canonical | key | path | path-set | states | ledger-append | ledger-read\n');
     process.exitCode = 2;
     return;
   }

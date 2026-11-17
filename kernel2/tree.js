@@ -29,14 +29,17 @@ function runScenario(scenario) {
       if (node) node.check = step.check.status;
     } else if (step.edit) {
       const node = nodeNamed(step.edit.node);
-      if (node) node.gate = step.edit.to;
-      confirmed = false;
+      if (node && node.gate !== step.edit.to) {
+        node.gate = step.edit.to;
+        confirmed = false;
+      }
     } else if (step.remove) {
-      children.delete(step.remove.child);
-      confirmed = false;
+      if (children.delete(step.remove.child)) confirmed = false;
     } else if (step.add) {
-      children.set(step.add.child, { gate: step.add.gate, check: 'unknown' });
-      confirmed = false;
+      if (!children.has(step.add.child)) {
+        children.set(step.add.child, { gate: step.add.gate, check: 'unknown' });
+        confirmed = false;
+      }
     }
     results.push({ status: treeStatus(scenario.policy, confirmed, root, [...children.values()]) });
   }
