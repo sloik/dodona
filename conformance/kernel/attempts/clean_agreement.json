@@ -1,0 +1,38 @@
+{
+  "kind": "attempts",
+  "name": "clean_agreement",
+  "claim": "C35",
+  "covers": [
+    "attempts/reach_agreed"
+  ],
+  "why": "An attempt that is open counts as a failure until it is closed.",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "agreed",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    }
+  ]
+}

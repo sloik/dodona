@@ -1,0 +1,73 @@
+{
+  "kind": "tree",
+  "name": "removing_a_child_returns_to_draft",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_remove_keeps_confirmation"
+  ],
+  "why": "Dropping a child whose criterion is not met must not deliver the parent. The owner has to confirm the new shape.",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    },
+    "k2": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "remove": {
+          "child": "k2"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}

@@ -61,7 +61,19 @@ fn rank(s: &str) -> usize {
 fn grade(a: &Value, floor: usize) -> (bool, &str) {
     let owner = a.get("by").str() == "owner";
     let level = if owner {
-        a.opt("separation").map(Value::str).unwrap_or("self")
+        {
+            let claim = a.opt("claims").map(Value::str).unwrap_or("self");
+            let cap = if a.opt("source").map(Value::str).unwrap_or("declared") == "attested" {
+                "cross-make"
+            } else {
+                "helper"
+            };
+            if rank(claim) > rank(cap) {
+                cap
+            } else {
+                claim
+            }
+        }
     } else {
         "self"
     };
@@ -150,10 +162,17 @@ mod tests {
     }
     #[test]
     fn exception_grade() {
-        let a = json::parse(br#"{"by":"owner","separation":"helper"}"#).unwrap();
+        let a = json::parse(br#"{"by":"owner","claims":"helper"}"#).unwrap();
         assert_eq!(grade(&a, rank("helper")), (true, "helper"));
         assert_eq!(grade(&a, rank("apart")), (false, "helper"));
-        let b = json::parse(br#"{"by":"worker","separation":"credentialed"}"#).unwrap();
+        let declared = json::parse(br#"{"by":"owner","claims":"credentialed"}"#).unwrap();
+        assert_eq!(grade(&declared, rank("apart")), (false, "helper"));
+        let attested =
+            json::parse(br#"{"by":"owner","claims":"credentialed","source":"attested"}"#).unwrap();
+        assert_eq!(grade(&attested, rank("cross-make")), (true, "cross-make"));
+        let absent = json::parse(br#"{"by":"owner"}"#).unwrap();
+        assert_eq!(grade(&absent, rank("self")), (true, "self"));
+        let b = json::parse(br#"{"by":"worker","claims":"credentialed"}"#).unwrap();
         assert_eq!(grade(&b, 0), (false, "self"));
     }
 }

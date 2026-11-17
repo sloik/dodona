@@ -1,0 +1,51 @@
+{
+  "kind": "assurance",
+  "name": "unreported_link_is_nothing",
+  "claim": "C31",
+  "covers": [
+    "assurance/mutant_ignore_unreported"
+  ],
+  "why": "A link nobody reported counts as nothing. Leaving a link out never raises the level.",
+  "steps": [
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "proven",
+            "code-to-runs": "proven"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "none"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "proven",
+            "code-to-runs": "proven",
+            "runs-to-world": null
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "none"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {},
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "none"
+      }
+    }
+  ]
+}

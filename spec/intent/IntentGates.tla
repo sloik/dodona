@@ -9,8 +9,9 @@
 (* is an exception granted on the record; it takes effect only if the      *)
 (* owner granted it and the grantor was separate enough from the work,     *)
 (* as policy demands. How separate a grantor was is a level. When nothing  *)
-(* is recorded the level is the lowest one, and the worker granting to     *)
-(* itself is always the lowest one.                                        *)
+(* is recorded the level is the lowest one, the worker granting to itself  *)
+(* is always the lowest one, and a level that is only declared, not        *)
+(* attested, counts as "helper" at most.                                   *)
 (*                                                                         *)
 (* What this model does NOT cover: child intents, the text of criteria,    *)
 (* assurance levels, time limits, checks that vary between runs, and       *)
@@ -43,7 +44,10 @@ Parties == {"owner", "worker"}
 Levels  == {"self", "helper", "apart"}
 Rank(l) == CASE l = "self" -> 0 [] l = "helper" -> 1 [] l = "apart" -> 2
 
+Sources == {"declared", "attested"}
+
 Mutants == {"none", "worker_can_amend", "worker_keeps_level", "below_floor_counts", "missing_is_apart",
+            "declared_counts_in_full",
             "hide_level", "edit_keeps_confirmation", "draft_delivers",
             "unguarded_delivers", "delivered_ignores_unknown", "deferred_as_passed"}
 
@@ -83,19 +87,23 @@ Edit(c, g) ==
 \* separation level, or with none recorded ("missing"). Anyone may ask and the
 \* request goes on record. It takes effect only if the owner granted it, at or
 \* above the floor. The worker granting to itself is graded "self" whatever
-\* level it wrote down.
-Amend(c, g, by, recorded) ==
+\* level it wrote down. A level that rests only on someone's word is capped at
+\* "helper", however high the claim; an attested one stands.
+Amend(c, g, by, recorded, src) ==
     /\ confirmed
     /\ g # effGate[c]
     /\ LET level   == IF by = "worker" /\ Mutant # "worker_keeps_level" THEN "self"
                       ELSE IF recorded = "missing"
                            THEN (IF Mutant = "missing_is_apart" THEN "apart" ELSE "self")
+                      ELSE IF src = "declared" /\ Mutant # "declared_counts_in_full"
+                                /\ Rank(recorded) > Rank("helper")
+                           THEN "helper"
                       ELSE recorded
            counted == /\ by = "owner" \/ Mutant = "worker_can_amend"
                       /\ Rank(level) >= Rank(MinSep) \/ Mutant = "below_floor_counts"
            shown   == IF Mutant = "hide_level" THEN "apart" ELSE level
        IN  /\ amendments' = amendments \cup
-                  {[crit |-> c, to |-> g, by |-> by, recorded |-> recorded,
+                  {[crit |-> c, to |-> g, by |-> by, recorded |-> recorded, source |-> src,
                     level |-> level, shown |-> shown, counted |-> counted]}
            /\ effGate' = IF counted THEN [effGate EXCEPT ![c] = g] ELSE effGate
     /\ UNCHANGED <<chk, base, confirmed>>
@@ -106,7 +114,8 @@ Next ==
     \/ \E c \in Crits, v \in {"unknown", "passed", "failed"} : CheckChange(c, v)
     \/ Confirm
     \/ \E c \in Crits, g \in Gates : Edit(c, g)
-    \/ \E c \in Crits, g \in Gates, by \in Parties, r \in Recordable : Amend(c, g, by, r)
+    \/ \E c \in Crits, g \in Gates, by \in Parties, r \in Recordable, src \in Sources :
+           Amend(c, g, by, r, src)
 
 Spec == Init /\ [][Next]_vars
 
@@ -157,6 +166,10 @@ FloorHolds      == \A a \in amendments : a.counted => Rank(a.level) >= Rank(MinS
 \* Nothing recorded means the lowest level, and so does the worker granting.
 DefaultIsLowest == \A a \in amendments : a.recorded = "missing" => a.level = "self"
 WorkerIsSelf    == \A a \in amendments : a.by = "worker" => a.level = "self"
+
+\* A claim that rests only on declaration is never graded above "helper".
+DeclaredIsCapped ==
+    \A a \in amendments : a.source = "declared" => Rank(a.level) <= Rank("helper")
 
 \* The level reported is the level used.
 LevelShown == \A a \in amendments : a.shown = a.level

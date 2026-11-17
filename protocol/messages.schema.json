@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/sloik/dodona/protocol/messages.schema.json",
   "title": "Provider protocol messages",
-  "description": "Draft 0.2. Every line exchanged between kernel and provider is one of these messages. Top-level objects accept extra fields under an x- prefix; nested objects are closed. Bulk data never travels in a message: files are referred to by relative path in the working directory of the request, with their identity. Below protocol 1.0 there is no compatibility promise.",
+  "description": "Draft 0.2. Every line exchanged between kernel and provider is one of these messages. Top-level objects accept extra fields under an x- prefix; nested objects are closed. Bulk data never travels in a message: files are referred to by relative path in the working directory of the request, with their identity. Below protocol 1.0 there is no compatibility promise. Schema validation is a first filter. The kernel also applies the rules in protocol/README.md that a schema cannot express.",
   "oneOf": [
     {
       "$ref": "#/$defs/hello"
@@ -405,6 +405,13 @@
             "$ref": "#/$defs/tool_digest"
           },
           "description": "Digests of every tool in the closure the run expects, including runtimes, sorted by name. The executor reports what it actually ran; any difference is an error."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Environment variables for the program, complete: nothing is inherited. A value may refer to the root of a pinned tool tree as ${tool:NAME} and to the working directory as ${work}. The program starts in the working directory."
         }
       }
     },
@@ -433,7 +440,7 @@
             "cancelled",
             "limit-exceeded"
           ],
-          "description": "How the run ended. Anything but exited ends the check in error."
+          "description": "How the run ended. Anything but exited ends the check in error; the provider is not asked to interpret it."
         },
         "exit_status": {
           "type": "integer",
@@ -483,7 +490,7 @@
     },
     "final_check": {
       "type": "object",
-      "description": "A final verdict. strength is required for passed and failed.",
+      "description": "A final verdict. strength is required for passed and failed. A final of passed or failed with no run behind it is refused by the kernel and the check ends in error: a verdict must rest on at least one run. The strength may not exceed the one the manifest declares; the kernel lowers it if it does.",
       "required": [
         "verdict"
       ],
@@ -622,9 +629,11 @@
     },
     "run_result_request": {
       "type": "object",
-      "description": "Sent by the kernel after a run described by next has ended. The output files named in the report are in the working directory.",
+      "description": "Sent by the kernel after a run described by next has ended. The output files named in the report are in the working directory. Sent only when the run ended as exited. A run that timed out, was cancelled or exceeded a limit ends the check in error and the provider is not asked.",
       "required": [
         "op",
+        "check",
+        "run",
         "report"
       ],
       "additionalProperties": false,
@@ -634,6 +643,15 @@
         },
         "report": {
           "$ref": "#/$defs/run_report"
+        },
+        "check": {
+          "$ref": "#/$defs/id",
+          "description": "The id of the request that started this check. Several checks may be in flight in one session."
+        },
+        "run": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Which run of the check this is, counting from 1. The key under which the kernel submits a run includes this number, so a repeated run is never answered from an earlier one."
         }
       }
     },
@@ -954,7 +972,7 @@
     },
     "intent": {
       "type": "object",
-      "description": "An intent as read from a file. The kernel computes the intent's identity from these fields over the canonical encoding (protocol/canonical-encoding.md); the provider does not supply one.",
+      "description": "An intent as read from a file. The kernel computes the intent's identity from these fields over the canonical encoding (protocol/canonical-encoding.md); the provider does not supply one. A provider never reports that an intent is confirmed: confirmation comes only from an act record with a ticket the kernel issued.",
       "required": [
         "name",
         "file",
@@ -1013,26 +1031,6 @@
             "$ref": "common.schema.json#/$defs/name"
           },
           "description": "What the intent expects to touch: definition names or path prefixes, sorted."
-        },
-        "confirmation": {
-          "type": "object",
-          "description": "The owner's record that confirms a baseline. baseline is the intent identity that was confirmed. Absent means the intent is a draft.",
-          "required": [
-            "baseline",
-            "by"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "baseline": {
-              "$ref": "common.schema.json#/$defs/identity"
-            },
-            "by": {
-              "type": "string"
-            },
-            "ticket": {
-              "type": "string"
-            }
-          }
         }
       }
     },
@@ -1044,7 +1042,8 @@
         "intent",
         "changes",
         "reason",
-        "granted_by"
+        "granted_by",
+        "ticket"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1083,7 +1082,9 @@
           "type": "string"
         },
         "granted_by": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "description": "Who granted it. The kernel checks that this is the intent's owner; the act record, not this field, decides how separate the grantor was."
         },
         "ticket": {
           "type": "string"

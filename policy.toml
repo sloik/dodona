@@ -4,7 +4,7 @@
 # is on record before anything is judged against it. The data is described by
 # protocol/policy.schema.json.
 
-policy = "0.1"
+policy = "0.2"
 reference = "main"
 
 # Everything under intents/ hangs off the first intent.

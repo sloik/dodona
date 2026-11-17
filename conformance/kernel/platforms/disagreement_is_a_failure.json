@@ -1,0 +1,77 @@
+{
+  "kind": "platforms",
+  "name": "disagreement_is_a_failure",
+  "claim": "C15",
+  "covers": [
+    "platforms/mutant_disagreement_ignored",
+    "platforms/mutant_one_platform_reproduces"
+  ],
+  "why": "One platform alone says nothing about reproducibility. Two that disagree are a failure, and a disagreement anywhere means no record may stand in.",
+  "stand_in_allowed": true,
+  "keys": [
+    "k1",
+    "k2"
+  ],
+  "platforms": [
+    "p1",
+    "p2"
+  ],
+  "steps": [
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "reproducibility": {
+          "k1": "unknown"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p2",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k1": {
+            "p1": "passed",
+            "p2": "failed"
+          }
+        },
+        "reproducibility": {
+          "k1": "failed"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k2": {
+            "p1": "passed",
+            "p2": "unknown"
+          }
+        },
+        "stood_in": [],
+        "reproducibility": {
+          "k1": "failed",
+          "k2": "unknown"
+        }
+      }
+    }
+  ]
+}

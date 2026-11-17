@@ -85,7 +85,7 @@ A submission with no closing entry is `pending`. Only evidence records are reusa
 
 Each status also reports:
 
-- `strength`: the provider's name for its kind of evidence (its evidence class, such as proof, bounded model check, test) together with a **rank** the provider picks from a list the kernel owns: `exhaustive` (all inputs), `bounded` (all inputs within stated bounds), `sampled` (some inputs), `documented` (no check, only a written mapping). Policy sets minimums by rank. A status reports the weakest rank among the records it rests on
+- `strength`: the provider's name for its kind of evidence (its evidence class, such as proof, bounded model check, test) together with a **rank** the provider picks from a list the kernel owns: `exhaustive` (all inputs), `bounded` (all inputs within stated bounds), `sampled` (some inputs), `documented` (no check, only a written mapping). Policy sets minimums by rank. A rank maps onto the evidence scale as: exhaustive, `proven`; bounded, `bounded`; sampled, `sampled`; documented, `asserted`. The rank in a provider's manifest is a ceiling, and a result claiming more is lowered to it. A status reports the weakest rank among the records it rests on
 - `non_vacuous`: `shown` if every planted defect of this obligation is itself `passed`, `not-shown` if any is not, `none-planted` if there are none
 - `trusted_base`: the union of the kernel's, the provider's and the records' assumptions
 - `isolation`: the weakest isolation level among the runs

@@ -1,0 +1,71 @@
+{
+  "kind": "platforms",
+  "name": "policy_can_forbid_stand_in",
+  "claim": "C15",
+  "covers": [
+    "platforms/mutant_always_stand_in"
+  ],
+  "why": "Where policy does not allow stand-ins, a platform with no record of its own is unknown, verified claim or not.",
+  "stand_in_allowed": false,
+  "keys": [
+    "k1",
+    "k2"
+  ],
+  "platforms": [
+    "p1",
+    "p2"
+  ],
+  "steps": [
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k2": {
+            "p2": "unknown"
+          }
+        },
+        "stood_in": []
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "stood_in": []
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k2": {
+            "p1": "passed",
+            "p2": "unknown"
+          }
+        },
+        "stood_in": [],
+        "reproducibility": {
+          "k1": "passed",
+          "k2": "unknown"
+        }
+      }
+    }
+  ]
+}

@@ -92,7 +92,7 @@ The rules are fixed by the kernel so identity cannot depend on the platform ([00
 - File content is hashed as raw bytes. The project declares its line-ending and byte-order-mark convention; a text file that violates it is an error, never silently normalised. Which files are text is declared by the provider that claims them.
 - Paths pass one normative check, listed once in [decision 0009](decisions/0009-platform-order-and-portability-rules.md) and published with test vectors. A path is accepted on every platform or on none.
 - Symbolic links and similar indirections inside a project are rejected at index time. File modes never take part in identity.
-- Structured values are hashed over one canonical encoding: keys and sets in UTF-8 byte order, integers only, no floating point.
+- Structured values are hashed over one [canonical encoding](protocol/canonical-encoding.md): a published standard, restricted to integers.
 - The algorithm is named in every identity and fixes the digest length.
 
 ## 5. Verdicts, status and evidence

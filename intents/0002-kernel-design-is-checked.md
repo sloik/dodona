@@ -15,6 +15,6 @@ The rules that decide what counts as shown must themselves be shown to be sound,
 
 | # | Criterion | Gate | Checked by |
 |---|---|---|---|
-| 1 | Every claim in spec/CLAIMS.md has a model or scenario | hard | 12 of 36 modelled so far; all 12 checked |
+| 1 | Every claim in spec/CLAIMS.md has a model or scenario | hard | 23 of 36 modelled so far; 6 checked, the rest waiting to be run |
 | 2 | Every modelled claim has a planted defect that is caught | hard | spec/kernel/expected.json and spec/intent/expected.json |
 | 3 | Every modelled claim has a completed, recorded run | hard | spec/CLAIMS.md, Recorded runs |

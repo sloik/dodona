@@ -1,9 +1,15 @@
 #![forbid(unsafe_code)]
+mod assurance;
+mod attempts;
 mod canonical;
+mod decisions;
 mod evidence;
 mod intent;
 mod json;
 mod path;
+mod plan;
+mod platforms;
+mod tree;
 mod unicode;
 mod unicode_tables;
 use std::io::{self, Read, Write};
@@ -23,6 +29,12 @@ fn main() {
                         path::set(&v)
                     } else {
                         let results = match (command.as_str(), v.get("kind").str()) {
+                            ("scenario", "plan") => plan::run(&v),
+                            ("scenario", "platforms") => platforms::run(&v),
+                            ("scenario", "attempts") => attempts::run(&v),
+                            ("scenario", "tree") => tree::run(&v),
+                            ("scenario", "assurance") => assurance::run(&v),
+                            ("scenario", "decisions") => decisions::run(&v),
                             ("scenario", "evidence") => evidence::run(&v),
                             ("states", "evidence") => evidence::states(&v),
                             ("scenario", "intent") => intent::run(&v),

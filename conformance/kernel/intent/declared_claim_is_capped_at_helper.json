@@ -1,0 +1,80 @@
+{
+  "kind": "intent",
+  "name": "declared_claim_is_capped_at_helper",
+  "claim": "C33",
+  "covers": [
+    "intent/mutant_declared_counts_in_full"
+  ],
+  "why": "A claim that rests only on someone's word earns helper at most, however high the claim. Here the owner claims the fifth level and the exception still does not take effect.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "owner",
+          "claims": "cross-make",
+          "source": "declared"
+        }
+      },
+      "expect": {
+        "status": "open",
+        "amendment": {
+          "takes_effect": false,
+          "level": "helper"
+        }
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "owner",
+          "claims": "apart"
+        }
+      },
+      "expect": {
+        "status": "open",
+        "amendment": {
+          "takes_effect": false,
+          "level": "helper"
+        }
+      }
+    }
+  ]
+}

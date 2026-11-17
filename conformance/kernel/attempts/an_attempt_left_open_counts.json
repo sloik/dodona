@@ -1,0 +1,65 @@
+{
+  "kind": "attempts",
+  "name": "an_attempt_left_open_counts",
+  "claim": "C35",
+  "covers": [
+    "attempts/mutant_open_ignored"
+  ],
+  "why": "An attempt that was started and never closed is a failed attempt, not a missing one.",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": true,
+        "cap": "helper",
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "agreed",
+        "shopped": false,
+        "cap": null,
+        "attempts": 2
+      }
+    }
+  ]
+}

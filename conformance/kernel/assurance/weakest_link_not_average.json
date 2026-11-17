@@ -1,0 +1,73 @@
+{
+  "kind": "assurance",
+  "name": "weakest_link_not_average",
+  "claim": "C24",
+  "covers": [
+    "assurance/mutant_average",
+    "assurance/reach_proven",
+    "assurance/mutant_always_nothing"
+  ],
+  "why": "The shown level is the weakest link, never an average.",
+  "steps": [
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "bounded",
+            "code-to-runs": "proven",
+            "runs-to-world": "sampled"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "sampled"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "proven",
+            "code-to-runs": "proven",
+            "runs-to-world": "proven"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "proven"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "proven",
+            "code-to-runs": "proven",
+            "runs-to-world": "none"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "none"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "asserted",
+            "code-to-runs": "bounded",
+            "runs-to-world": "observed"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "asserted"
+      }
+    }
+  ]
+}

@@ -33,44 +33,93 @@ Bounds: one intent with two or three criteria (hard and deferred), at most one o
 
 This model is narrow. It takes a recorded separation level as given and checks only what the kernel does with it; whether the level is true is outside it. `DeliveredSound`, `DeliveredConfirmed`, `DeliveredGuarded` and `FulfilledSound` can only catch a kernel that computes the report wrongly. `GateProvenance` does not require the amendment to come before the change. Not covered: child intents, the text of criteria, assurance levels, time limits and checks that vary between runs.
 
-The model was rewritten on 2026-11-17 to add the baseline, the unguarded rule and graded separation. Run 3 was of the earlier version and supports no claim. Run 4 is of the current version.
+The model was rewritten on 2026-11-17 to add the baseline, the unguarded rule and graded separation. Runs 3 and 4 were of earlier versions and support no current claim. The model was changed again so that a level which is only declared counts as `helper` at most; it has not been run since.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | **checked**, run 4 |
-| C25 | While an intent is confirmed, a gate differs from the baseline only through an amendment on record that took effect, and only the owner's amendments take effect | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends` | A gate is edited and the intent stays confirmed; the worker's amendment takes effect | **checked**, run 4 |
-| C28 | Amendments are live rules: a sufficiently separate owner's amendment can open the way to delivery, and one below the floor cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence when the grantor cannot reach the floor | (reachability) | **checked**, run 4 |
-| C29 | An intent the owner has not confirmed, or that was edited since, is never reported delivered | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `DeliveredConfirmed` | An unconfirmed intent is reported delivered | **checked**, run 4 |
-| C30 | An intent with fewer hard gates than policy demands is never reported delivered. Children are not modelled | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredGuarded` | An intent with no hard gate is reported delivered | **checked**, run 4 |
-| C33 | An act with no separation recorded is graded `self`, as is the worker granting to itself; an amendment below policy's floor does not take effect; the level reported is the level used | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `DefaultIsLowest`, `WorkerIsSelf`, `FloorHolds`, `LevelShown` | Nothing recorded treated as a high level; the worker keeps the level it wrote down; an amendment below the floor takes effect; a higher level shown than recorded | **checked**, run 4 |
+| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | modelled, unchecked |
+| C25 | While an intent is confirmed, a gate differs from the baseline only through an amendment on record that took effect, and only the owner's amendments take effect | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends` | A gate is edited and the intent stays confirmed; the worker's amendment takes effect | modelled, unchecked |
+| C28 | Amendments are live rules: a sufficiently separate owner's amendment can open the way to delivery, and one below the floor cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence when the grantor cannot reach the floor | (reachability) | modelled, unchecked |
+| C29 | An intent the owner has not confirmed, or that was edited since, is never reported delivered | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `DeliveredConfirmed` | An unconfirmed intent is reported delivered | modelled, unchecked |
+| C30 | An intent with fewer hard gates than policy demands is never reported delivered. Children are not modelled | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredGuarded` | An intent with no hard gate is reported delivered | modelled, unchecked |
+| C33 | An act with no separation recorded is graded `self`, as is the worker granting to itself; an amendment below policy's floor does not take effect; the level reported is the level used | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `DefaultIsLowest`, `WorkerIsSelf`, `FloorHolds`, `LevelShown` | Nothing recorded treated as a high level; the worker keeps the level it wrote down; an amendment below the floor takes effect; a higher level shown than recorded | modelled, unchecked |
+
+## Modelled in `planner/Planner.tla`
+
+Bounds: three definitions (one depending on another, one unrelated in the same file), two hash values, a compiler and a test runner, at most three records. Dependency sets do not change.
+
+| # | Claim | Decision | Property | Planted defect that must fail | Status |
+|---|---|---|---|---|---|
+| C9 | Nothing stale is reused, including what is stale through an indirect dependency, and with per-definition identity nothing current is rerun | [0002](../decisions/0002-small-kernel-everything-else-is-a-provider.md) | `NoWrongReuse`, `NoNeedlessRerun` | The key covers the target and not what it depends on; the planner reruns everything | modelled, unchecked |
+| C8 | File-level fallback identity never causes a wrong reuse. It does cause extra reruns, and that is shown too | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md) | `NoWrongReuse` with file identity; `NoNeedlessRerun` must be violated there | The fallback ignores a dependency | modelled, unchecked |
+| C10 | Changing a build tool makes checks of what it built stale | [0012](../decisions/0012-spec-to-code-conformance-is-an-explicit-seam.md) | `NoWrongReuse` | A test's key leaves out the build that produced what it tests | modelled, unchecked |
+
+## Modelled in `assurance/Assurance.tla`
+
+Every combination of three links, each with one of six levels or unreported, and two planted defects, each passed, failed, unknown or absent. This is the whole input space of the rule, not a sample of it.
+
+| # | Claim | Decision | Property | Planted defect that must fail | Status |
+|---|---|---|---|---|---|
+| C24 | A criterion's shown level is the weakest of its evidence links: never above any link, and never lower than it has to be | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink`, `NotUnderstated` | The links are averaged; the level is always the lowest | modelled, unchecked |
+| C31 | An evidence link with nothing reported counts as none and never raises the level | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink` | A link nobody reported is left out | modelled, unchecked |
+| C19 | A check is reported as shown able to fail only when it has planted defects and every one was caught | [data model](../MODEL.md#3-obligations) | `NonVacuitySound` | A planted defect that never ran counts as caught; a check with none planted is reported as shown | modelled, unchecked |
+
+## Modelled in `tree/IntentTree.tla`
+
+Bounds: a root with up to two children, one criterion each, hard or soft. One level of children; no exceptions.
+
+| # | Claim | Decision | Property | Planted defect that must fail | Status |
+|---|---|---|---|---|---|
+| C34 | A parent is delivered only when every child is; a child with no hard gate never is; and adding or removing a child, or editing any gate, needs the owner's confirmation again | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `TreeSound`, `ShapeIsConfirmed` | A child is removed or added and the root stays confirmed; the root is delivered whatever its children are; a child made soft counts as delivered | modelled, unchecked |
+
+## Modelled in `attempts/Attempts.tla`
+
+Bounds: at most three attempts and one change of target. Attempts made without taking a ticket leave no record and are outside the model.
+
+| # | Claim | Decision | Property | Planted defect that must fail | Status |
+|---|---|---|---|---|---|
+| C35 | On an unchanged target the worst result counts and an attempt left open counts as a failure; an agreement after an attempt that did not agree is flagged, and the flag caps the separation of the act | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `WorstCounts`, `ShoppingIsFlagged` | Only the latest attempt counts; an open attempt is ignored; shopping is not flagged; the flag does not cap | modelled, unchecked |
+
+## Modelled in `platforms/Platforms.tla`
+
+Bounds: two sets of inputs and two platforms.
+
+| # | Claim | Decision | Property | Planted defect that must fail | Status |
+|---|---|---|---|---|---|
+| C15 | A status rests on another platform's record only when policy allows it and the claim of platform independence is verified; reproducibility passes only with two agreeing platforms and fails on any disagreement | [0008](../decisions/0008-reproducibility-levels.md) | `StandInIsEarned`, `ReproSound` | A record always stands in; a record stands in unverified; one platform alone is reported as reproduced; a disagreement is not a failure | modelled, unchecked |
+
+## Modelled in `decisions/Decisions.tla`
+
+Bounds: two names, two contents and absence.
+
+| # | Claim | Decision | Property | Planted defect that must fail | Status |
+|---|---|---|---|---|---|
+| C16 | A decision is flagged exactly when the content behind the name it governs is no longer the content it recorded, including when the name disappears, and whether or not the old content exists elsewhere | [0001](../decisions/0001-decisions-are-nodes.md) | `FlagIsExact` | The kernel tracks contents without names; a name that disappears is not flagged | modelled, unchecked |
+
+## Modelled in `liveness/Liveness.tla`
+
+Bounds: one obligation; at most two edits, two outages and two lost runs. The claim holds only under the stated assumptions: the kernel keeps submitting what is undecided, the backend comes back, and a run in flight finishes unless it is lost. No scenario in the conformance kit covers this, because the seed kernel has no loop that submits work.
+
+| # | Claim | Decision | Property | Planted defect that must fail | Status |
+|---|---|---|---|---|---|
+| C22 | Under those assumptions, every obligation is eventually decided and stays decided | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyDecided` | After finding the backend down, or after a lost run, the kernel never tries again | modelled, unchecked |
 
 ## Not yet modelled
 
 | # | Claim | Decision | Intended check | Planted defect that must fail |
 |---|---|---|---|---|
 | C7 | The same content has the same identity on every platform, and a path is accepted on all platforms or none | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md), [0009](../decisions/0009-platform-order-and-portability-rules.md) | Conformance vectors for the encoding and the path check | A checker that folds case with the platform's own rules |
-| C8 | File-level fallback identity can cause extra reruns but never a wrong reuse | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md) | Model: C1 with coarser keys | Fallback that ignores a declared dependency |
-| C9 | The planner reruns every stale obligation and no obligation that is not stale, including when dependency sets change | [0002](../decisions/0002-small-kernel-everything-else-is-a-provider.md) | Model with changing dependencies, plus scenarios | Planner that skips a transitive dependent |
-| C10 | Changing a build tool invalidates checks of what it built | [0012](../decisions/0012-spec-to-code-conformance-is-an-explicit-seam.md) | Model with artifact nodes | Key that omits the producing obligation |
 | C11 | A check never runs on an executor the configuration did not name, and a mismatch between requested and reported tools or platform is never a result | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | Model, plus scenarios with the executor down and with a lying executor | Kernel with a silent local fallback |
 | C12 | A run is not submitted twice and not lost across a kernel restart | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | Model with handles and restart | Kernel that resubmits on restart |
 | C13 | No malformed, late or out-of-order provider message leads to a pass | [0003](../decisions/0003-providers-are-separate-processes.md) | The misbehaving test provider | Kernel that defaults a missing verdict to passed |
 | C14 | Adding a platform to the lock changes no existing entry | [0008](../decisions/0008-reproducibility-levels.md) | Scenario: resolve on one platform, add a second | Resolver that re-resolves existing entries |
-| C15 | Two platforms disagreeing at the chosen level is reported as a failure, and one platform alone is reported as unknown | [0008](../decisions/0008-reproducibility-levels.md) | Model with the platform in the key | Kernel that reuses one platform's record for another |
-| C16 | A decision is flagged when the identity behind a name it governs changes, in content-addressed languages too | [0001](../decisions/0001-decisions-are-nodes.md) | Model, plus scenario | Index that tracks identities without names |
 | C17 | A change that weakens policy is always visible in the report | [0014](../decisions/0014-policy-is-separate-from-configuration.md) | Scenarios: lowered bound, removed obligation, weaker provider | Kernel that judges against the edited policy only |
 | C18 | A record no trusted kernel wrote is never reused; a torn ledger write never changes a status silently | [0015](../decisions/0015-ledger-integrity-and-record-trust.md) | Model with two writers and crash points, plus scenarios | Kernel that accepts any record with a valid hash |
-| C19 | An obligation is reported non-vacuous only when every planted defect of it was caught | [data model](../MODEL.md#3-obligations) | Model, plus scenario | Kernel that ignores a planted defect that did not run |
 | C20 | The conformance kit rejects kernels with known defects. Measured, not modelled: `tools/kit_adequacy.py` plants 15 defects in the seed kernel and the kit rejects 15 | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | Run defective kernels against the kit; report the fraction rejected | A kit with a scenario removed |
 | C21 | Two independent kernels agree on real project states, and any disagreement is reported as a conflict | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | Differential runs beyond the kit | A kernel carrying a defect the kit does not target |
-| C22 | If the backend is eventually reachable, every obligation eventually gets a reusable verdict or a stated reason why not | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | Liveness property, with fairness assumptions | Planner that never resubmits after `unavailable` |
-| C24 | A criterion's reported assurance is never above its weakest link | [0019](../decisions/0019-assurance-is-stated-per-link.md) | Model, plus scenarios | Kernel that averages the links |
 | C26 | A varying check is never reported from fewer runs than it declared | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Scenarios with declared sample sizes | Kernel that stops at the first passing run |
 | C27 | Two intents that touch the same definition are reported as colliding before work starts | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Scenarios | Index that compares declared paths only as text |
-| C31 | An evidence link with nothing reported counts as none, and never raises a score | [0019](../decisions/0019-assurance-is-stated-per-link.md) | Scenarios | Kernel that takes the weakest of the reported links only |
 | C32 | A status is never shown without its headline, and a self-granted exception or unverified independence is always in it | [0019](../decisions/0019-assurance-is-stated-per-link.md), [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Scenarios on the agent interface | Interface that returns the status word alone |
-| C34 | Moving a hard criterion into a child intent, or removing a child, never turns an undeliverable intent into a deliverable one | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Model with children and totals over descendants | Kernel that counts gates per intent |
-| C35 | A pass that follows a failure on an unchanged target is flagged and graded no higher than `helper`; an attempt with no result counts as a failure | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | Model with tickets and attempts | Kernel that keeps only the latest attempt |
 | C36 | A separation level is never shown without its weakest source, and a fact not covered by a valid attestation is treated as declared | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | Scenarios | Kernel that trusts an unsigned attestation |
 
 ## Recorded runs

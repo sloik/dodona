@@ -90,7 +90,20 @@
           "type": "string"
         },
         "make": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "vendor": {
+              "type": "string"
+            },
+            "family": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "description": "Model family and vendor, as reported by whatever ran the actor. A deterministic tool is not a make."
         }
       }
     },

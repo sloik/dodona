@@ -66,10 +66,25 @@ Two documents sit beside the schemas: the [configuration reference](../docs/conf
 
 Still to be written: the submission and outcome ledger entries, the canonical encoding with its test vectors, the normative path check with its test vectors, the agent interface beyond `status` (the shapes of `resolve`, `index`, `plan`, `run`, `explain`, `review` and `reproduce`), the file format and location of the lock and the policy, and a conformance kit that judges a provider. The shapes in the new schemas have not been run against a kernel; none exists.
 
+## Rules a schema cannot express
+
+Validating a message against its schema is a first filter. The kernel also holds to these, and a breach ends the check or the session in `error`:
+
+- **Wire parsing is as strict as the canonical encoding.** A message with a repeated key, a number that is not an integer, a lone surrogate, or nesting deeper than the limit in `hello` is refused.
+- **Every path passes the [path check](path-check.md)**, not only the pattern in the schema. A program path must lie inside the tool tree it names.
+- **Every file is re-hashed.** The identity a provider gives for a file is recomputed from its bytes.
+- **An answer matches its request**: same `id`, same capability, and an `id` that was asked.
+- **A verdict rests on a run.** A final `passed` or `failed` with no run behind it is refused.
+- **Strength has a ceiling.** A result may not claim a stronger rank than the provider's manifest declares.
+- **A run that did not exit ends the check.** A run that timed out, was cancelled or exceeded a limit ends the check in `error`; the provider is not asked to interpret it.
+- **Later runs use only what is in the key or what an earlier run of the same check produced.**
+- **A provider cannot confirm an intent or grant an exception.** Those come only from act records with tickets the kernel issued.
+- **Each run of a check is submitted under its own key**, which includes its number, so a repeated run is never answered from an earlier one.
+
 ## Rules for every message
 
 - Paths are relative, use `/`, and pass the normative path check.
 - Commands are argument lists. No message carries a string meant for a shell.
-- Sets are sorted by UTF-8 bytes, so equal content encodes identically in every language.
+- Sets are sorted as the [canonical encoding](canonical-encoding.md) sorts keys, so equal content encodes identically in every language.
 - Numbers are integers. No floating point takes part in any identity.
 - No wall-clock time takes part in any identity.

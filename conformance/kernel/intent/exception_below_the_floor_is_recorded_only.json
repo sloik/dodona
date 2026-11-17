@@ -48,7 +48,8 @@
           "criterion": "c1",
           "to": "soft",
           "by": "owner",
-          "separation": "helper"
+          "claims": "helper",
+          "source": "attested"
         }
       },
       "expect": {

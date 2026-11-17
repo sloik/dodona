@@ -136,6 +136,13 @@
       "expect_exit": 12,
       "purpose": "Planted defect: an open deferred gate does not block fulfilment.",
       "of": "FulfilledSound"
+    },
+    {
+      "config": "mutant_declared_counts_in_full.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a level that is only declared is counted in full.",
+      "of": "DeclaredIsCapped"
     }
   ]
 }

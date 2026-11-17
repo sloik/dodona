@@ -1,0 +1,74 @@
+{
+  "model": "Platforms.tla",
+  "tool": {
+    "name": "tla2tools",
+    "version": "1.7.4",
+    "requires": [
+      "a Java runtime"
+    ],
+    "digest": "not yet pinned; no lock exists"
+  },
+  "arguments": [
+    "-workers",
+    "1",
+    "-config",
+    "<config>",
+    "Platforms.tla"
+  ],
+  "exit_codes": {
+    "0": "completed, no violation",
+    "12": "safety violation found",
+    "13": "temporal property violated",
+    "other": "did not complete; counts as neither outcome"
+  },
+  "bounds": "two core keys, two platforms",
+  "cases": [
+    {
+      "config": "design_stand_in_allowed.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "With stand-ins allowed by policy, both properties hold."
+    },
+    {
+      "config": "design_stand_in_forbidden.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "With stand-ins forbidden, no status ever rests on another platform's record."
+    },
+    {
+      "config": "reach_stand_in.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A verified claim does let a record stand in, so the rule is live.",
+      "of": "NeverStoodIn"
+    },
+    {
+      "config": "mutant_always_stand_in.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: one platform's record is reused for another whatever policy says.",
+      "of": "StandInIsEarned"
+    },
+    {
+      "config": "mutant_stand_in_unverified.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a record stands in although the claim was never verified.",
+      "of": "StandInIsEarned"
+    },
+    {
+      "config": "mutant_one_platform_reproduces.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: one platform alone is reported as reproduced.",
+      "of": "ReproSound"
+    },
+    {
+      "config": "mutant_disagreement_ignored.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: two platforms disagree and it is not a failure.",
+      "of": "ReproSound"
+    }
+  ]
+}

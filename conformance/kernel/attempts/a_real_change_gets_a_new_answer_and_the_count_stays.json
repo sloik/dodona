@@ -1,0 +1,74 @@
+{
+  "kind": "attempts",
+  "name": "a_real_change_gets_a_new_answer_and_the_count_stays",
+  "claim": "C35",
+  "covers": [],
+  "why": "When the thing judged changes, the old refusal no longer decides the answer. The number of attempts along the same line is still shown, so repeated retries with small changes stay visible.",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "change_target": {}
+      },
+      "expect": {
+        "result": "none",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "agreed",
+        "shopped": false,
+        "cap": null,
+        "attempts": 2
+      }
+    }
+  ]
+}

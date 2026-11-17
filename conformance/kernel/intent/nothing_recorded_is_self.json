@@ -5,7 +5,7 @@
   "covers": [
     "intent/mutant_missing_is_apart"
   ],
-  "why": "With no separation recorded the level is the lowest one.",
+  "why": "With no separation claimed the level is the lowest one.",
   "policy": {
     "exception_separation": "apart",
     "min_hard_gates": 1

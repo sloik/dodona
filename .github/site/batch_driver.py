@@ -1,0 +1,43 @@
+"""Runs a list of model-checker cases one after another, inside the executor.
+
+Part of this repository's own site binding (decision 0023). It is the only
+place in the repository that starts the model checker, and it is meant to be
+run by the site's executor in its sandbox, never directly: one executor job
+for the whole list is kinder to a shared queue than one job per case.
+
+    python3 batch_driver.py manifest.json
+
+The manifest lists cases, each with a working directory, an argument list and
+a name. For each case the driver writes <out>/<name>.txt with the checker's
+output and <out>/<name>.exit with its exit status. A case that cannot be
+started gets the exit status "did-not-start". The driver itself judges
+nothing; tools/check_models.py does that from the files.
+"""
+import json
+import pathlib
+import subprocess
+import sys
+
+
+def main() -> int:
+    manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+    out = pathlib.Path(manifest["out"])
+    for case in manifest["cases"]:
+        target = out / case["name"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            done = subprocess.run(case["argv"], cwd=case["cwd"], capture_output=True)
+            target.with_suffix(".txt").write_bytes(done.stdout + done.stderr)
+            target.with_suffix(".exit").write_text(str(done.returncode), encoding="ascii")
+        except OSError as err:
+            target.with_suffix(".txt").write_text(f"could not start: {err}\n", encoding="utf-8")
+            target.with_suffix(".exit").write_text("did-not-start", encoding="ascii")
+        for extra in case.get("keep", []):  # files the case produced that should come back
+            source = pathlib.Path(case["cwd"]) / extra
+            if source.exists():
+                (out / (case["name"] + "." + extra)).write_bytes(source.read_bytes())
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -40,8 +40,7 @@
           "description": "Where the tool or provider was obtained from, as a stable designator such as a release address. Never a local path."
         },
         "published_digest": {
-          "type": "string",
-          "pattern": "^[a-z0-9-]+:[0-9a-f]+$",
+          "$ref": "common.schema.json#/$defs/identity",
           "description": "The digest the upstream publishes for what it distributes, with the algorithm named, as upstream states it. The tree digest was verified against it when the lock was generated. A tool whose upstream publishes nothing to compare against is not decided."
         }
       }

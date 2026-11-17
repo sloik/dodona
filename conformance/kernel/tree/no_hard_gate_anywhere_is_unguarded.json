@@ -1,0 +1,47 @@
+{
+  "kind": "tree",
+  "name": "no_hard_gate_anywhere_is_unguarded",
+  "claim": "C34",
+  "covers": [],
+  "why": "Hard gates are counted over the whole tree.",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "soft"
+  },
+  "children": {
+    "k1": {
+      "gate": "soft"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "node": "root",
+          "to": "hard"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    }
+  ]
+}

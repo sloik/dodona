@@ -1,0 +1,85 @@
+{
+  "kind": "tree",
+  "name": "a_soft_child_is_never_delivered",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_soft_child_is_delivered"
+  ],
+  "why": "Making a child's only criterion soft does not deliver it. A child with no hard gate is never delivered, so its parent is not either.",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    },
+    "k2": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "node": "k2",
+          "to": "soft"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    }
+  ]
+}

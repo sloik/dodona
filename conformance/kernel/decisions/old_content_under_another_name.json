@@ -1,0 +1,38 @@
+{
+  "kind": "decisions",
+  "name": "old_content_under_another_name",
+  "claim": "C16",
+  "covers": [
+    "decisions/mutant_identities_without_names"
+  ],
+  "why": "The decision follows the name. That the old content still exists somewhere else does not matter.",
+  "governs": "n1",
+  "names": {
+    "n1": "a",
+    "n2": "b"
+  },
+  "steps": [
+    {
+      "do": {
+        "edit": {
+          "name": "n2",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "flagged": false
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": "c"
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    }
+  ]
+}

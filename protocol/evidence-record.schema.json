@@ -15,7 +15,8 @@
     "executor",
     "isolation",
     "origin",
-    "runs"
+    "runs",
+    "kind"
   ],
   "patternProperties": {
     "^x-": {}
@@ -35,7 +36,7 @@
     },
     "core_key": {
       "$ref": "common.schema.json#/$defs/identity",
-      "description": "Hash of inputs. Recomputed by the kernel whenever the record is read."
+      "description": "Identity of the object described under $defs/core_key_preimage, over the canonical encoding. Recomputed by the kernel whenever the record is read."
     },
     "platform": {
       "$ref": "common.schema.json#/$defs/platform",
@@ -138,6 +139,13 @@
             "violated"
           ],
           "description": "What the obligation expects. Part of the core key."
+        },
+        "mapping": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identity"
+          },
+          "description": "For conformance: the files that say which part of the implementation answers to which part of the specification. A set, sorted."
         }
       }
     },
@@ -200,9 +208,22 @@
           "tools_ran": {
             "type": "array",
             "items": {
-              "$ref": "common.schema.json#/$defs/identity"
+              "type": "object",
+              "required": [
+                "name",
+                "digest"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "digest": {
+                  "$ref": "common.schema.json#/$defs/identity"
+                }
+              }
             },
-            "description": "Tool digests the executor reports it actually ran."
+            "description": "The tools the executor reports it actually ran."
           },
           "handle": {
             "type": "string"
@@ -249,6 +270,87 @@
         "signature": {
           "type": "string",
           "description": "Required for a record to be reusable anywhere but where it was written."
+        }
+      }
+    },
+    "kind": {
+      "enum": [
+        "check",
+        "build",
+        "conformance",
+        "reproducibility"
+      ]
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "identity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "identity": {
+            "$ref": "common.schema.json#/$defs/identity"
+          }
+        }
+      },
+      "description": "For a build: the artifacts produced."
+    },
+    "deterministic": {
+      "type": "boolean",
+      "description": "For a build: whether the provider declares the outputs byte-identical for equal inputs."
+    }
+  },
+  "$defs": {
+    "core_key_preimage": {
+      "type": "object",
+      "description": "The exact object whose identity is the core key. Every array in it is a set, sorted as the canonical encoding says, except where order is stated to matter.",
+      "required": [
+        "obligation",
+        "kind",
+        "inputs",
+        "provider"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "obligation": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "kind": {
+          "enum": [
+            "check",
+            "build",
+            "conformance",
+            "reproducibility"
+          ]
+        },
+        "inputs": {
+          "description": "The record's `inputs` object, whole, without `platform`."
+        },
+        "provider": {
+          "type": "object",
+          "required": [
+            "name",
+            "version",
+            "protocol"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            },
+            "protocol": {
+              "type": "string"
+            }
+          }
         }
       }
     }

@@ -5,7 +5,7 @@
   "covers": [
     "intent/reach_delivered_by_amendment"
   ],
-  "why": "An exception granted by the owner, separate enough from the work, takes effect.",
+  "why": "An exception granted by the owner, with an attested claim of enough separation, takes effect.",
   "policy": {
     "exception_separation": "apart",
     "min_hard_gates": 1
@@ -47,7 +47,8 @@
           "criterion": "c1",
           "to": "soft",
           "by": "owner",
-          "separation": "apart"
+          "claims": "apart",
+          "source": "attested"
         }
       },
       "expect": {

@@ -9,7 +9,12 @@ output agree with what was expected. Anything else, including a run that did
 not finish, is a mismatch. Exit status is 0 only if every case matched.
 
     python tools/check_models.py --site .github/site/executor.json
+    python tools/check_models.py --site .github/site/executor.json --batch
     python tools/check_models.py --replay DIR     # judge recorded outputs
+
+With --batch every case goes to the executor as one job instead of one job
+each, which is kinder to a shared queue. The cases run one after another
+inside the executor and the outputs come back together.
 
 Replay directory layout: <model-dir-name>/<case>.out and <case>.exit
 """
@@ -19,8 +24,10 @@ import argparse
 import json
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 NO_ERROR = "Model checking completed. No error has been found."
@@ -80,6 +87,44 @@ def command_for(site: dict, model_dir: pathlib.Path, spec: dict, case: dict) -> 
     return argv
 
 
+def run_batch(site: dict, only: list[str], dumps: bool) -> pathlib.Path | None:
+    """Send every selected case to the executor as one job; return where the outputs came back."""
+    work = pathlib.Path(tempfile.mkdtemp(prefix="dodona-batch-"))
+    bundle, dest = work / "bundle", work / "fetched"
+    cases = []
+    for expected in sorted(ROOT.glob("spec/*/expected.json")):
+        model_dir = expected.parent
+        if only and model_dir.name not in only:
+            continue
+        spec = json.loads(expected.read_text(encoding="utf-8"))
+        shutil.copytree(model_dir, bundle / model_dir.name, ignore=shutil.ignore_patterns("expected.json"))
+        for case in spec["cases"]:
+            root_module = case.get("model", spec["model"])
+            args = [a.replace("<config>", case["config"]) for a in spec["arguments"]]
+            args = [root_module if a == spec["model"] else a for a in args]
+            cases.append({"name": f"{model_dir.name}/{case['config'].removesuffix('.cfg')}",
+                          "cwd": model_dir.name, "argv": site["tool"] + args})
+        if dumps and (model_dir / "dump.cfg").exists():
+            cases.append({"name": f"{model_dir.name}/dump", "cwd": model_dir.name, "keep": ["states.dump"],
+                          "argv": site["tool"] + ["-workers", "1", "-config", "dump.cfg", "-dump", "states", "MCDump.tla"]})
+    if not cases:
+        return None
+    shutil.copy(ROOT / ".github" / "site" / "batch_driver.py", bundle / "batch_driver.py")
+    (bundle / "manifest.json").write_text(json.dumps({"out": "out", "cases": cases}, indent=1), encoding="utf-8")
+    values = {"source": str(bundle), "dest": str(dest), "timeout": str(site.get("batch_timeout_seconds", 3600))}
+    argv = [part.format(**values) for part in site["batch_command"]]
+    print(f"sending {len(cases)} cases to the executor as one job", flush=True)
+    done = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if not dest.exists():
+        print("the executor returned nothing:", (done.stderr or done.stdout)[-400:])
+        return None
+    fetched = dest / "out" if (dest / "out").exists() else dest
+    for path in fetched.glob("*/*.exit"):
+        if path.read_text().strip() == "did-not-start":
+            path.unlink()
+    return fetched
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     mode = ap.add_mutually_exclusive_group(required=True)
@@ -89,9 +134,20 @@ def main() -> int:
     ap.add_argument("--only", action="append", default=[], metavar="MODEL",
                     help="run only this model directory under spec/ (may be repeated)")
     ap.add_argument("--save", type=pathlib.Path, help="keep each case's raw output under this directory")
+    ap.add_argument("--batch", action="store_true", help="send all cases to the executor as one job")
+    ap.add_argument("--dumps", action="store_true",
+                    help="with --batch: also have each model that has a dump.cfg write out its states")
     args = ap.parse_args()
 
     site = json.loads(args.site.read_text(encoding="utf-8")) if args.site else None
+    if args.batch:
+        fetched = run_batch(site, args.only, args.dumps)
+        if fetched is None:
+            print(json.dumps({"cases": 0, "matched": 0, "all_matched": False}))
+            return 1
+        args.replay = fetched
+        if args.save:
+            shutil.copytree(fetched, args.save, dirs_exist_ok=True)
     report = []
     for expected in sorted(ROOT.glob("spec/*/expected.json")):
         model_dir = expected.parent
@@ -103,6 +159,8 @@ def main() -> int:
             exit_code: int | None
             if args.replay:
                 out_file = args.replay / model_dir.name / f"{name}.out"
+                if not out_file.exists():
+                    out_file = args.replay / model_dir.name / f"{name}.txt"
                 exit_file = args.replay / model_dir.name / f"{name}.exit"
                 if out_file.exists() and exit_file.exists():
                     output = out_file.read_text(encoding="utf-8", errors="replace")

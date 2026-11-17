@@ -1,0 +1,82 @@
+{
+  "model": "Assurance.tla",
+  "tool": {
+    "name": "tla2tools",
+    "version": "1.7.4",
+    "requires": [
+      "a Java runtime"
+    ],
+    "digest": "not yet pinned; no lock exists"
+  },
+  "arguments": [
+    "-workers",
+    "1",
+    "-config",
+    "<config>",
+    "Assurance.tla"
+  ],
+  "exit_codes": {
+    "0": "completed, no violation",
+    "12": "safety violation found",
+    "13": "temporal property violated",
+    "other": "did not complete; counts as neither outcome"
+  },
+  "bounds": "three links with seven possible values each, two planted defects",
+  "cases": [
+    {
+      "config": "design.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "Every combination of inputs satisfies the three rules."
+    },
+    {
+      "config": "reach_proven.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "The top level is reachable when every link has it.",
+      "of": "NeverProven"
+    },
+    {
+      "config": "reach_shown.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Non-vacuity can be shown.",
+      "of": "NeverShown"
+    },
+    {
+      "config": "mutant_average.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the links are averaged.",
+      "of": "WeakestLink"
+    },
+    {
+      "config": "mutant_ignore_unreported.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a link nobody reported is left out, which raises the level.",
+      "of": "WeakestLink"
+    },
+    {
+      "config": "mutant_unknown_defect_counts.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a planted defect that never ran is treated as caught.",
+      "of": "NonVacuitySound"
+    },
+    {
+      "config": "mutant_empty_is_shown.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a check with no planted defect is reported as shown able to fail.",
+      "of": "NonVacuitySound"
+    },
+    {
+      "config": "mutant_always_nothing.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the shown level is always the lowest, which is safe and useless.",
+      "of": "NotUnderstated"
+    }
+  ]
+}

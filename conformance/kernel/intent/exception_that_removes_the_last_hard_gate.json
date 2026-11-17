@@ -33,7 +33,8 @@
           "criterion": "c1",
           "to": "soft",
           "by": "owner",
-          "separation": "apart"
+          "claims": "apart",
+          "source": "attested"
         }
       },
       "expect": {

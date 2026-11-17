@@ -1,0 +1,78 @@
+{
+  "kind": "assurance",
+  "name": "non_vacuity_needs_every_defect_caught",
+  "claim": "C19",
+  "covers": [
+    "assurance/mutant_unknown_defect_counts",
+    "assurance/mutant_empty_is_shown",
+    "assurance/reach_shown"
+  ],
+  "why": "A check is shown able to fail only when it has planted defects and every one was caught.",
+  "steps": [
+    {
+      "do": {
+        "judge": {
+          "links": {},
+          "defects": {}
+        }
+      },
+      "expect": {
+        "non_vacuous": "none-planted"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {},
+          "defects": {
+            "m1": "passed"
+          }
+        }
+      },
+      "expect": {
+        "non_vacuous": "shown"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {},
+          "defects": {
+            "m1": "passed",
+            "m2": "unknown"
+          }
+        }
+      },
+      "expect": {
+        "non_vacuous": "not-shown"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {},
+          "defects": {
+            "m1": "failed"
+          }
+        }
+      },
+      "expect": {
+        "non_vacuous": "not-shown"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {},
+          "defects": {
+            "m1": "passed",
+            "m2": "passed"
+          }
+        }
+      },
+      "expect": {
+        "non_vacuous": "shown"
+      }
+    }
+  ]
+}

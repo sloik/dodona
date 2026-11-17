@@ -70,7 +70,7 @@ def check_model_cases() -> None:
     for expected in sorted(ROOT.glob("spec/*/expected.json")):
         spec = json.loads(expected.read_text(encoding="utf-8"))
         listed = {c["config"] for c in spec["cases"]}
-        present = {p.name for p in expected.parent.glob("*.cfg")}
+        present = {p.name for p in expected.parent.glob("*.cfg")} - {"dump.cfg"}  # writes out states; judged by check_states
         for name in sorted(listed - present):
             problems.append(f"{expected.parent.name}: {name} is listed but missing")
         for name in sorted(present - listed):

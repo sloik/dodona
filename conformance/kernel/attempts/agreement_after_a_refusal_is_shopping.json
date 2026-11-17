@@ -1,0 +1,68 @@
+{
+  "kind": "attempts",
+  "name": "agreement_after_a_refusal_is_shopping",
+  "claim": "C35",
+  "covers": [
+    "attempts/mutant_latest_only",
+    "attempts/mutant_flag_missed",
+    "attempts/mutant_flag_does_not_cap",
+    "attempts/reach_shopped"
+  ],
+  "why": "Trying again until the answer is yes does not turn a refusal into an agreement. It is flagged, and it caps the separation of the act.",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": true,
+        "cap": "helper",
+        "attempts": 2
+      }
+    }
+  ]
+}

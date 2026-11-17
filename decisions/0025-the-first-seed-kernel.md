@@ -23,7 +23,7 @@ The conformance kit exists and was committed before any kernel. dodona needs a f
 
 **Who writes it.** The kit and the documents were written by one make of AI model. The seed is written by a different make, given only the documents, the kit and the two judging tools, and told not to read the reference path check. On the separation scale this is as much as can be claimed today: `cross-make`, `declared`.
 
-**What it may claim.** The seed is accepted when it passes every scenario and every encoding vector, on macOS, Linux and Windows. That is evidence at the level `sampled`: 27 scenarios and 25 vectors. It is not a proof, and it says nothing about the claims the formal models do not cover. The path check is left out of the seed, because it needs Unicode tables the standard library does not carry; the reference implementation in `tools/` stands in until a kernel embeds the pinned tables.
+**What it may claim.** The seed is accepted when it passes every scenario and every encoding vector, on macOS, Linux and Windows. That is evidence at the level `sampled`: scenarios and vectors, 27 and 25 when this was written and more since. It is not a proof, and it says nothing about the claims the formal models do not cover. The path check is left out of the seed, because it needs Unicode tables the standard library does not carry; the reference implementation in `tools/` stands in until a kernel embeds the pinned tables.
 
 **The next step up.** Raise the link between the models and the code from `sampled` to `bounded` by having the model checker write out every reachable state of the bounded models and checking the kernel's answer on each one.
 

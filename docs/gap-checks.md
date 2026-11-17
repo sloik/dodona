@@ -24,6 +24,14 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_provider_cases_match_the_provider` | A misbehaviour case that names a mode the provider does not have would quietly test the well-behaved path and pass |
 | `gap_every_check_is_listed` | A check whose reason is lost gets deleted by mistake |
 
+Three more checks run as their own tools in CI, because they need to build or install something:
+
+| Tool | The gap behind it |
+|---|---|
+| `tools/check_examples.py` | The provider guide's examples were valid only because their author said so, and a schema change silently broke one |
+| `tools/kit_adequacy.py` | A kit that no defective kernel fails proves nothing. Each planted defect must be rejected |
+| `tools/path_differential.py` | Two implementations of the path check written from one document could disagree unnoticed |
+
 The judge that decides whether a model run matched its expectation has its own tests in the same file, for the same reason: it once misread a correct result, and it must never turn an unfinished run into a pass.
 
 Known gaps with no check yet are listed as open in the review logs under `docs/reviews/` and as unmodelled claims in `spec/CLAIMS.md`.

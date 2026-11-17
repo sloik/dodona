@@ -7,6 +7,17 @@
     "kernel/assumption_undeclared_dep": "About a provider declaring too few dependencies. A kernel cannot detect that from its inputs; it is a provider conformance case.",
     "kernel/assumption_flaky_provider": "About a provider giving a wrong verdict. A kernel cannot detect that; the conflict scenario covers what the kernel does when verdicts disagree.",
     "intent/design_three_criteria": "A search of the whole state space, not a behaviour.",
-    "intent/design_two_criteria": "As above."
+    "intent/design_two_criteria": "As above.",
+    "planner/design_definition": "A search of the whole state space, not a behaviour.",
+    "planner/design_file": "As above.",
+    "assurance/design": "As above.",
+    "tree/design": "As above.",
+    "attempts/design": "As above.",
+    "platforms/design_stand_in_allowed": "As above.",
+    "platforms/design_stand_in_forbidden": "As above.",
+    "decisions/design": "As above.",
+    "liveness/design": "About what happens over unbounded time. A scenario is finite and cannot show 'eventually'.",
+    "liveness/mutant_no_resubmit_after_unavailable": "About a kernel that keeps submitting work over time. The seed has no such loop yet, so there is nothing to judge.",
+    "liveness/mutant_no_resubmit_after_loss": "As above."
   }
 }

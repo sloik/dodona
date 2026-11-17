@@ -1,0 +1,54 @@
+{
+  "model": "Decisions.tla",
+  "tool": {
+    "name": "tla2tools",
+    "version": "1.7.4",
+    "requires": [
+      "a Java runtime"
+    ],
+    "digest": "not yet pinned; no lock exists"
+  },
+  "arguments": [
+    "-workers",
+    "1",
+    "-config",
+    "<config>",
+    "Decisions.tla"
+  ],
+  "exit_codes": {
+    "0": "completed, no violation",
+    "12": "safety violation found",
+    "13": "temporal property violated",
+    "other": "did not complete; counts as neither outcome"
+  },
+  "bounds": "two names, two contents and absence",
+  "cases": [
+    {
+      "config": "design.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "The decision is flagged exactly when the identity behind its name has changed."
+    },
+    {
+      "config": "reach_flagged.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A flag is reachable.",
+      "of": "NeverFlagged"
+    },
+    {
+      "config": "mutant_identities_without_names.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the kernel tracks identities without names, and misses an edit when the old content still exists under another name.",
+      "of": "FlagIsExact"
+    },
+    {
+      "config": "mutant_gone_is_not_flagged.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a governed definition that disappears is not flagged.",
+      "of": "FlagIsExact"
+    }
+  ]
+}

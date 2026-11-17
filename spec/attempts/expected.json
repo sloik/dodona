@@ -1,0 +1,75 @@
+{
+  "model": "Attempts.tla",
+  "tool": {
+    "name": "tla2tools",
+    "version": "1.7.4",
+    "requires": [
+      "a Java runtime"
+    ],
+    "digest": "not yet pinned; no lock exists"
+  },
+  "arguments": [
+    "-workers",
+    "1",
+    "-config",
+    "<config>",
+    "Attempts.tla"
+  ],
+  "exit_codes": {
+    "0": "completed, no violation",
+    "12": "safety violation found",
+    "13": "temporal property violated",
+    "other": "did not complete; counts as neither outcome"
+  },
+  "bounds": "at most three attempts, one change of target",
+  "cases": [
+    {
+      "config": "design.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "The intended design satisfies both properties."
+    },
+    {
+      "config": "reach_agreed.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A clean agreement is reachable.",
+      "of": "NeverAgreed"
+    },
+    {
+      "config": "reach_shopped.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Shopping is reachable, so the flag is not a dead rule.",
+      "of": "NeverShopped"
+    },
+    {
+      "config": "mutant_latest_only.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: only the latest attempt counts.",
+      "of": "WorstCounts"
+    },
+    {
+      "config": "mutant_open_ignored.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: an attempt that was never closed is ignored.",
+      "of": "WorstCounts"
+    },
+    {
+      "config": "mutant_flag_does_not_cap.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: shopping is flagged and the level is not capped.",
+      "of": "ShoppingIsFlagged"
+    },
+    {
+      "config": "mutant_flag_missed.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: shopping is not flagged.",
+      "of": "ShoppingIsFlagged"
+    }
+  ]
+}

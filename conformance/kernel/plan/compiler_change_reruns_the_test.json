@@ -1,0 +1,153 @@
+{
+  "kind": "plan",
+  "name": "compiler_change_reruns_the_test",
+  "claim": "C10",
+  "covers": [
+    "planner/mutant_key_omits_producer"
+  ],
+  "why": "A test of what a build produced depends on the compiler too. The test cannot run until the build is current again, and going back to the old compiler makes the old results valid.",
+  "granularity": "definition",
+  "definitions": {
+    "d1": {
+      "depends_on": [
+        "d2"
+      ],
+      "file": "f1"
+    },
+    "d2": {
+      "depends_on": [],
+      "file": "f2"
+    },
+    "d3": {
+      "depends_on": [],
+      "file": "f2"
+    }
+  },
+  "obligations": {
+    "check": {
+      "targets": [
+        "d1"
+      ]
+    },
+    "build": {
+      "targets": [
+        "d1"
+      ],
+      "tool": "compiler"
+    },
+    "test": {
+      "artifact_of": "build",
+      "tool": "runner"
+    }
+  },
+  "start": {
+    "content": {
+      "d1": "a",
+      "d2": "a",
+      "d3": "a"
+    },
+    "tools": {
+      "compiler": "c1",
+      "runner": "r1"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "run": {
+          "obligation": "build"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": [
+          "check",
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": "test"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": [
+          "check"
+        ]
+      }
+    },
+    {
+      "do": {
+        "repin": {
+          "tool": "compiler",
+          "to": "c2"
+        }
+      },
+      "expect": {
+        "plan": [
+          "build",
+          "check",
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": "test"
+        }
+      },
+      "expect": {
+        "ran": false,
+        "plan": [
+          "build",
+          "check",
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": "build"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": [
+          "check",
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": "test"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": [
+          "check"
+        ]
+      }
+    },
+    {
+      "do": {
+        "repin": {
+          "tool": "compiler",
+          "to": "c1"
+        }
+      },
+      "expect": {
+        "plan": [
+          "check"
+        ]
+      }
+    }
+  ]
+}

@@ -61,8 +61,8 @@
       "name": "deferred gate ignored",
       "model_case": "intent/mutant_deferred_as_passed",
       "file": "src/intent.rs",
-      "find": "            .any(|(g, s)| g == \"deferred\" && s != \"passed\")",
-      "replace": "            .any(|(g, s)| g == \"deferred\" && s == \"never\")"
+      "find": "        .any(|(g, s)| g == \"deferred\" && s != \"passed\")",
+      "replace": "        .any(|(g, s)| g == \"deferred\" && s == \"never\")"
     },
     {
       "name": "edit keeps confirmation",
@@ -96,8 +96,8 @@
       "name": "worker keeps the level it wrote",
       "model_case": "intent/mutant_worker_keeps_level",
       "file": "src/intent.rs",
-      "find": "else { \"self\" };",
-      "replace": "else { a.opt(\"separation\").map(Value::str).unwrap_or(\"self\") };"
+      "find": "    } else {\n        \"self\"\n    };\n    (owner && rank(level)",
+      "replace": "    } else {\n        a.opt(\"claims\").map(Value::str).unwrap_or(\"self\")\n    };\n    (owner && rank(level)"
     },
     {
       "name": "level shown higher than used",
@@ -105,6 +105,160 @@
       "file": "src/intent.rs",
       "find": "(\"level\", json::string(level)),",
       "replace": "(\"level\", json::string(\"apart\")),"
+    },
+    {
+      "name": "declared counts in full",
+      "model_case": "intent/mutant_declared_counts_in_full",
+      "file": "src/intent.rs",
+      "find": "                \"helper\"\n            };",
+      "replace": "                \"credentialed\"\n            };"
+    },
+    {
+      "name": "direct deps only",
+      "model_case": "planner/mutant_direct_deps_only",
+      "file": "src/plan.rs",
+      "find": "            closure(t.str(), defs, &mut names);",
+      "replace": "            names.insert(t.str().into());"
+    },
+    {
+      "name": "key omits producer",
+      "model_case": "planner/mutant_key_omits_producer",
+      "file": "src/plan.rs",
+      "find": "        parts.push(key(producer.str(), input, content, tools));",
+      "replace": "        let _ = producer;"
+    },
+    {
+      "name": "plan everything",
+      "model_case": "planner/mutant_plan_everything",
+      "file": "src/plan.rs",
+      "find": ".filter(|(name, _)| !done.contains(&(name.clone(), key(name, input, content, tools))))",
+      "replace": ".filter(|(name, _)| { let _ = (done, name, content, tools); true })"
+    },
+    {
+      "name": "average",
+      "model_case": "assurance/mutant_average",
+      "file": "src/assurance.rs",
+      "find": "        .min()\n        .unwrap();",
+      "replace": "        .sum::<usize>() / 3;"
+    },
+    {
+      "name": "ignore unreported",
+      "model_case": "assurance/mutant_ignore_unreported",
+      "file": "src/assurance.rs",
+      "find": ".unwrap_or(\"none\");",
+      "replace": ".unwrap_or(\"proven\");"
+    },
+    {
+      "name": "unknown defect counts",
+      "model_case": "assurance/mutant_unknown_defect_counts",
+      "file": "src/assurance.rs",
+      "find": "v.str() == \"passed\"",
+      "replace": "v.str() != \"failed\""
+    },
+    {
+      "name": "empty is shown",
+      "model_case": "assurance/mutant_empty_is_shown",
+      "file": "src/assurance.rs",
+      "find": "        \"none-planted\"",
+      "replace": "        \"shown\""
+    },
+    {
+      "name": "remove keeps confirmation",
+      "model_case": "tree/mutant_remove_keeps_confirmation",
+      "file": "src/tree.rs",
+      "find": "                children.remove(r.get(\"child\").str());\n                confirmed = false;",
+      "replace": "                children.remove(r.get(\"child\").str());"
+    },
+    {
+      "name": "add keeps confirmation",
+      "model_case": "tree/mutant_add_keeps_confirmation",
+      "file": "src/tree.rs",
+      "find": "                confirmed = false;\n            }\n            json::object",
+      "replace": "            }\n            json::object"
+    },
+    {
+      "name": "delivered ignores children",
+      "model_case": "tree/mutant_delivered_ignores_children",
+      "file": "src/tree.rs",
+      "find": "|| children.values().any(|(g, s)| g != \"hard\" || s != \"passed\")",
+      "replace": "|| false"
+    },
+    {
+      "name": "soft child is delivered",
+      "model_case": "tree/mutant_soft_child_is_delivered",
+      "file": "src/tree.rs",
+      "find": "g != \"hard\" || s != \"passed\"",
+      "replace": "g == \"hard\" && s != \"passed\""
+    },
+    {
+      "name": "latest only",
+      "model_case": "attempts/mutant_latest_only",
+      "file": "src/attempts.rs",
+      "find": "attempts.iter().all(|(_, r)| r == \"agreed\")",
+      "replace": "attempts.last().unwrap().1 == \"agreed\""
+    },
+    {
+      "name": "open ignored",
+      "model_case": "attempts/mutant_open_ignored",
+      "file": "src/attempts.rs",
+      "find": "r == \"agreed\") {",
+      "replace": "r == \"agreed\" || r == \"open\") {"
+    },
+    {
+      "name": "flag does not cap",
+      "model_case": "attempts/mutant_flag_does_not_cap",
+      "file": "src/attempts.rs",
+      "find": "if shopped {\n                        json::string(\"helper\")",
+      "replace": "if false {\n                        json::string(\"helper\")"
+    },
+    {
+      "name": "flag missed",
+      "model_case": "attempts/mutant_flag_missed",
+      "file": "src/attempts.rs",
+      "find": "            shopped = true;",
+      "replace": "            shopped = false;"
+    },
+    {
+      "name": "always stand in",
+      "model_case": "platforms/mutant_always_stand_in",
+      "file": "src/platforms.rs",
+      "find": "if allowed && verified {",
+      "replace": "if { let _ = (allowed, verified); true } {"
+    },
+    {
+      "name": "stand in unverified",
+      "model_case": "platforms/mutant_stand_in_unverified",
+      "file": "src/platforms.rs",
+      "find": "if allowed && verified {",
+      "replace": "if allowed { let _ = verified;"
+    },
+    {
+      "name": "one platform reproduces",
+      "model_case": "platforms/mutant_one_platform_reproduces",
+      "file": "src/platforms.rs",
+      "find": "if values.len() < 2 {",
+      "replace": "if values.is_empty() {"
+    },
+    {
+      "name": "disagreement ignored",
+      "model_case": "platforms/mutant_disagreement_ignored",
+      "file": "src/platforms.rs",
+      "find": "values.iter().any(|v| *v != values[0])",
+      "replace": "values.iter().any(|v| *v != *v)"
+    },
+    {
+      "name": "identities without names",
+      "model_case": "decisions/mutant_identities_without_names",
+      "file": "src/decisions.rs",
+      "find": "flagged(names.get(governed).map(String::as_str), &recorded)",
+      "replace": "!names.values().any(|v| v == &recorded)"
+    },
+    {
+      "name": "gone is not flagged",
+      "model_case": "decisions/mutant_gone_is_not_flagged",
+      "file": "src/decisions.rs",
+      "find": "current != Some(recorded)",
+      "replace": "current.is_some() && current != Some(recorded)"
     }
   ]
 }

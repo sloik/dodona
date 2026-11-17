@@ -6,7 +6,7 @@
     "intent/mutant_worker_can_amend",
     "intent/mutant_worker_keeps_level"
   ],
-  "why": "The worker granting to itself is graded self whatever it wrote down, and only the owner's exceptions take effect, even where the floor is the lowest level.",
+  "why": "The worker granting to itself is graded self whatever it claims and whoever attests, and only the owner's exceptions take effect, even where the floor is the lowest level.",
   "policy": {
     "exception_separation": "self",
     "min_hard_gates": 1
@@ -48,7 +48,8 @@
           "criterion": "c1",
           "to": "soft",
           "by": "worker",
-          "separation": "apart"
+          "claims": "apart",
+          "source": "attested"
         }
       },
       "expect": {

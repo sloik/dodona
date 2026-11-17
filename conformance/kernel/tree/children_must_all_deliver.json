@@ -1,0 +1,67 @@
+{
+  "kind": "tree",
+  "name": "children_must_all_deliver",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_delivered_ignores_children",
+    "tree/reach_delivered"
+  ],
+  "why": "A parent is delivered only when every child is.",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    },
+    "k2": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}

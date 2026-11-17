@@ -70,7 +70,8 @@
           },
           "description": "Required obligations not yet decided. Present with unknown."
         }
-      }
+      },
+      "description": "A project status of passed requires a policy identity and at least one required obligation or intent; `undecided` may be non-empty only when the status is unknown. The kernel enforces this; see MODEL.md section 4."
     },
     "intents": {
       "type": "array",

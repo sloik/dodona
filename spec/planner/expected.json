@@ -1,0 +1,81 @@
+{
+  "model": "Planner.tla",
+  "tool": {
+    "name": "tla2tools",
+    "version": "1.7.4",
+    "requires": [
+      "a Java runtime"
+    ],
+    "digest": "not yet pinned; no lock exists"
+  },
+  "arguments": [
+    "-workers",
+    "1",
+    "-config",
+    "<config>",
+    "Planner.tla"
+  ],
+  "exit_codes": {
+    "0": "completed, no violation",
+    "12": "safety violation found",
+    "13": "temporal property violated",
+    "other": "did not complete; counts as neither outcome"
+  },
+  "bounds": "three definitions, two hash values, two tools, at most three records",
+  "cases": [
+    {
+      "config": "design_definition.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "With per-definition identity: nothing stale is reused, and nothing current is rerun."
+    },
+    {
+      "config": "design_file.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "With file-level fallback identity: nothing stale is reused."
+    },
+    {
+      "config": "file_costs_reruns.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "File-level identity does rerun things that were current: editing an unrelated definition in the same file. That is its only cost.",
+      "of": "NoNeedlessRerun"
+    },
+    {
+      "config": "reach_all_current.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A state with nothing left to plan is reachable.",
+      "of": "NeverAllCurrent"
+    },
+    {
+      "config": "mutant_direct_deps_only.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the key covers the target and not what it depends on.",
+      "of": "NoWrongReuse"
+    },
+    {
+      "config": "mutant_fallback_direct_deps_only.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "The same defect with file-level identity: the fallback ignores a dependency.",
+      "of": "NoWrongReuse"
+    },
+    {
+      "config": "mutant_key_omits_producer.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a test's key leaves out the build that produced what it tests, so a compiler change is missed.",
+      "of": "NoWrongReuse"
+    },
+    {
+      "config": "mutant_plan_everything.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the planner reruns everything.",
+      "of": "NoNeedlessRerun"
+    }
+  ]
+}

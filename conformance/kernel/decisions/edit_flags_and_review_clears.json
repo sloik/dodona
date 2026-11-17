@@ -1,0 +1,46 @@
+{
+  "kind": "decisions",
+  "name": "edit_flags_and_review_clears",
+  "claim": "C16",
+  "covers": [
+    "decisions/reach_flagged"
+  ],
+  "why": "A decision is flagged when what it governs changes, and not when something else does. Reviewing it against the new content clears the flag.",
+  "governs": "n1",
+  "names": {
+    "n1": "a",
+    "n2": "b"
+  },
+  "steps": [
+    {
+      "do": {
+        "edit": {
+          "name": "n2",
+          "to": "c"
+        }
+      },
+      "expect": {
+        "flagged": false
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": "c"
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "review": {}
+      },
+      "expect": {
+        "flagged": false
+      }
+    }
+  ]
+}
