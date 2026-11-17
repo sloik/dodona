@@ -18,12 +18,12 @@ What a `checked` status means here, and no more:
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C1 | Given a provider that is correct and declares all its inputs: a reported pass means the obligation holds for the current inputs, and a reported failure means it does not, under any interleaving of edits, tool changes, lost runs and completions | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` | Key leaves out the tool digest; result filed under the key at completion | modelled, unchecked |
-| C2 | Every reusable record was produced by a run that completed; an unreachable backend never produces one | [0005](../decisions/0005-closed-verdict-set.md) | `Provenance` | Unavailable recorded as passed | modelled, unchecked |
-| C3 | With a correct provider, no evidence key ever holds both a pass and a failure | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Consistent` | Result filed under the key at completion | modelled, unchecked |
-| C4 | Even with a provider that can be wrong, a pass is never reported while a failure is recorded for the same key | [0005](../decisions/0005-closed-verdict-set.md) | `NoPassOverFail`, small instance | With conflicting records, the pass wins | modelled, unchecked |
-| C5 | The design does reuse records after a change that does not affect them, so C1 is not satisfied by rerunning everything | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | Reachability: `NeverReusedAfterChange` must be violated | (reachability) | modelled, unchecked |
-| C6 | C1 depends on two trusted-base assumptions: complete declared inputs, and a correct provider. Removing either breaks it | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` must be violated in both cases | (the broken assumption is the check) | modelled, unchecked |
+| C1 | Given a provider that is correct and declares all its inputs: a reported pass means the obligation holds for the current inputs, and a reported failure means it does not, under any interleaving of edits, tool changes, lost runs and completions | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` | Key leaves out the tool digest; result filed under the key at completion | modelled, unchecked. Planted defects caught; the main design run did not complete |
+| C2 | Every reusable record was produced by a run that completed; an unreachable backend never produces one | [0005](../decisions/0005-closed-verdict-set.md) | `Provenance` | Unavailable recorded as passed | modelled, unchecked. Planted defects caught; the main design run did not complete |
+| C3 | With a correct provider, no evidence key ever holds both a pass and a failure | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Consistent` | Result filed under the key at completion | modelled, unchecked. Planted defects caught; the main design run did not complete |
+| C4 | Even with a provider that can be wrong, a pass is never reported while a failure is recorded for the same key | [0005](../decisions/0005-closed-verdict-set.md) | `NoPassOverFail`, small instance | With conflicting records, the pass wins | **checked**, run 1 |
+| C5 | The design does reuse records after a change that does not affect them, so C1 is not satisfied by rerunning everything | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | Reachability: `NeverReusedAfterChange` must be violated | (reachability) | **checked**, run 1 |
+| C6 | C1 depends on two trusted-base assumptions: complete declared inputs, and a correct provider. Removing either breaks it | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` must be violated in both cases | (the broken assumption is the check) | **checked**, run 1 |
 
 C6 does not show the assumptions hold. It shows they are load-bearing, which is why they are in the [trusted base](../MODEL.md#6-trusted-base).
 
@@ -69,4 +69,35 @@ This model is narrow, and a review said so. It takes the declared gates and the 
 
 ## Recorded runs
 
-None yet. The model checks have been submitted and have not finished.
+### Run 1: `kernel/EvidenceReuse.tla`, 2026-11-17
+
+Checker: TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802), from tla2tools 1.7.4, one worker. Model files (SHA-256): `EvidenceReuse.tla` `3d4b878a24d6e96d925b4c7d0406041eb42648974db8a59b4792a2d480312c20`, `MC.tla` `85f57a901972d333d7939e49da4d89a91851c09c6cd26e1a0b6ec060b5b56c8c`. The checker and the runtime under it are not pinned by digest yet.
+
+13 of 14 cases matched. **The main design case did not complete**, so claims C1 to C3 are not checked.
+
+| Case | Expected | Result | States generated / distinct | Match |
+|---|---|---|---|---|
+| `design` | no violation | **did not complete**: the checker ran out of its disk allowance after 2,581,743 distinct states, with 310,237 still to explore and no violation found so far | 17,611,514 / 2,581,743 | no |
+| `design_three_hashes` | no violation | no violation, search complete | 1,660,815 / 202,428 | yes |
+| `design_flaky` | no violation | no violation, search complete | 315,212 / 38,704 | yes |
+| `reach_pass` | `NeverPassed` violated | violated | 68 / 37 | yes |
+| `reach_fail` | `NeverFailed` violated | violated | 88 / 47 | yes |
+| `reach_reuse` | `NeverReusedAfterChange` violated | violated | 249 / 130 | yes |
+| `reach_conflict` | `NeverConflict` violated | violated | 274 / 134 | yes |
+| `mutant_key_omits_tool` | `Sound` violated | violated | 230 / 120 | yes |
+| `mutant_complete_with_current_key` | `Sound` violated | violated | 223 / 117 | yes |
+| `mutant_complete_with_current_key_consistent` | `Consistent` violated | violated | 2,904 / 1,190 | yes |
+| `mutant_unavailable_is_pass` | `Provenance` violated | violated | 61 / 33 | yes |
+| `mutant_pass_outranks_fail` | `NoPassOverFail` violated | violated | 274 / 134 | yes |
+| `assumption_undeclared_dep` | `Sound` violated | violated | 266 / 140 | yes |
+| `assumption_flaky_provider` | `Sound` violated | violated | 33 / 16 | yes |
+
+Every violation ended with the checker's exit code 12 and every completed search with 0. The incomplete case ended with 255.
+
+What this run establishes: C4, C5 and C6, which need only the small instance or a violation. For C1 to C3 it establishes that each planted defect is caught, and that the properties hold on the small three-hash instance; it does not establish them at the main bounds.
+
+The design case has been resubmitted unchanged in bounds, with a state view that leaves out a history variable none of its properties read (`kernel/MCDesign.tla`). Its result will be recorded here as run 2.
+
+### `intent/IntentGates.tla`
+
+Submitted. No case has completed.

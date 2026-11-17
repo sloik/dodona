@@ -10,7 +10,7 @@ dodona is a tool an AI agent can ask that question, so nobody has to take the ag
 |---|---|
 | **Stage** | Design. There is no kernel and nothing to run yet |
 | **Exists** | Architecture, data model, 22 proposed decisions, draft protocol schemas, two formal models |
-| **Checked so far** | Nothing yet. The first model check is partly run; see [the claims table](spec/CLAIMS.md) |
+| **Checked so far** | 3 of 32 design claims, by a bounded model check. The main design case has not completed; see [the claims table](spec/CLAIMS.md) |
 | **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ## The chain dodona watches
