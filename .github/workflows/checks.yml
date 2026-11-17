@@ -35,6 +35,8 @@ jobs:
           persist-credentials: false
       - name: Run repository checks
         run: ${{ matrix.python }} tools/check_repo.py
+      - name: Judge the reference host with the misbehaving provider
+        run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.python }} tools/provider_host.py
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Kernel unit tests

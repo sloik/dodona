@@ -379,6 +379,22 @@ def gap_no_generated_files_are_tracked() -> None:
             problems.append(f"{path}: a generated file is under version control")
 
 
+def gap_provider_cases_match_the_provider() -> None:
+    """A case naming a mode the provider does not have would silently test the well-behaved path."""
+    cases = json.loads((ROOT / "conformance" / "provider" / "cases.json").read_text(encoding="utf-8"))["cases"]
+    source = (ROOT / "conformance" / "provider" / "misbehaving_provider.py").read_text(encoding="utf-8")
+    modes = [c["mode"] for c in cases]
+    if modes[:1] != ["well-behaved"]:
+        problems.append("conformance/provider/cases.json: the first case must be the well-behaved control")
+    for case in cases:
+        if case["mode"] != "well-behaved" and f'"{case["mode"]}"' not in source:
+            problems.append(f"conformance/provider/cases.json: mode {case['mode']} is not in the provider")
+        if case["outcome"] == "error" and "reason" not in case:
+            problems.append(f"conformance/provider/cases.json: {case['mode']} expects an error with no reason")
+    if len(modes) != len(set(modes)):
+        problems.append("conformance/provider/cases.json: a mode is listed twice")
+
+
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
@@ -386,7 +402,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_no_generated_files_are_tracked,
-              gap_every_check_is_listed]
+              gap_provider_cases_match_the_provider, gap_every_check_is_listed]
 
 
 class JudgeTests(unittest.TestCase):

@@ -1,0 +1,105 @@
+{
+  "about": "What a host must do with misbehaving_provider.py in each mode. `outcome` is what the session ends as. For `error`, `reason` is the stable reason code. In every case the host must return within its deadline plus a short grace period, and no process the provider started may still be running afterwards.",
+  "limits": {
+    "deadline_ms": 3000,
+    "max_line_bytes": 1048576,
+    "max_log_bytes": 65536,
+    "grace_ms": 5000
+  },
+  "cases": [
+    {
+      "mode": "well-behaved",
+      "outcome": "ok",
+      "why": "A control: a provider that does everything right must be accepted, or the other cases prove nothing."
+    },
+    {
+      "mode": "garbage",
+      "outcome": "error",
+      "why": "A line that is not JSON ends the session.",
+      "reason": "malformed"
+    },
+    {
+      "mode": "not-an-object",
+      "outcome": "error",
+      "why": "A JSON value that is not a message object ends the session.",
+      "reason": "malformed"
+    },
+    {
+      "mode": "byte-order-mark",
+      "outcome": "error",
+      "why": "A byte-order mark is a protocol error.",
+      "reason": "framing"
+    },
+    {
+      "mode": "carriage-return",
+      "outcome": "error",
+      "why": "A carriage return before the line feed is a protocol error.",
+      "reason": "framing"
+    },
+    {
+      "mode": "bad-encoding",
+      "outcome": "error",
+      "why": "Bytes that are not UTF-8 end the session.",
+      "reason": "encoding"
+    },
+    {
+      "mode": "over-long-line",
+      "outcome": "error",
+      "why": "A line longer than the host allows ends the session; the host must not buffer it without bound.",
+      "reason": "too-long"
+    },
+    {
+      "mode": "half-a-line",
+      "outcome": "error",
+      "why": "An unfinished line is not a message; the deadline still applies.",
+      "reason": "deadline"
+    },
+    {
+      "mode": "never-answers",
+      "outcome": "error",
+      "why": "No answer by the deadline ends the session.",
+      "reason": "deadline"
+    },
+    {
+      "mode": "late",
+      "outcome": "error",
+      "why": "An answer that would come after the deadline is never waited for.",
+      "reason": "deadline"
+    },
+    {
+      "mode": "exits-before-answering",
+      "outcome": "error",
+      "why": "A provider that goes away mid-session ends in error, not in a pass.",
+      "reason": "closed"
+    },
+    {
+      "mode": "wrong-id",
+      "outcome": "error",
+      "why": "An answer to a request that was not asked ends the session.",
+      "reason": "wrong-id"
+    },
+    {
+      "mode": "two-answers",
+      "outcome": "error",
+      "why": "A second answer to one request is not ignored.",
+      "reason": "unexpected"
+    },
+    {
+      "mode": "flood-on-standard-error",
+      "outcome": "ok",
+      "why": "Megabytes on standard error must neither block the provider nor fill memory. The log is kept up to a cap and marked as cut short.",
+      "log_truncated": true
+    },
+    {
+      "mode": "leaves-a-process-behind",
+      "outcome": "ok",
+      "why": "A provider that answers correctly and leaves a process running: the answer stands, and the process must be gone afterwards."
+    },
+    {
+      "mode": "leaves-a-process-behind-and-hangs",
+      "outcome": "error",
+      "why": "A provider that hangs with a child holding its output open: the host must end the session at the deadline and leave nothing running.",
+      "reason": "deadline"
+    }
+  ]
+}

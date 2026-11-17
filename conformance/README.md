@@ -11,6 +11,8 @@ Version 0 covers what the formal models cover and no more: how an obligation's s
 | `kernel/evidence/` | Scenarios for obligation status: edits, tool changes, submissions, completions, lost runs, an unreachable backend |
 | `kernel/intent/` | Scenarios for intent status: confirmation, checks, direct edits, exceptions with their separation level, policy floors |
 | `kernel/index.json` | The modelled cases that have no scenario, each with the reason |
+| `provider/misbehaving_provider.py` | A provider that does one thing wrong in each of its modes: garbage, a byte-order mark, a carriage return, bad encoding, an over-long line, half a line, no answer, a late answer, a wrong or repeated answer, a flood on standard error, a process left behind |
+| `provider/cases.json` | What a host must do with it in each mode |
 | `vectors/canonical.json` | The [canonical encoding](../protocol/canonical-encoding.md): values with their exact text and hash, and inputs that must be refused |
 | `vectors/paths.json` | The [path check](../protocol/path-check.md): accepted paths, refused paths with the reason, and sets that collide |
 
@@ -58,6 +60,12 @@ The result after each step has `"status"`, and after an `amend` step also `"amen
 
 Version 0 leaves out `uncovered` and `overdue`: every criterion has a check, and there is no clock.
 
+## How a host is judged
+
+`tools/run_provider_cases.py -- <host command>` starts the host once per case and has it run the misbehaving provider in that mode. A case matches when the host reports the expected outcome and reason, returns within the deadline plus a grace period, and nothing the provider started is still running. The first case is a well-behaved provider that must be accepted: a host that refuses everything would otherwise pass.
+
+`tools/provider_host.py` is a small reference host, there to show the session rules can be kept on macOS, Linux and Windows. It checks framing, encoding, line length, deadlines and message envelopes, and ends every process the provider started. It does not validate message bodies against the schemas, and it is not part of any kernel yet.
+
 ## Rules for the kit
 
 - A scenario is added before the behaviour it tests, and is committed before any kernel that will be judged by it.
@@ -67,6 +75,6 @@ Version 0 leaves out `uncovered` and `overdue`: every criterion has a check, and
 
 ## Not yet in the kit
 
-- Scenarios for providers: malformed messages, late answers, a deliberately misbehaving provider.
+- Messages that are well-formed and wrong in content: a verdict with no run behind it, a result that fails its schema. The reference host does not validate bodies.
 - Kit adequacy: running kernels with known defects against the kit and reporting the fraction it rejects.
 - Anything not modelled: the planner, artifacts, platforms, the ledger's crash behaviour, child intents, time limits, varying checks, attempts and tickets.

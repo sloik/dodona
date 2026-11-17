@@ -141,7 +141,8 @@ A parent needs its children delivered and its own criteria met. Gate counts and 
 delivered · gates: 4 hard, 1 soft, 1 deferred (open, due 2027-01-31)
           · shown: bounded (weakest evidence link: specification → code)
           · agreed: criteria confirmed by <who>; checks matched to criteria by <who>
-          · separation: apart (declared), 5 of 6 acts apart or better; weakest: exception, helper
+          · separation: helper (claims apart), 0 of 6 acts apart or better; weakest: grant-amendment
+          · attempts: 1
           · exceptions: 1
 ```
 
@@ -179,11 +180,13 @@ A criterion's **shown** level is its weakest evidence link. An intent's score is
 | `self` | The worker did it, or nothing is recorded. The default |
 | `helper` | Someone else, but started, briefed or informed by the worker |
 | `apart` | A fresh session that saw only the thing to judge and the criteria, briefed by someone other than the worker |
-| `tested` | `apart`, and it rejected a known-bad case, with every attempt on record |
-| `cross-make` | `tested`, and a different make from the worker: another model family, vendor or a deterministic tool |
+| `tested` | `apart`, and given a known-wrong and a known-right case unlabelled, it rejected the one and accepted the other |
+| `cross-make` | `tested`, and a different make from the worker by policy's list of makes. A script is not a make |
 | `credentialed` | `cross-make`, signed with a credential the worker cannot create. Not available yet |
 
-Each fact behind a level is `checked` by dodona, `attested` by a harness whose key policy lists, or `declared`. A level is always shown with its weakest source. dodona lowers a claimed level when the record does not support it and never raises one.
+**A claim is not a grade.** The grade is the level the record supports, capped by who stands behind its facts: facts that are only `declared`, including by the party that did the work, earn `helper` at most; facts `attested` by a harness whose key is listed in protected policy earn up to `cross-make`; the top level needs a credential the worker cannot create. A capped grade is shown with its claim, as `helper (claims apart)`. The kernel works out the source of each fact; a record cannot say how well supported it is. **Nothing can attest yet, so today the highest grade is `helper`.**
+
+The worker is the whole party in control of the work: an orchestrating agent, the sub-agents it starts and any role it gives itself.
 
 Separation is graded for the acts that rest on someone's word:
 
@@ -195,7 +198,7 @@ Separation is graded for the acts that rest on someone's word:
 | Closing a deferred gate by observation | The gate stays open |
 | Changing policy | The change does not take effect |
 
-It is not graded for a check anyone can run again from locked inputs; the evidence scale covers that. Separation is a separate axis: it is never multiplied into the evidence level. The headline shows the weakest separation among the acts a result rests on, which act that is, and a count of acts at `apart` or better out of all of them. Anything resting on an act at `self` is at most `asserted`.
+The result of a check anyone can run again from locked inputs is graded on the evidence scale, not here; saying that it tests the criterion is still an act, and is graded. Separation is a separate axis: it is never multiplied into the evidence level. The kernel works out which acts there must be, and one with no record is at `self`. The headline shows the weakest separation among them, which act that is, and a count of acts at `apart` or better out of the number there must be. Anything resting on an act at `self` is at most `asserted`, whatever floor policy sets.
 
 Trying again is recorded: a checker takes a ticket before each attempt, an attempt with no result counts as a failure, the worst result on an unchanged target counts, and a pass after a failure without a change is flagged and graded no higher than `helper`.
 

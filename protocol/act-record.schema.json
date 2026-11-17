@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/sloik/dodona/protocol/act-record.schema.json",
   "title": "Act record",
-  "description": "One act that rests on someone's judgement, with what is needed to grade how separate the actor was from the work (decision 0024). The level is computed by the kernel from these fields and is never taken from the record.",
+  "description": "One act that rests on someone's judgement, with what is needed to grade how separate the actor was from the work (decision 0024). The level, and how well each fact is supported, are worked out by the kernel and are never taken from the record.",
   "type": "object",
   "required": [
     "ticket",
@@ -31,7 +31,7 @@
     },
     "target": {
       "$ref": "common.schema.json#/$defs/identity",
-      "description": "Identity of what was judged. Attempts are counted per target and kind."
+      "description": "Identity of what was judged."
     },
     "result": {
       "enum": [
@@ -70,12 +70,9 @@
             },
             "model": {
               "type": "string"
-            },
-            "tool": {
-              "type": "string"
             }
           },
-          "description": "Model family and vendor, or the name of a deterministic tool."
+          "description": "Model family and vendor, as reported by whatever ran the actor. A deterministic tool is not a make."
         }
       }
     },
@@ -121,9 +118,29 @@
     "given": {
       "type": "array",
       "items": {
-        "$ref": "common.schema.json#/$defs/identity"
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "enum": [
+              "work",
+              "criteria",
+              "brief",
+              "known-wrong",
+              "known-right",
+              "other"
+            ]
+          },
+          "content": {
+            "$ref": "common.schema.json#/$defs/identity"
+          }
+        }
       },
-      "description": "Everything placed in the actor's context or made readable to it, by content hash. Anything the worker wrote about its own reasoning here means at most helper."
+      "description": "Everything placed in the actor's context or made readable to it. Anything marked `other`, or anything the worker wrote about its own reasoning, means at most helper."
     },
     "fresh_context": {
       "type": "boolean",
@@ -132,19 +149,38 @@
     "known_bad": {
       "type": "object",
       "required": [
-        "case",
-        "rejected"
+        "wrong",
+        "right",
+        "supplied_by",
+        "criterion",
+        "rejected_wrong",
+        "accepted_right"
       ],
       "additionalProperties": false,
       "properties": {
-        "case": {
+        "wrong": {
           "$ref": "common.schema.json#/$defs/identity"
         },
-        "rejected": {
+        "right": {
+          "$ref": "common.schema.json#/$defs/identity"
+        },
+        "supplied_by": {
+          "enum": [
+            "kernel",
+            "owner"
+          ]
+        },
+        "criterion": {
+          "type": "string"
+        },
+        "rejected_wrong": {
+          "type": "boolean"
+        },
+        "accepted_right": {
           "type": "boolean"
         }
       },
-      "description": "A case known to be wrong, shown to the actor, and whether it was rejected. Needed for tested."
+      "description": "A case known to be wrong and one known to be right, given to the actor unlabelled. Needed for tested."
     },
     "attempt": {
       "type": "object",
@@ -169,13 +205,6 @@
     },
     "transcript": {
       "$ref": "common.schema.json#/$defs/identity"
-    },
-    "sources": {
-      "type": "object",
-      "additionalProperties": {
-        "$ref": "common.schema.json#/$defs/fact_source"
-      },
-      "description": "For each field above, who stands behind it. A field missing here is declared."
     },
     "attestation": {
       "type": "object",
@@ -204,6 +233,26 @@
         }
       },
       "description": "A harness signature over the listed fields. Fields it does not cover fall back to declared."
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "intent",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "intent": {
+          "type": "string"
+        },
+        "criterion": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        }
+      },
+      "description": "What attempts are counted along: the same criterion of the same intent, whatever the content of the work."
     }
   }
 }

@@ -25,6 +25,11 @@ min_agree_percent = 100
 # The least separation at which each kind of act takes effect (decision 0024).
 # Whoever grants an exception, or changes this file, must not be the party
 # whose work is being judged.
+#
+# A grade above "helper" needs an attestation, and nothing can attest yet. So
+# for now the two floors at "apart" cannot be met: no exception can take
+# effect in this repository, and this file cannot be changed by an act that
+# counts. That is intended.
 [separation.floor.grant-amendment]
 level = "apart"
 
@@ -35,7 +40,7 @@ level = "apart"
 level = "helper"
 
 [separation.floor.confirm-baseline]
-level = "self"
+level = "helper"
 
 [separation.floor.match-check]
 level = "self"

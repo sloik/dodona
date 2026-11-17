@@ -53,7 +53,7 @@ The status is never one word. Every result leads with the whole picture:
 delivered · gates: 4 hard, 1 soft, 1 deferred (open)
           · shown: bounded (weakest link: specification → code)
           · agreed: criteria confirmed by the owner; checks matched by a reviewer
-          · separation: apart (declared), 5 of 6 acts apart or better
+          · separation: helper (claims apart), 0 of 6 acts apart or better
           · exceptions: 1
 ```
 
@@ -115,11 +115,13 @@ Agents can and should start other agents to check their work. dodona cannot make
 | `self` | The worker checked its own work, or nothing is recorded |
 | `helper` | Someone else, but started, briefed or informed by the worker |
 | `apart` | A fresh session that saw only the work and the criteria |
-| `tested` | Apart, and it was shown a known-bad case and rejected it |
-| `cross-make` | Tested, and a different model family, vendor or a plain tool |
+| `tested` | Apart, and it told a known-wrong case from a known-right one |
+| `cross-make` | Tested, and a different model family or vendor |
 | `credentialed` | Signed with a credential the worker cannot create (not available yet) |
 
 Nothing recorded means `self`. A project sets the lowest level at which an exception or a confirmation counts.
+
+**A claim is not a grade.** An agent can write down that its checker was separate. dodona shows the claim and caps the grade by who stands behind the facts: a say-so earns `helper` at most, and anything higher needs a signature from something the working agent does not control. Nothing can provide that yet, so today the highest grade is `helper`, shown as `helper (claims apart)`. A review showed a lone agent could otherwise have claimed the fifth level of six.
 
 ## Nothing is built in
 
