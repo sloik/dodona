@@ -1,7 +1,8 @@
 ---
 id: "0008"
 title: Reproducibility through a lock, at a level the agent chooses
-status: accepted
+status: proposed
+direction: owner
 date: 2026-11-17
 governs:
   - ARCHITECTURE.md

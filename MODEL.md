@@ -57,6 +57,18 @@ Obligations are **enumerated by the verifier or conformance provider**, not inve
 
 A **run** ends in one of six verdicts, defined in [the architecture](ARCHITECTURE.md#5-verdicts-status-and-evidence). Status is what the kernel derives from the ledger.
 
+**Ledger entries**
+
+| Entry | Written | Holds |
+|---|---|---|
+| Submission | Before a run is sent to an executor; updated with the handle when the executor accepts | Obligation, core key, target platform, executor, handle |
+| Evidence record | When a check ends `passed` or `failed` | Everything in the [record schema](protocol/evidence-record.schema.json) |
+| Outcome | When a check ends `unavailable`, `error` or `unsupported` | The submission it closes, the verdict, a reason code, the log |
+
+A submission with no closing entry is `pending`. Only evidence records are reusable. Outcome entries are what give `unknown` its reason.
+
+**Status is per platform.** Policy names the platforms on which each obligation is required; the default is the platform of the executor bound to it. In the rules below, "the current key" means the core key computed now together with the platform being asked about. A record from a different platform counts only as a *stand-in*: when the provider claims platform independence and that claim has been verified as policy demands. A status resting on a stand-in says so.
+
 **Obligation status**
 
 | Status | Rule |
@@ -79,7 +91,7 @@ A rerun never replaces a record. It adds one, and disagreement becomes `conflict
 
 | Status | Rule |
 |---|---|
-| `passed` | Policy requires at least one obligation, and every required obligation is `passed` at or above the required evidence class, non-vacuity and isolation |
+| `passed` | Policy requires at least one obligation, and every required obligation is `passed` on every platform it is required on, at or above the required evidence class, non-vacuity and isolation |
 | `failed` | At least one required obligation is `failed` or `conflict` |
 | `unknown` | Otherwise, with the list of obligations that are not yet decided |
 | `nothing-required` | Policy requires no obligation. Never shown as a pass |

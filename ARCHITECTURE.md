@@ -2,7 +2,7 @@
 
 Status: **draft 0.2**. Nothing in this document is implemented. Draft 0.1 was reviewed by five independent reviewers; what they found and what changed is in [docs/reviews/](docs/reviews/2026-11-17-draft-0.1.md). Where a claim has a formal model, the [claims table](spec/CLAIMS.md) says whether a model checker has actually run on it.
 
-The decisions behind this document are recorded in [`decisions/`](decisions/README.md). A decision marked `accepted` overrides this file; one marked `proposed` is the current design and open to challenge. Terms are defined in [the data model](MODEL.md).
+The decisions behind this document are recorded in [`decisions/`](decisions/README.md). No decision is accepted yet: all are proposals, and those marked `direction: owner` follow a direction the project owner gave. Once a decision is accepted it overrides this file. Terms are defined in [the data model](MODEL.md).
 
 ## 1. What dodona is
 
@@ -120,7 +120,9 @@ Every record carries an **evidence key** ([0006](decisions/0006-evidence-key-and
 - the **core key**, a hash over a published structure: the obligation, the identities of its specification and target definitions with their dependency closure, input artefacts and the obligation that produced them, the provider identity and protocol version, the digests of every tool in the closure, and the configuration: bounds, flags, seeds, worker counts and limits
 - the **platform the check actually executed on**, as reported by the executor
 
-The kernel computes the key; providers never do. It is fixed at submission from an immutable copy of the inputs, and the result is filed under it even if the project changed during the run. A record is reused only when its key equals the key computed now. Keeping the platform outside the core key is what lets the kernel pair records from different platforms and compare them.
+The kernel computes the key; providers never do. It is fixed at submission from an immutable copy of the inputs, and the result is filed under it even if the project changed during the run. Status is always asked **for a platform**. Policy names the platforms on which an obligation is required; by default it is the platform of the executor bound to it. A record counts towards an obligation's status on a platform only when its core key equals the core key computed now and its platform is that platform. Keeping the platform outside the core key is what lets the kernel pair records from different platforms and compare them.
+
+There is one exception, and it is explicit: where a provider's claim to be platform-independent has been verified as policy demands, a record from another platform may stand in. The status then says so, naming the platform the record came from.
 
 Every record, including every pass, also carries the exit status and the digest of the raw output it was derived from, so any verdict can be audited later.
 
@@ -141,7 +143,7 @@ Reproducing a project on another machine means resolving the same lock and getti
 | `evidence` | Additionally, the provider's declared comparable summary is equal, for example the number of states explored |
 | `artifact` | Additionally, build outputs are byte-identical; allowed only where the provider declares it can do this |
 
-A level a provider cannot meet is an error at resolve time. Records with the same core key and different platforms are compared at the chosen level; disagreement is a `failed` reproducibility obligation. If only one platform has run, reproducibility is `unknown`, not assumed. A provider's claim to be platform-independent removes nothing from the key; it only allows a record from one platform to stand in for another after the claim has itself been checked on two.
+A level a provider cannot meet is an error at resolve time. Records with the same core key and different platforms are compared at the chosen level; disagreement is a `failed` reproducibility obligation. If only one platform has run, reproducibility is `unknown`, not assumed. A provider's claim to be platform-independent removes nothing from the key; it only allows the stand-in described in section 5, after the claim has itself been checked on two platforms.
 
 Platforms are supported in a fixed order: macOS, then Linux, then Windows, then others. The portability rules in [0009](decisions/0009-platform-order-and-portability-rules.md) apply now, and are tested now with data-only vectors that need no second machine.
 
@@ -149,7 +151,8 @@ Platforms are supported in a fixed order: macOS, then Linux, then Windows, then 
 
 A reported pass is worth only as much as the path it took ([0015](decisions/0015-ledger-integrity-and-record-trust.md), [0016](decisions/0016-provider-isolation-is-stated-not-assumed.md)).
 
-- **The ledger has one writer at a time.** Records are framed and checksummed; a torn final record is detected, discarded and reported. The kernel reports only what is durably recorded.
+- **The ledger has one writer at a time.** Entries are framed and checksummed; a torn final entry is detected, discarded and reported. The kernel reports only what is durably recorded.
+- **Submissions are journalled before they are sent.** The ledger holds three kinds of entry: a submission with its key and, once known, the executor's handle; an evidence record for a `passed` or `failed` result; and an outcome entry for anything else. After a restart the kernel reattaches to open submissions by handle instead of submitting again.
 - **A record's key is recomputed from its stated inputs whenever it is read.** A record whose key does not match is rejected.
 - **Records have an origin.** Records this kernel wrote are trusted. Records arriving from anywhere else, such as a shared store, are not reusable until policy names their origin as trusted and their signature verifies.
 - **Providers are bounded.** Every request has a deadline on a monotonic clock, and message and log sizes are capped. A late answer is logged and dropped.

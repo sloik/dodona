@@ -1,7 +1,8 @@
 ---
 id: "0001"
 title: Decisions are first-class nodes
-status: accepted
+status: proposed
+direction: owner
 date: 2026-11-17
 governs:
   - decisions/

@@ -56,7 +56,7 @@ A **run description** names: the program as an exact file inside a pinned tool t
 | [provider-manifest.schema.json](provider-manifest.schema.json) | What a provider announces |
 | [evidence-record.schema.json](evidence-record.schema.json) | One ledger entry |
 
-Still to be written: request and result messages per capability, the run description, the lock, policy, the canonical encoding with its test vectors, the normative path check with its test vectors, and the agent interface.
+Still to be written: request and result messages per capability, the run description, the submission and outcome ledger entries, the lock, policy, the configuration reference, the canonical encoding with its test vectors, the normative path check with its test vectors, and the agent interface.
 
 ## Rules for every message
 

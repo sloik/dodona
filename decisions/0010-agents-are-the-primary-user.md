@@ -1,7 +1,8 @@
 ---
 id: "0010"
 title: Agents are the primary user
-status: accepted
+status: proposed
+direction: owner
 date: 2026-11-17
 governs:
   - ARCHITECTURE.md

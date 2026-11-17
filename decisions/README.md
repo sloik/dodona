@@ -12,8 +12,11 @@ Each record is a Markdown file with a header:
 | `status` | `proposed`, `accepted`, `superseded` or `rejected` |
 | `governs` | What the decision constrains. Repository paths for now; definition identities once an index exists |
 | `supersedes` | Ids of decisions this one replaces |
+| `direction` | Optional. `owner` when the project owner set the direction |
 
-`accepted` means the project owner decided it. `proposed` means it is the current design and still open to challenge. An accepted decision may rest on proposed ones for its detail; the accepted part is the direction stated in its title.
+`accepted` means the project owner has read the record and decided it. `proposed` means it is the current design and still open to challenge. No record is accepted yet.
+
+`direction: owner` in the header marks a proposed record whose direction, as stated in its title, was given by the project owner. The detail in the body is still a proposal.
 
 To propose a decision, add a record with status `proposed`. Only the project owner changes a status to `accepted`. Until the first public release, records may be revised in place; after it, a change of meaning is always a new record.
 
@@ -25,17 +28,17 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 
 | Id | Decision | Status |
 |---|---|---|
-| [0001](0001-decisions-are-nodes.md) | Decisions are first-class nodes | accepted |
-| [0002](0002-small-kernel-everything-else-is-a-provider.md) | Small kernel; everything else is a provider | accepted |
+| [0001](0001-decisions-are-nodes.md) | Decisions are first-class nodes | proposed, owner direction |
+| [0002](0002-small-kernel-everything-else-is-a-provider.md) | Small kernel; everything else is a provider | proposed, owner direction |
 | [0003](0003-providers-are-separate-processes.md) | Providers are separate processes speaking a versioned protocol | proposed |
 | [0004](0004-definition-identity-comes-from-the-language-provider.md) | Definition identity comes from the language provider, with a file-level fallback | proposed |
 | [0005](0005-closed-verdict-set.md) | A closed set of verdicts; only a pass is a pass | proposed |
 | [0006](0006-evidence-key-and-trusted-base.md) | Evidence is reused by key, and the trusted base is listed | proposed |
 | [0007](0007-execution-backend-is-separate-from-the-verifier.md) | The execution backend is separate from the verifier | proposed |
-| [0008](0008-reproducibility-levels.md) | Reproducibility through a lock, at a level the agent chooses | accepted |
-| [0009](0009-platform-order-and-portability-rules.md) | Platform order, and portability rules that apply from day one | accepted |
-| [0010](0010-agents-are-the-primary-user.md) | Agents are the primary user | accepted |
-| [0011](0011-self-hosting-through-a-verified-seed.md) | Self-hosting through a verified seed; no implementation language is fixed | accepted |
+| [0008](0008-reproducibility-levels.md) | Reproducibility through a lock, at a level the agent chooses | proposed, owner direction |
+| [0009](0009-platform-order-and-portability-rules.md) | Platform order, and portability rules that apply from day one | proposed, owner direction |
+| [0010](0010-agents-are-the-primary-user.md) | Agents are the primary user | proposed, owner direction |
+| [0011](0011-self-hosting-through-a-verified-seed.md) | Self-hosting through a verified seed; no implementation language is fixed | proposed, owner direction |
 | [0012](0012-spec-to-code-conformance-is-an-explicit-seam.md) | Specification-to-code conformance is an explicit seam | proposed |
 | [0013](0013-initial-binding-for-kernel-models.md) | TLA+ is the initial binding for dodona's own kernel models | proposed |
 | [0014](0014-policy-is-separate-from-configuration.md) | Policy is separate from configuration | proposed |

@@ -1,7 +1,8 @@
 ---
 id: "0009"
 title: Platform order, and portability rules that apply from day one
-status: accepted
+status: proposed
+direction: owner
 date: 2026-11-17
 governs:
   - ARCHITECTURE.md

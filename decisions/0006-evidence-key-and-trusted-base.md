@@ -23,7 +23,7 @@ The **core key** is a hash over a published structure: the obligation; the ident
 
 The second part is **the platform the check executed on**, as reported by the executor.
 
-The kernel computes the key. Providers never do, and may only add declared inputs before submission. The key is fixed at submission from a private copy of the inputs, and the result is filed under it even if the project changed during the run. A record is reused only when both parts equal the key computed now. Whenever a record is read, its key is recomputed from its stated inputs and the record is rejected on mismatch.
+The kernel computes the key. Providers never do, and may only add declared inputs before submission. The key is fixed at submission from a private copy of the inputs, and the result is filed under it even if the project changed during the run. Status is asked for a platform. A record counts only when its core key equals the core key computed now and its platform is the one asked about; the single exception is a verified platform-independence claim, under which a record from another platform may stand in and is reported as doing so. Whenever a record is read, its key is recomputed from its stated inputs and the record is rejected on mismatch.
 
 Every record, including a pass, carries the exit status and the digest of the raw output it was derived from.
 

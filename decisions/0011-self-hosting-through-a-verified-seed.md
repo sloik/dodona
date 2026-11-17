@@ -1,7 +1,8 @@
 ---
 id: "0011"
 title: Self-hosting through a verified seed; no implementation language is fixed
-status: accepted
+status: proposed
+direction: owner
 date: 2026-11-17
 governs:
   - ARCHITECTURE.md

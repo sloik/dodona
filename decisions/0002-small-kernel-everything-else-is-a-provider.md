@@ -1,7 +1,8 @@
 ---
 id: "0002"
 title: Small kernel; everything else is a provider
-status: accepted
+status: proposed
+direction: owner
 date: 2026-11-17
 governs:
   - ARCHITECTURE.md
