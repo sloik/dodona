@@ -1,0 +1,486 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sloik/dodona/protocol/status.schema.json",
+  "title": "Status",
+  "description": "Draft 0.2. The result of the agent-facing status command (MODEL.md section 7). Derived by the kernel from the graph and the ledger; never supplied by a provider. Asked for the platforms listed. A status word never travels alone: every intent carries its headline fields. Top-level objects accept extra fields under an x- prefix; nested objects are closed.",
+  "type": "object",
+  "required": [
+    "status",
+    "policy",
+    "project",
+    "platforms",
+    "intents",
+    "obligations",
+    "errors"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "Format version of this result."
+    },
+    "policy": {
+      "type": "object",
+      "required": [
+        "reference"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "$ref": "common.schema.json#/$defs/identity",
+          "description": "Identity of the policy judged against. Absent when there is no policy."
+        },
+        "reference": {
+          "enum": [
+            "same",
+            "differs",
+            "unavailable"
+          ],
+          "description": "Whether the policy in force differs from the reference policy. differs is reported prominently."
+        }
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/platform"
+      },
+      "description": "The platforms this result is for."
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "unknown",
+            "nothing-required"
+          ]
+        },
+        "undecided": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/obligation_ref"
+          },
+          "description": "Required obligations not yet decided. Present with unknown."
+        }
+      }
+    },
+    "intents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/intent_status"
+      }
+    },
+    "obligations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/obligation_status"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/error"
+      },
+      "description": "Everything the kernel could not do or had to reject, so nothing is dropped silently."
+    }
+  },
+  "patternProperties": {
+    "^x-": {}
+  },
+  "$defs": {
+    "obligation_ref": {
+      "type": "object",
+      "required": [
+        "binding",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "name": {
+          "$ref": "common.schema.json#/$defs/name"
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "description": "A stable error: a code, the node concerned, and structured detail.",
+      "required": [
+        "code",
+        "node"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Stable error code. A code is never reused for another meaning. Codes, each with the kind of node it concerns, in this draft: path-rejected (file): An indexed path failed the path check or a provider's own rules. detail: reason. file-claimed-twice (file): Two bindings claim one file for one capability. detail: the two bindings. line-ending-violation (file): A text file breaks the project's line-ending or byte-order-mark rule. link-rejected (file): A symbolic link or similar indirection inside the project. lock-missing (project): No lock exists, or it does not cover a configured platform. lock-stale (project): The configuration changed in a way the lock does not cover. tool-unresolvable (tool): No tool matches the constraint, or no build exists for the platform. detail: platform. reproducibility-unmeetable (obligation): The chosen reproducibility level is above what the provider declares. provider-protocol-violation (obligation): A message failed validation; the session ended and the check in flight is error. provider-deadline (obligation): An answer came after its deadline and was dropped. executor-unavailable (obligation): The executor could not be reached. There is no fallback. platform-mismatch (obligation): The executor ran on a platform other than the one asked for. tool-digest-mismatch (tool): The executor ran a tool whose digest differs from the one expected. record-key-mismatch (record): A record's key does not match its stated inputs; the record is rejected. record-origin-untrusted (record): A record from an origin policy does not list, or whose signature does not verify. ledger-torn-entry (project): A torn final ledger entry was found, discarded and reported. policy-missing (policy): No policy file exists; project status is nothing-required. undeclared-touch (intent): A check touched something its intent did not declare. detail: what. touch-collision (intent): Two intents that may be worked on in parallel declare overlapping touches. unknown-reference (intent): A criterion links to an obligation, or an intent to a child, that does not exist. unsupported (obligation): The provider cannot express or check the obligation."
+        },
+        "node": {
+          "type": "object",
+          "description": "The node concerned.",
+          "required": [
+            "kind",
+            "name"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "project",
+                "file",
+                "intent",
+                "amendment",
+                "definition",
+                "decision",
+                "obligation",
+                "artifact",
+                "tool",
+                "record",
+                "policy"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "description": "Name of the node, or the relative path for a file. Empty for the project."
+            }
+          }
+        },
+        "detail": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          },
+          "description": "Structured facts only, as named values. No information exists only as prose."
+        }
+      }
+    },
+    "obligation_status": {
+      "type": "object",
+      "required": [
+        "binding",
+        "name",
+        "platform",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "name": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "platform": {
+          "$ref": "common.schema.json#/$defs/platform"
+        },
+        "status": {
+          "$ref": "common.schema.json#/$defs/status"
+        },
+        "reason": {
+          "enum": [
+            "never-run",
+            "pending",
+            "unavailable",
+            "error",
+            "unsupported"
+          ],
+          "description": "Present exactly when status is unknown."
+        },
+        "strength": {
+          "$ref": "common.schema.json#/$defs/strength",
+          "description": "The provider's class with the weakest rank among the records it rests on."
+        },
+        "non_vacuous": {
+          "enum": [
+            "shown",
+            "not-shown",
+            "none-planted"
+          ]
+        },
+        "isolation": {
+          "$ref": "common.schema.json#/$defs/isolation",
+          "description": "The weakest among the runs."
+        },
+        "trusted_base": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The union of the kernel's, the provider's and the records' assumptions this status rests on."
+        },
+        "stand_in": {
+          "$ref": "common.schema.json#/$defs/platform",
+          "description": "Present when the status rests on a record from this other platform under a verified platform-independence claim."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unknown"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "reason"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "reason"
+              ]
+            },
+            "required": [
+              "strength",
+              "non_vacuous",
+              "isolation",
+              "trusted_base"
+            ]
+          }
+        }
+      ]
+    },
+    "intent_status": {
+      "type": "object",
+      "required": [
+        "name",
+        "status",
+        "gates",
+        "shown",
+        "agreed",
+        "separation",
+        "exceptions",
+        "score"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "common.schema.json#/$defs/name"
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "uncovered",
+            "unguarded",
+            "open",
+            "delivered",
+            "fulfilled",
+            "overdue"
+          ]
+        },
+        "gates": {
+          "type": "object",
+          "description": "Totalled over the intent and all its descendants.",
+          "required": [
+            "hard",
+            "soft",
+            "deferred",
+            "deferred_open"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "hard": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "soft": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "deferred": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "deferred_open": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "next_due": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "description": "Earliest due date among open deferred gates. Derived; takes part in no identity."
+            }
+          }
+        },
+        "shown": {
+          "type": "object",
+          "description": "The weakest evidence link, never an average.",
+          "required": [
+            "level",
+            "weakest_link"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "level": {
+              "$ref": "common.schema.json#/$defs/assurance"
+            },
+            "weakest_link": {
+              "$ref": "messages.schema.json#/$defs/evidence_link"
+            },
+            "sample": {
+              "type": "object",
+              "description": "For sampled: how many runs. One run is 1 of 1.",
+              "required": [
+                "runs",
+                "agreed"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "runs": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "agreed": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        "agreed": {
+          "type": "object",
+          "description": "Who agreed the judgement links.",
+          "required": [
+            "criteria_confirmed_by",
+            "checks_matched_by"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "criteria_confirmed_by": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Who confirmed the baseline. Null for a draft."
+            },
+            "checks_matched_by": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Who said each check tests its criterion, sorted, one entry per person."
+            }
+          }
+        },
+        "separation": {
+          "type": "object",
+          "description": "How separate the parties behind the acts were from the work.",
+          "required": [
+            "weakest",
+            "acts_apart_or_better",
+            "acts_total"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "weakest": {
+              "type": "object",
+              "required": [
+                "level",
+                "source"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "level": {
+                  "$ref": "common.schema.json#/$defs/separation"
+                },
+                "source": {
+                  "$ref": "common.schema.json#/$defs/fact_source"
+                }
+              }
+            },
+            "act": {
+              "enum": [
+                "confirm-baseline",
+                "match-check",
+                "grant-amendment",
+                "close-deferred",
+                "change-policy"
+              ],
+              "description": "The act the weakest level belongs to. Absent when no act is recorded, in which case the weakest is self."
+            },
+            "acts_apart_or_better": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "acts_total": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "exceptions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of amendments."
+        },
+        "score": {
+          "type": "object",
+          "required": [
+            "numerator",
+            "denominator"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "numerator": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Criteria whose shown level reaches what policy demands for their gate."
+            },
+            "denominator": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "All criteria, over the intent and its descendants."
+            }
+          }
+        },
+        "amendments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "separation",
+              "source"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "common.schema.json#/$defs/name"
+              },
+              "separation": {
+                "$ref": "common.schema.json#/$defs/separation"
+              },
+              "source": {
+                "$ref": "common.schema.json#/$defs/fact_source"
+              }
+            }
+          },
+          "description": "Amendments, those granted at self first."
+        }
+      }
+    }
+  }
+}
