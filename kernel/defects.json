@@ -40,8 +40,8 @@
       "name": "draft is delivered",
       "model_case": "intent/mutant_draft_delivers",
       "file": "src/intent.rs",
-      "find": "let status = if !confirmed {",
-      "replace": "let status = if false {"
+      "find": "if !confirmed {",
+      "replace": "if false {"
     },
     {
       "name": "unguarded is delivered",
@@ -75,8 +75,8 @@
       "name": "worker's exception takes effect",
       "model_case": "intent/mutant_worker_can_amend",
       "file": "src/intent.rs",
-      "find": "            let effective = owner && rank(level) >= floor;",
-      "replace": "            let effective = rank(level) >= floor;"
+      "find": "owner && rank(level) >= floor",
+      "replace": "rank(level) >= floor"
     },
     {
       "name": "nothing recorded treated as apart",
@@ -89,15 +89,15 @@
       "name": "floor ignored",
       "model_case": "intent/mutant_below_floor_counts",
       "file": "src/intent.rs",
-      "find": "            let effective = owner && rank(level) >= floor;",
-      "replace": "            let effective = owner;"
+      "find": "owner && rank(level) >= floor",
+      "replace": "owner"
     },
     {
       "name": "worker keeps the level it wrote",
       "model_case": "intent/mutant_worker_keeps_level",
       "file": "src/intent.rs",
-      "find": "            } else {\n                \"self\"\n            };",
-      "replace": "            } else {\n                a.opt(\"separation\").map(Value::str).unwrap_or(\"self\")\n            };"
+      "find": "else { \"self\" };",
+      "replace": "else { a.opt(\"separation\").map(Value::str).unwrap_or(\"self\") };"
     },
     {
       "name": "level shown higher than used",
