@@ -11,6 +11,8 @@ DumpInit == Init /\ report = [o \in Obligations |-> Status(o)]
 DumpNext == Next /\ report' = [o \in Obligations |-> Status(o)']
 DumpSpec == DumpInit /\ [][DumpNext]_<<vars, report>>
 
-\* One run in flight at a time keeps the list of states small enough to move.
-DumpBound == Cardinality(running) <= 1
+\* One run in flight and at most three records keep the list of states small
+\* enough to move: tens of thousands of states instead of millions. Both
+\* obligations and their shared dependency are still there.
+DumpBound == Cardinality(running) <= 1 /\ Cardinality(ledger) <= 3
 =============================================================================
