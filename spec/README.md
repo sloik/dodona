@@ -5,6 +5,7 @@ Models of the kernel, written before any kernel exists. TLA+ is the initial bind
 | Model | Covers |
 |---|---|
 | [kernel/EvidenceReuse.tla](kernel/EvidenceReuse.tla) | When a recorded result may be reused, under edits, tool changes, lost runs, results arriving after an edit, and a provider that can be wrong |
+| [intent/IntentGates.tla](intent/IntentGates.tla) | When an intent may be reported delivered or fulfilled, and that a gate changes only through an owner's recorded amendment, with self-granted ones always marked and blocked where an independent approver is required |
 
 ## Running a model
 

@@ -27,6 +27,16 @@ What a `checked` status means here, and no more:
 
 C6 does not show the assumptions hold. It shows they are load-bearing, which is why they are in the [trusted base](../MODEL.md#6-trusted-base).
 
+## Modelled in `intent/IntentGates.tla`
+
+Bounds: one intent with three criteria (two hard, one deferred) and at most two amendments. Not covered: child intents, assurance levels, time limits, checks that vary between runs, and how an identity is established.
+
+| # | Claim | Decision | Property | Planted defect that must fail | Status |
+|---|---|---|---|---|---|
+| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | modelled, unchecked |
+| C25 | A gate changes only through an amendment on record granted by the owner; a self-granted amendment is always marked, and takes no effect where an independent approver is required | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends`, `NoSelfWhenIndependent`, `SelfShown` | Silent gate change; worker's amendment accepted; self-granted amendment takes effect; self-granted amendment not marked | modelled, unchecked |
+| C28 | Amendments are live rules: an owner's amendment can open the way to delivery, and under an independent-approver policy a self-granted one cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence in the strict case | (reachability) | modelled, unchecked |
+
 ## Not yet modelled
 
 | # | Claim | Decision | Intended check | Planted defect that must fail |
@@ -47,9 +57,7 @@ C6 does not show the assumptions hold. It shows they are load-bearing, which is 
 | C20 | The conformance kit rejects kernels with known defects | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | Run defective kernels against the kit; report the fraction rejected | A kit with a scenario removed |
 | C21 | Two independent kernels agree on real project states, and any disagreement is reported as a conflict | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | Differential runs beyond the kit | A kernel carrying a defect the kit does not target |
 | C22 | If the backend is eventually reachable, every obligation eventually gets a reusable verdict or a stated reason why not | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | Liveness property, with fairness assumptions | Planner that never resubmits after `unavailable` |
-| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Model of intent status, plus scenarios | Kernel that treats a deferred gate as passed |
 | C24 | A criterion's reported assurance is never above its weakest link | [0019](../decisions/0019-assurance-is-stated-per-link.md) | Model, plus scenarios | Kernel that averages the links |
-| C25 | No gate is passed, moved or dropped without an amendment on record, and a self-granted amendment is always shown, and never counts where an independent approver is required | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Model with owner and worker identities, plus scenarios | Kernel that accepts an amendment from the worker as the owner's |
 | C26 | A varying check is never reported from fewer runs than it declared | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Scenarios with declared sample sizes | Kernel that stops at the first passing run |
 | C27 | Two intents that touch the same definition are reported as colliding before work starts | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Scenarios | Index that compares declared paths only as text |
 

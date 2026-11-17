@@ -1,0 +1,113 @@
+{
+  "model": "MC.tla",
+  "tool": {
+    "name": "tla2tools",
+    "version": "1.7.4",
+    "requires": [
+      "a Java runtime"
+    ],
+    "digest": "not yet pinned; no lock exists"
+  },
+  "arguments": [
+    "-workers",
+    "1",
+    "-config",
+    "<config>",
+    "MC.tla"
+  ],
+  "exit_codes": {
+    "0": "completed, no violation",
+    "12": "safety violation found",
+    "other": "did not complete; counts as neither outcome"
+  },
+  "bounds": "three criteria (two hard, one deferred), at most two amendments",
+  "cases": [
+    {
+      "config": "design_separate_owner.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "Owner and worker are different parties, independent approver required."
+    },
+    {
+      "config": "design_same_party_strict.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "Owner also does the work, independent approver required: no amendment can take effect."
+    },
+    {
+      "config": "design_same_party_lenient.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "Owner also does the work, no independent approver required: self-granted amendments take effect and are marked."
+    },
+    {
+      "config": "reach_delivered.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Delivery is reachable with hard gates still in place.",
+      "of": "NeverDelivered"
+    },
+    {
+      "config": "reach_fulfilled.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Fulfilment is reachable with a deferred gate in place.",
+      "of": "NeverFulfilled"
+    },
+    {
+      "config": "reach_delivered_by_amendment.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "An owner's amendment can open the way to delivery, so amendments are not dead rules.",
+      "of": "NeverDeliveredByAmendment"
+    },
+    {
+      "config": "strict_blocks_self_amendment.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "With an independent approver required and owner equal to worker, no amendment opens the way to delivery."
+    },
+    {
+      "config": "mutant_worker_can_amend.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the worker's amendment is accepted.",
+      "of": "OnlyOwnerAmends"
+    },
+    {
+      "config": "mutant_self_counts.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a self-granted amendment takes effect although an independent approver is required.",
+      "of": "NoSelfWhenIndependent"
+    },
+    {
+      "config": "mutant_hide_self.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a self-granted amendment is not marked.",
+      "of": "SelfShown"
+    },
+    {
+      "config": "mutant_silent_change.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a gate changes with no amendment on record.",
+      "of": "GateProvenance"
+    },
+    {
+      "config": "mutant_delivered_ignores_unknown.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a hard gate whose check has not run is treated as passed.",
+      "of": "DeliveredSound"
+    },
+    {
+      "config": "mutant_deferred_as_passed.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: an open deferred gate does not block fulfilment.",
+      "of": "FulfilledSound"
+    }
+  ]
+}
