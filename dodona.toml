@@ -71,9 +71,8 @@ provider = "dodona.store.local"
 # What must pass is policy, not configuration (decision 0014). The policy file
 # does not exist yet; without one, project status is "nothing-required".
 [policy]
-path = "policy.toml"
-reference = "main"
-exception_separation = "apart"   # least separation at which an exception takes effect (decision 0024)
+path = "policy.toml"   # what must pass lives there, not here
+reference = "main"     # the policy on this branch is the one to compare against
 
 [[binding]]
 name = "intents"

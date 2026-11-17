@@ -13,7 +13,6 @@
     "inputs",
     "provider",
     "executor",
-    "strength",
     "isolation",
     "origin",
     "runs"
@@ -212,7 +211,8 @@
       }
     },
     "strength": {
-      "$ref": "common.schema.json#/$defs/strength"
+      "$ref": "common.schema.json#/$defs/strength",
+      "description": "Required for records of checks and of conformance. A build record has none: building shows nothing about correctness."
     },
     "isolation": {
       "$ref": "common.schema.json#/$defs/isolation"

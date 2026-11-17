@@ -12,8 +12,9 @@ dodona is a tool an AI agent can ask that question, so nobody has to take the ag
 
 | | |
 |---|---|
-| **Stage** | Design. There is no kernel and nothing to run yet |
-| **Exists** | Architecture, data model, 25 proposed decisions, draft protocol schemas, two formal models |
+| **Stage** | Early. A first seed kernel exists and does only what the conformance kit can judge. dodona is not usable yet |
+| **Exists** | Architecture, data model, 25 proposed decisions, protocol schemas, two formal models, a conformance kit, a seed kernel |
+| **Runs** | The seed kernel is built and judged by the kit on macOS, Linux and Windows on every change: 27 scenarios, 25 encoding vectors, and 15 planted defects the kit must reject. That is sampled evidence, not proof |
 | **Checked so far** | 6 of 36 design claims, by a bounded model check of a small instance. That says nothing yet about any implementation; see [the claims table](spec/CLAIMS.md) |
 | **Guarded by** | Automatic checks on every change: a gap that is found becomes a check ([list](docs/gap-checks.md)) |
 | **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |
@@ -150,11 +151,13 @@ No implementation language is chosen. dodona's own intents, decisions and formal
 ```mermaid
 flowchart LR
     S0["<b>0</b> design<br/>and models"] --> S1["<b>1</b> conformance kit"] --> S2["<b>2</b> seed kernel"] --> S3["<b>3</b> seed checks<br/>dodona"] --> S4["<b>4</b> seed builds<br/>its successor"] --> S5["<b>5</b> second,<br/>independent kernel"]
+    classDef done fill:#d9f2e3,stroke:#2e8555,color:#123
     classDef now fill:#fff3cd,stroke:#b8860b,color:#332
-    class S0 now
+    class S0,S1 done
+    class S2 now
 ```
 
-The project is at stage 0. A kernel checking itself adds no trust in itself; that is what the independent second kernel is for.
+The project is at stage 2, in a small way: a first seed, written by a different make of AI model from the one that wrote the kit, passes the kit. It covers only what the formal models cover. A kernel checking itself adds no trust in itself; that is what the independent second kernel is for.
 
 ## Where to go next
 
@@ -165,7 +168,10 @@ The project is at stage 0. A kernel checking itself adds no trust in itself; tha
 | What dodona is meant to do, as a roadmap | [intents/](intents/README.md) |
 | Why it is designed this way | [decisions/](decisions/README.md) |
 | What has actually been checked | [spec/CLAIMS.md](spec/CLAIMS.md) |
-| How providers talk to the kernel | [protocol/](protocol/README.md) |
+| How providers talk to the kernel | [protocol/](protocol/README.md), [writing a provider](docs/writing-a-provider.md) |
+| How a project is configured | [docs/configuration.md](docs/configuration.md) |
+| What a correct kernel must do | [conformance/](conformance/README.md) |
+| The first kernel | [kernel/](kernel/README.md) |
 | What reviewers found wrong | [docs/reviews/](docs/reviews/2026-11-17-draft-0.1.md) |
 | To take part | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Rules for agents working here | [AGENTS.md](AGENTS.md) |

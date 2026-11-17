@@ -19,6 +19,8 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_canonical_vectors_are_consistent` | A test vector whose hash is not the hash of its own text would mislead every implementer |
 | `gap_every_modelled_case_has_a_scenario` | A defect planted in a formal model protects a kernel only if a scenario carries it into the kit. Every modelled case needs a scenario or a stated reason |
 | `gap_kit_judge_is_strict` | The judge of model runs once misread a result. The kit's judge must refuse an empty, short or wrong answer |
+| `gap_own_policy_fits_the_schema` | dodona's own policy file was first written with field names the policy schema did not have |
+| `gap_no_generated_files_are_tracked` | Compiled caches were committed by mistake, and build output contains private paths |
 | `gap_every_check_is_listed` | A check whose reason is lost gets deleted by mistake |
 
 The judge that decides whether a model run matched its expectation has its own tests in the same file, for the same reason: it once misread a correct result, and it must never turn an unfinished run into a pass.

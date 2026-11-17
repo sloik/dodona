@@ -8,7 +8,7 @@ Every node has a **name** (stable, how it is referred to) and an **identity** (a
 
 | Node | Name | Identity | Comes from |
 |---|---|---|---|
-| Intent | Its id | Hash of the statement and criteria | The intent owner, through an intent provider |
+| Intent | Its id | Hash of its baseline: statement, criteria, gates, limits, links to checks and children. Worked out by the kernel | The intent owner, through an intent provider |
 | Amendment | Its id | Hash of the record | The intent owner |
 | Definition | Path or symbol, scoped by the binding that indexed it | Hash of content, as the language provider defines content | `definition.index`, or the file-level fallback |
 | Specification | A definition whose role is to state what must hold | Same as a definition | `definition.index` for the specification language |
@@ -109,7 +109,7 @@ This is the layer that answers the question dodona exists for: *was what was def
 
 **Intent.** A statement in plain words, such as a problem, a feature or a story, with an owner and a list of criteria. It may break into child intents. Each intent declares what it expects to touch, so independent intents can be worked on in parallel and colliding ones are reported. A check that touches something its intent did not declare is reported as an undeclared touch.
 
-**Baseline.** An intent's identity covers everything that sets the bar: its statement, criteria, the gate of each criterion, time limits, sample sizes and thresholds, the links from criteria to checks, and its set of children. The owner **confirms** an intent by a record that names that identity and the confirmer. The confirmed identity is the baseline. Any later difference from it, in any of those parts, is an amendment, and voids the confirmation until the owner confirms again. An intent that has never been confirmed is a `draft` and can never be delivered.
+**Baseline.** An intent's identity covers everything that sets the bar: its statement, criteria, the gate of each criterion, time limits, sample sizes and thresholds, the links from criteria to checks, and its set of children. A time limit is a length of time counted from delivery, not a date, so no clock takes part in the identity; the due date shown in a report is worked out from the recorded delivery. The owner **confirms** an intent by a record that names that identity and the confirmer. The confirmed identity is the baseline. Any later difference from it, in any of those parts, is an amendment, and voids the confirmation until the owner confirms again. An intent that has never been confirmed is a `draft` and can never be delivered.
 
 **Gate.** How a criterion is tied to the obligations that check it:
 

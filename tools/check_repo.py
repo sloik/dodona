@@ -21,11 +21,18 @@ import run_kit  # noqa: E402
 
 problems: list[str] = []
 
+SKIPPED_PARTS = {".git", "__pycache__", "target"}
+
+
+def repo_files(pattern: str = "**/*"):
+    """Files that belong to the repository: not version control data, caches or build output."""
+    return [p for p in sorted(ROOT.glob(pattern))
+            if p.is_file() and not SKIPPED_PARTS & set(p.relative_to(ROOT).parts)]
+
+
 
 def check_json_and_toml() -> None:
-    for path in sorted(ROOT.glob("**/*.json")):
-        if ".git" in path.parts:
-            continue
+    for path in repo_files("**/*.json"):
         try:
             json.loads(path.read_text(encoding="utf-8"))
         except ValueError as err:
@@ -39,9 +46,7 @@ def check_json_and_toml() -> None:
 
 def check_links() -> None:
     link = re.compile(r"\]\(([^)#\s]+)(#[^)]*)?\)")
-    for path in sorted(ROOT.glob("**/*.md")):
-        if ".git" in path.parts:
-            continue
+    for path in repo_files("**/*.md"):
         for target, _ in link.findall(path.read_text(encoding="utf-8")):
             if re.match(r"[a-z]+://", target):
                 continue
@@ -50,10 +55,10 @@ def check_links() -> None:
 
 
 def check_line_endings() -> None:
-    for path in sorted(ROOT.glob("**/*")):
-        if ".git" in path.parts or not path.is_file() or "conformance" in path.parts:
+    for path in repo_files():
+        if "conformance" in path.parts:
             continue
-        if path.suffix in {".md", ".json", ".toml", ".tla", ".cfg", ".py", ".yml"}:
+        if path.suffix in {".md", ".json", ".toml", ".tla", ".cfg", ".py", ".yml", ".rs"}:
             data = path.read_bytes()
             if b"\r\n" in data:
                 problems.append(f"{path.relative_to(ROOT).as_posix()}: has CRLF line endings")
@@ -208,15 +213,13 @@ def gap_vocabulary_is_the_same_everywhere() -> None:
 def gap_nothing_private_or_unportable() -> None:
     """The repository is public and must run on three platforms."""
     private = re.compile(r"/Users/|/home/[a-z]|\bC:\\\\Users")
-    for path in sorted(ROOT.glob("**/*")):
+    for path in repo_files():
         rel = path.relative_to(ROOT).as_posix()
-        if ".git/" in rel or rel.startswith(".git") and not rel.startswith(".github") and not rel.startswith(".gitattributes") and not rel.startswith(".gitignore"):
-            continue
-        if not path.is_file() or rel.startswith("spec/runs/"):
+        if rel.startswith("spec/runs/"):
             continue
         if path.suffix in {".sh", ".bat", ".cmd", ".ps1"}:
             problems.append(f"{rel}: shell scripts are not allowed (decision 0009)")
-        if path.suffix in {".md", ".json", ".toml", ".py", ".yml", ".tla", ".cfg"} and rel != "tools/check_repo.py":
+        if path.suffix in {".md", ".json", ".toml", ".py", ".yml", ".tla", ".cfg", ".rs"} and rel != "tools/check_repo.py":
             if private.search(path.read_text(encoding="utf-8", errors="replace")):
                 problems.append(f"{rel}: contains a private or absolute path")
 
@@ -268,8 +271,7 @@ def gap_path_check_matches_its_vectors() -> None:
 
 def gap_repository_paths_are_portable() -> None:
     """dodona's own files must pass dodona's own path rules."""
-    paths = [p.relative_to(ROOT).as_posix() for p in ROOT.glob("**/*")
-             if ".git" not in p.relative_to(ROOT).parts and "__pycache__" not in p.parts]
+    paths = [p.relative_to(ROOT).as_posix() for p in repo_files()]
     for path in paths:
         reason = pathcheck.check(path.encode("utf-8"))
         if reason:
@@ -328,12 +330,62 @@ def gap_kit_judge_is_strict() -> None:
             problems.append(f"kit judge: wrong answer for kernel output {output!r}")
 
 
+def _fits(value, schema: dict, defs: dict, where: str) -> None:
+    """A small structural check of data against the subset of JSON Schema the policy schema uses."""
+    if "$ref" in schema:
+        name = schema["$ref"].split("/")[-1]
+        target = defs.get(name)
+        if target is None:
+            return  # a reference into another schema file; vocabulary is checked elsewhere
+        return _fits(value, target, defs, where)
+    if "enum" in schema and value not in schema["enum"]:
+        problems.append(f"policy.toml: {where} is {value!r}, not one of {schema['enum']}")
+    kind = schema.get("type")
+    wanted = {"object": dict, "array": list, "string": str, "integer": int, "boolean": bool}.get(kind)
+    if wanted and (not isinstance(value, wanted) or (kind == "integer" and isinstance(value, bool))):
+        problems.append(f"policy.toml: {where} should be {kind}")
+        return
+    if isinstance(value, dict):
+        known = schema.get("properties", {})
+        for key in schema.get("required", []):
+            if key not in value:
+                problems.append(f"policy.toml: {where} lacks {key}")
+        for key, item in value.items():
+            if key in known:
+                _fits(item, known[key], defs, f"{where}.{key}")
+            elif not key.startswith("x-") and schema.get("additionalProperties") is False:
+                problems.append(f"policy.toml: {where}.{key} is not a field the policy schema knows")
+    if isinstance(value, list) and isinstance(schema.get("items"), dict):
+        for number, item in enumerate(value):
+            _fits(item, schema["items"], defs, f"{where}[{number}]")
+
+
+def gap_own_policy_fits_the_schema() -> None:
+    """dodona's own policy file was first written with field names the schema did not have."""
+    schema = json.loads((ROOT / "protocol" / "policy.schema.json").read_text(encoding="utf-8"))
+    policy = tomllib.loads((ROOT / "policy.toml").read_text(encoding="utf-8"))
+    _fits(policy, schema, schema.get("$defs", {}), "policy")
+
+
+def gap_no_generated_files_are_tracked() -> None:
+    """Compiled caches were once committed by mistake."""
+    import shutil
+    import subprocess
+    if not shutil.which("git") or not (ROOT / ".git").exists():
+        return
+    listed = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
+    for path in listed:
+        if "__pycache__" in path or path.endswith(".pyc") or path.startswith("kernel/target/"):
+            problems.append(f"{path}: a generated file is under version control")
+
+
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
               gap_workflows_are_safe, gap_path_check_matches_its_vectors,
               gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
+              gap_own_policy_fits_the_schema, gap_no_generated_files_are_tracked,
               gap_every_check_is_listed]
 
 

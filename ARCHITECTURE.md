@@ -1,6 +1,6 @@
 # dodona architecture
 
-Status: **draft 0.4**. Nothing in this document is implemented. Draft 0.1 was reviewed by five independent reviewers; what they found and what changed is in [docs/reviews/](docs/reviews/2026-11-17-draft-0.1.md). Where a claim has a formal model, the [claims table](spec/CLAIMS.md) says whether a model checker has actually run on it.
+Status: **draft 0.5**. Almost nothing in this document is implemented: a first seed kernel covers status derivation only. Draft 0.1 was reviewed by five independent reviewers; what they found and what changed is in [docs/reviews/](docs/reviews/2026-11-17-draft-0.1.md). Where a claim has a formal model, the [claims table](spec/CLAIMS.md) says whether a model checker has actually run on it.
 
 The decisions behind this document are recorded in [`decisions/`](decisions/README.md). No decision is accepted yet: all are proposals, and those marked `direction: owner` follow a direction the project owner gave. Once a decision is accepted it overrides this file. Terms are defined in [the data model](MODEL.md).
 
@@ -170,7 +170,7 @@ No implementation language is chosen ([0011](decisions/0011-self-hosting-through
 
 | Stage | What exists | What it establishes |
 |---|---|---|
-| 0 (now) | Decisions, protocol schemas, formal models of the kernel | Design properties, for the bounds checked |
+| 0 | Decisions, protocol schemas, formal models of the kernel | Design properties, for the bounds checked |
 | 1 | Conformance kit: scenarios and planted defects, independent of any implementation | A way to judge a kernel that is not the kernel |
 | 2 | **Seed**: a first kernel, in whatever language the chosen providers support | That this kernel passes the kit and its conformance obligation |
 | 3 | The seed runs dodona's own obligations | That dodona can describe itself. No added trust in the seed |
@@ -193,6 +193,9 @@ CONTRIBUTING.md     how to take part
 intents/            dodona's own intents: what it is meant to do, in plain words
 AGENTS.md           rules for agents working in this repository
 dodona.toml         dodona's own project configuration (not yet executable)
+policy.toml         dodona's own policy: the bar it holds itself to
+kernel/             the first seed kernel
+tools/              disposable helpers: the checks, the judges
 decisions/          decision records, in the default decision format
 protocol/           provider protocol: message and record schemas
 spec/               formal models of the kernel, and the claims table
@@ -201,7 +204,7 @@ providers/          reference providers (empty until stage 2)
 docs/reviews/       review rounds: findings and what was done about each
 ```
 
-There is deliberately no source tree for the kernel yet.
+`kernel/` holds the first seed ([0025](decisions/0025-the-first-seed-kernel.md)): it does only what the conformance kit can judge.
 
 ## 10. What makes this verifiable
 

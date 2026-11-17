@@ -1,0 +1,110 @@
+{
+  "about": "Defects to plant in this kernel, one at a time, to measure whether the conformance kit rejects a kernel that has them. Each replaces one piece of source text. `model_case` names the planted defect in the formal models that it repeats, where there is one. tools/kit_adequacy.py applies them to a copy; the source here is never changed.",
+  "defects": [
+    {
+      "name": "key leaves out the tool",
+      "model_case": "kernel/mutant_key_omits_tool",
+      "file": "src/evidence.rs",
+      "find": "        tool: tool.into(),",
+      "replace": "        tool: String::new(),"
+    },
+    {
+      "name": "result filed under the key at completion",
+      "model_case": "kernel/mutant_complete_with_current_key",
+      "file": "src/evidence.rs",
+      "find": "            attempt.outcome = x.get(\"verdict\").str().into()",
+      "replace": "            attempt.key = key(&attempt.key.obligation.clone(), obligations, &defs, &tool);\n            attempt.outcome = x.get(\"verdict\").str().into()"
+    },
+    {
+      "name": "unavailable recorded as passed",
+      "model_case": "kernel/mutant_unavailable_is_pass",
+      "file": "src/evidence.rs",
+      "find": "if up { \"pending\" } else { \"unavailable\" }",
+      "replace": "if up { \"pending\" } else { \"passed\" }"
+    },
+    {
+      "name": "pass outranks fail",
+      "model_case": "kernel/mutant_pass_outranks_fail",
+      "file": "src/evidence.rs",
+      "find": "(true, true) => \"conflict\",",
+      "replace": "(true, true) => \"passed\","
+    },
+    {
+      "name": "lost run recorded as passed",
+      "model_case": null,
+      "file": "src/evidence.rs",
+      "find": "            attempt.outcome = \"error\".into()",
+      "replace": "            attempt.outcome = \"passed\".into()"
+    },
+    {
+      "name": "draft is delivered",
+      "model_case": "intent/mutant_draft_delivers",
+      "file": "src/intent.rs",
+      "find": "let status = if !confirmed {",
+      "replace": "let status = if false {"
+    },
+    {
+      "name": "unguarded is delivered",
+      "model_case": "intent/mutant_unguarded_delivers",
+      "file": "src/intent.rs",
+      "find": "count() as i64) < min {",
+      "replace": "count() as i64) < 0 {"
+    },
+    {
+      "name": "unknown hard gate passes",
+      "model_case": "intent/mutant_delivered_ignores_unknown",
+      "file": "src/intent.rs",
+      "find": "any(|(g, s)| g == \"hard\" && s != \"passed\")",
+      "replace": "any(|(g, s)| g == \"hard\" && s == \"failed\")"
+    },
+    {
+      "name": "deferred gate ignored",
+      "model_case": "intent/mutant_deferred_as_passed",
+      "file": "src/intent.rs",
+      "find": "            .any(|(g, s)| g == \"deferred\" && s != \"passed\")",
+      "replace": "            .any(|(g, s)| g == \"deferred\" && s == \"never\")"
+    },
+    {
+      "name": "edit keeps confirmation",
+      "model_case": "intent/mutant_edit_keeps_confirmation",
+      "file": "src/intent.rs",
+      "find": "            criteria.get_mut(a.get(\"criterion\").str()).unwrap().0 = a.get(\"to\").str().into();\n            confirmed = false",
+      "replace": "            criteria.get_mut(a.get(\"criterion\").str()).unwrap().0 = a.get(\"to\").str().into();"
+    },
+    {
+      "name": "worker's exception takes effect",
+      "model_case": "intent/mutant_worker_can_amend",
+      "file": "src/intent.rs",
+      "find": "            let effective = owner && rank(level) >= floor;",
+      "replace": "            let effective = rank(level) >= floor;"
+    },
+    {
+      "name": "nothing recorded treated as apart",
+      "model_case": "intent/mutant_missing_is_apart",
+      "file": "src/intent.rs",
+      "find": "unwrap_or(\"self\")",
+      "replace": "unwrap_or(\"apart\")"
+    },
+    {
+      "name": "floor ignored",
+      "model_case": "intent/mutant_below_floor_counts",
+      "file": "src/intent.rs",
+      "find": "            let effective = owner && rank(level) >= floor;",
+      "replace": "            let effective = owner;"
+    },
+    {
+      "name": "worker keeps the level it wrote",
+      "model_case": "intent/mutant_worker_keeps_level",
+      "file": "src/intent.rs",
+      "find": "            } else {\n                \"self\"\n            };",
+      "replace": "            } else {\n                a.opt(\"separation\").map(Value::str).unwrap_or(\"self\")\n            };"
+    },
+    {
+      "name": "level shown higher than used",
+      "model_case": "intent/mutant_hide_level",
+      "file": "src/intent.rs",
+      "find": "(\"level\", json::string(level)),",
+      "replace": "(\"level\", json::string(\"apart\")),"
+    }
+  ]
+}

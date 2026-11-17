@@ -10,7 +10,7 @@ Each intent has an owner, criteria, and for each criterion a gate ([data model](
 | [0002](0002-kernel-design-is-checked.md) | The kernel's rules are checked before any kernel is written | 0001 | open |
 | [0003](0003-a-provider-can-be-written-from-the-documents.md) | Someone outside can write a provider from the documents alone | 0001 | uncovered |
 | [0004](0004-same-answers-on-every-platform.md) | The same project gives the same answers on every platform | 0001 | uncovered |
-| [0005](0005-a-kernel-can-be-judged.md) | A kernel can be judged by something that is not a kernel | 0001 | uncovered |
+| [0005](0005-a-kernel-can-be-judged.md) | A kernel can be judged by something that is not a kernel | 0001 | uncovered (2 of 3 criteria have checks) |
 | [0006](0006-intent-to-delivery-is-traceable.md) | The path from an intent to what was delivered can be traced and scored | 0001 | uncovered |
 
 `uncovered` means at least one criterion has nothing that checks it yet. That is the honest state of a project at design stage.

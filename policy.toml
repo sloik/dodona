@@ -1,0 +1,41 @@
+# dodona's own policy: the bar this repository holds itself to (decision 0014).
+#
+# No kernel exists yet to enforce this file. It is written down so that the bar
+# is on record before anything is judged against it. The data is described by
+# protocol/policy.schema.json.
+
+policy = "0.1"
+reference = "main"
+
+# Everything under intents/ hangs off the first intent.
+[required]
+intents = ["0001"]
+
+[minimum]
+non_vacuity = true          # every check must be shown able to fail
+
+[gates]
+min_hard = 1                # an intent with no hard gate is never delivered (decision 0018)
+max_deferred_days = 90
+
+[gates.varying]
+min_runs = 5
+min_agree_percent = 100
+
+# The least separation at which each kind of act takes effect (decision 0024).
+# Whoever grants an exception, or changes this file, must not be the party
+# whose work is being judged.
+[separation.floor.grant-amendment]
+level = "apart"
+
+[separation.floor.change-policy]
+level = "apart"
+
+[separation.floor.close-deferred]
+level = "helper"
+
+[separation.floor.confirm-baseline]
+level = "self"
+
+[separation.floor.match-check]
+level = "self"
