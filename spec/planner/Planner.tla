@@ -1,46 +1,52 @@
 ------------------------------ MODULE Planner ------------------------------
 (***************************************************************************)
-(* What the planner reruns (claims C8, C9 and C10).                        *)
+(* What the planner reruns, and in what order (claims C8, C9 and C10).     *)
 (*                                                                         *)
-(* Three definitions: d1 depends on d2; d3 is unrelated but lives in the   *)
-(* same file as d2. Three obligations: "check" and "build" target d1, and  *)
-(* so depend on d1 and d2. "test" targets the artifact that "build"        *)
-(* produces, so it also depends on the compiler. An obligation is planned  *)
-(* when no record matches its current key.                                 *)
+(* Four definitions in a chain: d1 depends on d2, which depends on d4. d3  *)
+(* is unrelated but lives in the same file as d2. "check" and "build"      *)
+(* target d1. "test" works on the artifact that "build" produced.          *)
 (*                                                                         *)
-(* Each record also carries what the result really depended on. That is    *)
-(* the ground truth the kernel's keys are judged against.                  *)
+(* The model keeps two things apart on purpose. The kernel's KEY for an    *)
+(* obligation is what the kernel hashes. The TRUTH of a result is what it  *)
+(* really came from: for a check or a build, the content of everything d1  *)
+(* depends on, found by following the depends-on relation; for a test, the *)
+(* artifact it actually ran on. Builds put their artifacts in a store,     *)
+(* each under the key of the build that made it. A test must take the      *)
+(* artifact stored under the current build key, not whichever artifact was *)
+(* built last. The properties compare key and truth.                       *)
 (*                                                                         *)
-(* Granularity "definition" hashes each definition; "file" hashes the      *)
-(* whole file a definition is in, which is the fallback when a language    *)
-(* cannot name definitions.                                                *)
-(*                                                                         *)
-(* Not covered: dependency sets that change, more than one build target,   *)
-(* and runs that take time.                                                *)
+(* Not covered: dependency relations that change, builds that fail, more   *)
+(* than one build target, runs that take time.                             *)
 (***************************************************************************)
 EXTENDS Naturals, FiniteSets
 
 CONSTANTS Granularity, Mutant
 
-VARIABLES defHash, compiler, runner, records
+VARIABLES defHash, compiler, runner, records, store, latest
 
-vars == <<defHash, compiler, runner, records>>
+vars == <<defHash, compiler, runner, records, store, latest>>
 
-Defs        == {"d1", "d2", "d3"}
+Defs        == {"d1", "d2", "d3", "d4"}
 Hashes      == {0, 1}
 Obligations == {"check", "build", "test"}
-Target      == {"d1", "d2"}            \* the closure of d1 over depends-on
-SameFile(d) == IF d = "d1" THEN {"d1"} ELSE {"d2", "d3"}
+DependsOn(d) == CASE d = "d1" -> {"d2"} [] d = "d2" -> {"d4"} [] OTHER -> {}
+SameFile(d)  == IF d \in {"d2", "d3"} THEN {"d2", "d3"} ELSE {d}
 
-Mutants == {"none", "direct_deps_only", "key_omits_producer", "plan_everything"}
+\* Everything reachable from d over depends-on, in at most three steps.
+Step(S)    == S \cup UNION {DependsOn(d) : d \in S}
+Closure(d) == Step(Step(Step({d})))
+
+Mutants == {"none", "direct_deps_only", "no_deps", "key_omits_producer", "plan_everything",
+            "test_without_build"}
 ASSUME Mutant \in Mutants /\ Granularity \in {"definition", "file"}
 
 \* How the kernel identifies one definition.
 Ident(d) == IF Granularity = "file" THEN [x \in SameFile(d) |-> defHash[x]] ELSE defHash[d]
 
-\* The definitions the kernel's key covers. The planted defect follows only
-\* the direct target and misses what it depends on.
-KeyDefs == IF Mutant = "direct_deps_only" THEN {"d1"} ELSE Target
+\* The definitions the kernel's key covers.
+KeyDefs == CASE Mutant = "no_deps"          -> {"d1"}
+             [] Mutant = "direct_deps_only" -> Step({"d1"})
+             [] OTHER                       -> Closure("d1")
 
 BuildKey == [defs |-> [d \in KeyDefs |-> Ident(d)], tool |-> compiler]
 
@@ -50,11 +56,26 @@ Key(o) ==
       [] o = "test"  -> [producer |-> IF Mutant = "key_omits_producer" THEN 0 ELSE BuildKey,
                          tool |-> runner]
 
-\* What a result really depends on.
-Truth(o) ==
-    CASE o = "check" -> <<defHash["d1"], defHash["d2"]>>
-      [] o = "build" -> <<defHash["d1"], defHash["d2"], compiler>>
-      [] o = "test"  -> <<defHash["d1"], defHash["d2"], compiler, runner>>
+\* What a source-level result really depends on: the true closure, now.
+Sources == [d \in Closure("d1") |-> defHash[d]]
+
+\* The artifact a test run now would use: the one stored under the current
+\* build key. The planted defect takes whichever was built last.
+Stored == {s \in store : s.key = BuildKey}
+Tested == IF Mutant = "test_without_build" THEN latest
+          ELSE (CHOOSE s \in Stored : TRUE).content
+
+\* What a result produced now would really rest on.
+TruthNow(o) ==
+    CASE o = "check" -> [sources |-> Sources]
+      [] o = "build" -> [sources |-> Sources, compiler |-> compiler]
+      [] o = "test"  -> [artifact |-> Tested, runner |-> runner]
+
+\* What a result for the current inputs ought to rest on. For the test that is
+\* an artifact built from the current sources by the current compiler.
+TruthWanted(o) ==
+    IF o = "test" THEN [artifact |-> [sources |-> Sources, compiler |-> compiler], runner |-> runner]
+    ELSE TruthNow(o)
 
 Reusable(o) == {r \in records : r.ob = o /\ r.key = Key(o)}
 
@@ -66,21 +87,28 @@ Init ==
     /\ compiler \in Hashes
     /\ runner \in Hashes
     /\ records = {}
+    /\ store = {}
+    /\ latest = "none"
 
 Edit(d, h) ==
     /\ h # defHash[d]
     /\ defHash' = [defHash EXCEPT ![d] = h]
-    /\ UNCHANGED <<compiler, runner, records>>
+    /\ UNCHANGED <<compiler, runner, records, store, latest>>
 
-RepinCompiler(h) == h # compiler /\ compiler' = h /\ UNCHANGED <<defHash, runner, records>>
-RepinRunner(h)   == h # runner /\ runner' = h /\ UNCHANGED <<defHash, compiler, records>>
+RepinCompiler(h) == h # compiler /\ compiler' = h /\ UNCHANGED <<defHash, runner, records, store, latest>>
+RepinRunner(h)   == h # runner /\ runner' = h /\ UNCHANGED <<defHash, compiler, records, store, latest>>
 
-\* A planned obligation runs. The test runs only on an artifact from a build
-\* that is itself current.
+\* A planned obligation runs. A build stores its artifact under its key. A
+\* test may run only when the build for the current inputs has been done, and
+\* takes that build's artifact. The planted defect runs the test on whatever
+\* was built last, current or not.
 Run(o) ==
     /\ o \in Plan
-    /\ o = "test" => Reusable("build") # {}
-    /\ records' = records \cup {[ob |-> o, key |-> Key(o), truth |-> Truth(o)]}
+    /\ o = "test" => IF Mutant = "test_without_build" THEN latest # "none" ELSE Stored # {}
+    /\ records' = records \cup {[ob |-> o, key |-> Key(o), truth |-> TruthNow(o)]}
+    /\ LET made == [sources |-> Sources, compiler |-> compiler]
+       IN  /\ store' = IF o = "build" THEN store \cup {[key |-> BuildKey, content |-> made]} ELSE store
+           /\ latest' = IF o = "build" THEN made ELSE latest
     /\ UNCHANGED <<defHash, compiler, runner>>
 
 Next ==
@@ -90,20 +118,26 @@ Next ==
 
 Spec == Init /\ [][Next]_vars
 
-RecordBound == Cardinality(records) <= 3
+RecordBound == Cardinality(records) <= 5
 ----------------------------------------------------------------------------
-\* Every record the kernel would reuse really was produced from the current
-\* inputs. This is "no wrong reuse", and so "everything stale is planned".
-NoWrongReuse ==
-    \A o \in Obligations : \A r \in Reusable(o) : r.truth = Truth(o)
+TypeOK ==
+    /\ defHash \in [Defs -> Hashes]
+    /\ compiler \in Hashes /\ runner \in Hashes
+    /\ \A r \in records : r.ob \in Obligations
+    /\ Granularity \in {"definition", "file"}
 
-\* Nothing is planned that already has a result for the current inputs.
+\* Every record the kernel would reuse rests on what a result for the current
+\* inputs ought to rest on. For a test that includes having been run on an
+\* artifact built from the current sources.
+NoWrongReuse ==
+    \A o \in Obligations : \A r \in Reusable(o) : r.truth = TruthWanted(o)
+
+\* Nothing is planned that already has a result resting on the right things.
 \* Holds with definition granularity. With file granularity it is expected
 \* to be VIOLATED: coarse identity costs extra reruns, and only that.
 NoNeedlessRerun ==
-    \A o \in Plan : ~\E r \in records : r.ob = o /\ r.truth = Truth(o)
+    \A o \in Plan : ~\E r \in records : r.ob = o /\ r.truth = TruthWanted(o)
 
 \* Reachability: expected to be VIOLATED.
-NeverReused == \A o \in Obligations : Reusable(o) = {} \/ records = {}
 NeverAllCurrent == Plan # {}
 =============================================================================

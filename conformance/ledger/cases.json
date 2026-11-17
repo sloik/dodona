@@ -1,0 +1,160 @@
+{
+  "about": "A ledger of three entries, as the exact bytes a kernel must write (protocol/ledger.md), with each entry's identity. tools/run_ledger_cases.py appends these entries through the kernel and requires the file to be these bytes; then it damages the file in each of the ways listed and requires the reader to say what protocol/ledger.md says. The bytes were produced by the reference encoder, not by a kernel.",
+  "append": [
+    {
+      "kind": "evidence",
+      "body": {
+        "obligation": "ob-1",
+        "verdict": "passed",
+        "note": "za\u017c\u00f3\u0142\u0107"
+      }
+    },
+    {
+      "kind": "act",
+      "body": {
+        "kind": "confirm-baseline",
+        "ticket": "t-1"
+      }
+    },
+    {
+      "kind": "evidence",
+      "body": {
+        "obligation": "ob-2",
+        "verdict": "failed",
+        "n": 3
+      }
+    }
+  ],
+  "entries": [
+    {
+      "entry": {
+        "previous": null,
+        "kind": "evidence",
+        "body": {
+          "obligation": "ob-1",
+          "verdict": "passed",
+          "note": "za\u017c\u00f3\u0142\u0107"
+        }
+      },
+      "identity": "sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564",
+      "line": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\n"
+    },
+    {
+      "entry": {
+        "previous": "sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564",
+        "kind": "act",
+        "body": {
+          "kind": "confirm-baseline",
+          "ticket": "t-1"
+        }
+      },
+      "identity": "sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7",
+      "line": "dodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\n"
+    },
+    {
+      "entry": {
+        "previous": "sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7",
+        "kind": "evidence",
+        "body": {
+          "obligation": "ob-2",
+          "verdict": "failed",
+          "n": 3
+        }
+      },
+      "identity": "sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18",
+      "line": "dodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\n"
+    }
+  ],
+  "file": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\n",
+  "damage": [
+    {
+      "name": "torn at every byte of the last entry",
+      "how": "truncate-last-entry-at-every-byte",
+      "expect": {
+        "torn": true,
+        "entries": 2
+      }
+    },
+    {
+      "name": "last entry removed cleanly",
+      "how": "drop-last-line",
+      "expect": {
+        "torn": false,
+        "entries": 2
+      }
+    },
+    {
+      "name": "a byte changed in the second entry",
+      "how": "flip-byte-in-line-2",
+      "expect": {
+        "refused": "corrupt",
+        "at": 2
+      }
+    },
+    {
+      "name": "a byte changed in the last entry, line feed kept",
+      "how": "flip-byte-in-line-3",
+      "expect": {
+        "refused": "corrupt",
+        "at": 3
+      }
+    },
+    {
+      "name": "the second entry removed",
+      "how": "drop-line-2",
+      "expect": {
+        "refused": "corrupt",
+        "at": 2
+      }
+    },
+    {
+      "name": "the first two entries swapped",
+      "how": "swap-lines-1-2",
+      "expect": {
+        "refused": "corrupt",
+        "at": 1
+      }
+    },
+    {
+      "name": "a line that is not an entry added",
+      "how": "append-garbage-line",
+      "expect": {
+        "refused": "corrupt",
+        "at": 4
+      }
+    },
+    {
+      "name": "a carriage return before a line feed",
+      "how": "crlf-line-1",
+      "expect": {
+        "refused": "corrupt",
+        "at": 1
+      }
+    },
+    {
+      "name": "a well-formed entry that names the wrong previous entry",
+      "how": "append-entry-with-wrong-previous",
+      "expect": {
+        "refused": "corrupt",
+        "at": 4
+      }
+    },
+    {
+      "name": "a well-formed entry whose payload is not in canonical form",
+      "how": "append-entry-not-canonical",
+      "expect": {
+        "refused": "corrupt",
+        "at": 4
+      }
+    },
+    {
+      "name": "a well-formed entry appended by hand",
+      "how": "append-entry-by-hand",
+      "expect": {
+        "torn": false,
+        "entries": 4
+      },
+      "note": "The file's own checks cannot tell who wrote an entry. Whether it counts is decided by its content."
+    }
+  ]
+}

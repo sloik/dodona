@@ -1,0 +1,97 @@
+{
+  "kind": "platforms",
+  "name": "a_failing_result_can_stand_in_too",
+  "claim": "C15",
+  "covers": [
+    "platforms/mutant_stand_in_always_passed"
+  ],
+  "why": "Two platforms agreeing on a failure verify the claim just as two passes do, and what stands in is the other platform's verdict, whatever it is.",
+  "stand_in_allowed": true,
+  "keys": [
+    "k1",
+    "k2"
+  ],
+  "platforms": [
+    "p1",
+    "p2",
+    "p3"
+  ],
+  "steps": [
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p1",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "reproducibility": {
+          "k1": "unknown"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p3",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k1": {
+            "p1": "failed",
+            "p2": "failed",
+            "p3": "failed"
+          }
+        },
+        "stood_in": [
+          [
+            "k1",
+            "p2"
+          ]
+        ],
+        "reproducibility": {
+          "k1": "agrees"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p2",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k2": {
+            "p1": "failed",
+            "p2": "failed",
+            "p3": "failed"
+          }
+        },
+        "stood_in": [
+          [
+            "k1",
+            "p2"
+          ],
+          [
+            "k2",
+            "p1"
+          ],
+          [
+            "k2",
+            "p3"
+          ]
+        ],
+        "reproducibility": {
+          "k2": "unknown"
+        }
+      }
+    }
+  ]
+}

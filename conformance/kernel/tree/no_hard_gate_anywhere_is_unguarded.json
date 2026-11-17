@@ -3,7 +3,7 @@
   "name": "no_hard_gate_anywhere_is_unguarded",
   "claim": "C34",
   "covers": [],
-  "why": "Hard gates are counted over the whole tree.",
+  "why": "A tree with no hard gate anywhere is unguarded.",
   "policy": {
     "min_hard_gates": 1
   },

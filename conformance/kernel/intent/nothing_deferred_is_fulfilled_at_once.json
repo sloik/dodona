@@ -1,0 +1,70 @@
+{
+  "kind": "intent",
+  "name": "nothing_deferred_is_fulfilled_at_once",
+  "claim": "C23",
+  "covers": [],
+  "why": "With no deferred gate there is nothing left to wait for, so a delivered intent is fulfilled. An edit that changes nothing is not an edit.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "soft"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "fulfilled"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "criterion": "c2",
+          "to": "soft"
+        }
+      },
+      "expect": {
+        "status": "fulfilled"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "criterion": "c2",
+          "to": "deferred"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}

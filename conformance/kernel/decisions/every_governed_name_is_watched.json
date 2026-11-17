@@ -1,0 +1,102 @@
+{
+  "kind": "decisions",
+  "name": "every_governed_name_is_watched",
+  "claim": "C16",
+  "covers": [
+    "decisions/mutant_first_name_only"
+  ],
+  "why": "A decision can govern several names. A change behind any of them flags it, and a review needs all of them to exist.",
+  "governs": [
+    "n1",
+    "n2"
+  ],
+  "names": {
+    "n1": "a",
+    "n2": "b",
+    "n3": "c"
+  },
+  "steps": [
+    {
+      "do": {
+        "edit": {
+          "name": "n3",
+          "to": "x"
+        }
+      },
+      "expect": {
+        "flagged": false
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n2",
+          "to": "x"
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "review": {}
+      },
+      "expect": {
+        "flagged": false
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": null
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n2",
+          "to": "y"
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "review": {}
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n2",
+          "to": "x"
+        }
+      },
+      "expect": {
+        "flagged": false
+      }
+    }
+  ]
+}

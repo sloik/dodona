@@ -2,9 +2,7 @@
   "kind": "plan",
   "name": "file_identity_still_follows_dependencies",
   "claim": "C8",
-  "covers": [
-    "planner/mutant_fallback_direct_deps_only"
-  ],
+  "covers": [],
   "why": "File-level identity must still follow what a definition depends on.",
   "granularity": "file",
   "definitions": {

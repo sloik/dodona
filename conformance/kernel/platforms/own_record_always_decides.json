@@ -1,0 +1,136 @@
+{
+  "kind": "platforms",
+  "name": "own_record_always_decides",
+  "claim": "C15",
+  "covers": [
+    "platforms/mutant_other_overrides_own",
+    "platforms/mutant_stand_in_not_reported"
+  ],
+  "why": "A platform's own result is never replaced by another's. Two different verdicts recorded for one platform are a conflict there, and the inputs then differ across platforms.",
+  "stand_in_allowed": true,
+  "keys": [
+    "k1",
+    "k2"
+  ],
+  "platforms": [
+    "p1",
+    "p2",
+    "p3"
+  ],
+  "steps": [
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k1": {
+            "p1": "passed"
+          }
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k1": {
+            "p3": "passed"
+          }
+        },
+        "stood_in": [
+          [
+            "k1",
+            "p3"
+          ]
+        ]
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p3",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k1": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "failed"
+          }
+        },
+        "stood_in": [],
+        "reproducibility": {
+          "k1": "differs"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k2": {
+            "p1": "passed",
+            "p2": "unknown",
+            "p3": "unknown"
+          }
+        },
+        "stood_in": []
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k2": {
+            "p1": "passed"
+          }
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p1",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k2": {
+            "p1": "conflict"
+          }
+        },
+        "reproducibility": {
+          "k2": "differs"
+        }
+      }
+    }
+  ]
+}

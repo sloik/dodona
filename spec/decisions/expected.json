@@ -21,13 +21,13 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "two names, two contents and absence",
+  "bounds": "three names, two of them governed; two contents and absence",
   "cases": [
     {
       "config": "design.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "The decision is flagged exactly when the identity behind its name has changed."
+      "purpose": "The decision is flagged exactly when a governed name no longer has the content it was reviewed against."
     },
     {
       "config": "reach_flagged.cfg",
@@ -40,7 +40,7 @@
       "config": "mutant_identities_without_names.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: the kernel tracks identities without names, and misses an edit when the old content still exists under another name.",
+      "purpose": "Planted defect: the kernel tracks contents without names, and misses an edit when the old content still exists under another name.",
       "of": "FlagIsExact"
     },
     {
@@ -48,6 +48,20 @@
       "expect": "violation",
       "expect_exit": 12,
       "purpose": "Planted defect: a governed definition that disappears is not flagged.",
+      "of": "FlagIsExact"
+    },
+    {
+      "config": "mutant_refresh_on_edit.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the kernel updates what it has stored whenever a governed definition is edited, so it never flags.",
+      "of": "FlagIsExact"
+    },
+    {
+      "config": "mutant_first_name_only.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: only the first governed name is watched.",
       "of": "FlagIsExact"
     }
   ]

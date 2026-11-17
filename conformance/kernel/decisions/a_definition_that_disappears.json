@@ -6,7 +6,9 @@
     "decisions/mutant_gone_is_not_flagged"
   ],
   "why": "A governed definition that is removed is flagged, and there is nothing to review it against.",
-  "governs": "n1",
+  "governs": [
+    "n1"
+  ],
   "names": {
     "n1": "a",
     "n2": "b"

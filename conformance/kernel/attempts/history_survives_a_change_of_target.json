@@ -1,0 +1,132 @@
+{
+  "kind": "attempts",
+  "name": "history_survives_a_change_of_target",
+  "claim": "C35",
+  "covers": [
+    "attempts/mutant_change_hides_history",
+    "attempts/reach_retried_across_change"
+  ],
+  "why": "Changing the thing judged gets a new answer and does not hide the earlier attempts. An agreement after a refusal is reported as retried even across the change, and is shopped only when the target did not change.",
+  "claims": "apart",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "retried": false,
+        "attempts": 1,
+        "granted": "apart"
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "retried": false,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "change_target": {}
+      },
+      "expect": {
+        "result": "none",
+        "shopped": false,
+        "retried": false,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "agreed",
+        "shopped": false,
+        "retried": true,
+        "cap": null,
+        "attempts": 2,
+        "granted": "apart"
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t3"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "retried": true,
+        "attempts": 3
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t3",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "retried": true,
+        "attempts": 3
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t4"
+        }
+      },
+      "expect": {
+        "attempts": 4
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t4",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": true,
+        "retried": true,
+        "cap": "helper",
+        "attempts": 4,
+        "granted": "helper"
+      }
+    }
+  ]
+}

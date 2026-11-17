@@ -47,7 +47,7 @@
           }
         },
         "reproducibility": {
-          "k1": "failed"
+          "k1": "differs"
         }
       }
     },
@@ -68,7 +68,7 @@
         },
         "stood_in": [],
         "reproducibility": {
-          "k1": "failed",
+          "k1": "differs",
           "k2": "unknown"
         }
       }

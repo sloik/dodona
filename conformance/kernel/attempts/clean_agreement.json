@@ -5,7 +5,7 @@
   "covers": [
     "attempts/reach_agreed"
   ],
-  "why": "An attempt that is open counts as a failure until it is closed.",
+  "why": "One attempt, closed as agreed, is an agreement. Until it is closed it counts as a failure.",
   "steps": [
     {
       "do": {

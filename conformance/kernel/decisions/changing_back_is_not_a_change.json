@@ -1,0 +1,71 @@
+{
+  "kind": "decisions",
+  "name": "changing_back_is_not_a_change",
+  "claim": "C16",
+  "covers": [],
+  "why": "The flag follows the content. Changing it back is not a change.",
+  "governs": [
+    "n1"
+  ],
+  "names": {
+    "n1": "a",
+    "n2": "b"
+  },
+  "steps": [
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": "c"
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "flagged": false
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": null
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "flagged": false
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "flagged": false
+      }
+    }
+  ]
+}

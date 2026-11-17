@@ -1,0 +1,287 @@
+{
+  "about": "The core key of an evidence record: the identity of exactly this object under the canonical encoding (protocol/evidence-record.schema.json, core_key_preimage). `accept` gives objects with their key. `reject` gives objects a kernel must refuse to key, with the reason: the arrays specified_by, targets, closure, declared and mapping are sets and must arrive sorted with no repeats, and the platform is not part of the core key.",
+  "accept": [
+    {
+      "name": "a plain check",
+      "preimage": {
+        "obligation": "sha256:a08cc2e7cd9d217f2888327463da92168c5c29cf62b590c3ecc0eb6f5e241aca",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+            "sha256:2367d5304fd8a822f3ba24a53d70f2ae25ca3a020d45a33cd657aa230e6ad060",
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:fd98a4211195ab678be53a0b5f89c2daf41a4911a227ebd76ec0e0b38497c953",
+          "expect": "holds"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      },
+      "core_key": "sha256:f899a61ae49ac9777ec7c1715c5672acebb26473dcd2f2754106fb49b0c45887"
+    },
+    {
+      "name": "the same with a different tool",
+      "preimage": {
+        "obligation": "sha256:a08cc2e7cd9d217f2888327463da92168c5c29cf62b590c3ecc0eb6f5e241aca",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+            "sha256:2367d5304fd8a822f3ba24a53d70f2ae25ca3a020d45a33cd657aa230e6ad060",
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:b65e0951acae80140876b847da7940c969a08157ba7458728fdb680e98517473"
+            }
+          ],
+          "config": "sha256:fd98a4211195ab678be53a0b5f89c2daf41a4911a227ebd76ec0e0b38497c953",
+          "expect": "holds"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      },
+      "core_key": "sha256:49fb5cb5c738b1ddd77ab629d0c9f7113a438dac456dd7e8a77e4cce930e6e6f"
+    },
+    {
+      "name": "the same expecting a violation",
+      "preimage": {
+        "obligation": "sha256:a08cc2e7cd9d217f2888327463da92168c5c29cf62b590c3ecc0eb6f5e241aca",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+            "sha256:2367d5304fd8a822f3ba24a53d70f2ae25ca3a020d45a33cd657aa230e6ad060",
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:fd98a4211195ab678be53a0b5f89c2daf41a4911a227ebd76ec0e0b38497c953",
+          "expect": "violated"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      },
+      "core_key": "sha256:b2e1b71fc13276887d074fa2072ad47f7f3630723e484ade20a4e127bf533d98"
+    },
+    {
+      "name": "the same from a newer provider",
+      "preimage": {
+        "obligation": "sha256:a08cc2e7cd9d217f2888327463da92168c5c29cf62b590c3ecc0eb6f5e241aca",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+            "sha256:2367d5304fd8a822f3ba24a53d70f2ae25ca3a020d45a33cd657aa230e6ad060",
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:fd98a4211195ab678be53a0b5f89c2daf41a4911a227ebd76ec0e0b38497c953",
+          "expect": "holds"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.1",
+          "protocol": "0.2"
+        }
+      },
+      "core_key": "sha256:0f617d9555c2da2843086be389a727b69d7a8943fdd8835d739dffbe615d129e"
+    },
+    {
+      "name": "a conformance check with a mapping",
+      "preimage": {
+        "obligation": "sha256:a08cc2e7cd9d217f2888327463da92168c5c29cf62b590c3ecc0eb6f5e241aca",
+        "kind": "conformance",
+        "inputs": {
+          "specified_by": [
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+            "sha256:2367d5304fd8a822f3ba24a53d70f2ae25ca3a020d45a33cd657aa230e6ad060",
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:fd98a4211195ab678be53a0b5f89c2daf41a4911a227ebd76ec0e0b38497c953",
+          "expect": "holds",
+          "mapping": [
+            "sha256:bdf485ec089bd8d3261ff81fe9f6cbf5ae784522b7a491eae3c86ced527b083b"
+          ]
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      },
+      "core_key": "sha256:de2bedfb8b1d0cb35ac700cdf379bc99cd9b42612cbe9851f6b7a305bded572b"
+    }
+  ],
+  "reject": [
+    {
+      "name": "a set that is not sorted",
+      "preimage": {
+        "obligation": "sha256:a08cc2e7cd9d217f2888327463da92168c5c29cf62b590c3ecc0eb6f5e241aca",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476",
+            "sha256:2367d5304fd8a822f3ba24a53d70f2ae25ca3a020d45a33cd657aa230e6ad060",
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:fd98a4211195ab678be53a0b5f89c2daf41a4911a227ebd76ec0e0b38497c953",
+          "expect": "holds"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      },
+      "reason": "unsorted-set"
+    },
+    {
+      "name": "a set with a repeated member",
+      "preimage": {
+        "obligation": "sha256:a08cc2e7cd9d217f2888327463da92168c5c29cf62b590c3ecc0eb6f5e241aca",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+            "sha256:2367d5304fd8a822f3ba24a53d70f2ae25ca3a020d45a33cd657aa230e6ad060",
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476",
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:fd98a4211195ab678be53a0b5f89c2daf41a4911a227ebd76ec0e0b38497c953",
+          "expect": "holds"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      },
+      "reason": "unsorted-set"
+    },
+    {
+      "name": "a platform inside the core key",
+      "preimage": {
+        "obligation": "sha256:a08cc2e7cd9d217f2888327463da92168c5c29cf62b590c3ecc0eb6f5e241aca",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+            "sha256:2367d5304fd8a822f3ba24a53d70f2ae25ca3a020d45a33cd657aa230e6ad060",
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:fd98a4211195ab678be53a0b5f89c2daf41a4911a227ebd76ec0e0b38497c953",
+          "expect": "holds",
+          "platform": {
+            "os": "linux",
+            "arch": "x86_64"
+          }
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      },
+      "reason": "platform-in-core-key"
+    }
+  ]
+}

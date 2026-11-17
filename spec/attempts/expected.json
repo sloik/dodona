@@ -21,13 +21,19 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "at most three attempts, one change of target",
+  "bounds": "at most three attempts, two changes of target",
   "cases": [
     {
       "config": "design.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "The intended design satisfies both properties."
+      "purpose": "The intended design satisfies every property, for an act that claims a high level."
+    },
+    {
+      "config": "design_claims_self.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "The same for an act that claims the lowest level: the cap must not raise it."
     },
     {
       "config": "reach_agreed.cfg",
@@ -42,6 +48,13 @@
       "expect_exit": 12,
       "purpose": "Shopping is reachable, so the flag is not a dead rule.",
       "of": "NeverShopped"
+    },
+    {
+      "config": "reach_retried_across_change.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "An agreement after a change of target, following a refusal before it, is reachable: the case the two rules treat differently.",
+      "of": "NeverRetriedAcrossChange"
     },
     {
       "config": "mutant_latest_only.cfg",
@@ -62,14 +75,28 @@
       "expect": "violation",
       "expect_exit": 12,
       "purpose": "Planted defect: shopping is flagged and the level is not capped.",
-      "of": "ShoppingIsFlagged"
+      "of": "ShoppingIsCapped"
     },
     {
       "config": "mutant_flag_missed.cfg",
       "expect": "violation",
       "expect_exit": 12,
       "purpose": "Planted defect: shopping is not flagged.",
-      "of": "ShoppingIsFlagged"
+      "of": "ShoppingIsCapped"
+    },
+    {
+      "config": "mutant_cap_raises.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the cap sets the level to helper, which raises an act that claimed less.",
+      "of": "ShoppingIsCapped"
+    },
+    {
+      "config": "mutant_change_hides_history.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a change of target hides the earlier attempts, so retrying with a trivial change leaves no trace.",
+      "of": "HistoryIsKept"
     }
   ]
 }

@@ -1,0 +1,57 @@
+{
+  "kind": "attempts",
+  "name": "the_cap_never_raises_a_level",
+  "claim": "C35",
+  "covers": [
+    "attempts/mutant_cap_raises",
+    "attempts/design_claims_self"
+  ],
+  "why": "Capping at helper lowers a level that was above it. It does not lift an act that claimed less.",
+  "claims": "self",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "granted": "self"
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "granted": "self"
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "granted": "self"
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "shopped": true,
+        "cap": "helper",
+        "granted": "self"
+      }
+    }
+  ]
+}

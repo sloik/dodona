@@ -1,5 +1,5 @@
 {
-  "about": "Which recorded run supports which claim, and the exact files it was run on. tools/check_repo.py fails if a claim is marked checked in CLAIMS.md and no run listed here still matches the files.",
+  "about": "Which recorded run supports which claim, and the exact files it was run on. tools/check_repo.py fails if a claim is marked checked in CLAIMS.md and no run listed here still matches the files. `other_files` lists files outside the model directory that the result also depends on, such as the kernel's source; they are held to the same rule.",
   "runs": [
     {
       "id": "run-1",
@@ -298,7 +298,24 @@
         "run-6-kernel",
         "run-6-intent"
       ],
-      "note": "The seed kernel agreed with the model on 71,744 states of the evidence model and 78,894 of the intent model. State lists (SHA-256): kernel 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4, intent cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d. They are kept as a CI artifact, not in the repository."
+      "note": "The seed kernel agreed with the model on 71,744 states of the evidence model and 78,894 of the intent model. State lists (SHA-256): kernel 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4, intent cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d. They are kept as a CI artifact, not in the repository.",
+      "other_files": {
+        "kernel/src/assurance.rs": "2ad0e0836157601e4419f275deea9f6f6335a7409c9fe63b095f56a72c009649",
+        "kernel/src/attempts.rs": "6eff5dd50dbc4fe133849119e4d8f54d670fab6655e1336d122ebc2948419927",
+        "kernel/src/canonical.rs": "c254d742480fb0d0da5687b7cd38b5ed7be872987c64f7be792cd678745024fc",
+        "kernel/src/decisions.rs": "bcb66b11559045b5cb2d75808c71d38f6512ee3f53b9211282b05d94f80467c7",
+        "kernel/src/evidence.rs": "c003bba189a4d989ed9242d9839e39176f44f979c5be77a3810d696956c90610",
+        "kernel/src/intent.rs": "53153f6c22f9f3a6246ebe7d04f7e66ac1d3b955927203f46dc445accd38e48e",
+        "kernel/src/json.rs": "09d8d6cfc6664958b9b5622c636d2418beb2f9d58bb6f75ef1a489e99c8da131",
+        "kernel/src/main.rs": "e764eafc7ffbcc73357cec471cb05935ad254ec77560d443b6166b0e0261d4c1",
+        "kernel/src/path.rs": "17d7a387dadbd473ffcde38048218b5392b2bb2c8c0417737b33c92384015eab",
+        "kernel/src/plan.rs": "1f631803308ec57166e3c60f6838d5a6b97c97d051ff5e5332e68839c90588ad",
+        "kernel/src/platforms.rs": "433ecbbf7825374e81bb35bd9256c7ea29a4a8ff74916319865a73453ec69985",
+        "kernel/src/tree.rs": "84ad83a32a9c3e022e90e0efdca4c8b413c78884fc410bf9213e841f2d7ab788",
+        "kernel/src/unicode.rs": "c9e8139a873cb7cfcb26d531bb5ac740a7da7924111ee27ceda7c6e2ec558fc1",
+        "kernel/src/unicode_tables.rs": "2807352dd6b0e44a6e40c1b473c0295d381995e8c6cece73ee9b099269497e08",
+        "tools/check_states.py": "d94cc0df8dfd21c026cab751c3fbe73124c936ee6996c72d1217461b860661b9"
+      }
     }
   ]
 }
