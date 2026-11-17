@@ -1,0 +1,458 @@
+{
+  "kind": "status",
+  "name": "evidence_counts_only_for_the_inputs_it_states",
+  "claim": "C18",
+  "covers": [],
+  "why": "A record counts for the inputs it was made from, and only if its key really is the key of the inputs it states. A record with the wrong key is rejected and counted as rejected, whoever wrote it.",
+  "self": {
+    "writer": "kernel-a",
+    "platform": "p1"
+  },
+  "policy": {
+    "min_hard_gates": 1,
+    "required": [
+      "i1"
+    ],
+    "trusted_writers": [],
+    "floors": {
+      "confirm-baseline": "helper",
+      "match-check": "self"
+    },
+    "attestors": {
+      "harness-1": "6b65792d666f722d7468652d6b69742d6f6e6c792d6e6f742d612d736563726574"
+    },
+    "makes": [
+      [
+        "vendor-a/family-x",
+        "vendor-a/family-x-small"
+      ],
+      [
+        "vendor-b/family-y"
+      ]
+    ]
+  },
+  "obligations": {
+    "ob-a": {
+      "preimage": {
+        "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+            "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+          "expect": "holds"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      }
+    },
+    "ob-b": {
+      "preimage": {
+        "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+          ],
+          "targets": [
+            "sha256:5cdc5e62e9ab46c230bc591c0e9c56de6e2c40300fee21b5b9d352380e7ed4e1"
+          ],
+          "closure": [
+            "sha256:5cdc5e62e9ab46c230bc591c0e9c56de6e2c40300fee21b5b9d352380e7ed4e1",
+            "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+          "expect": "holds"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      }
+    }
+  },
+  "intents": {
+    "i1": {
+      "owner": "owner-1",
+      "worker": "worker-1",
+      "children": [],
+      "criteria": {
+        "c1": {
+          "gate": "hard",
+          "checked_by": [
+            "ob-a"
+          ]
+        },
+        "c2": {
+          "gate": "deferred",
+          "checked_by": [
+            "ob-b"
+          ]
+        }
+      }
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "append": {
+          "kind": "evidence",
+          "body": {
+            "obligation": "ob-a",
+            "preimage": {
+              "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+              "kind": "check",
+              "inputs": {
+                "specified_by": [
+                  "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+                ],
+                "targets": [
+                  "sha256:ce22065189fc9d3efd674e140eb73b05c38d86c44f0701c17abfb44c1874f0f2"
+                ],
+                "closure": [
+                  "sha256:ce22065189fc9d3efd674e140eb73b05c38d86c44f0701c17abfb44c1874f0f2",
+                  "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+                ],
+                "tools": [
+                  {
+                    "name": "checker",
+                    "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+                  }
+                ],
+                "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+                "expect": "holds"
+              },
+              "provider": {
+                "name": "example.checker",
+                "version": "1.0.0",
+                "protocol": "0.2"
+              }
+            },
+            "core_key": "sha256:c16c36861d4371618fbbe49ac5efc9007a18311fbdc89c23db824486f0943895",
+            "platform": "p1",
+            "verdict": "passed",
+            "writer": "kernel-a"
+          }
+        }
+      },
+      "expect": {
+        "obligations": {
+          "ob-a": {
+            "status": "unknown",
+            "reason": "never-run"
+          }
+        },
+        "rejected": 0
+      }
+    },
+    {
+      "do": {
+        "append": {
+          "kind": "evidence",
+          "body": {
+            "obligation": "ob-a",
+            "preimage": {
+              "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+              "kind": "check",
+              "inputs": {
+                "specified_by": [
+                  "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+                ],
+                "targets": [
+                  "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+                ],
+                "closure": [
+                  "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+                  "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+                ],
+                "tools": [
+                  {
+                    "name": "checker",
+                    "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+                  }
+                ],
+                "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+                "expect": "holds"
+              },
+              "provider": {
+                "name": "example.checker",
+                "version": "1.0.0",
+                "protocol": "0.2"
+              }
+            },
+            "core_key": "sha256:c16c36861d4371618fbbe49ac5efc9007a18311fbdc89c23db824486f0943895",
+            "platform": "p1",
+            "verdict": "passed",
+            "writer": "kernel-a"
+          }
+        }
+      },
+      "expect": {
+        "obligations": {
+          "ob-a": {
+            "status": "unknown",
+            "reason": "never-run"
+          }
+        },
+        "rejected": 1
+      }
+    },
+    {
+      "do": {
+        "append": {
+          "kind": "evidence",
+          "body": {
+            "obligation": "ob-a",
+            "preimage": {
+              "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+              "kind": "check",
+              "inputs": {
+                "specified_by": [
+                  "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+                ],
+                "targets": [
+                  "sha256:ce22065189fc9d3efd674e140eb73b05c38d86c44f0701c17abfb44c1874f0f2"
+                ],
+                "closure": [
+                  "sha256:ce22065189fc9d3efd674e140eb73b05c38d86c44f0701c17abfb44c1874f0f2",
+                  "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+                ],
+                "tools": [
+                  {
+                    "name": "checker",
+                    "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+                  }
+                ],
+                "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+                "expect": "holds"
+              },
+              "provider": {
+                "name": "example.checker",
+                "version": "1.0.0",
+                "protocol": "0.2"
+              }
+            },
+            "core_key": "sha256:b191a7573d4b8fd5dc12ec1c0b95ba0f15bd9bbfb7aacc6a5cd93ad7630594bf",
+            "platform": "p1",
+            "verdict": "passed",
+            "writer": "kernel-a"
+          }
+        }
+      },
+      "expect": {
+        "obligations": {
+          "ob-a": {
+            "status": "unknown",
+            "reason": "never-run"
+          }
+        },
+        "rejected": 2
+      }
+    },
+    {
+      "do": {
+        "append": {
+          "kind": "evidence",
+          "body": {
+            "obligation": "ob-a",
+            "preimage": {
+              "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+              "kind": "check",
+              "inputs": {
+                "specified_by": [
+                  "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+                ],
+                "targets": [
+                  "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+                ],
+                "closure": [
+                  "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+                  "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+                ],
+                "tools": [
+                  {
+                    "name": "checker",
+                    "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+                  }
+                ],
+                "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+                "expect": "holds"
+              },
+              "provider": {
+                "name": "example.checker",
+                "version": "1.0.0",
+                "protocol": "0.2"
+              }
+            },
+            "core_key": "sha256:b191a7573d4b8fd5dc12ec1c0b95ba0f15bd9bbfb7aacc6a5cd93ad7630594bf",
+            "platform": "p1",
+            "verdict": "passed",
+            "writer": "kernel-a"
+          }
+        }
+      },
+      "expect": {
+        "obligations": {
+          "ob-a": {
+            "status": "passed"
+          }
+        },
+        "rejected": 2
+      }
+    },
+    {
+      "do": {
+        "change": {
+          "obligation": "ob-a",
+          "preimage": {
+            "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+            "kind": "check",
+            "inputs": {
+              "specified_by": [
+                "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+              ],
+              "targets": [
+                "sha256:ce22065189fc9d3efd674e140eb73b05c38d86c44f0701c17abfb44c1874f0f2"
+              ],
+              "closure": [
+                "sha256:ce22065189fc9d3efd674e140eb73b05c38d86c44f0701c17abfb44c1874f0f2",
+                "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+              ],
+              "tools": [
+                {
+                  "name": "checker",
+                  "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+                }
+              ],
+              "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+              "expect": "holds"
+            },
+            "provider": {
+              "name": "example.checker",
+              "version": "1.0.0",
+              "protocol": "0.2"
+            }
+          }
+        }
+      },
+      "expect": {
+        "obligations": {
+          "ob-a": {
+            "status": "passed"
+          }
+        }
+      }
+    },
+    {
+      "do": {
+        "change": {
+          "obligation": "ob-a",
+          "preimage": {
+            "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+            "kind": "check",
+            "inputs": {
+              "specified_by": [
+                "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+              ],
+              "targets": [
+                "sha256:28676cabfc4f5365da80bb13c4a6e1e4d1a7c0cc318bc8eddc4e96d972dbb371"
+              ],
+              "closure": [
+                "sha256:28676cabfc4f5365da80bb13c4a6e1e4d1a7c0cc318bc8eddc4e96d972dbb371",
+                "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+              ],
+              "tools": [
+                {
+                  "name": "checker",
+                  "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+                }
+              ],
+              "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+              "expect": "holds"
+            },
+            "provider": {
+              "name": "example.checker",
+              "version": "1.0.0",
+              "protocol": "0.2"
+            }
+          }
+        }
+      },
+      "expect": {
+        "obligations": {
+          "ob-a": {
+            "status": "unknown",
+            "reason": "never-run"
+          }
+        }
+      }
+    },
+    {
+      "do": {
+        "change": {
+          "obligation": "ob-a",
+          "preimage": {
+            "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+            "kind": "check",
+            "inputs": {
+              "specified_by": [
+                "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+              ],
+              "targets": [
+                "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+              ],
+              "closure": [
+                "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+                "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+              ],
+              "tools": [
+                {
+                  "name": "checker",
+                  "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+                }
+              ],
+              "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+              "expect": "holds"
+            },
+            "provider": {
+              "name": "example.checker",
+              "version": "1.0.0",
+              "protocol": "0.2"
+            }
+          }
+        }
+      },
+      "expect": {
+        "obligations": {
+          "ob-a": {
+            "status": "passed"
+          }
+        }
+      }
+    }
+  ]
+}

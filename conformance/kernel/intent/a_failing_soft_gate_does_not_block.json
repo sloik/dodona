@@ -1,0 +1,76 @@
+{
+  "kind": "intent",
+  "name": "a_failing_soft_gate_does_not_block",
+  "claim": "C23",
+  "covers": [],
+  "why": "A soft gate never blocks delivery, whatever its check says.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "soft"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "failed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "conflict"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c3",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "fulfilled"
+      }
+    }
+  ]
+}

@@ -27,13 +27,26 @@
       "config": "design.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "The intended design satisfies both properties."
+      "purpose": "The intended design satisfies every property with a floor of one hard gate."
+    },
+    {
+      "config": "design_floor_two.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "The same with a floor of two hard gates, which only root and child together can meet."
     },
     {
       "config": "reach_delivered.cfg",
       "expect": "violation",
       "expect_exit": 12,
       "purpose": "A root with children can be delivered.",
+      "of": "NeverDelivered"
+    },
+    {
+      "config": "reach_delivered_floor_two.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A tree can be delivered when the floor is met only by counting children.",
       "of": "NeverDelivered"
     },
     {
@@ -63,6 +76,20 @@
       "expect_exit": 12,
       "purpose": "Planted defect: a child whose only criterion was made soft counts as delivered.",
       "of": "TreeSound"
+    },
+    {
+      "config": "mutant_ignores_floor.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a tree with no hard gate at all is delivered.",
+      "of": "TreeGuarded"
+    },
+    {
+      "config": "mutant_floor_counts_root_only.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: only the root's own gates are counted towards the floor, so a tree that meets a floor of two with a child's gate is never delivered.",
+      "of": "TreeComplete"
     }
   ]
 }

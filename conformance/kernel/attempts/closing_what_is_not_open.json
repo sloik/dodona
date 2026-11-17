@@ -1,0 +1,88 @@
+{
+  "kind": "attempts",
+  "name": "closing_what_is_not_open",
+  "claim": "C35",
+  "covers": [],
+  "why": "Closing a ticket that was never taken, or one already closed, changes nothing. A ticket taken before a change of target can still be closed, and that is history.",
+  "steps": [
+    {
+      "do": {
+        "close": {
+          "ticket": "nobody-took-this",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "none",
+        "attempts": 0
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused"
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "change_target": {}
+      },
+      "expect": {
+        "result": "none",
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "none",
+        "shopped": false,
+        "retried": true,
+        "attempts": 2
+      }
+    }
+  ]
+}

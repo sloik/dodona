@@ -94,6 +94,9 @@ def check_claims_match_runs() -> None:
             (folder / name).exists()
             and hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest
             for name, digest in run["files"].items()
+        ) and all(
+            (ROOT / name).exists() and hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == digest
+            for name, digest in run.get("other_files", {}).items()
         ) and (ROOT / "spec" / "runs" / run["outputs"]).is_dir()
     supported = set()
     for run in index["runs"]:

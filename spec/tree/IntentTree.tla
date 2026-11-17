@@ -26,7 +26,8 @@ Nodes == Kids \cup {"root"}
 Gates == {"hard", "soft"}
 
 Mutants == {"none", "remove_keeps_confirmation", "add_keeps_confirmation",
-            "delivered_ignores_children", "soft_child_is_delivered"}
+            "delivered_ignores_children", "soft_child_is_delivered", "ignores_floor",
+            "floor_counts_root_only"}
 ASSUME Mutant \in Mutants /\ MinHard \in Nat
 
 Init ==
@@ -79,9 +80,15 @@ HardTotal == Cardinality({n \in InTree : gate[n] = "hard"})
 ChildDelivered(k) ==
     IF gate[k] = "hard" THEN chk[k] = "passed" ELSE Mutant = "soft_child_is_delivered"
 
+RootHard == IF gate["root"] = "hard" THEN 1 ELSE 0
+Guarded ==
+    CASE Mutant = "ignores_floor" -> TRUE
+      [] Mutant = "floor_counts_root_only" -> RootHard >= MinHard
+      [] OTHER -> HardTotal >= MinHard
+
 ReportDelivered ==
     /\ confirmed
-    /\ HardTotal >= MinHard
+    /\ Guarded
     /\ gate["root"] = "hard" => chk["root"] = "passed"
     /\ Mutant = "delivered_ignores_children" \/ \A k \in present : ChildDelivered(k)
 
@@ -91,6 +98,25 @@ TreeSound ==
     ReportDelivered =>
         /\ \A n \in InTree : gate[n] = "hard" => chk[n] = "passed"
         /\ \A k \in present : gate[k] = "hard"
+
+\* Delivered: the tree as a whole has at least the hard gates policy demands,
+\* counted over the root and every child.
+TreeGuarded == ReportDelivered => HardTotal >= MinHard
+
+\* And the other way round: a confirmed tree that meets the floor, whose hard
+\* gates all pass and whose children all have a hard gate, is delivered. A
+\* kernel that never delivers anything is safe and useless.
+TreeComplete ==
+    (/\ confirmed
+     /\ HardTotal >= MinHard
+     /\ \A n \in InTree : gate[n] = "hard" => chk[n] = "passed"
+     /\ \A k \in present : gate[k] = "hard") => ReportDelivered
+
+TypeOK ==
+    /\ present \subseteq Kids
+    /\ gate \in [Nodes -> Gates]
+    /\ chk \in [Nodes -> {"unknown", "passed", "failed"}]
+    /\ confirmed \in BOOLEAN
 
 \* While confirmed, the tree is exactly the one the owner confirmed.
 ShapeIsConfirmed ==

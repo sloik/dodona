@@ -1,0 +1,82 @@
+{
+  "kind": "assurance",
+  "name": "every_link_can_be_the_weakest",
+  "claim": "C24",
+  "covers": [],
+  "why": "Any of the three links can be the weakest, and any of them can be the one that is missing.",
+  "steps": [
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "proven",
+            "code-to-runs": "asserted",
+            "runs-to-world": "proven"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "asserted"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "proven",
+            "runs-to-world": "proven"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "none"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "proven",
+            "code-to-runs": null,
+            "runs-to-world": "proven"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "none"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "code-to-runs": "proven",
+            "runs-to-world": "proven"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "none"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "bounded",
+            "code-to-runs": "observed",
+            "runs-to-world": "sampled"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "observed"
+      }
+    }
+  ]
+}

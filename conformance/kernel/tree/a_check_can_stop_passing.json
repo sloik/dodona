@@ -1,0 +1,127 @@
+{
+  "kind": "tree",
+  "name": "a_check_can_stop_passing",
+  "claim": "C34",
+  "covers": [],
+  "why": "A check behind a hard gate can stop passing, and the tree is open again.",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "failed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "conflict"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "unknown"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "failed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    }
+  ]
+}

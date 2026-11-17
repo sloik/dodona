@@ -1,0 +1,79 @@
+{
+  "kind": "intent",
+  "name": "floor_above_apart",
+  "claim": "C33",
+  "covers": [],
+  "why": "The separation floor can be any level, not only the lowest or apart.",
+  "policy": {
+    "exception_separation": "tested",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "owner",
+          "claims": "apart",
+          "source": "attested"
+        }
+      },
+      "expect": {
+        "status": "open",
+        "amendment": {
+          "takes_effect": false,
+          "level": "apart"
+        }
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "owner",
+          "claims": "tested",
+          "source": "attested"
+        }
+      },
+      "expect": {
+        "status": "delivered",
+        "amendment": {
+          "takes_effect": true,
+          "level": "tested"
+        }
+      }
+    }
+  ]
+}

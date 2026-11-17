@@ -1,0 +1,71 @@
+{
+  "kind": "tree",
+  "name": "minimum_of_two_hard_gates",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_ignores_floor"
+  ],
+  "why": "The floor is a number. With a floor of two, one hard gate is not enough.",
+  "policy": {
+    "min_hard_gates": 2
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "node": "k1",
+          "to": "soft"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    }
+  ]
+}

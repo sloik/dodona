@@ -1,0 +1,89 @@
+{
+  "kind": "plan",
+  "name": "running_a_current_obligation_does_nothing",
+  "claim": "C9",
+  "covers": [],
+  "why": "Running something that already has a result for its inputs does nothing, and says so.",
+  "granularity": "definition",
+  "definitions": {
+    "d1": {
+      "depends_on": [],
+      "file": "f1"
+    }
+  },
+  "obligations": {
+    "check": {
+      "targets": [
+        "d1"
+      ]
+    }
+  },
+  "start": {
+    "content": {
+      "d1": "a"
+    },
+    "tools": {
+      "compiler": "c1",
+      "runner": "r1"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "run": {
+          "obligation": "check"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": "check"
+        }
+      },
+      "expect": {
+        "ran": false,
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "plan": [
+          "check"
+        ]
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": "check"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": "check"
+        }
+      },
+      "expect": {
+        "ran": false,
+        "plan": []
+      }
+    }
+  ]
+}

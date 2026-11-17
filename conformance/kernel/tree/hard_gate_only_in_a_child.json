@@ -1,0 +1,42 @@
+{
+  "kind": "tree",
+  "name": "hard_gate_only_in_a_child",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_floor_counts_root_only",
+    "tree/reach_delivered_floor_two"
+  ],
+  "why": "A hard gate in a child counts towards the tree's total.",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "soft"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}

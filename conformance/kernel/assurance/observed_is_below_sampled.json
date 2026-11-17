@@ -1,0 +1,69 @@
+{
+  "kind": "assurance",
+  "name": "observed_is_below_sampled",
+  "claim": "C24",
+  "covers": [],
+  "why": "Seen working live is below shown for some cases. The order of the scale matters.",
+  "steps": [
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "sampled",
+            "code-to-runs": "bounded",
+            "runs-to-world": "observed"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "observed"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "observed",
+            "code-to-runs": "sampled",
+            "runs-to-world": "proven"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "observed"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "bounded",
+            "code-to-runs": "sampled",
+            "runs-to-world": "sampled"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "sampled"
+      }
+    },
+    {
+      "do": {
+        "judge": {
+          "links": {
+            "spec-to-code": "observed",
+            "code-to-runs": "asserted",
+            "runs-to-world": "observed"
+          },
+          "defects": {}
+        }
+      },
+      "expect": {
+        "shown": "asserted"
+      }
+    }
+  ]
+}

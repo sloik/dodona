@@ -21,19 +21,25 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "two core keys, two platforms",
+  "bounds": "two core keys, three platforms",
   "cases": [
     {
       "config": "design_stand_in_allowed.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "With stand-ins allowed by policy, both properties hold."
+      "purpose": "With stand-ins allowed and claimed, every property holds."
     },
     {
       "config": "design_stand_in_forbidden.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "With stand-ins forbidden, no status ever rests on another platform's record."
+      "purpose": "With stand-ins forbidden by policy, no status ever rests on another platform's record."
+    },
+    {
+      "config": "design_not_claimed.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "Where the provider makes no claim of platform independence, nothing stands in."
     },
     {
       "config": "reach_stand_in.cfg",
@@ -55,6 +61,34 @@
       "expect_exit": 12,
       "purpose": "Planted defect: a record stands in although the claim was never verified.",
       "of": "StandInIsEarned"
+    },
+    {
+      "config": "mutant_stand_in_unclaimed.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a record stands in although the provider never claimed platform independence.",
+      "of": "StandInIsEarned"
+    },
+    {
+      "config": "mutant_stand_in_always_passed.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a stand-in is reported as passed whatever the other platform's verdict was.",
+      "of": "StandInIsEarned"
+    },
+    {
+      "config": "mutant_other_overrides_own.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: another platform's record replaces a platform's own.",
+      "of": "OwnRecordDecides"
+    },
+    {
+      "config": "mutant_stand_in_not_reported.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a status rests on another platform's record and the report does not say so.",
+      "of": "StandInIsReported"
     },
     {
       "config": "mutant_one_platform_reproduces.cfg",
