@@ -44,3 +44,9 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0014](0014-policy-is-separate-from-configuration.md) | Policy is separate from configuration | proposed |
 | [0015](0015-ledger-integrity-and-record-trust.md) | Ledger integrity, and trust in records from elsewhere | proposed |
 | [0016](0016-provider-isolation-is-stated-not-assumed.md) | Provider isolation is stated, not assumed | proposed |
+| [0017](0017-intent-in-plain-words-broken-down.md) | Work starts as intent in plain words, and breaks down | proposed, owner direction |
+| [0018](0018-hard-soft-and-deferred-gates.md) | Hard, soft and deferred gates | proposed, owner direction |
+| [0019](0019-assurance-is-stated-per-link.md) | Assurance is stated for each link, and the weakest link is the score | proposed, owner direction |
+| [0020](0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Exceptions are granted by the intent owner, and recorded | proposed, owner direction |
+| [0021](0021-dodona-judges-and-does-not-plan.md) | dodona judges; it does not plan or do the work | proposed, owner direction |
+| [0022](0022-open-project-published-as-it-evolves.md) | An open project, published as it evolves | proposed, owner direction |

@@ -1,6 +1,6 @@
 # dodona data model
 
-Status: **draft 0.2**, not implemented. This file defines the terms the [architecture](ARCHITECTURE.md) uses. Field-level schemas live in [protocol/](protocol/README.md).
+Status: **draft 0.3**, not implemented. This file defines the terms the [architecture](ARCHITECTURE.md) uses. Field-level schemas live in [protocol/](protocol/README.md).
 
 ## 1. Nodes
 
@@ -8,6 +8,8 @@ Every node has a **name** (stable, how it is referred to) and an **identity** (a
 
 | Node | Name | Identity | Comes from |
 |---|---|---|---|
+| Intent | Its id | Hash of the statement and criteria | The intent owner, through an intent provider |
+| Amendment | Its id | Hash of the record | The intent owner |
 | Definition | Path or symbol, scoped by the binding that indexed it | Hash of content, as the language provider defines content | `definition.index`, or the file-level fallback |
 | Specification | A definition whose role is to state what must hold | Same as a definition | `definition.index` for the specification language |
 | Decision | Its id | Hash of the record | `decision.index` |
@@ -23,6 +25,9 @@ A specification is not a different kind of thing from a definition. Specificatio
 
 | Edge | From → to | Meaning |
 |---|---|---|
+| `breaks-into` | Intent → intent | The child is part of delivering the parent |
+| `checked-by` | Criterion of an intent → obligation, through a gate | The obligation is how the criterion is shown |
+| `amends` | Amendment → intent | A recorded change to criteria or gates |
 | `depends-on` | Definition → definition | Changing the target can change the meaning of the source |
 | `governs` | Decision → definition name | The decision constrains this definition; records the identity at the time of writing |
 | `supersedes` | Decision → decision | The older decision no longer applies |
@@ -98,7 +103,51 @@ A rerun never replaces a record. It adds one, and disagreement becomes `conflict
 
 The result also names the policy identity it was judged against, and whether that policy differs from the reference policy ([decision 0014](decisions/0014-policy-is-separate-from-configuration.md)).
 
-## 5. Trusted base
+## 5. Intent, gates and assurance
+
+This is the layer that answers the question dodona exists for: *was what was defined actually built and delivered, and how sure is that?* ([0017](decisions/0017-intent-in-plain-words-broken-down.md) to [0020](decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md))
+
+**Intent.** A statement in plain words, such as a problem, a feature or a story, with an owner and a list of criteria. It may break into child intents. Each intent declares what it expects to touch, so independent intents can be worked on in parallel and colliding ones are reported.
+
+**Gate.** How a criterion is tied to the obligations that check it:
+
+| Gate | Blocks delivery | When it is checked |
+|---|---|---|
+| Hard (default) | Yes | Before delivery |
+| Soft | No; lowers stated assurance | Before delivery |
+| Deferred | No; blocks *fulfilled* | After delivery, by a stated limit, typically on a live system |
+
+A check on something that varies between runs declares the number of runs and how many must agree, and reports the measured rate with its sample size.
+
+**Intent status**, always derived:
+
+| Status | Rule |
+|---|---|
+| `uncovered` | At least one criterion has no obligation and no amendment |
+| `open` | Covered; at least one hard gate is not passed |
+| `delivered` | Every hard gate passed. Reports the open deferred gates |
+| `fulfilled` | Delivered, and every deferred gate closed |
+| `overdue` | Delivered, and a deferred gate passed its limit while open |
+
+A parent needs its children delivered and its own criteria met.
+
+**Assurance.** Each criterion reports a level for each link from intent to running system, on one scale:
+
+`proven` > `bounded` > `sampled` > `observed` > `asserted` > `none`
+
+| Link | Typical source of the level |
+|---|---|
+| Intent → definition | Owner confirmed the criteria: `asserted` by the owner. Unconfirmed: `none` |
+| Definition → specification | Share of the criterion covered by formal statements |
+| Specification → code | The rank of the conformance evidence |
+| Code → what runs | Whether the delivered artifact is the one that was checked, by identity |
+| What runs → the world | Deferred gates: `observed`, with how many observations |
+
+The criterion's assurance is its **weakest link**. The intent's score is a count: criteria at or above the level their gate demands, out of all criteria. Every report shows the count, the weakest link, and where it is.
+
+**Amendment.** Any change to criteria or gates after work started. Granted only by the intent owner, recorded with what changed, why and by whom, never erased. An amended criterion is at most `asserted` for the part amended. An amendment granted by the party that did the work is **self-granted**: shown first in every report, and not counted at all where policy requires an independent approver, which is the recommended setting.
+
+## 6. Trusted base
 
 One list, referred to from everywhere else. Every status reports the subset it rests on.
 
@@ -114,6 +163,7 @@ Assumed by the kernel's design:
 8. Each pinned tool is what its upstream published.
 9. The specification states the property that was actually intended.
 10. Whoever can change policy is authorised to.
+11. An intent's owner is who the record says, and an owner confirming criteria has read them.
 
 Declared by each provider in its manifest, for example: the model checker is correct, the language runtime under it is correct, the foreign-function shell is not covered by the proof.
 
@@ -121,7 +171,7 @@ Reported per record, for example: this proof used these axioms; this run was not
 
 Assumptions 1, 2 and 5 are not left as pure trust. The conformance kit perturbs a provider's environment to look for undeclared inputs, the executor's report is compared with the lock, and a second platform or a second run can expose a wrong verdict as a conflict. None of that removes the assumption; it makes violations more likely to be seen.
 
-## 6. Agent interface
+## 7. Agent interface
 
 A sketch, to be replaced by schemas. Every command takes and returns structured data, never prompts, and can be run repeatedly with the same result. A command never waits for a long check; it returns and can be asked again.
 
@@ -129,7 +179,7 @@ A sketch, to be replaced by schemas. Every command takes and returns structured 
 |---|---|---|
 | `resolve` | Reads configuration, produces or verifies the lock | Lock identity, anything unresolvable per platform |
 | `index` | Asks providers for definitions, decisions and obligations | Graph summary and every rejected path or file with a reason code |
-| `status` | Derives status from the graph and ledger | Project status, and per obligation: status, reason, evidence class, non-vacuity |
+| `status` | Derives status from the graph and ledger | Project status; per intent: status, score, weakest link, amendments, self-granted first; per obligation: status, reason, strength, non-vacuity |
 | `plan` | Works out what is stale | Ordered obligations to run, each with why it is stale |
 | `run` | Submits planned obligations to executors | Run handles; verdicts for anything that finished |
 | `explain` | Traces one result | Its key structure, records, trusted base, and the decisions governing its targets |

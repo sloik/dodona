@@ -25,7 +25,7 @@ What a `checked` status means here, and no more:
 | C5 | The design does reuse records after a change that does not affect them, so C1 is not satisfied by rerunning everything | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | Reachability: `NeverReusedAfterChange` must be violated | (reachability) | modelled, unchecked |
 | C6 | C1 depends on two trusted-base assumptions: complete declared inputs, and a correct provider. Removing either breaks it | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` must be violated in both cases | (the broken assumption is the check) | modelled, unchecked |
 
-C6 does not show the assumptions hold. It shows they are load-bearing, which is why they are in the [trusted base](../MODEL.md#5-trusted-base).
+C6 does not show the assumptions hold. It shows they are load-bearing, which is why they are in the [trusted base](../MODEL.md#6-trusted-base).
 
 ## Not yet modelled
 
@@ -47,6 +47,11 @@ C6 does not show the assumptions hold. It shows they are load-bearing, which is 
 | C20 | The conformance kit rejects kernels with known defects | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | Run defective kernels against the kit; report the fraction rejected | A kit with a scenario removed |
 | C21 | Two independent kernels agree on real project states, and any disagreement is reported as a conflict | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | Differential runs beyond the kit | A kernel carrying a defect the kit does not target |
 | C22 | If the backend is eventually reachable, every obligation eventually gets a reusable verdict or a stated reason why not | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | Liveness property, with fairness assumptions | Planner that never resubmits after `unavailable` |
+| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Model of intent status, plus scenarios | Kernel that treats a deferred gate as passed |
+| C24 | A criterion's reported assurance is never above its weakest link | [0019](../decisions/0019-assurance-is-stated-per-link.md) | Model, plus scenarios | Kernel that averages the links |
+| C25 | No gate is passed, moved or dropped without an amendment on record, and a self-granted amendment is always shown, and never counts where an independent approver is required | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Model with owner and worker identities, plus scenarios | Kernel that accepts an amendment from the worker as the owner's |
+| C26 | A varying check is never reported from fewer runs than it declared | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Scenarios with declared sample sizes | Kernel that stops at the first passing run |
+| C27 | Two intents that touch the same definition are reported as colliding before work starts | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Scenarios | Index that compares declared paths only as text |
 
 ## Recorded runs
 

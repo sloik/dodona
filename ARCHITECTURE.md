@@ -1,19 +1,24 @@
 # dodona architecture
 
-Status: **draft 0.2**. Nothing in this document is implemented. Draft 0.1 was reviewed by five independent reviewers; what they found and what changed is in [docs/reviews/](docs/reviews/2026-11-17-draft-0.1.md). Where a claim has a formal model, the [claims table](spec/CLAIMS.md) says whether a model checker has actually run on it.
+Status: **draft 0.3**. Nothing in this document is implemented. Draft 0.1 was reviewed by five independent reviewers; what they found and what changed is in [docs/reviews/](docs/reviews/2026-11-17-draft-0.1.md). Where a claim has a formal model, the [claims table](spec/CLAIMS.md) says whether a model checker has actually run on it.
 
 The decisions behind this document are recorded in [`decisions/`](decisions/README.md). No decision is accepted yet: all are proposals, and those marked `direction: owner` follow a direction the project owner gave. Once a decision is accepted it overrides this file. Terms are defined in [the data model](MODEL.md).
 
 ## 1. What dodona is
 
-dodona keeps four things linked and tells an agent which of them are still true:
+dodona answers one question for an agent, including a less capable one: **was what was defined actually built and delivered, and how sure is that?** To do so it keeps five things linked:
 
+0. **Intent**: what someone wants, in plain words, with the criteria that would make it true.
 1. **Decisions**: why something exists, what was rejected, what it replaces.
 2. **Specifications**: what must hold, stated formally.
 3. **Definitions**: the code, down to the smallest unit the language can identify.
 4. **Evidence**: recorded results of checking definitions against specifications.
 
 When anything changes, dodona works out which evidence is no longer valid, reruns only those checks, and reports what is now proven, failing or unknown.
+
+**Not everything can be fully checked, and dodona says how much was.** Delivery is refused by default when something defined has not been shown. Where that is impossible, such as behaviour only visible on a live system or results that vary between runs, there are named ways through: soft and deferred gates declared in advance, and recorded exceptions granted by the intent's owner. Every result states the weakest link between what was meant and what runs ([data model](MODEL.md#5-intent-gates-and-assurance)).
+
+**dodona judges; it does not plan or do the work** ([0021](decisions/0021-dodona-judges-and-does-not-plan.md)).
 
 **The user is an agent.** People read the output, but the interface is designed for a program driving it: structured input and output, stable error codes, no prompts, no prose that has to be parsed ([0010](decisions/0010-agents-are-the-primary-user.md)).
 
@@ -30,9 +35,9 @@ When anything changes, dodona works out which evidence is no longer valid, rerun
               │     kernel     │  graph · identity · planner · ledger · policy
               └───────┬────────┘
                       │  provider protocol (versioned messages between processes)
-   ┌──────────┬───────┼────────┬───────────┬───────────┬───────────┐
-decision   language  verifier  conformance  executor   toolchain    store
-provider   provider  provider   provider    provider   provider    provider
+   ┌────────┬─────────┬───────┼────────┬───────────┬──────────┬───────────┬───────┐
+ intent  decision  language verifier conformance executor  toolchain   store
+                         (each a provider)
 ```
 
 The **kernel** is small and has no knowledge of any language or tool. It owns:
@@ -46,7 +51,7 @@ The **kernel** is small and has no knowledge of any language or tool. It owns:
 | Ledger | Durable, single-writer, append-only record of every check that ran |
 | Policy | What is required to pass, compared against what actually passed |
 | Provider host | Starts providers, bounds them, validates every message |
-| Agent interface | The only way in: [commands](MODEL.md#6-agent-interface) with structured input and output |
+| Agent interface | The only way in: [commands](MODEL.md#7-agent-interface) with structured input and output |
 
 Everything else is a **provider**: a separate program that speaks the [provider protocol](protocol/README.md) ([0003](decisions/0003-providers-are-separate-processes.md)).
 
@@ -56,6 +61,7 @@ A provider implements one or more *capabilities*. Capabilities are the unit of m
 
 | Kind | Capability | Supplies |
 |---|---|---|
+| Intent | `intent.index` | Intents with owner, criteria, gates and children; amendments |
 | Decision | `decision.index` | Decision nodes: status, what each governs (by name), what it supersedes |
 | Language | `definition.index` | Definitions: stable name, content identity, dependencies, and the files that materialise them |
 | Language | `artifact.build` | Build outputs as graph nodes, and whether the output is deterministic |
@@ -126,7 +132,7 @@ There is one exception, and it is explicit: where a provider's claim to be platf
 
 Every record, including every pass, also carries the exit status and the digest of the raw output it was derived from, so any verdict can be audited later.
 
-Reuse is sound only under stated assumptions, the **trusted base**. dodona lists them instead of hiding them, at three levels: the kernel's own ([MODEL.md](MODEL.md#5-trusted-base)), each provider's standing additions in its manifest, and anything a particular result additionally rests on, such as an axiom a proof used.
+Reuse is sound only under stated assumptions, the **trusted base**. dodona lists them instead of hiding them, at three levels: the kernel's own ([MODEL.md](MODEL.md#6-trusted-base)), each provider's standing additions in its manifest, and anything a particular result additionally rests on, such as an axiom a proof used.
 
 ## 6. Reproducibility
 
@@ -182,7 +188,9 @@ The trust in this chain is stated plainly:
 
 ```
 ARCHITECTURE.md     this document
-MODEL.md            data model, status rules, trusted base, agent interface
+MODEL.md            data model, status rules, gates and assurance, trusted base, agent interface
+CONTRIBUTING.md     how to take part
+intents/            dodona's own intents: what it is meant to do, in plain words
 AGENTS.md           rules for agents working in this repository
 dodona.toml         dodona's own project configuration (not yet executable)
 decisions/          decision records, in the default decision format
@@ -208,7 +216,8 @@ The same rule is part of the product: an obligation can carry planted defects, a
 
 ## 11. Open questions
 
-- How policy is protected from the agent it constrains: a signature, a separate repository, or review of every change.
+- How an owner's identity is established, so that an exception can be shown to come from the owner and not from the worker.
+- How much of a plain-words criterion a formal statement covers, and who judges that.
 - The signing scheme for records shared between machines.
 - Whether providers may also be loaded as sandboxed modules, in addition to separate processes.
 - How decisions written in a formal language express "governs" and "supersedes".

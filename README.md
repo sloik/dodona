@@ -17,13 +17,16 @@ Three things usually live apart and drift: the decision record that explains why
 
 ## Design
 
+- **One question.** Was what was defined actually built and delivered, and how sure is that? dodona answers it for an agent, including a less capable one, and shows the weakest link in the chain from what was meant to what runs.
+- **Refuse by default, with honest ways through.** Unproven work is not reported as delivered. What cannot be checked up front, such as live behaviour or results that vary, has declared gates and recorded exceptions that leave a mark.
+
 - **The user is an agent.** dodona is driven by AI agents through structured commands; people read the results.
 - **Nothing is built in.** The decision format, specification language, checker, compiler and the place checks run are all replaceable providers, and a project can mix them.
 - **Only a pass is a pass.** A check that was queued, timed out or could not start is reported as exactly that.
 - **Reproducible across platforms.** A committed lock pins every tool by digest per platform. macOS first, then Linux, then Windows.
 - **Built with itself.** dodona's own decisions and formal specification are the source of truth; an implementation is a derived artifact that must conform to them.
 
-Start with [ARCHITECTURE.md](ARCHITECTURE.md); terms are defined in [MODEL.md](MODEL.md). The reasons are in [decisions/](decisions/README.md), the formal models and what they do and do not show are in [spec/](spec/README.md), and the provider protocol is in [protocol/](protocol/README.md). Agents working here follow [AGENTS.md](AGENTS.md).
+Start with [ARCHITECTURE.md](ARCHITECTURE.md); terms are defined in [MODEL.md](MODEL.md). The reasons are in [decisions/](decisions/README.md), the formal models and what they do and do not show are in [spec/](spec/README.md), and the provider protocol is in [protocol/](protocol/README.md). What dodona is meant to do, in plain words, is in [intents/](intents/README.md). Agents working here follow [AGENTS.md](AGENTS.md); to take part, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

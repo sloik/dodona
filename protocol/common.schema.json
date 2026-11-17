@@ -117,6 +117,7 @@
     },
     "capability": {
       "enum": [
+        "intent.index",
         "decision.index",
         "definition.index",
         "artifact.build",
@@ -127,6 +128,24 @@
         "tool.resolve",
         "store.blob"
       ]
+    },
+    "gate": {
+      "enum": [
+        "hard",
+        "soft",
+        "deferred"
+      ]
+    },
+    "assurance": {
+      "enum": [
+        "proven",
+        "bounded",
+        "sampled",
+        "observed",
+        "asserted",
+        "none"
+      ],
+      "description": "Ordered, strongest first (decision 0019)."
     }
   }
 }
