@@ -18,9 +18,9 @@ What a `checked` status means here, and no more:
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C1 | Given a provider that is correct and declares all its inputs: a reported pass means the obligation holds for the current inputs, and a reported failure means it does not, under any interleaving of edits, tool changes, lost runs and completions | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` | Key leaves out the tool digest; result filed under the key at completion | modelled, unchecked. Planted defects caught; the main design run did not complete |
-| C2 | Every reusable record was produced by a run that completed; an unreachable backend never produces one | [0005](../decisions/0005-closed-verdict-set.md) | `Provenance` | Unavailable recorded as passed | modelled, unchecked. Planted defects caught; the main design run did not complete |
-| C3 | With a correct provider, no evidence key ever holds both a pass and a failure | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Consistent` | Result filed under the key at completion | modelled, unchecked. Planted defects caught; the main design run did not complete |
+| C1 | Given a provider that is correct and declares all its inputs: a reported pass means the obligation holds for the current inputs, and a reported failure means it does not, under any interleaving of edits, tool changes, lost runs and completions | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` | Key leaves out the tool digest; result filed under the key at completion | **checked**, runs 1 and 2 |
+| C2 | Every reusable record was produced by a run that completed; an unreachable backend never produces one | [0005](../decisions/0005-closed-verdict-set.md) | `Provenance` | Unavailable recorded as passed | **checked**, runs 1 and 2 |
+| C3 | With a correct provider, no evidence key ever holds both a pass and a failure | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Consistent` | Result filed under the key at completion | **checked**, runs 1 and 2 |
 | C4 | Even with a provider that can be wrong, a pass is never reported while a failure is recorded for the same key | [0005](../decisions/0005-closed-verdict-set.md) | `NoPassOverFail`, small instance | With conflicting records, the pass wins | **checked**, run 1 |
 | C5 | The design does reuse records after a change that does not affect them, so C1 is not satisfied by rerunning everything | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | Reachability: `NeverReusedAfterChange` must be violated | (reachability) | **checked**, run 1 |
 | C6 | C1 depends on two trusted-base assumptions: complete declared inputs, and a correct provider. Removing either breaks it | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` must be violated in both cases | (the broken assumption is the check) | **checked**, run 1 |
@@ -73,7 +73,7 @@ This model is narrow, and a review said so. It takes the declared gates and the 
 
 Checker: TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802), from tla2tools 1.7.4, one worker. Model files (SHA-256): `EvidenceReuse.tla` `3d4b878a24d6e96d925b4c7d0406041eb42648974db8a59b4792a2d480312c20`, `MC.tla` `85f57a901972d333d7939e49da4d89a91851c09c6cd26e1a0b6ec060b5b56c8c`. The checker and the runtime under it are not pinned by digest yet.
 
-13 of 14 cases matched. **The main design case did not complete**, so claims C1 to C3 are not checked.
+13 of 14 cases matched. **The main design case did not complete** in this run; see run 2.
 
 | Case | Expected | Result | States generated / distinct | Match |
 |---|---|---|---|---|
@@ -96,7 +96,17 @@ Every violation ended with the checker's exit code 12 and every completed search
 
 What this run establishes: C4, C5 and C6, which need only the small instance or a violation. For C1 to C3 it establishes that each planted defect is caught, and that the properties hold on the small three-hash instance; it does not establish them at the main bounds.
 
-The design case has been resubmitted unchanged in bounds, with a state view that leaves out a history variable none of its properties read (`kernel/MCDesign.tla`). Its result will be recorded here as run 2.
+### Run 2: the main design case, 2026-11-17
+
+Same checker, same `EvidenceReuse.tla` and `MC.tla` as run 1, with root module `MCDesign.tla` (SHA-256 `0506b653fb859765ffbbb46ce34e713137826240c571361ba9792228eff3439b`) and `design.cfg` (`c214becbb3978d011b9d1f890f9f84d967858aeede311d85fcf46ec0edaaa451`). The bounds are unchanged. The only difference from run 1 is a state view that leaves out the history variable `changed`, which none of the checked properties read and no action uses to decide anything else; the reasoning is in `MCDesign.tla`.
+
+| Case | Expected | Result | States generated / distinct | Match |
+|---|---|---|---|---|
+| `design` | no violation of `TypeOK`, `Sound`, `Provenance`, `Consistent`, `NoPassOverFail` | no violation, search complete, depth 33 | 12,599,304 / 1,540,096 | yes |
+
+With run 1, all 14 cases of this model now match. C1 to C6 are checked, for the bounds and assumptions stated at the top of this file, and for the model only.
+
+The soundness of using a state view is an argument, not something the checker verified. It is the weakest step in this result.
 
 ### `intent/IntentGates.tla`
 
