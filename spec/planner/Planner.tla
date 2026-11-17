@@ -95,7 +95,7 @@ Init ==
     /\ steps = 0
     /\ records = {}
     /\ store = {}
-    /\ latest = "none"
+    /\ latest = [sources |-> [d \in Closure("d1") |-> 0], compiler |-> 0]  \* a placeholder; read only once something is built
 
 Edit(d, h) ==
     /\ h # defHash[d]
@@ -111,7 +111,7 @@ RepinRunner(h)   == h # runner /\ runner' = h /\ UNCHANGED <<defHash, compiler, 
 \* was built last, current or not.
 Run(o) ==
     /\ o \in Plan
-    /\ o = "test" => IF Mutant = "test_without_build" THEN latest # "none" ELSE Stored # {}
+    /\ o = "test" => IF Mutant = "test_without_build" THEN store # {} ELSE Stored # {}
     /\ records' = records \cup {[ob |-> o, key |-> Key(o), truth |-> TruthNow(o)]}
     /\ LET made == [sources |-> Sources, compiler |-> compiler]
        IN  /\ store' = IF o = "build" THEN store \cup {[key |-> BuildKey, content |-> made]} ELSE store
