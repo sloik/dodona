@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+mod acts;
 mod assurance;
 mod attempts;
 mod canonical;
@@ -6,49 +7,103 @@ mod decisions;
 mod evidence;
 mod intent;
 mod json;
+mod ledger;
 mod path;
 mod plan;
 mod platforms;
+mod status;
 mod tree;
 mod unicode;
 mod unicode_tables;
+use json::Value;
 use std::io::{self, Read, Write};
-fn main() {
-    let mut input = Vec::new();
-    let answer = if io::stdin().read_to_end(&mut input).is_err() {
-        json::object(vec![("refused", json::string("not-json"))])
-    } else {
-        match std::env::args().nth(1).as_deref() {
-            Some("canonical") => canonical::answer(&input),
-            Some("scenario" | "states" | "path" | "path-set") => match json::parse(&input) {
-                Ok(v) => {
-                    let command = std::env::args().nth(1).unwrap();
-                    if command == "path" {
-                        path::one(&v)
-                    } else if command == "path-set" {
-                        path::set(&v)
-                    } else {
-                        let results = match (command.as_str(), v.get("kind").str()) {
-                            ("scenario", "plan") => plan::run(&v),
-                            ("scenario", "platforms") => platforms::run(&v),
-                            ("scenario", "attempts") => attempts::run(&v),
-                            ("scenario", "tree") => tree::run(&v),
-                            ("scenario", "assurance") => assurance::run(&v),
-                            ("scenario", "decisions") => decisions::run(&v),
-                            ("scenario", "evidence") => evidence::run(&v),
-                            ("states", "evidence") => evidence::states(&v),
-                            ("scenario", "intent") => intent::run(&v),
-                            ("states", "intent") => intent::states(&v),
-                            _ => Vec::new(),
-                        };
-                        json::object(vec![("results", json::Value::Array(results))])
-                    }
-                }
-                Err(reason) => json::object(vec![("refused", json::string(reason))]),
-            },
-            _ => json::object(vec![("refused", json::string("not-json"))]),
+use std::process::ExitCode;
+fn results(results: Vec<Value>) -> Value {
+    json::object(vec![("results", Value::Array(results))])
+}
+/// The answer to one command, or why the input cannot be handled.
+/// Input of the wrong shape for its command stops the process instead; either
+/// way nothing is printed and the exit status is not zero.
+fn answer(command: &str, input: &[u8]) -> Result<Value, String> {
+    // These two commands have a refusal for input that is not acceptable JSON.
+    if command == "canonical" {
+        return Ok(canonical::answer(input));
+    }
+    let v = match json::parse(input) {
+        Ok(v) => v,
+        Err(reason) if command == "key" => {
+            return Ok(json::object(vec![("refused", json::string(reason))]))
         }
+        Err(reason) => return Err(format!("the input is not acceptable JSON: {reason}")),
     };
-    let mut out = io::stdout().lock();
-    let _ = writeln!(out, "{}", json::encode(&answer));
+    let kind = || match v.opt("kind") {
+        Some(Value::String(s)) => Ok(s.as_str()),
+        _ => Err("the input has no `kind`".to_owned()),
+    };
+    Ok(match command {
+        "key" => canonical::key(&v),
+        "path" => path::one(&v),
+        "path-set" => path::set(&v),
+        "ledger-append" => ledger::append(&v)?,
+        "ledger-read" => ledger::read(&v)?,
+        "scenario" => results(match kind()? {
+            "acts" => acts::run(&v),
+            "status" => status::run(&v),
+            "plan" => plan::run(&v),
+            "platforms" => platforms::run(&v),
+            "attempts" => attempts::run(&v),
+            "tree" => tree::run(&v),
+            "assurance" => assurance::run(&v),
+            "decisions" => decisions::run(&v),
+            "evidence" => evidence::run(&v),
+            "intent" => intent::run(&v),
+            other => return Err(format!("no scenarios of kind `{other}`")),
+        }),
+        "states" => results(match kind()? {
+            "evidence" => evidence::states(&v),
+            "intent" => intent::states(&v),
+            other => return Err(format!("no states of kind `{other}`")),
+        }),
+        other => return Err(format!("no command `{other}`")),
+    })
+}
+fn main() -> ExitCode {
+    let command = std::env::args().nth(1).unwrap_or_default();
+    let mut input = Vec::new();
+    let answer = match io::stdin().read_to_end(&mut input) {
+        Ok(_) => answer(&command, &input),
+        Err(e) => Err(format!("cannot read standard input: {e}")),
+    };
+    match answer {
+        Ok(answer) => {
+            let mut out = io::stdout().lock();
+            match writeln!(out, "{}", json::encode(&answer)).and_then(|_| out.flush()) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(_) => ExitCode::FAILURE,
+            }
+        }
+        Err(why) => {
+            eprintln!("dodona-kernel: {why}");
+            ExitCode::from(2)
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn commands() {
+        assert!(answer("canonical", b"{").unwrap().opt("refused").is_some());
+        assert!(answer("key", b"{").unwrap().opt("refused").is_some());
+        assert!(answer("key", b"{}").unwrap().opt("core_key").is_some());
+        assert!(answer("scenario", b"{").is_err());
+        assert!(answer("scenario", b"{}").is_err());
+        assert!(answer("scenario", br#"{"kind":"nothing"}"#).is_err());
+        assert!(answer("states", br#"{"kind":"plan"}"#).is_err());
+        assert!(answer("ledger-read", b"{}").is_err());
+        assert!(answer("nothing", b"{}").is_err());
+        assert!(answer("", b"{}").is_err());
+        let r = answer("scenario", br#"{"kind":"assurance","steps":[]}"#).unwrap();
+        assert_eq!(json::encode(&r), r#"{"results":[]}"#);
+    }
 }

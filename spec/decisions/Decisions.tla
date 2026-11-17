@@ -2,47 +2,71 @@
 (***************************************************************************)
 (* A decision is flagged when what it governs changes (claim C16).         *)
 (*                                                                         *)
-(* Two named definitions. Each name has a content identity, or is gone     *)
-(* (identity 0). A decision governs the name n1 and records the identity   *)
-(* n1 had when the decision was written or last reviewed. It must be       *)
-(* flagged exactly when the identity behind n1 is no longer that one.      *)
+(* Three named definitions. Each name has a content identity, or is gone   *)
+(* (identity 0). A decision governs the names n1 and n2. What it must be   *)
+(* compared against is the content each governed name had when the         *)
+(* decision was last REVIEWED. The model keeps that in `reviewed`, which   *)
+(* only a review changes, separately from `recorded`, which is whatever    *)
+(* the kernel has stored. A kernel that quietly updates its stored value   *)
+(* when a definition is edited makes the two differ, and never flags.      *)
 (*                                                                         *)
-(* In a language that addresses code by content, an edit is a new identity *)
-(* behind an old name. A kernel that tracks identities without names       *)
-(* cannot tell that from a deletion, and misses the case where the old     *)
-(* content still exists under another name.                                *)
+(* Not covered: renaming, and more than one decision.                      *)
 (***************************************************************************)
 EXTENDS Naturals
 
 CONSTANT Mutant
 
-VARIABLES ident, recorded
+VARIABLES ident, recorded, reviewed
 
-vars == <<ident, recorded>>
+vars == <<ident, recorded, reviewed>>
 
-Names == {"n1", "n2"}
-Idents == {0, 1, 2}
+Names   == {"n1", "n2", "n3"}
+Governs == {"n1", "n2"}
+Idents  == {0, 1, 2}
 
-Mutants == {"none", "identities_without_names", "gone_is_not_flagged"}
+Mutants == {"none", "identities_without_names", "gone_is_not_flagged", "refresh_on_edit",
+            "first_name_only"}
 ASSUME Mutant \in Mutants
 
-Init == ident \in [Names -> {1, 2}] /\ recorded = ident["n1"]
+Init ==
+    /\ ident \in [Names -> {1, 2}]
+    /\ recorded = [n \in Governs |-> ident[n]]
+    /\ reviewed = [n \in Governs |-> ident[n]]
 
-Edit(n, h) == h # ident[n] /\ ident' = [ident EXCEPT ![n] = h] /\ UNCHANGED recorded
+Edit(n, h) ==
+    /\ h # ident[n]
+    /\ ident' = [ident EXCEPT ![n] = h]
+    /\ recorded' = IF Mutant = "refresh_on_edit" /\ n \in Governs
+                   THEN [recorded EXCEPT ![n] = h] ELSE recorded
+    /\ UNCHANGED reviewed
 
-\* The decision is reviewed against what n1 is now.
-Review == ident["n1"] # 0 /\ recorded # ident["n1"] /\ recorded' = ident["n1"] /\ UNCHANGED ident
+\* The decision is reviewed against what its names are now. Nothing to review
+\* against if a governed name is gone.
+Review ==
+    /\ \A n \in Governs : ident[n] # 0
+    /\ \E n \in Governs : reviewed[n] # ident[n]
+    /\ reviewed' = [n \in Governs |-> ident[n]]
+    /\ recorded' = [n \in Governs |-> ident[n]]
+    /\ UNCHANGED ident
 
 Next == (\E n \in Names, h \in Idents : Edit(n, h)) \/ Review
 
 Spec == Init /\ [][Next]_vars
 ----------------------------------------------------------------------------
-ShouldFlag == ident["n1"] # recorded
+TypeOK == ident \in [Names -> Idents] /\ recorded \in [Governs -> Idents] /\ reviewed \in [Governs -> Idents]
 
+\* Ground truth, from what was reviewed: some governed name no longer has the
+\* content the decision was reviewed against.
+ShouldFlag == \E n \in Governs : ident[n] # reviewed[n]
+
+\* What the kernel reports, from what it has stored.
 Flag ==
-    CASE Mutant = "identities_without_names" -> ~\E n \in Names : ident[n] = recorded
-      [] Mutant = "gone_is_not_flagged" -> ident["n1"] # recorded /\ ident["n1"] # 0
-      [] OTHER -> ident["n1"] # recorded
+    CASE Mutant = "identities_without_names" ->
+            \E n \in Governs : ~\E m \in Names : ident[m] = recorded[n]
+      [] Mutant = "gone_is_not_flagged" ->
+            \E n \in Governs : ident[n] # recorded[n] /\ ident[n] # 0
+      [] Mutant = "first_name_only" -> ident["n1"] # recorded["n1"]
+      [] OTHER -> \E n \in Governs : ident[n] # recorded[n]
 
 FlagIsExact == Flag <=> ShouldFlag
 

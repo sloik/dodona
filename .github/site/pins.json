@@ -1,0 +1,17 @@
+{
+  "about": "The files this site's executor must be found to run before a result from it is accepted, for dodona's own checks. This is NOT dodona's lock: the lock (protocol/lock.schema.json) pins whole tool trees by a digest verified against what upstream publishes, and nothing computes that yet. `sha256` is the digest the executor must measure for the file; null means not pinned yet, and nothing recorded in that state ever counts. The Java runtime is whatever the executor's system provides; `system` is not a version, and pinning its launcher file says little about the runtime.",
+  "tools": [
+    {
+      "name": "java",
+      "version": "system",
+      "file": "java/bin/java",
+      "sha256": null
+    },
+    {
+      "name": "tla2tools",
+      "version": "1.7.4",
+      "file": "tla2tools/tla2tools.jar",
+      "sha256": null
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "kind": "attempts",
+  "name": "agreement_before_a_refusal_is_not_shopping",
+  "claim": "C35",
+  "covers": [],
+  "why": "A ticket names its own attempt, and shopping is an agreement taken AFTER an attempt that did not agree, not merely alongside one.",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t3"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 3
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t3",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": true,
+        "cap": "helper",
+        "attempts": 3
+      }
+    }
+  ]
+}

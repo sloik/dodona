@@ -1,0 +1,59 @@
+'use strict';
+// Trying a judgement again (decision 0024, conformance/README.md, attempts scenarios).
+// Each attempt is { ticket, target, state } where `state` is `open`, `agreed`
+// or `refused` and `target` counts the changes of target before it was taken.
+
+const { rank } = require('./intent');
+
+// `none`, `agreed` or `refused`. An open attempt counts as a failure.
+function overallResult(attempts) {
+  if (attempts.length === 0) return 'none';
+  return attempts.every((attempt) => attempt.state === 'agreed') ? 'agreed' : 'refused';
+}
+
+// True if some attempt closed as agreed was taken after one that is not agreed.
+function isShopped(attempts) {
+  return attempts.some((attempt, position) => attempt.state === 'agreed'
+    && attempts.slice(0, position).some((earlier) => earlier.state !== 'agreed'));
+}
+
+// The claimed level, lowered to helper if the cap applies and the claim was higher.
+function grantedLevel(claims, capped) {
+  if (capped && rank(claims) > rank('helper')) return 'helper';
+  return claims;
+}
+
+// `all` is every attempt ever taken; the current target's are those with `target` equal to `current`.
+function judge(all, current, claims) {
+  const onTarget = all.filter((attempt) => attempt.target === current);
+  const shopped = isShopped(onTarget);
+  const answer = {
+    result: overallResult(onTarget),
+    shopped,
+    cap: shopped ? 'helper' : null,
+    attempts: all.length,
+    retried: isShopped(all),
+  };
+  if (claims !== undefined) answer.granted = grantedLevel(claims, shopped);
+  return answer;
+}
+
+function runScenario(scenario) {
+  const all = [];
+  let current = 0;
+  const results = [];
+  for (const { do: step } of scenario.steps) {
+    if (step.take) {
+      all.push({ ticket: step.take.as, target: current, state: 'open' });
+    } else if (step.close) {
+      const attempt = all.find((candidate) => candidate.ticket === step.close.ticket && candidate.state === 'open');
+      if (attempt) attempt.state = step.close.result;
+    } else if (step.change_target) {
+      current += 1;
+    }
+    results.push(judge(all, current, scenario.claims));
+  }
+  return results;
+}
+
+module.exports = { overallResult, isShopped, grantedLevel, judge, runScenario };

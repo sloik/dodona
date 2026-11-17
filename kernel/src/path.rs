@@ -1,13 +1,10 @@
 use crate::{
+    canonical,
     json::{self, Value},
     unicode,
 };
 pub fn one(v: &Value) -> Value {
-    let hex = v.get("hex").str().as_bytes();
-    let bytes: Vec<u8> = hex
-        .chunks_exact(2)
-        .map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap())
-        .collect();
+    let bytes = canonical::unhex(v.get("hex").str()).expect("hex is not hexadecimal bytes");
     match check(&bytes) {
         Some(r) => json::object(vec![("refused", json::string(r))]),
         None => json::object(vec![("accepted", Value::Bool(true))]),

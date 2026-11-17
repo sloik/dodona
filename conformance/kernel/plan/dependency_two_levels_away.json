@@ -1,11 +1,12 @@
 {
   "kind": "plan",
-  "name": "transitive_dependency_is_followed",
+  "name": "dependency_two_levels_away",
   "claim": "C9",
   "covers": [
-    "planner/mutant_direct_deps_only"
+    "planner/mutant_direct_deps_only",
+    "planner/mutant_fallback_direct_deps_only"
   ],
-  "why": "A check of d1 depends on d2 as well, because d1 does. Editing d2 makes everything about d1 stale.",
+  "why": "A dependency of a dependency counts. The first version of the kit never had one.",
   "granularity": "definition",
   "definitions": {
     "d1": {
@@ -15,12 +16,14 @@
       "file": "f1"
     },
     "d2": {
-      "depends_on": [],
+      "depends_on": [
+        "d3"
+      ],
       "file": "f2"
     },
     "d3": {
       "depends_on": [],
-      "file": "f2"
+      "file": "f3"
     }
   },
   "obligations": {
@@ -28,16 +31,6 @@
       "targets": [
         "d1"
       ]
-    },
-    "build": {
-      "targets": [
-        "d1"
-      ],
-      "tool": "compiler"
-    },
-    "test": {
-      "artifact_of": "build",
-      "tool": "runner"
     }
   },
   "start": {
@@ -60,49 +53,31 @@
       },
       "expect": {
         "ran": true,
-        "plan": [
-          "build",
-          "test"
-        ]
-      }
-    },
-    {
-      "do": {
-        "run": {
-          "obligation": "build"
-        }
-      },
-      "expect": {
-        "ran": true,
-        "plan": [
-          "test"
-        ]
-      }
-    },
-    {
-      "do": {
-        "run": {
-          "obligation": "test"
-        }
-      },
-      "expect": {
-        "ran": true,
         "plan": []
       }
     },
     {
       "do": {
         "edit": {
-          "definition": "d2",
+          "definition": "d3",
           "to": "b"
         }
       },
       "expect": {
         "plan": [
-          "build",
-          "check",
-          "test"
+          "check"
         ]
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d3",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "plan": []
       }
     }
   ]

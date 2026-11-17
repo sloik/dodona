@@ -21,7 +21,7 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "three definitions, two hash values, two tools, at most three records",
+  "bounds": "four definitions in a chain plus one unrelated in a shared file, two hash values, a compiler and a test runner; every behaviour of at most six steps from one starting state",
   "cases": [
     {
       "config": "design_definition.cfg",
@@ -53,14 +53,21 @@
       "config": "mutant_direct_deps_only.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: the key covers the target and not what it depends on.",
+      "purpose": "Planted defect: the key follows direct dependencies and not what those depend on in turn.",
+      "of": "NoWrongReuse"
+    },
+    {
+      "config": "mutant_no_deps.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the key covers the target and nothing it depends on.",
       "of": "NoWrongReuse"
     },
     {
       "config": "mutant_fallback_direct_deps_only.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "The same defect with file-level identity: the fallback ignores a dependency.",
+      "purpose": "The indirect-dependency defect with file-level identity.",
       "of": "NoWrongReuse"
     },
     {
@@ -68,6 +75,13 @@
       "expect": "violation",
       "expect_exit": 12,
       "purpose": "Planted defect: a test's key leaves out the build that produced what it tests, so a compiler change is missed.",
+      "of": "NoWrongReuse"
+    },
+    {
+      "config": "mutant_test_without_build.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the test is run before the build is current, on a stale artifact, and its result is filed as current.",
       "of": "NoWrongReuse"
     },
     {

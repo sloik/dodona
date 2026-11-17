@@ -62,7 +62,24 @@ fn planned(
     plan.sort();
     plan
 }
+/// Whether following `artifact_of` from every obligation comes to an end.
+fn chains_end(obligations: &Value) -> bool {
+    obligations.object().iter().all(|(name, _)| {
+        let mut at = name.as_str();
+        for _ in 0..obligations.object().len() {
+            match obligations.opt(at).and_then(|o| o.opt("artifact_of")) {
+                Some(Value::String(next)) => at = next,
+                _ => return true,
+            }
+        }
+        false
+    })
+}
 pub fn run(input: &Value) -> Vec<Value> {
+    assert!(
+        chains_end(input.get("obligations")),
+        "an obligation is an artifact of itself"
+    );
     let start = input.get("start");
     let mut content: BTreeMap<String, String> = start
         .get("content")
@@ -136,6 +153,17 @@ mod tests {
         let mut seen = BTreeSet::new();
         closure("a", &defs, &mut seen);
         assert_eq!(seen.len(), 3);
+    }
+    #[test]
+    fn artifact_chains() {
+        let ok =
+            json::parse(br#"{"a":{"targets":[]},"b":{"artifact_of":"a"},"c":{"artifact_of":"b"}}"#)
+                .unwrap();
+        assert!(chains_end(&ok));
+        let own = json::parse(br#"{"a":{"artifact_of":"a"}}"#).unwrap();
+        assert!(!chains_end(&own));
+        let ring = json::parse(br#"{"a":{"artifact_of":"b"},"b":{"artifact_of":"a"}}"#).unwrap();
+        assert!(!chains_end(&ring));
     }
     #[test]
     fn keys_and_planning() {

@@ -23,14 +23,25 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_no_generated_files_are_tracked` | Compiled caches were committed by mistake, and build output contains private paths |
 | `gap_provider_cases_match_the_provider` | A misbehaviour case that names a mode the provider does not have would quietly test the well-behaved path and pass |
 | `gap_every_check_is_listed` | A check whose reason is lost gets deleted by mistake |
+| `gap_kit_shown_claims_are_exercised` | Claims shown by the kit and not by a model had no status of their own, and nothing tied them to a tool that runs. Each must name tools that exist and that CI runs, and may never be marked checked |
+| `gap_kit_judge_hides_the_answers` | The kit judge sent each scenario to the kernel with the expected results in it. A program that printed them back passed every scenario |
+| `gap_generated_kit_files_are_current` | Kit files that hold hashes and keyed check values are generated. Edited by hand, or left behind by a change to the generator, they would be wrong unseen |
+| `gap_driver_refuses_outside_the_queue` | The one file that starts the model checker could be run by hand anywhere. It must refuse, even when given a made-up job marker |
+| `gap_one_reader_of_checker_output` | The provider and the older model tool each read the checker's output their own way and could have disagreed about what a violation is |
+| `gap_an_unfinished_job_proves_nothing` | Six claims were marked checked from a job the queue had stopped part of the way, and a tool nobody had measured was indistinguishable from one not yet pinned. A job with no end marker, or a tool with no measurement, may never yield a verdict |
 
-Three more checks run as their own tools in CI, because they need to build or install something:
+More checks run as their own tools in CI, because they need to build or install something:
 
 | Tool | The gap behind it |
 |---|---|
 | `tools/check_examples.py` | The provider guide's examples were valid only because their author said so, and a schema change silently broke one |
 | `tools/kit_adequacy.py` | A kit that no defective kernel fails proves nothing. Each planted defect must be rejected |
 | `tools/path_differential.py` | Two implementations of the path check written from one document could disagree unnoticed |
+| `tools/run_check_cases.py` | The rules a schema cannot express were prose. A checker that breaks each one in turn must be refused by the host, and nothing recorded as passed |
+| `tools/check_transcript.py` | The first real provider sent three kinds of message its own schemas refused, and nothing noticed until a recorded session was validated |
+| `tools/run_ledger_cases.py` | A ledger entry cut short by a crash, or two writers at once, could lose or corrupt a record silently |
+| `tools/run_attest_check.py` | Check values in the kit were made once by the kit's author. A kernel must also accept ones made now and refuse them once the record is changed |
+| `tools/kernel_differential.py` | Two kernels can both pass the kit and still differ where the kit does not look. On its first run it found a step order the contract said nothing about, on which one kernel crashed |
 
 The judge that decides whether a model run matched its expectation has its own tests in the same file, for the same reason: it once misread a correct result, and it must never turn an unfinished run into a pass.
 

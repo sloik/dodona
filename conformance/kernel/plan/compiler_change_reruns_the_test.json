@@ -3,7 +3,8 @@
   "name": "compiler_change_reruns_the_test",
   "claim": "C10",
   "covers": [
-    "planner/mutant_key_omits_producer"
+    "planner/mutant_key_omits_producer",
+    "planner/mutant_test_without_build"
   ],
   "why": "A test of what a build produced depends on the compiler too. The test cannot run until the build is current again, and going back to the old compiler makes the old results valid.",
   "granularity": "definition",

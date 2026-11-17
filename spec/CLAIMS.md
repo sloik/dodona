@@ -10,7 +10,7 @@ Status values:
 
 What a `checked` status means here, and no more:
 
-- **A review on 2026-11-17 found the seven newest models weaker than this table reads** (planner, assurance, tree, attempts, platforms, decisions, liveness; claims C8, C9, C10, C15, C16, C19, C22, C24, C31, C34, C35). In five of them every property restates its own definition: it catches the planted defects and cannot fail otherwise. Two contradicted the design: the attempts model let a change of target erase earlier attempts, and the planner's rule that a test runs only on a current build could be removed unnoticed. The cases below did run and match; what they show is that the rules are written down exactly and each planted defect is caught, not that the rules are right. The models are being rewritten and these claims will be reset to unchecked ([issue 21](https://github.com/sloik/dodona/issues/21)).
+- **Many of these properties restate a rule.** Where a model describes a pure rule, the property that checks it says the same thing in other words, and cannot fail in the intended design. What such a model gives is an exact statement of the rule, a planted defect for each way of getting it wrong, and scenarios that carry those defects to a kernel. Each section says which of its properties have content of their own.
 - A bounded model check shows a property for the bounds in the configuration, not for all sizes. The bounds are two definitions, two obligations, two hash values and at most two runs in flight, with a smaller instance where noted.
 - The model has one kernel, a ledger that keeps what it is given, abstract hashes that never collide, and fixed dependency sets.
 - Nothing here says anything about an implementation. That is a separate conformance obligation ([decision 0012](../decisions/0012-spec-to-code-conformance-is-an-explicit-seam.md)).
@@ -47,89 +47,106 @@ The model was rewritten on 2026-11-17 to add the baseline, the unguarded rule an
 
 ## Modelled in `planner/Planner.tla`
 
-Bounds: three definitions (one depending on another, one unrelated in the same file), two hash values, a compiler and a test runner, at most three records. Dependency sets do not change.
+Bounds: four definitions in a chain plus one unrelated in a shared file, two hash values, a compiler and a test runner; every behaviour of at most six steps from one starting state. A first version bounded the number of records instead and was too large to finish. The depends-on relation does not change, and builds do not fail.
+
+The model keeps the kernel's key and the truth of a result apart: the truth of a check or build is found by following the depends-on relation, and the truth of a test is the artifact it actually ran on. The properties compare the two.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C9 | Nothing stale is reused, including what is stale through an indirect dependency, and with per-definition identity nothing current is rerun | [0002](../decisions/0002-small-kernel-everything-else-is-a-provider.md) | `NoWrongReuse`, `NoNeedlessRerun` | The key covers the target and not what it depends on; the planner reruns everything | **checked**, run 6 |
-| C8 | File-level fallback identity never causes a wrong reuse. It does cause extra reruns, and that is shown too | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md) | `NoWrongReuse` with file identity; `NoNeedlessRerun` must be violated there | The fallback ignores a dependency | **checked**, run 6 |
-| C10 | Changing a build tool makes checks of what it built stale | [0012](../decisions/0012-spec-to-code-conformance-is-an-explicit-seam.md) | `NoWrongReuse` | A test's key leaves out the build that produced what it tests | **checked**, run 6 |
+| C9 | Nothing stale is reused, including what is stale through a dependency of a dependency, and with per-definition identity nothing current is rerun. A test is run only on the artifact built from the current inputs | [0002](../decisions/0002-small-kernel-everything-else-is-a-provider.md) | `NoWrongReuse`, `NoNeedlessRerun` | The key follows one level of dependencies only; the key covers no dependencies; the test runs on whatever was built last; the planner reruns everything | **checked**, run 7 |
+| C8 | File-level fallback identity never causes a wrong reuse. It does cause extra reruns, and that is shown too | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md) | `NoWrongReuse` with file identity; `NoNeedlessRerun` must be violated there | The fallback misses a dependency of a dependency | **checked**, run 7 |
+| C10 | Changing a build tool makes checks of what it built stale | [data model](../MODEL.md#3-obligations) | `NoWrongReuse` | A test's key leaves out the build that produced what it tests | **checked**, run 7 |
 
 ## Modelled in `assurance/Assurance.tla`
 
-Every combination of three links, each with one of six levels or unreported, and two planted defects, each passed, failed, unknown or absent. This is the whole input space of the rule, not a sample of it.
+Every combination of three links, each with one of six levels or unreported, and two planted defects, each passed, failed, unknown or absent.
+
+**These properties restate the rule.** The shown level is defined as the weakest link, and the property says it is the weakest link. A model of a pure rule cannot do more: its use is that the rule is written down exactly, that each way of getting it wrong is shown to be caught, and that the conformance kit carries those cases to a kernel. The order of the levels is an input to the model, not something it checks.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C24 | A criterion's shown level is the weakest of its evidence links: never above any link, and never lower than it has to be | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink`, `NotUnderstated` | The links are averaged; the level is always the lowest | **checked**, run 6 |
-| C31 | An evidence link with nothing reported counts as none and never raises the level | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink` | A link nobody reported is left out | **checked**, run 6 |
-| C19 | A check is reported as shown able to fail only when it has planted defects and every one was caught | [data model](../MODEL.md#3-obligations) | `NonVacuitySound` | A planted defect that never ran counts as caught; a check with none planted is reported as shown | **checked**, run 6 |
+| C24 | As the rule is written in this model, the shown level of a criterion is the weakest of its evidence links | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink`, `NotUnderstated` | The links are averaged; the level is always the lowest | modelled, unchecked |
+| C31 | As written, a link with nothing reported counts as none and never raises the level | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink` | A link nobody reported is left out | modelled, unchecked |
+| C19 | As written, a check is reported as shown able to fail only when it has planted defects and every one was caught | [data model](../MODEL.md#3-obligations) | `NonVacuitySound` | A planted defect that never ran counts as caught; a check with none planted is reported as shown | modelled, unchecked |
 
 ## Modelled in `tree/IntentTree.tla`
 
-Bounds: a root with up to two children, one criterion each, hard or soft. One level of children; no exceptions.
+Bounds: a root with up to two children, one criterion each, hard or soft; floors of one and two hard gates. One level of children; no exceptions. A child counts as delivered when its one hard gate passes; children are not themselves confirmed.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C34 | A parent is delivered only when every child is; a child with no hard gate never is; and adding or removing a child, or editing any gate, needs the owner's confirmation again | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `TreeSound`, `ShapeIsConfirmed` | A child is removed or added and the root stays confirmed; the root is delivered whatever its children are; a child made soft counts as delivered | **checked**, run 6 |
+| C34 | A tree is delivered only when it is confirmed, has at least the hard gates policy demands counted over root and children, every hard gate passes and every child has a hard gate; and a tree that meets all that is delivered. Adding or removing a child, or changing a gate, needs confirming again | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `TreeSound`, `TreeGuarded`, `TreeComplete`, `ShapeIsConfirmed` | A child is removed or added and the root stays confirmed; the root is delivered whatever its children are; a child made soft counts as delivered; the floor is ignored; only the root's gates are counted | **checked**, run 7 |
 
 ## Modelled in `attempts/Attempts.tla`
 
-Bounds: at most three attempts and one change of target. Attempts made without taking a ticket leave no record and are outside the model.
+Bounds: at most three attempts and two changes of target. Attempts made without taking a ticket leave no record and are outside the model. The model cannot tell a real fix from a trivial change made to get a fresh try, and neither can a kernel; that is why the history is kept across changes.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C35 | On an unchanged target the worst result counts and an attempt left open counts as a failure; an agreement after an attempt that did not agree is flagged, and the flag caps the separation of the act | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `WorstCounts`, `ShoppingIsFlagged` | Only the latest attempt counts; an open attempt is ignored; shopping is not flagged; the flag does not cap | **checked**, run 6 |
+| C35 | On the current target the worst result counts and an attempt left open is a failure. An agreement after an attempt that did not agree on the same target is flagged, and the act is then graded helper at most and never above what it claimed. Across changes of target every attempt is still counted, and an agreement after any earlier attempt that did not agree is reported as retried | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `WorstCounts`, `ShoppingIsCapped`, `HistoryIsKept` | Only the latest attempt counts; an open attempt is ignored; shopping is not flagged; the flag does not cap; the cap raises a level; a change of target hides the history | modelled, unchecked |
 
 ## Modelled in `platforms/Platforms.tla`
 
-Bounds: two sets of inputs and two platforms.
+Bounds: two sets of inputs and three platforms.
+
+"Verified" in this model is weak: some set of inputs has the same verdict on at least two platforms, and none has different verdicts. One agreeing sample is enough, and two agreeing failures count.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C15 | A status rests on another platform's record only when policy allows it and the claim of platform independence is verified; reproducibility passes only with two agreeing platforms and fails on any disagreement | [0008](../decisions/0008-reproducibility-levels.md) | `StandInIsEarned`, `ReproSound` | A record always stands in; a record stands in unverified; one platform alone is reported as reproduced; a disagreement is not a failure | **checked**, run 6 |
+| C15 | A platform's own record decides its status. A status with no record of its own exists only when policy allows stand-ins, the provider claims platform independence and that weak notion of verified holds; it is then another platform's verdict, and is reported as a stand-in. Reproducibility agrees only with at least two agreeing platforms and differs on any disagreement | [0008](../decisions/0008-reproducibility-levels.md) | `OwnRecordDecides`, `StandInIsEarned`, `StandInIsReported`, `ReproSound` | A record always stands in; stands in unverified; stands in unclaimed; a stand-in is always reported as passed; another platform's record overrides a platform's own; a stand-in is not reported; one platform alone is reported as reproduced; a disagreement is not a failure | **checked**, run 7 |
 
 ## Modelled in `decisions/Decisions.tla`
 
-Bounds: two names, two contents and absence.
+Bounds: three names, two of them governed by one decision; two contents and absence. No renaming.
+
+The model keeps what the decision was last reviewed against apart from what the kernel has stored, so a kernel that quietly updates its stored value is caught.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C16 | A decision is flagged exactly when the content behind the name it governs is no longer the content it recorded, including when the name disappears, and whether or not the old content exists elsewhere | [0001](../decisions/0001-decisions-are-nodes.md) | `FlagIsExact` | The kernel tracks contents without names; a name that disappears is not flagged | **checked**, run 6 |
+| C16 | A decision is flagged exactly when some name it governs no longer has the content the decision was last reviewed against, including when the name is gone, and whether or not the old content exists elsewhere | [0001](../decisions/0001-decisions-are-nodes.md) | `FlagIsExact` | The kernel tracks contents without names; a name that disappears is not flagged; the stored content is refreshed on every edit; only the first governed name is watched | modelled, unchecked |
 
 ## Modelled in `liveness/Liveness.tla`
 
-Bounds: one obligation; at most two edits, two outages and two lost runs. The claim holds only under the stated assumptions: the kernel keeps submitting what is undecided, the backend comes back, and a run in flight finishes unless it is lost. No scenario in the conformance kit covers this, because the seed kernel has no loop that submits work.
+Bounds: one obligation; at most two edits, two outages and two runs that end without finishing.
+
+**The claim holds only under five assumptions, and they carry most of its weight**: the kernel keeps submitting whatever has no answer; the backend comes back after an outage; a run in flight ends one way or another; edits, outages, errors and losses each happen only a bounded number of times; and the kernel can tell that a run was lost. A run that hangs silently for ever is outside the model. No scenario in the conformance kit covers this, because the seed kernel has no loop that submits work.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C22 | Under those assumptions, every obligation is eventually decided and stays decided | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyDecided` | After finding the backend down, or after a lost run, the kernel never tries again | **checked**, run 6 |
+| C22 | Under those assumptions, every obligation eventually has a verdict or the stated reason that it cannot be checked, and that then stays | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again | modelled, unchecked |
 
 ## Checked against the seed kernel
 
 | # | Claim | Decision | Check | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C37 | The seed kernel gives the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states, in CI | Each of five defects planted in the kernel made between 1,515 and 34,020 states disagree | **checked**, run 6 |
+| C37 | The seed kernel gives the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states, in CI | Each of five defects planted in the kernel made between 1,515 and 34,020 states disagree | **checked**, run 7 |
 
 This ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
+
+## Shown by the conformance kit, not by a model
+
+These claims are not checked by a model. Each is exercised on every change by the tools named, on the kernels that exist. That is evidence at the level `sampled`: it shows the cases that were tried. None of these counts as checked.
+
+| # | Claim | Decision | Exercised by | What that does and does not show | Status |
+|---|---|---|---|---|---|
+| C7 | The same content has the same identity on every platform, and a path is accepted on all platforms or none | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md), [0009](../decisions/0009-platform-order-and-portability-rules.md) | `tools/run_vectors.py`, `tools/run_path_vectors.py`, `tools/path_differential.py` | The vectors and random paths that were tried, on macOS, Linux and Windows. Not every content or path. Only the kernels that were judged | sampled by the kit |
+| C13 | No malformed, late or out-of-order provider message leads to a pass | [0003](../decisions/0003-providers-are-separate-processes.md) | `tools/run_provider_cases.py`, `tools/run_check_cases.py` | The stage-0 hosts, against a provider that breaks one rule at a time. No kernel hosts a provider yet, so this says nothing about a kernel. Late and out-of-order messages across several requests in flight are not covered | sampled by the kit |
+| C18 | A record no trusted kernel wrote is never reused; a torn ledger write never changes a status silently | [0015](../decisions/0015-ledger-integrity-and-record-trust.md) | `tools/run_ledger_cases.py`, `tools/run_kit.py` | A ledger damaged in each listed way, cut at every byte of its last entry, and written by two kernels at once; and status scenarios with records from another writer, another platform and a key that does not match. A crash in the middle of a write is imitated by cutting the file, not caused | sampled by the kit |
+| C20 | The conformance kit rejects kernels with known defects. Measured, not modelled: `tools/kit_adequacy.py` plants 15 defects in the seed kernel and the kit rejects 15 | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | `tools/kit_adequacy.py` | The listed defects, which the authors of the kit and of the kernel chose. A defect nobody thought of is not on the list | sampled by the kit |
+| C36 | A separation level is never shown without its weakest source, and a fact not covered by a valid attestation is treated as declared | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `tools/run_kit.py`, `tools/run_attest_check.py` | Kernels grading act records, with check values written into the kit and others made at test time. The key is a published fixture. No harness exists, so nothing real is vouched for | sampled by the kit |
+| C21 | Two independent kernels agree on real project states, and any disagreement is reported as a conflict | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | `tools/kernel_differential.py`, `tools/run_kit.py` | Two kernels, in Rust and JavaScript, the second written without sight of the first, give the same full answers on every scenario and on reshuffled ones. Not on real project states at scale, and a disagreement is reported by the tool, not yet by a kernel as a conflict. The second kernel's author is the same make of AI model as the kit's, and the first kernel was finished by that make too, so the two are less independent than they sound | sampled by the kit |
 
 ## Not yet modelled
 
 | # | Claim | Decision | Intended check | Planted defect that must fail |
 |---|---|---|---|---|
-| C7 | The same content has the same identity on every platform, and a path is accepted on all platforms or none | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md), [0009](../decisions/0009-platform-order-and-portability-rules.md) | Conformance vectors for the encoding and the path check | A checker that folds case with the platform's own rules |
 | C11 | A check never runs on an executor the configuration did not name, and a mismatch between requested and reported tools or platform is never a result | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | Model, plus scenarios with the executor down and with a lying executor | Kernel with a silent local fallback |
 | C12 | A run is not submitted twice and not lost across a kernel restart | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | Model with handles and restart | Kernel that resubmits on restart |
-| C13 | No malformed, late or out-of-order provider message leads to a pass | [0003](../decisions/0003-providers-are-separate-processes.md) | The misbehaving test provider | Kernel that defaults a missing verdict to passed |
 | C14 | Adding a platform to the lock changes no existing entry | [0008](../decisions/0008-reproducibility-levels.md) | Scenario: resolve on one platform, add a second | Resolver that re-resolves existing entries |
 | C17 | A change that weakens policy is always visible in the report | [0014](../decisions/0014-policy-is-separate-from-configuration.md) | Scenarios: lowered bound, removed obligation, weaker provider | Kernel that judges against the edited policy only |
-| C18 | A record no trusted kernel wrote is never reused; a torn ledger write never changes a status silently | [0015](../decisions/0015-ledger-integrity-and-record-trust.md) | Model with two writers and crash points, plus scenarios | Kernel that accepts any record with a valid hash |
-| C20 | The conformance kit rejects kernels with known defects. Measured, not modelled: `tools/kit_adequacy.py` plants 15 defects in the seed kernel and the kit rejects 15 | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | Run defective kernels against the kit; report the fraction rejected | A kit with a scenario removed |
-| C21 | Two independent kernels agree on real project states, and any disagreement is reported as a conflict | [0011](../decisions/0011-self-hosting-through-a-verified-seed.md) | Differential runs beyond the kit | A kernel carrying a defect the kit does not target |
 | C26 | A varying check is never reported from fewer runs than it declared | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Scenarios with declared sample sizes | Kernel that stops at the first passing run |
 | C27 | Two intents that touch the same definition are reported as colliding before work starts | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Scenarios | Index that compares declared paths only as text |
 | C32 | A status is never shown without its headline, and a self-granted exception or unverified independence is always in it | [0019](../decisions/0019-assurance-is-stated-per-link.md), [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Scenarios on the agent interface | Interface that returns the status word alone |
-| C36 | A separation level is never shown without its weakest source, and a fact not covered by a valid attestation is treated as declared | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | Scenarios | Kernel that trusts an unsigned attestation |
 
 ## Recorded runs
 
@@ -367,3 +384,62 @@ Two earlier attempts at this run stopped partway, at a limit on the space a job 
 | `mutant_add_keeps_confirmation` | violation | violation of ShapeIsConfirmed | 498 / 465 |
 | `mutant_delivered_ignores_children` | violation | violation of TreeSound | 147 / 147 |
 | `mutant_soft_child_is_delivered` | violation | violation of TreeSound | 2,163 / 1,134 |
+
+### Run 7: the kernel again, on run 6's states
+
+2026-11-18. The seed kernel was extended, so its agreement with the two dump models was measured again on the state lists run 6 wrote out: 71,744 and 78,894 states, no difference. The second kernel agrees on the same states. No model was run for this.
+
+### Run 7: three of the rewritten models
+
+2026-11-18. The planner, platforms and tree models as rewritten after the review, run through the shared queue from a development machine: platforms and tree in job `8d41ae3f84254c84b62384ef67d84fbc`, the planner in job `f1e82dbabf9d42e0940ed943d1e3a3ae` after one of its defect cases was found to compare values of two kinds and was corrected. Both jobs completed. Outputs: [runs/run-7/](runs/run-7/). The other four rewritten models (assurance, attempts, decisions, liveness) have no completed run yet.
+
+**`planner`** (10 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design_definition` | no-violation | no-violation | 19,951 / 8,988 |
+| `design_file` | no-violation | no-violation | 29,378 / 15,161 |
+| `file_costs_reruns` | violation | violation of NoNeedlessRerun | 60 / 40 |
+| `reach_all_current` | violation | violation of NeverAllCurrent | 321 / 172 |
+| `mutant_direct_deps_only` | violation | violation of NoWrongReuse | 61 / 40 |
+| `mutant_no_deps` | violation | violation of NoWrongReuse | 59 / 39 |
+| `mutant_fallback_direct_deps_only` | violation | violation of NoWrongReuse | 61 / 41 |
+| `mutant_key_omits_producer` | violation | violation of NoWrongReuse | 354 / 186 |
+| `mutant_test_without_build` | violation | violation of NoWrongReuse | 330 / 178 |
+| `mutant_plan_everything` | violation | violation of NoNeedlessRerun | 8 / 8 |
+
+**`platforms`** (12 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design_stand_in_allowed` | no-violation | no-violation | 2,917 / 729 |
+| `design_stand_in_forbidden` | no-violation | no-violation | 2,917 / 729 |
+| `design_not_claimed` | no-violation | no-violation | 2,917 / 729 |
+| `reach_stand_in` | violation | violation of NeverStoodIn | 15 / 15 |
+| `mutant_always_stand_in` | violation | violation of StandInIsEarned | 2 / 2 |
+| `mutant_stand_in_unverified` | violation | violation of StandInIsEarned | 2 / 2 |
+| `mutant_stand_in_unclaimed` | violation | violation of StandInIsEarned | 15 / 15 |
+| `mutant_stand_in_always_passed` | violation | violation of StandInIsEarned | 80 / 60 |
+| `mutant_other_overrides_own` | violation | violation of OwnRecordDecides | 20 / 20 |
+| `mutant_stand_in_not_reported` | violation | violation of StandInIsReported | 15 / 15 |
+| `mutant_one_platform_reproduces` | violation | violation of ReproSound | 2 / 2 |
+| `mutant_disagreement_ignored` | violation | violation of ReproSound | 20 / 20 |
+
+**`tree`** (10 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 341,312 / 28,512 |
+| `design_floor_two` | no-violation | no-violation | 341,312 / 28,512 |
+| `reach_delivered` | violation | violation of NeverDelivered | 1,710 / 943 |
+| `reach_delivered_floor_two` | violation | violation of NeverDelivered | 10,531 / 3,482 |
+| `mutant_remove_keeps_confirmation` | violation | violation of ShapeIsConfirmed | 1,642 / 929 |
+| `mutant_add_keeps_confirmation` | violation | violation of ShapeIsConfirmed | 498 / 465 |
+| `mutant_delivered_ignores_children` | violation | violation of TreeSound | 147 / 147 |
+| `mutant_soft_child_is_delivered` | violation | violation of TreeSound | 2,163 / 1,134 |
+| `mutant_ignores_floor` | violation | violation of TreeGuarded | 51 / 51 |
+| `mutant_floor_counts_root_only` | violation | violation of TreeComplete | 10,531 / 3,482 |
+
+### Not a run: the first attempt at the rewritten models
+
+A job with every case of the seven rewritten models was stopped by the queue part of the way, when the planner model outgrew the space a job is allowed. Thirty cases of four models had finished by then and each showed what it was expected to. They are not recorded as a run and no claim rests on them: a job that did not complete proves nothing here, whatever it left behind. The planner model has since been bounded by depth.

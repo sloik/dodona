@@ -8,6 +8,9 @@ from __future__ import annotations
 import hashlib
 import json
 import pathlib
+import os
+import tempfile
+import subprocess
 import re
 import sys
 import tomllib
@@ -94,6 +97,9 @@ def check_claims_match_runs() -> None:
             (folder / name).exists()
             and hashlib.sha256((folder / name).read_bytes()).hexdigest() == digest
             for name, digest in run["files"].items()
+        ) and all(
+            (ROOT / name).exists() and hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == digest
+            for name, digest in run.get("other_files", {}).items()
         ) and (ROOT / "spec" / "runs" / run["outputs"]).is_dir()
     supported = set()
     for run in index["runs"]:
@@ -140,6 +146,81 @@ def gap_readme_counts() -> None:
     ids = [cid for cid, _ in rows]
     if len(ids) != len(set(ids)):
         problems.append("spec/CLAIMS.md lists a claim id twice")
+
+
+def gap_kit_shown_claims_are_exercised() -> None:
+    """A claim could be listed as shown by the kit while nothing ran the tool that shows it."""
+    text = (ROOT / "spec" / "CLAIMS.md").read_text(encoding="utf-8")
+    start = text.find("## Shown by the conformance kit")
+    if start < 0:
+        problems.append("spec/CLAIMS.md: the section of claims shown by the kit is missing")
+        return
+    section = text[start:].split("\n## ")[0]
+    workflow = (ROOT / ".github" / "workflows" / "checks.yml").read_text(encoding="utf-8")
+    for row in re.findall(r"^\| C\d+ \|.*$", section, flags=re.M):
+        cells = [c.strip() for c in row.strip("|").split("|")]
+        tools = re.findall(r"`(tools/\w+\.py)`", cells[3])
+        if not tools:
+            problems.append(f"spec/CLAIMS.md {cells[0]}: no tool is named as exercising it")
+        for tool in tools:
+            if not (ROOT / tool).exists():
+                problems.append(f"spec/CLAIMS.md {cells[0]}: {tool} does not exist")
+            elif tool not in workflow:
+                problems.append(f"spec/CLAIMS.md {cells[0]}: {tool} is not run by .github/workflows/checks.yml")
+        if "**checked**" in row or not cells[-1].startswith("sampled"):
+            problems.append(f"spec/CLAIMS.md {cells[0]}: a claim shown by the kit must be marked sampled, never checked")
+
+
+def gap_kit_judge_hides_the_answers() -> None:
+    """The kit judge sent each scenario to the kernel whole; a program that echoed the expected results passed all of them."""
+    asked = run_kit.question({"kind": "k", "claim": "C0", "covers": ["x"], "why": "w", "steps": [{"do": {"a": 1}, "expect": {"b": 2}}]})
+    if "expect" in json.dumps(asked) or any(k in asked for k in ("claim", "covers", "why")):
+        problems.append("tools/run_kit.py shows the kernel the expected results or the notes about a scenario")
+
+
+def gap_generated_kit_files_are_current() -> None:
+    """Kit files with hashes and keyed check values are generated; an edit by hand, or to the generator alone, would leave them wrong."""
+    done = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_kit_vectors.py"), "--check"], capture_output=True, text=True)
+    if done.returncode != 0:
+        problems.append("the generated kit files differ from what tools/gen_kit_vectors.py writes: " + (done.stdout + done.stderr).strip()[-200:])
+
+
+def gap_driver_refuses_outside_the_queue() -> None:
+    """The file that starts the model checker could be run by hand on any machine. It must refuse before reading anything."""
+    driver = ROOT / ".github" / "site" / "batch_driver.py"
+    with tempfile.TemporaryDirectory() as tmp:
+        for extra in ({}, {"TLA_QUEUE_JOB": "0123456789abcdef0123456789abcdef"}):
+            env = {k: v for k, v in os.environ.items() if k != "TLA_QUEUE_JOB"} | extra
+            done = subprocess.run([sys.executable, "-I", str(driver), "no-such-manifest.json"], cwd=tmp, env=env, capture_output=True)
+            if done.returncode != 78 or os.listdir(tmp):
+                problems.append(".github/site/batch_driver.py did not refuse to run outside a job of the queue"
+                                + (" when given a made-up job marker" if extra else ""))
+
+
+def gap_an_unfinished_job_proves_nothing() -> None:
+    """Results were once recorded from a job the queue had stopped part of the way, and a tool nobody measured looked the same as one not yet pinned."""
+    import host
+    cases = [({"reachable": False, "complete": False}, [], [], "unavailable"),
+             ({"reachable": True, "complete": False}, [], [], "job-incomplete"),
+             ({"reachable": True}, [], [], "job-incomplete"),
+             ({"reachable": True, "complete": True}, ["java"], [], "tool-unmeasured"),
+             ({"reachable": True, "complete": True}, [], ["java"], "tool-mismatch"),
+             ({"reachable": True, "complete": True}, [], [], None)]
+    for runs, unmeasured, mismatched, want in cases:
+        if host.proves_nothing(runs, unmeasured, mismatched) != want:
+            problems.append(f"tools/host.py: a job with {runs}, unmeasured {unmeasured}, mismatched {mismatched} must give {want}")
+    driver = (ROOT / ".github" / "site" / "batch_driver.py").read_text(encoding="utf-8")
+    if not (driver.find("measured.json") < driver.find("subprocess.run(case") < driver.find("complete.json")):
+        problems.append(".github/site/batch_driver.py must measure its tools before the first case and write its marker after the last")
+
+
+def gap_one_reader_of_checker_output() -> None:
+    """The provider and the older model tool each had their own reading of the checker's output and could have disagreed."""
+    provider = (ROOT / "providers" / "tlc" / "provider.py").read_text(encoding="utf-8")
+    older = (ROOT / "tools" / "check_models.py").read_text(encoding="utf-8")
+    for name, text in (("providers/tlc/provider.py", provider), ("tools/check_models.py", older)):
+        if "from judge import" not in text or "is violated" in text:
+            problems.append(f"{name} must take its reading of the checker's output from providers/tlc/judge.py and hold no copy")
 
 
 def gap_claims_name_real_properties() -> None:
@@ -402,7 +483,10 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_no_generated_files_are_tracked,
-              gap_provider_cases_match_the_provider, gap_every_check_is_listed]
+              gap_provider_cases_match_the_provider, gap_every_check_is_listed,
+              gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
+              gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
+              gap_an_unfinished_job_proves_nothing]
 
 
 class JudgeTests(unittest.TestCase):

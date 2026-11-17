@@ -1,11 +1,35 @@
-use crate::json::{self, Value};
+use crate::{
+    acts,
+    json::{self, Value},
+};
 use std::collections::BTreeMap;
+/// A criterion as the status rule sees it: its gate, and the status of each check behind it.
+pub struct Criterion {
+    pub gate: String,
+    pub checks: Vec<String>,
+}
+impl Criterion {
+    fn one(gate: &str, check: &str) -> Criterion {
+        Criterion {
+            gate: gate.into(),
+            checks: vec![check.into()],
+        }
+    }
+    /// Some check behind it is not passed.
+    fn lacking(&self) -> bool {
+        self.checks.iter().any(|s| s != "passed")
+    }
+    /// It has at least one check and every one is passed.
+    pub fn met(&self) -> bool {
+        !self.checks.is_empty() && !self.lacking()
+    }
+}
 pub fn run(input: &Value) -> Vec<Value> {
-    let mut criteria: BTreeMap<String, (String, String)> = input
+    let mut criteria: BTreeMap<String, Criterion> = input
         .get("criteria")
         .object()
         .iter()
-        .map(|(k, v)| (k.clone(), (v.get("gate").str().into(), "unknown".into())))
+        .map(|(k, v)| (k.clone(), Criterion::one(v.get("gate").str(), "unknown")))
         .collect();
     let policy = input.get("policy");
     let floor = rank(policy.get("exception_separation").str());
@@ -19,23 +43,27 @@ pub fn run(input: &Value) -> Vec<Value> {
             confirmed = true
         }
         if let Some(a) = action.opt("check") {
-            criteria.get_mut(a.get("criterion").str()).unwrap().1 = a.get("status").str().into()
+            criteria.get_mut(a.get("criterion").str()).unwrap().checks =
+                vec![a.get("status").str().into()]
         }
         if let Some(a) = action.opt("edit") {
-            criteria.get_mut(a.get("criterion").str()).unwrap().0 = a.get("to").str().into();
-            confirmed = false
+            let gate = &mut criteria.get_mut(a.get("criterion").str()).unwrap().gate;
+            if *gate != a.get("to").str() {
+                *gate = a.get("to").str().into();
+                confirmed = false;
+            }
         }
         if let Some(a) = action.opt("amend") {
             let (effective, level) = grade(a, floor);
             if effective {
-                criteria.get_mut(a.get("criterion").str()).unwrap().0 = a.get("to").str().into()
+                criteria.get_mut(a.get("criterion").str()).unwrap().gate = a.get("to").str().into()
             }
             amendment = Some(json::object(vec![
                 ("takes_effect", Value::Bool(effective)),
                 ("level", json::string(level)),
             ]));
         }
-        let status = status(confirmed, &criteria, min);
+        let status = status(confirmed, &criteria.values().collect::<Vec<_>>(), min);
         let mut result = vec![("status", json::string(status))];
         if let Some(a) = amendment {
             result.push(("amendment", a))
@@ -45,17 +73,7 @@ pub fn run(input: &Value) -> Vec<Value> {
     results
 }
 fn rank(s: &str) -> usize {
-    [
-        "self",
-        "helper",
-        "apart",
-        "tested",
-        "cross-make",
-        "credentialed",
-    ]
-    .iter()
-    .position(|x| *x == s)
-    .unwrap()
+    acts::rank(s).expect("not a separation level")
 }
 
 fn grade(a: &Value, floor: usize) -> (bool, &str) {
@@ -79,21 +97,20 @@ fn grade(a: &Value, floor: usize) -> (bool, &str) {
     };
     (owner && rank(level) >= floor, level)
 }
-fn status(
-    confirmed: bool,
-    criteria: &BTreeMap<String, (String, String)>,
-    min: i64,
-) -> &'static str {
+/// The status of an intent: the one rule, for intent scenarios and for status scenarios.
+/// In intent scenarios every criterion has exactly one check, so `uncovered` never applies.
+pub fn status(confirmed: bool, criteria: &[&Criterion], min: i64) -> &'static str {
+    let hard = criteria.iter().filter(|c| c.gate == "hard").count() as i64;
+    let lacking = |gate: &str| criteria.iter().any(|c| c.gate == gate && c.lacking());
     if !confirmed {
         "draft"
-    } else if (criteria.values().filter(|(g, _)| g == "hard").count() as i64) < min {
+    } else if criteria.iter().any(|c| c.checks.is_empty()) {
+        "uncovered"
+    } else if hard < min.max(1) {
         "unguarded"
-    } else if criteria.values().any(|(g, s)| g == "hard" && s != "passed") {
+    } else if lacking("hard") {
         "open"
-    } else if criteria
-        .values()
-        .any(|(g, s)| g == "deferred" && s != "passed")
-    {
+    } else if lacking("deferred") {
         "delivered"
     } else {
         "fulfilled"
@@ -107,16 +124,11 @@ pub fn states(input: &Value) -> Vec<Value> {
         .array()
         .iter()
         .map(|state| {
-            let criteria = state
+            let criteria: Vec<Criterion> = state
                 .get("criteria")
                 .object()
                 .iter()
-                .map(|(k, v)| {
-                    (
-                        k.clone(),
-                        (v.get("gate").str().into(), v.get("check").str().into()),
-                    )
-                })
+                .map(|(_, v)| Criterion::one(v.get("gate").str(), v.get("check").str()))
                 .collect();
             let confirmed = matches!(state.get("confirmed"), Value::Bool(true));
             let amendments = state
@@ -136,7 +148,7 @@ pub fn states(input: &Value) -> Vec<Value> {
                     "status",
                     json::string(status(
                         confirmed,
-                        &criteria,
+                        &criteria.iter().collect::<Vec<_>>(),
                         policy.get("min_hard_gates").number(),
                     )),
                 ),
@@ -150,15 +162,51 @@ mod tests {
     use super::*;
     #[test]
     fn intent_status() {
-        let mut c = BTreeMap::new();
-        c.insert("c".into(), ("hard".into(), "unknown".into()));
-        assert_eq!(status(false, &c, 1), "draft");
-        assert_eq!(status(true, &c, 2), "unguarded");
-        assert_eq!(status(true, &c, 1), "open");
-        c.get_mut("c").unwrap().1 = "passed".into();
-        assert_eq!(status(true, &c, 1), "fulfilled");
-        c.insert("d".into(), ("deferred".into(), "unknown".into()));
-        assert_eq!(status(true, &c, 1), "delivered");
+        let mut c = vec![Criterion::one("hard", "unknown")];
+        let of =
+            |c: &[Criterion], confirmed, min| status(confirmed, &c.iter().collect::<Vec<_>>(), min);
+        assert_eq!(of(&c, false, 1), "draft");
+        assert_eq!(of(&c, true, 2), "unguarded");
+        assert_eq!(of(&c, true, 1), "open");
+        c[0].checks = vec!["passed".into()];
+        assert_eq!(of(&c, true, 1), "fulfilled");
+        assert_eq!(of(&c, true, 0), "fulfilled");
+        c.push(Criterion::one("soft", "failed"));
+        assert_eq!(of(&c, true, 1), "fulfilled");
+        assert_eq!(of(&c, true, 2), "unguarded");
+        c.push(Criterion::one("deferred", "unknown"));
+        assert_eq!(of(&c, true, 1), "delivered");
+        c[2].checks.clear();
+        assert_eq!(of(&c, true, 1), "uncovered");
+        assert_eq!(of(&[], true, 0), "unguarded");
+    }
+    #[test]
+    fn met_needs_a_check() {
+        assert!(Criterion::one("hard", "passed").met());
+        assert!(!Criterion::one("hard", "unknown").met());
+        let mut c = Criterion::one("deferred", "passed");
+        c.checks.push("conflict".into());
+        assert!(!c.met());
+        c.checks.clear();
+        assert!(!c.met());
+    }
+    #[test]
+    fn states_use_the_same_rules() {
+        let input = json::parse(
+            br#"{"policy":{"exception_separation":"helper","min_hard_gates":0},"states":[
+                {"confirmed":true,"criteria":{"c":{"gate":"soft","check":"passed"}},
+                 "amendments":[{"by":"owner","claims":"apart"},{"by":"worker","claims":"apart"}]},
+                {"confirmed":true,"criteria":{"c":{"gate":"hard","check":"passed"},"d":{"gate":"deferred","check":"failed"}},"amendments":[]}]}"#,
+        )
+        .unwrap();
+        let got: Vec<String> = states(&input).iter().map(json::encode).collect();
+        assert_eq!(
+            got,
+            [
+                r#"{"amendments":[{"level":"helper","takes_effect":true},{"level":"self","takes_effect":false}],"status":"unguarded"}"#,
+                r#"{"amendments":[],"status":"delivered"}"#
+            ]
+        );
     }
     #[test]
     fn exception_grade() {

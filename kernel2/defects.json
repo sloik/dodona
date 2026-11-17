@@ -1,0 +1,551 @@
+{
+  "about": "Planted defects for kernel2. Each entry is one exact text replacement in one file that makes the kernel wrong in one way the conformance kit is meant to catch. plant.js applies them one at a time to a temporary copy.",
+  "defects": [
+    {
+      "name": "key leaves out the tool",
+      "model_case": "kernel/mutant_key_omits_tool",
+      "file": "evidence.js",
+      "find": "    && entry.tool === current.tool\n",
+      "replace": ""
+    },
+    {
+      "name": "a result filed under the inputs at completion instead of at submission",
+      "model_case": "kernel/mutant_complete_with_current_key",
+      "file": "evidence.js",
+      "find": "inputs: run.inputs, tool: run.tool, verdict: step.complete.verdict",
+      "replace": "inputs: inputsOf(state.definitions, dependsOn(run.obligation)), tool: state.tool, verdict: step.complete.verdict"
+    },
+    {
+      "name": "unavailable recorded as passed",
+      "model_case": "kernel/mutant_unavailable_is_pass",
+      "file": "evidence.js",
+      "find": "ledger.outcomes.push({ ...entry, outcome: 'unavailable' });",
+      "replace": "ledger.records.push({ ...entry, verdict: 'passed' });"
+    },
+    {
+      "name": "pass outranks fail",
+      "model_case": "kernel/mutant_pass_outranks_fail",
+      "file": "evidence.js",
+      "find": "if (anyPassed && anyFailed) return { status: 'conflict', pending: false, reason: null };",
+      "replace": ""
+    },
+    {
+      "name": "lost run recorded as passed",
+      "model_case": "(none named in the kit)",
+      "file": "evidence.js",
+      "find": "ledger.outcomes.push({ obligation: run.obligation, inputs: run.inputs, tool: run.tool, outcome: 'error' });",
+      "replace": "ledger.records.push({ obligation: run.obligation, inputs: run.inputs, tool: run.tool, verdict: 'passed' });"
+    },
+    {
+      "name": "draft is delivered",
+      "model_case": "intent/mutant_draft_delivers",
+      "file": "intent.js",
+      "find": "  if (!confirmed) return 'draft';\n",
+      "replace": ""
+    },
+    {
+      "name": "unguarded is delivered",
+      "model_case": "intent/mutant_unguarded_delivers",
+      "file": "intent.js",
+      "find": "  if (hard.length < minimum) return 'unguarded';\n",
+      "replace": ""
+    },
+    {
+      "name": "unknown hard gate passes",
+      "model_case": "intent/mutant_delivered_ignores_unknown",
+      "file": "intent.js",
+      "find": "hard.some((criterion) => criterion.check !== 'passed')",
+      "replace": "hard.some((criterion) => criterion.check === 'failed' || criterion.check === 'conflict')"
+    },
+    {
+      "name": "deferred gate ignored",
+      "model_case": "intent/mutant_deferred_as_passed",
+      "file": "intent.js",
+      "find": "if (deferred.every((criterion) => criterion.check === 'passed')) return 'fulfilled';",
+      "replace": "return 'fulfilled';"
+    },
+    {
+      "name": "edit keeps confirmation",
+      "model_case": "intent/mutant_edit_keeps_confirmation",
+      "file": "intent.js",
+      "find": "step.edit.to;\n        confirmed = false;",
+      "replace": "step.edit.to;"
+    },
+    {
+      "name": "worker's exception takes effect",
+      "model_case": "intent/mutant_worker_can_amend",
+      "file": "intent.js",
+      "find": "amendment.by === 'owner' && rank(level)",
+      "replace": "rank(level)"
+    },
+    {
+      "name": "nothing claimed treated as apart",
+      "model_case": "intent/mutant_missing_is_apart",
+      "file": "intent.js",
+      "find": "amendment.claims === null) return 'self';",
+      "replace": "amendment.claims === null) return 'apart';"
+    },
+    {
+      "name": "floor ignored",
+      "model_case": "intent/mutant_below_floor_counts",
+      "file": "intent.js",
+      "find": " && rank(level) >= rank(policy.exception_separation);",
+      "replace": ";"
+    },
+    {
+      "name": "worker keeps the level it claims",
+      "model_case": "intent/mutant_worker_keeps_level",
+      "file": "intent.js",
+      "find": "  if (amendment.by === 'worker') return 'self';\n",
+      "replace": ""
+    },
+    {
+      "name": "level shown higher than used",
+      "model_case": "intent/mutant_hide_level",
+      "file": "intent.js",
+      "find": "return { takes_effect: takesEffect, level };",
+      "replace": "return { takes_effect: takesEffect, level: amendment.claims || level };"
+    },
+    {
+      "name": "a declared claim counted in full",
+      "model_case": "intent/mutant_declared_counts_in_full",
+      "file": "intent.js",
+      "find": "declared: 'helper'",
+      "replace": "declared: 'credentialed'"
+    },
+    {
+      "name": "plan follows only direct targets",
+      "model_case": "planner/mutant_direct_deps_only",
+      "file": "plan.js",
+      "find": "    pending.push(...definitions[name].depends_on);\n",
+      "replace": ""
+    },
+    {
+      "name": "a test's inputs leave out the build it tests",
+      "model_case": "planner/mutant_key_omits_producer",
+      "file": "plan.js",
+      "find": "if (details.artifact_of !== undefined) inputs.push",
+      "replace": "if (false) inputs.push"
+    },
+    {
+      "name": "everything always planned",
+      "model_case": "planner/mutant_plan_everything",
+      "file": "plan.js",
+      "find": ".filter((obligation) => !hasResult(scenario, state, results, obligation))",
+      "replace": ".filter(() => true)"
+    },
+    {
+      "name": "shown level is the average",
+      "model_case": "assurance/mutant_average",
+      "file": "assurance.js",
+      "find": "SCALE[Math.min(...LINKS.map((link) => levelOf(links, link)))]",
+      "replace": "SCALE[Math.floor(LINKS.map((link) => levelOf(links, link)).reduce((a, b) => a + b, 0) / LINKS.length)]"
+    },
+    {
+      "name": "an unreported link left out of the minimum",
+      "model_case": "assurance/mutant_ignore_unreported",
+      "file": "assurance.js",
+      "find": "Math.min(...LINKS.map(",
+      "replace": "Math.min(...LINKS.filter((link) => links[link]).map("
+    },
+    {
+      "name": "unknown planted defect counts as caught",
+      "model_case": "assurance/mutant_unknown_defect_counts",
+      "file": "assurance.js",
+      "find": "statuses.every((status) => status === 'passed')",
+      "replace": "statuses.every((status) => status !== 'failed')"
+    },
+    {
+      "name": "no planted defect reported as shown",
+      "model_case": "assurance/mutant_empty_is_shown",
+      "file": "assurance.js",
+      "find": "return 'none-planted';",
+      "replace": "return 'shown';"
+    },
+    {
+      "name": "removing a child keeps the tree confirmed",
+      "model_case": "tree/mutant_remove_keeps_confirmation",
+      "file": "tree.js",
+      "find": "if (children.delete(step.remove.child)) confirmed = false;",
+      "replace": "children.delete(step.remove.child);"
+    },
+    {
+      "name": "adding a child keeps it confirmed",
+      "model_case": "tree/mutant_add_keeps_confirmation",
+      "file": "tree.js",
+      "find": "check: 'unknown' });\n        confirmed = false;\n      }\n    }",
+      "replace": "check: 'unknown' });\n      }\n    }"
+    },
+    {
+      "name": "root delivered whatever its children",
+      "model_case": "tree/mutant_delivered_ignores_children",
+      "file": "tree.js",
+      "find": "if (hard.some((node) => node.check !== 'passed')) return 'open';",
+      "replace": "if (root.check !== 'passed') return 'open';"
+    },
+    {
+      "name": "soft child counts as delivered",
+      "model_case": "tree/mutant_soft_child_is_delivered",
+      "file": "tree.js",
+      "find": "  if (children.some((child) => child.gate !== 'hard')) return 'open';\n",
+      "replace": ""
+    },
+    {
+      "name": "only the latest attempt counts",
+      "model_case": "attempts/mutant_latest_only",
+      "file": "attempts.js",
+      "find": "return attempts.every((attempt) => attempt.state === 'agreed') ? 'agreed' : 'refused';",
+      "replace": "return attempts[attempts.length - 1].state === 'agreed' ? 'agreed' : 'refused';"
+    },
+    {
+      "name": "open attempt ignored",
+      "model_case": "attempts/mutant_open_ignored",
+      "file": "attempts.js",
+      "find": "return attempts.every((attempt) => attempt.state === 'agreed') ? 'agreed' : 'refused';",
+      "replace": "return attempts.every((attempt) => attempt.state !== 'refused') ? 'agreed' : 'refused';"
+    },
+    {
+      "name": "shopping flagged but not capping",
+      "model_case": "attempts/mutant_flag_does_not_cap",
+      "file": "attempts.js",
+      "find": "cap: shopped ? 'helper' : null",
+      "replace": "cap: null"
+    },
+    {
+      "name": "shopping never flagged",
+      "model_case": "attempts/mutant_flag_missed",
+      "file": "attempts.js",
+      "find": "const shopped = isShopped(onTarget);",
+      "replace": "const shopped = false;"
+    },
+    {
+      "name": "a record always stands in",
+      "model_case": "platforms/mutant_always_stand_in",
+      "file": "platforms.js",
+      "find": "scenario.stand_in_allowed && providerClaims && claimVerified(recorded, scenario.keys)",
+      "replace": "providerClaims && claimVerified(recorded, scenario.keys)"
+    },
+    {
+      "name": "a record stands in unverified",
+      "model_case": "platforms/mutant_stand_in_unverified",
+      "file": "platforms.js",
+      "find": "providerClaims && claimVerified(recorded, scenario.keys);",
+      "replace": "providerClaims;"
+    },
+    {
+      "name": "one platform alone reproduced",
+      "model_case": "platforms/mutant_one_platform_reproduces",
+      "file": "platforms.js",
+      "find": "if (keyAgrees(recorded, key)) return 'agrees';",
+      "replace": "if (verdictsOf(recorded, key).size > 0) return 'agrees';"
+    },
+    {
+      "name": "disagreement not a failure",
+      "model_case": "platforms/mutant_disagreement_ignored",
+      "file": "platforms.js",
+      "find": "  if (keyDiffers(recorded, key)) return 'differs';\n",
+      "replace": ""
+    },
+    {
+      "name": "decision flagged only when its content exists nowhere",
+      "model_case": "decisions/mutant_identities_without_names",
+      "file": "decisions.js",
+      "find": "return now !== recorded.get(name);",
+      "replace": "return ![...names.values()].includes(recorded.get(name));"
+    },
+    {
+      "name": "a name that disappears not flagged",
+      "model_case": "decisions/mutant_gone_is_not_flagged",
+      "file": "decisions.js",
+      "find": "const now = names.has(name) ? names.get(name) : null;",
+      "replace": "const now = names.has(name) ? names.get(name) : recorded.get(name);"
+    },
+    {
+      "name": "plan dependencies followed one level only",
+      "model_case": "planner/mutant_direct_deps_only",
+      "file": "plan.js",
+      "find": "pending.push(...definitions[name].depends_on);",
+      "replace": "if (targets.includes(name)) pending.push(...definitions[name].depends_on);"
+    },
+    {
+      "name": "a run of a current obligation reports ran true",
+      "model_case": "(round 2 kit)",
+      "file": "plan.js",
+      "find": "ran = planned && sourceReady;",
+      "replace": "ran = sourceReady;"
+    },
+    {
+      "name": "file granularity treats every definition as one file",
+      "model_case": "(round 2 kit)",
+      "file": "plan.js",
+      "find": "scenario.definitions[other].file === file)",
+      "replace": "true)"
+    },
+    {
+      "name": "assurance ignores the middle link",
+      "model_case": "(round 2 kit)",
+      "file": "assurance.js",
+      "find": "const LINKS = ['spec-to-code', 'code-to-runs', 'runs-to-world'];",
+      "replace": "const LINKS = ['spec-to-code', 'runs-to-world'];"
+    },
+    {
+      "name": "observed and sampled swapped in the scale",
+      "model_case": "(round 2 kit)",
+      "file": "assurance.js",
+      "find": "'asserted', 'observed', 'sampled',",
+      "replace": "'asserted', 'sampled', 'observed',"
+    },
+    {
+      "name": "tree treats every check as passed",
+      "model_case": "(round 2 kit)",
+      "file": "tree.js",
+      "find": "hard.some((node) => node.check !== 'passed')",
+      "replace": "false"
+    },
+    {
+      "name": "tree counts hard gates on the root only",
+      "model_case": "(round 2 kit)",
+      "file": "tree.js",
+      "find": "const hard = nodes.filter((node) => node.gate === 'hard');",
+      "replace": "const hard = [root].filter((node) => node.gate === 'hard');"
+    },
+    {
+      "name": "tree ignores the floor",
+      "model_case": "(round 2 kit)",
+      "file": "tree.js",
+      "find": "hard.length < policy.min_hard_gates",
+      "replace": "hard.length < 1"
+    },
+    {
+      "name": "attempts close ignores the ticket and closes the latest open attempt",
+      "model_case": "(round 2 kit)",
+      "file": "attempts.js",
+      "find": "all.find((candidate) => candidate.ticket === step.close.ticket && candidate.state === 'open')",
+      "replace": "all.findLast((candidate) => candidate.state === 'open')"
+    },
+    {
+      "name": "attempts shopped ignores order",
+      "model_case": "(round 2 kit)",
+      "file": "attempts.js",
+      "find": "&& attempts.slice(0, position).some((earlier) => earlier.state !== 'agreed'));",
+      "replace": "&& attempts.some((earlier) => earlier.state !== 'agreed'));"
+    },
+    {
+      "name": "a change of target hides earlier attempts from retried and attempts",
+      "model_case": "(round 2 kit)",
+      "file": "attempts.js",
+      "find": "attempts: all.length,\n    retried: isShopped(all),",
+      "replace": "attempts: onTarget.length,\n    retried: isShopped(onTarget),"
+    },
+    {
+      "name": "the cap raises a level that claimed less",
+      "model_case": "(round 2 kit)",
+      "file": "attempts.js",
+      "find": "if (capped && rank(claims) > rank('helper')) return 'helper';",
+      "replace": "if (capped) return 'helper';"
+    },
+    {
+      "name": "platforms verified drops the no-disagreement clause",
+      "model_case": "(round 2 kit)",
+      "file": "platforms.js",
+      "find": "return sameOnTwo && !keys.some((key) => keyDiffers(recorded, key));",
+      "replace": "return sameOnTwo;"
+    },
+    {
+      "name": "platforms stood_in not sorted",
+      "model_case": "(round 2 kit)",
+      "file": "platforms.js",
+      "find": "  stoodIn.sort((a, b) => compareText(a[0], b[0]) || compareText(a[1], b[1]));\n",
+      "replace": ""
+    },
+    {
+      "name": "a stand-in is always reported passed",
+      "model_case": "(round 2 kit)",
+      "file": "platforms.js",
+      "find": "status[key][platform] = [...others[0][1]][0];",
+      "replace": "status[key][platform] = 'passed';"
+    },
+    {
+      "name": "another platform's record overrides a platform's own",
+      "model_case": "(round 2 kit)",
+      "file": "platforms.js",
+      "find": "if (own !== undefined) {",
+      "replace": "if (own !== undefined && !(mayStandIn && others.length > 0)) {"
+    },
+    {
+      "name": "stand-in without the provider's claim",
+      "model_case": "(round 2 kit)",
+      "file": "platforms.js",
+      "find": "scenario.stand_in_allowed && providerClaims && claimVerified",
+      "replace": "scenario.stand_in_allowed && claimVerified"
+    },
+    {
+      "name": "decision flag is sticky after an edit back",
+      "model_case": "(round 2 kit)",
+      "file": "decisions.js",
+      "find": "results.push({ flagged: isFlagged(names, scenario.governs, recorded) });",
+      "replace": "results.push({ flagged: (results.some((r) => r.flagged) && !step.review) || isFlagged(names, scenario.governs, recorded) });"
+    },
+    {
+      "name": "decisions watch only the first governed name",
+      "model_case": "(round 2 kit)",
+      "file": "decisions.js",
+      "find": "return governs.some((name) => {",
+      "replace": "return governs.slice(0, 1).some((name) => {"
+    },
+    {
+      "name": "decisions refresh the recorded content on edit",
+      "model_case": "(round 2 kit)",
+      "file": "decisions.js",
+      "find": "else names.set(step.edit.name, step.edit.to);",
+      "replace": "else { names.set(step.edit.name, step.edit.to); if (recorded.has(step.edit.name)) recorded.set(step.edit.name, step.edit.to); }"
+    },
+    {
+      "name": "a failing soft gate blocks delivery",
+      "model_case": "(round 2 kit)",
+      "file": "intent.js",
+      "find": "hard.some((criterion) => criterion.check !== 'passed')",
+      "replace": "all.filter((criterion) => criterion.gate !== 'deferred').some((criterion) => criterion.check !== 'passed')"
+    },
+    {
+      "name": "min_hard_gates treated as 1 whatever it is",
+      "model_case": "(round 2 kit)",
+      "file": "intent.js",
+      "find": "Math.max(1, policy.min_hard_gates)",
+      "replace": "1"
+    },
+    {
+      "name": "the separation floor capped at apart",
+      "model_case": "(round 2 kit)",
+      "file": "intent.js",
+      "find": "rank(level) >= rank(policy.exception_separation)",
+      "replace": "rank(level) >= Math.min(rank(policy.exception_separation), rank('apart'))"
+    },
+    {
+      "name": "an attested source with no claim earns the cap",
+      "model_case": "(round 2 kit)",
+      "file": "intent.js",
+      "find": "if (amendment.claims === undefined || amendment.claims === null) return 'self';",
+      "replace": "if (amendment.claims === undefined || amendment.claims === null) return amendment.source === 'attested' ? SOURCE_CAP.attested : 'self';"
+    },
+    {
+      "name": "acts: an attestation under an unlisted key is accepted",
+      "model_case": "(round 2 kit)",
+      "file": "acts.js",
+      "find": "if (!Object.hasOwn(attestors, attestation.key)) return false;",
+      "replace": "if (!Object.hasOwn(attestors, attestation.key)) return true;"
+    },
+    {
+      "name": "acts: the mac is not checked",
+      "model_case": "(round 2 kit)",
+      "file": "acts.js",
+      "find": "return crypto.timingSafeEqual(expected, Buffer.from(attestation.mac, 'hex'));",
+      "replace": "return true;"
+    },
+    {
+      "name": "acts: uncovered fields count as vouched for",
+      "model_case": "(round 2 kit)",
+      "file": "acts.js",
+      "find": "vouched[fact] = holds && reads.every((field) => record.attestation.covers.includes(field));",
+      "replace": "vouched[fact] = holds;"
+    },
+    {
+      "name": "acts: a missing started_by counts as started by someone else",
+      "model_case": "(round 2 kit)",
+      "file": "acts.js",
+      "find": "started: present(actor.started_by) && actor.started_by !== worker.id,",
+      "replace": "started: actor.started_by !== worker.id,"
+    },
+    {
+      "name": "acts: tested without the known-wrong and known-right items among given",
+      "model_case": "(round 2 kit)",
+      "file": "acts.js",
+      "find": "      && hasItem(record.given, 'known-wrong', knownBad.wrong)\n      && hasItem(record.given, 'known-right', knownBad.right),\n",
+      "replace": "      ,\n"
+    },
+    {
+      "name": "status: a record whose key does not match its preimage counts",
+      "model_case": "(round 2 kit)",
+      "file": "status.js",
+      "find": "entry.kind === 'evidence' && !isRejected(entry.body))\n    .map",
+      "replace": "entry.kind === 'evidence')\n    .map"
+    },
+    {
+      "name": "status: any writer's records count",
+      "model_case": "(round 2 kit)",
+      "file": "status.js",
+      "find": "      && writers.includes(body.writer)\n",
+      "replace": ""
+    },
+    {
+      "name": "status: another platform's records count",
+      "model_case": "(round 2 kit)",
+      "file": "status.js",
+      "find": "      && body.platform === state.self.platform\n",
+      "replace": ""
+    },
+    {
+      "name": "status: a confirmation by someone other than the owner counts",
+      "model_case": "(round 2 kit)",
+      "file": "status.js",
+      "find": "act.target === baseline && act.actor.id === intent.owner)",
+      "replace": "act.target === baseline)"
+    },
+    {
+      "name": "status: a confirmation of a different baseline counts",
+      "model_case": "(round 2 kit)",
+      "file": "status.js",
+      "find": "act.kind === CONFIRM && act.target === baseline && ",
+      "replace": "act.kind === CONFIRM && "
+    },
+    {
+      "name": "status: a confirmation below the floor counts",
+      "model_case": "(round 2 kit)",
+      "file": "status.js",
+      "find": "confirmLevels.some((level) => rank(level) >= rank(floor))",
+      "replace": "confirmLevels.length > 0"
+    },
+    {
+      "name": "status: missing acts are left out of the separation count",
+      "model_case": "(round 2 kit)",
+      "file": "status.js",
+      "find": "matchLevels.push(highest(levels));",
+      "replace": "if (levels.length > 0) matchLevels.push(highest(levels));"
+    },
+    {
+      "name": "status: a project that requires nothing is reported passed",
+      "model_case": "(round 2 kit)",
+      "file": "status.js",
+      "find": "  if (policy.required.length === 0) return 'nothing-required';\n",
+      "replace": ""
+    },
+    {
+      "name": "status: a criterion that nothing checks counts as met",
+      "model_case": "(round 2 kit)",
+      "file": "status.js",
+      "find": "const met = states.length > 0 && states.every(",
+      "replace": "const met = states.every("
+    },
+    {
+      "name": "status: an unchecked deferred criterion is not counted as open",
+      "model_case": "(round 2 kit)",
+      "file": "status.js",
+      "find": "c.gate === 'deferred' && !c.met).length",
+      "replace": "c.gate === 'deferred' && c.states.length > 0 && !c.met).length"
+    },
+    {
+      "name": "completing a run that is not in flight records a result",
+      "model_case": "(round 2 kit)",
+      "file": "evidence.js",
+      "find": "      const at = ledger.running.findIndex((run) => run.run === step.complete.run);\n      if (at >= 0) {\n        const [run] = ledger.running.splice(at, 1);\n        ledger.records.push({ obligation: run.obligation, inputs: run.inputs, tool: run.tool, verdict: step.complete.verdict });\n      }",
+      "replace": "      const at = ledger.running.findIndex((run) => run.run === step.complete.run);\n      const run = at >= 0 ? ledger.running.splice(at, 1)[0] : ledger.last;\n      if (run) {\n        ledger.last = run;\n        ledger.records.push({ obligation: run.obligation, inputs: run.inputs, tool: run.tool, verdict: step.complete.verdict });\n      }"
+    },
+    {
+      "name": "a submit under a name in flight starts a second run",
+      "model_case": "(round 2 kit)",
+      "file": "evidence.js",
+      "find": "\n        && !ledger.running.some((run) => run.run === step.submit.as)) {",
+      "replace": ") {"
+    }
+  ]
+}

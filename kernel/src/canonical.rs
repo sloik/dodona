@@ -12,7 +12,24 @@ pub fn answer(input: &[u8]) -> Value {
         Err(reason) => json::object(vec![("refused", json::string(reason))]),
     }
 }
-fn sha256(input: &[u8]) -> String {
+/// The identity of a value: the hash of its canonical encoding.
+pub fn identity(v: &Value) -> String {
+    format!("sha256:{}", sha256(json::encode(v).as_bytes()))
+}
+/// Bytes from hexadecimal digits, two per byte. Signs and odd lengths are refused.
+pub fn unhex(s: &str) -> Option<Vec<u8>> {
+    if s.len() % 2 != 0 || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
+        .collect()
+}
+pub fn sha256(input: &[u8]) -> String {
+    digest(input).iter().map(|b| format!("{b:02x}")).collect()
+}
+pub fn digest(input: &[u8]) -> [u8; 32] {
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
         0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
@@ -73,7 +90,11 @@ fn sha256(input: &[u8]) -> String {
             *x = x.wrapping_add(y)
         }
     }
-    h.iter().map(|v| format!("{v:08x}")).collect()
+    let mut out = [0u8; 32];
+    for (i, v) in h.iter().enumerate() {
+        out[i * 4..i * 4 + 4].copy_from_slice(&v.to_be_bytes());
+    }
+    out
 }
 #[cfg(test)]
 mod tests {
@@ -88,5 +109,69 @@ mod tests {
             sha256(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+}
+
+/// The core key of an evidence record from its preimage, or why it has none.
+/// The named arrays are sets: sorted by their UTF-8 bytes, with no repeats.
+pub fn core_key(v: &Value) -> Result<String, &'static str> {
+    let inputs = v.opt("inputs");
+    if v.opt("platform").is_some() || inputs.is_some_and(|i| i.opt("platform").is_some()) {
+        return Err("platform-in-core-key");
+    }
+    for name in ["specified_by", "targets", "closure", "declared", "mapping"] {
+        if let Some(Value::Array(a)) = inputs.and_then(|i| i.opt(name)) {
+            let sorted = a.windows(2).all(|w| match (&w[0], &w[1]) {
+                (Value::String(x), Value::String(y)) => x.as_bytes() < y.as_bytes(),
+                _ => false,
+            });
+            if !sorted {
+                return Err("unsorted-set");
+            }
+        }
+    }
+    Ok(identity(v))
+}
+pub fn key(v: &Value) -> Value {
+    match core_key(v) {
+        Ok(k) => json::object(vec![("core_key", json::string(&k))]),
+        Err(reason) => json::object(vec![("refused", json::string(reason))]),
+    }
+}
+#[cfg(test)]
+mod key_tests {
+    use super::*;
+    #[test]
+    fn rejects_non_sets_and_platform() {
+        let v = json::parse(br#"{"inputs":{"targets":["b","a"]}}"#).unwrap();
+        assert_eq!(key(&v).get("refused").str(), "unsorted-set");
+        let v = json::parse(br#"{"inputs":{"targets":["a","a"]}}"#).unwrap();
+        assert_eq!(core_key(&v), Err("unsorted-set"));
+        let v = json::parse(br#"{"inputs":{"platform":{}}}"#).unwrap();
+        assert_eq!(key(&v).get("refused").str(), "platform-in-core-key");
+        let v = json::parse(br#"{"platform":"p"}"#).unwrap();
+        assert_eq!(core_key(&v), Err("platform-in-core-key"));
+    }
+    #[test]
+    fn keys_what_it_accepts() {
+        let v = json::parse(br#"{"inputs":{"targets":["a","b"]}}"#).unwrap();
+        assert_eq!(core_key(&v), Ok(identity(&v)));
+        assert_eq!(
+            identity(&json::parse(b"{}").unwrap()),
+            "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        );
+        // Sets are ordered by UTF-8 bytes, not UTF-16 units.
+        let v = json::parse("{\"inputs\":{\"closure\":[\"\u{ff5e}\",\"\u{1f600}\"]}}".as_bytes())
+            .unwrap();
+        assert!(core_key(&v).is_ok());
+    }
+    #[test]
+    fn hexadecimal() {
+        assert_eq!(unhex("00ff1A"), Some(vec![0, 255, 26]));
+        assert_eq!(unhex(""), Some(vec![]));
+        assert_eq!(unhex("abc"), None);
+        assert_eq!(unhex("+a"), None);
+        assert_eq!(unhex("zz"), None);
+        assert_eq!(unhex("\u{e9}"), None);
     }
 }

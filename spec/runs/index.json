@@ -1,5 +1,5 @@
 {
-  "about": "Which recorded run supports which claim, and the exact files it was run on. tools/check_repo.py fails if a claim is marked checked in CLAIMS.md and no run listed here still matches the files.",
+  "about": "Which recorded run supports which claim, and the exact files it was run on. tools/check_repo.py fails if a claim is marked checked in CLAIMS.md and no run listed here still matches the files. `other_files` lists files outside the model directory that the result also depends on, such as the kernel's source; they are held to the same rule.",
   "runs": [
     {
       "id": "run-1",
@@ -298,7 +298,135 @@
         "run-6-kernel",
         "run-6-intent"
       ],
-      "note": "The seed kernel agreed with the model on 71,744 states of the evidence model and 78,894 of the intent model. State lists (SHA-256): kernel 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4, intent cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d. They are kept as a CI artifact, not in the repository."
+      "note": "The seed kernel agreed with the model on 71,744 states of the evidence model and 78,894 of the intent model. State lists (SHA-256): kernel 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4, intent cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d. They are kept as a CI artifact, not in the repository.",
+      "other_files": {
+        "kernel/src/assurance.rs": "2ad0e0836157601e4419f275deea9f6f6335a7409c9fe63b095f56a72c009649",
+        "kernel/src/attempts.rs": "6eff5dd50dbc4fe133849119e4d8f54d670fab6655e1336d122ebc2948419927",
+        "kernel/src/canonical.rs": "c254d742480fb0d0da5687b7cd38b5ed7be872987c64f7be792cd678745024fc",
+        "kernel/src/decisions.rs": "bcb66b11559045b5cb2d75808c71d38f6512ee3f53b9211282b05d94f80467c7",
+        "kernel/src/evidence.rs": "c003bba189a4d989ed9242d9839e39176f44f979c5be77a3810d696956c90610",
+        "kernel/src/intent.rs": "53153f6c22f9f3a6246ebe7d04f7e66ac1d3b955927203f46dc445accd38e48e",
+        "kernel/src/json.rs": "09d8d6cfc6664958b9b5622c636d2418beb2f9d58bb6f75ef1a489e99c8da131",
+        "kernel/src/main.rs": "e764eafc7ffbcc73357cec471cb05935ad254ec77560d443b6166b0e0261d4c1",
+        "kernel/src/path.rs": "17d7a387dadbd473ffcde38048218b5392b2bb2c8c0417737b33c92384015eab",
+        "kernel/src/plan.rs": "1f631803308ec57166e3c60f6838d5a6b97c97d051ff5e5332e68839c90588ad",
+        "kernel/src/platforms.rs": "433ecbbf7825374e81bb35bd9256c7ea29a4a8ff74916319865a73453ec69985",
+        "kernel/src/tree.rs": "84ad83a32a9c3e022e90e0efdca4c8b413c78884fc410bf9213e841f2d7ab788",
+        "kernel/src/unicode.rs": "c9e8139a873cb7cfcb26d531bb5ac740a7da7924111ee27ceda7c6e2ec558fc1",
+        "kernel/src/unicode_tables.rs": "2807352dd6b0e44a6e40c1b473c0295d381995e8c6cece73ee9b099269497e08",
+        "tools/check_states.py": "d94cc0df8dfd21c026cab751c3fbe73124c936ee6996c72d1217461b860661b9"
+      }
+    },
+    {
+      "id": "run-7-kernel-on-every-state",
+      "date": "2026-11-18",
+      "model": "kernel",
+      "outputs": "run-6/kernel",
+      "files": {
+        "MCDump.tla": "c1b39f5370044992a73f78f21e2dca9cf8ab5b5fe3eeb1fbf09b02ebdbfe1c52",
+        "dump.cfg": "8d629107298bf6e2f9222508f993e1b5b51e0d7d1c0532cf79a39c56d71d6e97"
+      },
+      "claims": [
+        "C37"
+      ],
+      "needs": [
+        "run-6-kernel",
+        "run-6-intent"
+      ],
+      "note": "The seed kernel as extended on 2026-11-18 (acts, status, ledger, core keys) agreed with the model on the same 71,744 states of the evidence model and 78,894 of the intent model that run 6 wrote out; the two models are unchanged. State lists (SHA-256): kernel 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4, intent cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d. The second kernel, kernel2, agreed on the same states. Compared on a development machine; CI repeats it on every change to main.",
+      "other_files": {
+        "kernel/src/acts.rs": "095c211a762950ed8ddf8bf41c0b4306736826994acec1e7f366fd2be1470061",
+        "kernel/src/assurance.rs": "2ad0e0836157601e4419f275deea9f6f6335a7409c9fe63b095f56a72c009649",
+        "kernel/src/attempts.rs": "88b985453dd1af272ea8590e570322f025a3eab8d98d0beaf28d22b68fefa554",
+        "kernel/src/canonical.rs": "4b988ca178466f21e2ac52730b5391c548c80361bd9f0799ed65138602536c8f",
+        "kernel/src/decisions.rs": "0a29e0f0d21f4aabb08721674d9c9111713eff827a18af8eeb5a2b8109ea46ba",
+        "kernel/src/evidence.rs": "f67a60ce40d543f9bc354d60f83587070834bd89fb81e5ef4937a3e779fbaf3b",
+        "kernel/src/intent.rs": "4d1acb4952f6129640d96a8514632217900c681e4a387f7055da8ce1c602ee71",
+        "kernel/src/json.rs": "bab54c5ac989bd32cd6973b534356f43f12705109627b6f1beab6b40bcef3380",
+        "kernel/src/ledger.rs": "80457015c5b95a8d22e3955bc3f4298be38f77ee4689f614f1326e4671c2caa3",
+        "kernel/src/main.rs": "0a15eb8d54b12c92c57aa756cdfe3f724ba20ddad3be5f615a0ef410ac26b173",
+        "kernel/src/path.rs": "a227cac23810f69fafff764b9a593fa918bd0988ec07218ecce6458097442e9b",
+        "kernel/src/plan.rs": "02d907742502874b64801b972e8ddc6fb77927793140de00952d3438c6ca3a81",
+        "kernel/src/platforms.rs": "c3d3b718089578350b1c90cb7a77ab9629656340a58cb93a0a3deb0efaed0107",
+        "kernel/src/status.rs": "31ad4fd6020a791a4198f4695bbe6104c9ed793dfa24ec464621aeef1b4f2e48",
+        "kernel/src/tree.rs": "79328e62327161adde59fa5abe6503395426d21aacdc5ef2da5c5e674c6de105",
+        "kernel/src/unicode.rs": "c9e8139a873cb7cfcb26d531bb5ac740a7da7924111ee27ceda7c6e2ec558fc1",
+        "kernel/src/unicode_tables.rs": "2807352dd6b0e44a6e40c1b473c0295d381995e8c6cece73ee9b099269497e08",
+        "tools/check_states.py": "d94cc0df8dfd21c026cab751c3fbe73124c936ee6996c72d1217461b860661b9"
+      }
+    },
+    {
+      "id": "run-7-platforms",
+      "date": "2026-11-18",
+      "model": "platforms",
+      "outputs": "run-7/platforms",
+      "files": {
+        "Platforms.tla": "64feb6cff2b1b73e277b5f413cfb6be24611f7a3a775e86f0651481393e97da5",
+        "design_not_claimed.cfg": "834f0f5348859ae598f16081959c3ff9e88282fd43744df62cf9fb0f2b4c75ce",
+        "design_stand_in_allowed.cfg": "3f84f02dc4cc1c73f2f0aa1c85d55642a75fed8f6d0f0ac621052fa852dc6ab6",
+        "design_stand_in_forbidden.cfg": "0b896c76fd3f0c0848d9edd8c93e4355d595c122515b70ac212824f84eef6b2a",
+        "mutant_always_stand_in.cfg": "b78cea59034ca389eea51e14b5bb8a29185226cadedd0240235277cd57e8cb7b",
+        "mutant_disagreement_ignored.cfg": "c29bdb00747c19674c9d940b8477158d2cbf1d2b37514b7e30745446c1007507",
+        "mutant_one_platform_reproduces.cfg": "48cec5c88d6b36176e7616859fe73e778e4ec468d2792ca66a5aa9251b1a3237",
+        "mutant_other_overrides_own.cfg": "66c0c91c6c71409b7f73c4cf92217687d9123ac94c5c6488c47053fa6a5b31ba",
+        "mutant_stand_in_always_passed.cfg": "02589e11fbed24b0dd33b96fee3e6b08efd3ad25d1f3faf0e5cfdd9d07f95494",
+        "mutant_stand_in_not_reported.cfg": "1ec65d6c4a20cb6155189a763be994cd778738ee44eb60b699d0c527a1cd94cb",
+        "mutant_stand_in_unclaimed.cfg": "dfd71692f86b7f284881e0f7c6c93c50775e2f5f1120a6c73165a80c6fd122ca",
+        "mutant_stand_in_unverified.cfg": "17537c9a31f3fd7e0396da0cb873cb35880200b1854388f91f1251fa66e1476d",
+        "reach_stand_in.cfg": "bb1e1ab54851011b436c946f478d50ed9b0bf29806b1da716eb186afd3ff291f"
+      },
+      "claims": [
+        "C15"
+      ],
+      "note": "The model as rewritten after the review of 2026-11-17. Queue job 8d41ae3f84254c84b62384ef67d84fbc, 12 cases, every one matched. Run from a development machine through the shared queue, not by CI."
+    },
+    {
+      "id": "run-7-tree",
+      "date": "2026-11-18",
+      "model": "tree",
+      "outputs": "run-7/tree",
+      "files": {
+        "IntentTree.tla": "fe68698537f5c34b7eaa0716d7d0a18cb28fd2930f5bb40f1288d3f90f674c0a",
+        "design.cfg": "c7c8ebf85bcf27b01b78f4d8ae03bb2696d4f4c9ac50f8d9fe615676e05d2df8",
+        "design_floor_two.cfg": "7d1f8ad23d3456379c009f854ec17f14a67823ec79186a05676f75ee5030c45e",
+        "mutant_add_keeps_confirmation.cfg": "64fbee6cac1c771732931f2374e80c77710b9d63728fe209d3f2f1f0bb7fcd65",
+        "mutant_delivered_ignores_children.cfg": "537ed1a7e418307bffce3c662cb2df5a5f2a1a34cc67d56da524153a377128d4",
+        "mutant_floor_counts_root_only.cfg": "1d931a311cb6a43ef566e41c277b117c6df2206862c85aba9baec2ec15f6692c",
+        "mutant_ignores_floor.cfg": "19c46c7a96bb98602bdca01567f41d639db989765c29494b157b95eb02faac94",
+        "mutant_remove_keeps_confirmation.cfg": "f9da1872900fc115d5861cacdc83230d62fdc28b1d4ee707ccbae4b21e40433b",
+        "mutant_soft_child_is_delivered.cfg": "27c5074426fcd5d4cad76787a991b4f59bd7e468e597e5adf3eb420d56093cf9",
+        "reach_delivered.cfg": "9d7252d706e176827c6e7a7b2820e23df4800a0804e7ddaf3edb16e1f1b398d6",
+        "reach_delivered_floor_two.cfg": "92266cdc0125651c1be02df8f9a700d8146abc9090d07fbc356b61febb4a5f26"
+      },
+      "claims": [
+        "C34"
+      ],
+      "note": "The model as rewritten after the review of 2026-11-17. Queue job 8d41ae3f84254c84b62384ef67d84fbc, 10 cases, every one matched. Run from a development machine through the shared queue, not by CI."
+    },
+    {
+      "id": "run-7-planner",
+      "date": "2026-11-18",
+      "model": "planner",
+      "outputs": "run-7/planner",
+      "files": {
+        "Planner.tla": "1f0a70d18662b792a0106a5785115a67357e7a050cb4452e343348cc58939f60",
+        "design_definition.cfg": "2491cffd6812c7526e0dbab4802212a4f4d10c94e43fbe1027b6bc86c2fe85c1",
+        "design_file.cfg": "57687a4963fc2d129089199887bbb3aa59ccfdd47d30e8001d7c8f0eaf8b9b88",
+        "file_costs_reruns.cfg": "01451183dcd53143a8d093a9ba7ad108c6643ae1e72a0530d8661b085a31324d",
+        "mutant_direct_deps_only.cfg": "6b6079e84433130dae921d55ffb2acb3149f03d9c6e122c3176f1015596baff9",
+        "mutant_fallback_direct_deps_only.cfg": "4ebde8ccc46d00c25dcc8a3d2c6545a5ece5e42b22d73d89636bedd7b6ff09d4",
+        "mutant_key_omits_producer.cfg": "da0c75bc17418deff45c70f9d92ca91c1f765f35a886e53318dc21315491e15a",
+        "mutant_no_deps.cfg": "ebf76f509745bc00c3e43da2913de1bb76e4c63951c888f2569d95fb00bae41e",
+        "mutant_plan_everything.cfg": "e8d5752d49bc78da09f77256d68e74a4fc66eb105b0b6d328c8189e193590d23",
+        "mutant_test_without_build.cfg": "cbd219c2241a28fd74a2b4237adcd4013a20ca8a5deb8d8f22cc3a3b77c77969",
+        "reach_all_current.cfg": "c802db85e09cb2961546b15a9f50c5040ef8b8623e6ec8493922e65cfafa155b"
+      },
+      "claims": [
+        "C8",
+        "C9",
+        "C10"
+      ],
+      "note": "The model as rewritten after the review of 2026-11-17. Queue job f1e82dbabf9d42e0940ed943d1e3a3ae, 10 cases, every one matched. Run from a development machine through the shared queue, not by CI."
     }
   ]
 }

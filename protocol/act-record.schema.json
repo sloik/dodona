@@ -224,7 +224,7 @@
       "required": [
         "harness",
         "key",
-        "signature",
+        "mac",
         "covers"
       ],
       "additionalProperties": false,
@@ -235,17 +235,19 @@
         "key": {
           "type": "string"
         },
-        "signature": {
-          "type": "string"
-        },
         "covers": {
           "type": "array",
           "items": {
             "type": "string"
           }
+        },
+        "mac": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "HMAC-SHA256, in lowercase hexadecimal, under the named key, of the canonical encoding of {\"covers\": C, \"fields\": F}, where C is `covers` and F holds each covered field of this record under its name."
         }
       },
-      "description": "A harness signature over the listed fields. Fields it does not cover fall back to declared."
+      "description": "A harness's keyed check value over the listed fields. Fields it does not cover fall back to declared. It is a shared-key value, not a signature: whoever can check it could also have made it, so the key must be out of the worker's reach."
     },
     "lineage": {
       "type": "object",

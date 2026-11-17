@@ -1,4 +1,7 @@
-use crate::json::{self, Value};
+use crate::{
+    acts,
+    json::{self, Value},
+};
 fn judge(attempts: &[(String, String)]) -> (&'static str, bool) {
     let result = if attempts.is_empty() {
         "none"
@@ -20,8 +23,9 @@ fn judge(attempts: &[(String, String)]) -> (&'static str, bool) {
     (result, shopped)
 }
 pub fn run(input: &Value) -> Vec<Value> {
-    let mut attempts: Vec<(String, String)> = Vec::new();
-    let mut total = 0;
+    // Every attempt in the order taken; those on the current target start at `current`.
+    let mut all: Vec<(String, String)> = Vec::new();
+    let mut current = 0;
     input
         .get("steps")
         .array()
@@ -29,21 +33,22 @@ pub fn run(input: &Value) -> Vec<Value> {
         .map(|step| {
             let a = step.get("do");
             if let Some(t) = a.opt("take") {
-                attempts.push((t.get("as").str().into(), "open".into()));
-                total += 1;
+                all.push((t.get("as").str().into(), "open".into()));
             }
             if let Some(c) = a.opt("close") {
-                attempts
+                if let Some(a) = all
                     .iter_mut()
-                    .find(|(t, _)| t == c.get("ticket").str())
-                    .unwrap()
-                    .1 = c.get("result").str().into();
+                    .find(|(t, r)| t == c.get("ticket").str() && r == "open")
+                {
+                    a.1 = c.get("result").str().into();
+                }
             }
             if a.opt("change_target").is_some() {
-                attempts.clear();
+                current = all.len();
             }
-            let (result, shopped) = judge(&attempts);
-            json::object(vec![
+            let (result, shopped) = judge(&all[current..]);
+            let (_, retried) = judge(&all);
+            let mut fields = vec![
                 ("result", json::string(result)),
                 ("shopped", Value::Bool(shopped)),
                 (
@@ -54,8 +59,21 @@ pub fn run(input: &Value) -> Vec<Value> {
                         Value::Null
                     },
                 ),
-                ("attempts", Value::Number(total)),
-            ])
+                ("attempts", Value::Number(all.len() as i64)),
+                ("retried", Value::Bool(retried)),
+            ];
+            if let Some(claim) = input.opt("claims") {
+                let rank = acts::rank(claim.str()).expect("claims is not a separation level");
+                fields.push((
+                    "granted",
+                    json::string(if shopped && rank > 1 {
+                        "helper"
+                    } else {
+                        claim.str()
+                    }),
+                ));
+            }
+            json::object(fields)
         })
         .collect()
 }

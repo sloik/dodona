@@ -1,0 +1,62 @@
+{
+  "kind": "intent",
+  "name": "minimum_of_two_hard_gates",
+  "claim": "C30",
+  "covers": [],
+  "why": "The floor is a number here too, and unguarded comes before open.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 2
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "soft"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "criterion": "c2",
+          "to": "soft"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    }
+  ]
+}

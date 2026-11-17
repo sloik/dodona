@@ -1,0 +1,151 @@
+{
+  "kind": "platforms",
+  "name": "a_disagreement_elsewhere_voids_the_stand_in",
+  "claim": "C15",
+  "covers": [],
+  "why": "A disagreement on any set of inputs withdraws every stand-in, and the list of stand-ins is sorted.",
+  "stand_in_allowed": true,
+  "keys": [
+    "k3",
+    "k2",
+    "k1"
+  ],
+  "platforms": [
+    "p1",
+    "p2"
+  ],
+  "steps": [
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k1": {
+            "p1": "passed",
+            "p2": "unknown"
+          }
+        },
+        "stood_in": [],
+        "reproducibility": {
+          "k1": "unknown",
+          "k2": "unknown",
+          "k3": "unknown"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k1": {
+            "p1": "passed",
+            "p2": "passed"
+          }
+        },
+        "stood_in": [],
+        "reproducibility": {
+          "k1": "agrees"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k2": {
+            "p1": "passed",
+            "p2": "passed"
+          }
+        },
+        "stood_in": [
+          [
+            "k2",
+            "p2"
+          ]
+        ],
+        "reproducibility": {
+          "k1": "agrees",
+          "k2": "unknown"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k3",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k3": {
+            "p1": "passed",
+            "p2": "passed"
+          }
+        },
+        "stood_in": [
+          [
+            "k2",
+            "p2"
+          ],
+          [
+            "k3",
+            "p2"
+          ]
+        ],
+        "reproducibility": {
+          "k3": "unknown"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k3",
+          "platform": "p2",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k1": {
+            "p1": "passed",
+            "p2": "passed"
+          },
+          "k2": {
+            "p1": "passed",
+            "p2": "unknown"
+          },
+          "k3": {
+            "p1": "passed",
+            "p2": "failed"
+          }
+        },
+        "stood_in": [],
+        "reproducibility": {
+          "k1": "agrees",
+          "k2": "unknown",
+          "k3": "differs"
+        }
+      }
+    }
+  ]
+}

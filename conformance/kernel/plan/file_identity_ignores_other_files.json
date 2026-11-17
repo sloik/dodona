@@ -1,0 +1,95 @@
+{
+  "kind": "plan",
+  "name": "file_identity_ignores_other_files",
+  "claim": "C9",
+  "covers": [],
+  "why": "File-level identity covers the files a target depends on, not every file in the project.",
+  "granularity": "file",
+  "definitions": {
+    "d1": {
+      "depends_on": [
+        "d2"
+      ],
+      "file": "f1"
+    },
+    "d2": {
+      "depends_on": [],
+      "file": "f2"
+    },
+    "d3": {
+      "depends_on": [],
+      "file": "f2"
+    },
+    "d4": {
+      "depends_on": [],
+      "file": "f3"
+    }
+  },
+  "obligations": {
+    "check": {
+      "targets": [
+        "d1"
+      ]
+    }
+  },
+  "start": {
+    "content": {
+      "d1": "a",
+      "d2": "a",
+      "d3": "a",
+      "d4": "a"
+    },
+    "tools": {
+      "compiler": "c1",
+      "runner": "r1"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "run": {
+          "obligation": "check"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d4",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d3",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "plan": [
+          "check"
+        ]
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d3",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "plan": []
+      }
+    }
+  ]
+}

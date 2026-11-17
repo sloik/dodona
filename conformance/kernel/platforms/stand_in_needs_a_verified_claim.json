@@ -80,10 +80,11 @@
           ]
         ],
         "reproducibility": {
-          "k1": "passed",
+          "k1": "agrees",
           "k2": "unknown"
         }
       }
     }
-  ]
+  ],
+  "provider_claims": true
 }

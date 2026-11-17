@@ -3,10 +3,13 @@
   "name": "edit_flags_and_review_clears",
   "claim": "C16",
   "covers": [
-    "decisions/reach_flagged"
+    "decisions/reach_flagged",
+    "decisions/mutant_refresh_on_edit"
   ],
   "why": "A decision is flagged when what it governs changes, and not when something else does. Reviewing it against the new content clears the flag.",
-  "governs": "n1",
+  "governs": [
+    "n1"
+  ],
   "names": {
     "n1": "a",
     "n2": "b"

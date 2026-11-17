@@ -43,6 +43,8 @@ jobs:
           .venv-examples/bin/python tools/check_examples.py
       - name: Judge the reference host with the misbehaving provider
         run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.python }} tools/provider_host.py
+      - name: Judge the stage-0 host with a checker that breaks one rule at a time
+        run: ${{ matrix.python }} tools/run_check_cases.py
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Kernel unit tests
@@ -53,8 +55,43 @@ jobs:
         run: ${{ matrix.python }} tools/run_vectors.py -- kernel/target/release/dodona-kernel canonical
       - name: Judge the kernel with the path vectors
         run: ${{ matrix.python }} tools/run_path_vectors.py -- kernel/target/release/dodona-kernel path path-set
+      - name: Judge the kernel with the core-key vectors
+        run: ${{ matrix.python }} tools/run_key_vectors.py -- kernel/target/release/dodona-kernel key
+      - name: Judge the kernel's ledger, with damage at every byte and two writers at once
+        run: ${{ matrix.python }} tools/run_ledger_cases.py -- kernel/target/release/dodona-kernel
+      - name: Check the kernel against values the reference signer makes now
+        run: ${{ matrix.python }} tools/run_attest_check.py -- kernel/target/release/dodona-kernel scenario
       - name: Compare the kernel's path check with the reference on random paths
         run: ${{ matrix.python }} tools/path_differential.py -- kernel/target/release/dodona-kernel
-      - name: Plant known defects and check the kit rejects each
-        if: matrix.os == 'ubuntu-24.04'
-        run: ${{ matrix.python }} tools/kit_adequacy.py
+      # The second kernel: JavaScript, written without sight of the first.
+      - name: Second kernel, unit tests
+        run: node --test kernel2/test.js
+      - name: Judge the second kernel with the conformance kit
+        run: ${{ matrix.python }} tools/run_kit.py -- node kernel2/dodona-kernel2.js scenario
+      - name: Judge the second kernel with the encoding vectors
+        run: ${{ matrix.python }} tools/run_vectors.py -- node kernel2/dodona-kernel2.js canonical
+      - name: Judge the second kernel with the path vectors
+        run: ${{ matrix.python }} tools/run_path_vectors.py -- node kernel2/dodona-kernel2.js path path-set
+      - name: Judge the second kernel with the core-key vectors
+        run: ${{ matrix.python }} tools/run_key_vectors.py -- node kernel2/dodona-kernel2.js key
+      - name: Judge the second kernel's ledger
+        run: ${{ matrix.python }} tools/run_ledger_cases.py -- node kernel2/dodona-kernel2.js
+      - name: Check the second kernel against values the reference signer makes now
+        run: ${{ matrix.python }} tools/run_attest_check.py -- node kernel2/dodona-kernel2.js scenario
+      - name: Compare the two kernels on inputs the kit does not contain
+        run: ${{ matrix.python }} tools/kernel_differential.py --rounds 6 --a kernel/target/release/dodona-kernel --b node kernel2/dodona-kernel2.js
+
+  # A kit that no defective kernel fails proves nothing. Every listed defect is
+  # planted in each kernel in turn and the kit must reject it. Slow, so it has
+  # its own job.
+  planted-defects:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Plant known defects in the first kernel
+        run: python3 tools/kit_adequacy.py
+      - name: Plant known defects in the second kernel
+        run: node kernel2/plant.js

@@ -56,6 +56,11 @@ NonVacuous ==
                                 \/ (Mutant = "unknown_defect_counts" /\ defect[m] = "unknown")
          THEN "shown" ELSE "not-shown"
 ----------------------------------------------------------------------------
+TypeOK ==
+    /\ links \in [Links -> Levels \cup {"unreported"}]
+    /\ planted \subseteq Defects
+    /\ defect \in [Defects -> {"passed", "failed", "unknown"}]
+
 \* The shown level is never above any link, and an unreported link is nothing.
 WeakestLink == \A l \in Links : ShownRank <= Rank(links[l])
 

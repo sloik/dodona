@@ -7,8 +7,11 @@ Stage-0 helper (decision 0023).
 Copies kernel/ to a temporary directory, checks that the unchanged copy passes
 the kit, then plants each defect listed in kernel/defects.json, one at a time,
 rebuilds and runs the kit again. A planted defect counts as caught when the
-kit rejects that kernel. Exit status is 0 only if the unchanged kernel passes
-and every planted defect is caught.
+changed kernel builds and the kit rejects it. A defect that names a case of a
+formal model must be rejected by a scenario that says it covers that case;
+otherwise the scenario's label is wrong. Exit status is 0 only if the
+unchanged kernel passes and every planted defect is caught, by the right
+scenario where one is named.
 
 This measures the kit against defects someone thought of. It says nothing
 about defects nobody thought of.
@@ -40,6 +43,10 @@ def passes_kit(kernel_dir: pathlib.Path) -> tuple[bool, list[str]]:
 
 def main() -> int:
     defects = json.loads((ROOT / "kernel" / "defects.json").read_text(encoding="utf-8"))["defects"]
+    covers: dict[str, set[str]] = {}
+    for path in sorted(ROOT.glob("conformance/kernel/*/*.json")):
+        for case in json.loads(path.read_text(encoding="utf-8")).get("covers", []):
+            covers.setdefault(case, set()).add(f"{path.parent.name}/{path.stem}")
     with tempfile.TemporaryDirectory() as tmp:
         copy = pathlib.Path(tmp) / "kernel"
         shutil.copytree(ROOT / "kernel", copy, ignore=shutil.ignore_patterns("target"))
@@ -57,8 +64,14 @@ def main() -> int:
             source.write_text(original.replace(defect["find"], defect["replace"], 1), encoding="utf-8")
             ok, failing = passes_kit(copy)
             source.write_text(original, encoding="utf-8")
+            case = defect.get("model_case")
             if ok:
                 print(f"MISSED   {defect['name']}: the kit accepts a kernel with this defect")
+            elif failing == ["did not build"]:
+                print(f"BROKEN   {defect['name']}: the kernel does not build with this defect, so nothing was shown")
+            elif case and not covers.get(case, set()) & set(failing):
+                print(f"MISLABELLED {defect['name']}: no scenario that says it covers {case} rejects it; "
+                      f"rejected only by {', '.join(failing[:4])}")
             else:
                 caught += 1
                 print(f"caught   {defect['name']}: rejected by {len(failing)} scenario(s)")

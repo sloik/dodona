@@ -1,0 +1,23 @@
+{
+  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. In every case but the first, nothing may be recorded as passed.",
+  "cases": [
+    {"mode": "well-behaved", "run": "exited", "outcome": "verdict", "verdict": "passed", "why": "A control: a provider that keeps every rule must be accepted, or the other cases prove nothing."},
+    {"mode": "well-behaved", "run": "timed-out", "outcome": "verdict", "verdict": "error", "asked_to_interpret": false, "why": "A run that did not exit ends the check in error. The provider is not asked what it thinks."},
+    {"mode": "well-behaved", "run": "unavailable", "outcome": "verdict", "verdict": "unavailable", "asked_to_interpret": false, "why": "An executor that cannot be reached is reported as exactly that."},
+    {"mode": "verdict-without-run", "run": "exited", "outcome": "refused", "reason": "verdict-without-run", "why": "A verdict rests on a run."},
+    {"mode": "stronger-than-declared", "run": "exited", "outcome": "refused", "reason": "strength-above-ceiling", "why": "A result may not claim more than the manifest declares."},
+    {"mode": "no-strength", "run": "exited", "outcome": "refused", "reason": "strength-above-ceiling", "why": "A verdict that states no strength claims one the host cannot bound."},
+    {"mode": "invented-verdict", "run": "exited", "outcome": "refused", "reason": "bad-verdict", "why": "The set of verdicts is closed."},
+    {"mode": "next-and-final", "run": "exited", "outcome": "refused", "reason": "neither-or-both", "why": "An answer asks for a run or gives a verdict, never both."},
+    {"mode": "neither", "run": "exited", "outcome": "refused", "reason": "neither-or-both", "why": "An answer that does neither is no answer."},
+    {"mode": "undeclared-tool", "run": "exited", "outcome": "refused", "reason": "undeclared-tool", "ran": false, "why": "A provider may start only tools it declared."},
+    {"mode": "undeclared-tool-in-argument", "run": "exited", "outcome": "refused", "reason": "undeclared-tool", "ran": false, "why": "The same holds for a tool named in an argument."},
+    {"mode": "program-outside-its-tool", "run": "exited", "outcome": "refused", "reason": "bad-path", "ran": false, "why": "A program path lies inside the tool it names."},
+    {"mode": "argument-outside-its-tool", "run": "exited", "outcome": "refused", "reason": "bad-path", "ran": false, "why": "So does a file of a tool named in an argument."},
+    {"mode": "starts-outside", "run": "exited", "outcome": "refused", "reason": "bad-path", "ran": false, "why": "A run starts inside its working directory."},
+    {"mode": "output-outside", "run": "exited", "outcome": "refused", "reason": "bad-path", "ran": false, "why": "A run writes inside its working directory."},
+    {"mode": "input-not-in-key", "run": "exited", "outcome": "refused", "reason": "input-not-in-key", "ran": false, "why": "A run may read only what its result is keyed by."},
+    {"mode": "second-run-with-new-input", "run": "exited", "outcome": "refused", "reason": "input-not-in-key", "why": "A later run may use only what is in the key."},
+    {"mode": "answers-another-capability", "run": "exited", "outcome": "refused", "reason": "wrong-capability", "why": "An answer matches its request."}
+  ]
+}

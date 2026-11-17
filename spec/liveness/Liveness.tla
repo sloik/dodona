@@ -1,60 +1,86 @@
 ------------------------------ MODULE Liveness ------------------------------
 (***************************************************************************)
-(* Every obligation is eventually decided (claim C22).                     *)
+(* Every obligation eventually gets an answer (claim C22).                 *)
 (*                                                                         *)
-(* One obligation. Its state is unknown, pending, unavailable (the last    *)
-(* attempt found the backend down) or decided. Edits, outages and lost     *)
-(* runs each happen only a bounded number of times. Under the assumption   *)
-(* that the kernel keeps submitting what is not decided, that the backend  *)
-(* comes back, and that a run in flight eventually finishes unless it is   *)
-(* lost, the obligation is eventually decided and stays decided.           *)
+(* One obligation. A run of it can end three ways: with a verdict, with    *)
+(* "unsupported", which is permanent and is a stated reason, not a         *)
+(* verdict, or without finishing: an error, or a loss the kernel notices.  *)
+(* A run happens only while the backend is up; an outage while a run is in *)
+(* flight loses it.                                                        *)
 (*                                                                         *)
-(* The bounds and the fairness conditions are the assumptions. Without     *)
-(* them nothing can be promised: a backend that never returns leaves the   *)
-(* obligation unknown for ever, with the reason stated.                    *)
+(* THE ASSUMPTIONS. The property is true only under all of these, and each *)
+(* is an assumption about the world or the kernel, not something shown:    *)
+(*   1. The kernel keeps submitting whatever has no answer (fairness).     *)
+(*   2. The backend comes back after an outage (fairness).                 *)
+(*   3. A run in flight ends, one way or another (fairness).               *)
+(*   4. Edits, outages, errors and losses each happen only a bounded       *)
+(*      number of times. Without this nothing can be promised: a run that  *)
+(*      is lost every time never finishes.                                 *)
+(*   5. The kernel can tell that a run was lost. A run that hangs silently *)
+(*      for ever is outside the model.                                     *)
 (***************************************************************************)
 EXTENDS Naturals
 
-CONSTANTS MaxEdits, MaxOutages, MaxLosses, Mutant
+CONSTANTS MaxEdits, MaxOutages, MaxFailures, CanBeUnsupported, Mutant
 
-VARIABLES st, backend, edits, outages, losses
+VARIABLES st, backend, edits, outages, failures
 
-vars == <<st, backend, edits, outages, losses>>
+vars == <<st, backend, edits, outages, failures>>
 
-Mutants == {"none", "no_resubmit_after_unavailable", "no_resubmit_after_loss"}
-ASSUME Mutant \in Mutants
+Mutants == {"none", "no_resubmit_after_unavailable", "no_resubmit_after_loss",
+            "no_resubmit_after_error", "resubmits_unsupported"}
+ASSUME Mutant \in Mutants /\ CanBeUnsupported \in BOOLEAN
 
-Init == st = "unknown" /\ backend = "up" /\ edits = 0 /\ outages = 0 /\ losses = 0
+Init == st = "unknown" /\ backend = "up" /\ edits = 0 /\ outages = 0 /\ failures = 0
 
 Edit ==
     /\ edits < MaxEdits
     /\ edits' = edits + 1 /\ st' = "unknown"
-    /\ UNCHANGED <<backend, outages, losses>>
+    /\ UNCHANGED <<backend, outages, failures>>
 
+\* The backend goes down. A run in flight is lost with it.
 Down ==
     /\ backend = "up" /\ outages < MaxOutages
     /\ backend' = "down" /\ outages' = outages + 1
-    /\ UNCHANGED <<st, edits, losses>>
+    /\ st' = IF st = "pending" THEN "lost" ELSE st
+    /\ UNCHANGED <<edits, failures>>
 
-Up == backend = "down" /\ backend' = "up" /\ UNCHANGED <<st, edits, outages, losses>>
+Up == backend = "down" /\ backend' = "up" /\ UNCHANGED <<st, edits, outages, failures>>
 
-\* The kernel submits whatever is not decided and not in flight.
+Retryable ==
+    {"unknown"}
+    \cup (IF Mutant = "no_resubmit_after_unavailable" THEN {} ELSE {"unavailable"})
+    \cup (IF Mutant = "no_resubmit_after_loss" THEN {} ELSE {"lost"})
+    \cup (IF Mutant = "no_resubmit_after_error" THEN {} ELSE {"error"})
+    \cup (IF Mutant = "resubmits_unsupported" THEN {"unsupported"} ELSE {})
+
 Submit ==
-    /\ st \in {"unknown"} \cup (IF Mutant = "no_resubmit_after_unavailable" THEN {} ELSE {"unavailable"})
-                          \cup (IF Mutant = "no_resubmit_after_loss" THEN {} ELSE {"lost"})
+    /\ st \in Retryable
     /\ st' = IF backend = "up" THEN "pending" ELSE "unavailable"
-    /\ UNCHANGED <<backend, edits, outages, losses>>
+    /\ UNCHANGED <<backend, edits, outages, failures>>
 
-Complete == st = "pending" /\ st' = "decided" /\ UNCHANGED <<backend, edits, outages, losses>>
+\* A run ends with a verdict, or with "unsupported".
+Complete ==
+    /\ st = "pending" /\ backend = "up"
+    /\ st' \in {"decided"} \cup (IF CanBeUnsupported THEN {"unsupported"} ELSE {})
+    /\ UNCHANGED <<backend, edits, outages, failures>>
 
-Lose ==
-    /\ st = "pending" /\ losses < MaxLosses
-    /\ st' = "lost" /\ losses' = losses + 1
+\* A run ends without finishing: an error, or a loss the kernel notices.
+Fail ==
+    /\ st = "pending" /\ failures < MaxFailures
+    /\ st' \in {"error", "lost"}
+    /\ failures' = failures + 1
     /\ UNCHANGED <<backend, edits, outages>>
 
-Next == Edit \/ Down \/ Up \/ Submit \/ Complete \/ Lose
+Next == Edit \/ Down \/ Up \/ Submit \/ Complete \/ Fail
 
 Spec == Init /\ [][Next]_vars /\ WF_vars(Submit) /\ WF_vars(Complete) /\ WF_vars(Up)
+----------------------------------------------------------------------------
+TypeOK ==
+    /\ st \in {"unknown", "pending", "unavailable", "lost", "error", "decided", "unsupported"}
+    /\ backend \in {"up", "down"}
 
-EventuallyDecided == <>[](st = "decided")
+\* Eventually the obligation has a verdict, or the stated reason that it
+\* cannot be checked, and that does not change again.
+EventuallyAnswered == <>[](st \in {"decided", "unsupported"})
 =============================================================================

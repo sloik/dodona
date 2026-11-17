@@ -11,8 +11,10 @@ The manifest lists cases, each with a working directory, an argument list and
 a name. For each case the driver writes <out>/<name>.txt with the checker's
 output and <out>/<name>.exit with its exit status. A case that cannot be
 started gets the exit status "did-not-start". The driver itself judges
-nothing; tools/check_models.py does that from the files.
+nothing. Run anywhere but inside a job of the queue, it refuses with exit
+status 78 before reading anything.
 """
+import hashlib
 import json
 import pathlib
 import shutil
@@ -20,9 +22,46 @@ import subprocess
 import sys
 
 
+def inside_the_executor() -> bool:
+    """True only inside a job of this site's queue.
+
+    The driver starts the model checker, and this site allows that in one
+    place only. Every fact below is set by the queue for its jobs and cannot
+    be arranged by whoever runs this file by hand: a marker in the
+    environment alone is not enough.
+    """
+    import os
+    import re
+    job = os.environ.get("TLA_QUEUE_JOB", "")
+    if not sys.platform.startswith("linux") or not re.fullmatch(r"[0-9a-f]{32}", job):
+        return False
+    try:
+        import pwd
+        worker = pwd.getpwnam("tla-job").pw_uid
+        if not (os.getuid() == os.geteuid() == worker) or pwd.getpwuid(os.getuid()).pw_name != "tla-job":
+            return False
+        groups = pathlib.Path("/proc/self/cgroup").read_text(encoding="ascii").splitlines()
+    except (KeyError, OSError, ValueError):
+        return False
+    return groups == [f"0::/system.slice/tla-q-{job}.service"]
+
+
 def main() -> int:
+    if not inside_the_executor():
+        print("refused: this driver runs only inside a job of the site's queue", file=sys.stderr)
+        return 78
     manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
     out = pathlib.Path(manifest["out"])
+    out.mkdir(parents=True, exist_ok=True)
+    # What is about to be run: the digest of each program and library the site asked to have
+    # measured. Done before the first case, so it is there even if the job is stopped later.
+    measured = {}
+    for path in manifest.get("measure", []):
+        try:
+            measured[path] = hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+        except OSError:
+            measured[path] = None
+    (out / "measured.json").write_text(json.dumps(measured, indent=1), encoding="utf-8")
     for case in manifest["cases"]:
         target = out / case["name"]
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -41,6 +80,9 @@ def main() -> int:
         # The checker leaves its working files behind. Left to pile up over many
         # cases they would exhaust the space a job is allowed.
         shutil.rmtree(pathlib.Path(case["cwd"]) / "states", ignore_errors=True)
+    # Written last, so a job that was stopped part of the way has no such file
+    # and nothing from it can be taken for the result of a whole job.
+    (out / "complete.json").write_text(json.dumps({"cases": [case["name"] for case in manifest["cases"]]}), encoding="utf-8")
     return 0
 
 

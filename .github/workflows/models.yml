@@ -11,7 +11,7 @@ on:
     branches: [main]
     # Records of runs and the claims table are not inputs to a run; changing them
     # must not start another one on the shared queue.
-    paths: ["spec/**", "!spec/runs/**", "!spec/CLAIMS.md", "!spec/README.md", "tools/check_models.py", "tools/check_states.py", "kernel/**", ".github/site/**", ".github/workflows/models.yml"]
+    paths: ["spec/**", "!spec/runs/**", "!spec/CLAIMS.md", "!spec/README.md", "tools/check_models.py", "tools/check_states.py", "tools/host.py", "tools/status.py", "providers/**", "kernel/**", "kernel2/**", ".github/site/**", ".github/workflows/models.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -33,8 +33,12 @@ jobs:
           persist-credentials: false
       - name: Run repository checks
         run: python3 tools/check_repo.py
-      - name: Run and judge every model case
-        run: python3 tools/check_models.py --site .github/site/executor.json --batch --dumps --save model-outputs --report model-report.json
+      # One job on the shared queue for everything. The provider says what to
+      # run, the executor runs it, and what came back is saved as files.
+      - name: Have the provider describe every check and the executor run them
+        run: python3 tools/host.py collect --site .github/site/executor.json --out out/runs --dumps
+      - name: Judge every model case
+        run: python3 tools/check_models.py --replay out/runs/outputs --report model-report.json
       - name: Keep the report, the raw outputs and the lists of states
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -42,7 +46,7 @@ jobs:
           name: model-run
           path: |
             model-report.json
-            model-outputs
+            out/runs
           if-no-files-found: warn
 
   # The model checker wrote out every state the two dump models reached, each
@@ -51,6 +55,9 @@ jobs:
   # model checker.
   kernel-on-every-state:
     needs: models
+    # Also when the cases did not all match or the executor could not be
+    # reached: then that is what gets recorded.
+    if: always() && needs.models.result != 'skipped' && needs.models.result != 'cancelled'
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
@@ -63,6 +70,42 @@ jobs:
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Evidence reuse, every state
-        run: python3 tools/check_states.py --model kernel --dump model-outputs/kernel/dump.states.dump --settings spec/kernel/dump-settings.json -- kernel/target/release/dodona-kernel
+        run: python3 tools/check_states.py --model kernel --dump out/runs/outputs/kernel/dump.states.dump --settings spec/kernel/dump-settings.json -- kernel/target/release/dodona-kernel
       - name: Intent delivery, every state
-        run: python3 tools/check_states.py --model intent --dump model-outputs/intent/dump.states.dump --settings spec/intent/dump-settings.json -- kernel/target/release/dodona-kernel
+        run: python3 tools/check_states.py --model intent --dump out/runs/outputs/intent/dump.states.dump --settings spec/intent/dump-settings.json -- kernel/target/release/dodona-kernel
+      - name: Second kernel, evidence reuse, every state
+        run: python3 tools/check_states.py --model kernel --dump out/runs/outputs/kernel/dump.states.dump --settings spec/kernel/dump-settings.json -- node kernel2/dodona-kernel2.js
+      - name: Second kernel, intent delivery, every state
+        run: python3 tools/check_states.py --model intent --dump out/runs/outputs/intent/dump.states.dump --settings spec/intent/dump-settings.json -- node kernel2/dodona-kernel2.js
+      # dodona used on dodona: the provider reads what the runs printed, the
+      # kernel writes each verdict to a ledger and works out the status of this
+      # project from it. A run that did not happen is recorded as unavailable.
+      - name: Record every verdict in a ledger
+        if: always()
+        run: python3 tools/host.py conclude --runs out/runs --ledger out/dodona.ledger --writer ci --kernel kernel/target/release/dodona-kernel
+      - name: Status of this project, worked out by the kernel
+        if: always()
+        run: |
+          git fetch --quiet --depth 1 origin main
+          python3 tools/status.py --ledger out/dodona.ledger --writer ci --kernel kernel/target/release/dodona-kernel | tee out/status.txt
+          python3 tools/status.py --ledger out/dodona.ledger --writer ci --json --kernel kernel/target/release/dodona-kernel > out/status.json
+          { echo '### Status of dodona, worked out by its own kernel'; echo; echo '```'; cat out/status.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Validate every message of both provider sessions against the schemas
+        if: always()
+        run: |
+          python3 -m venv .venv-examples
+          .venv-examples/bin/python -m pip install --quiet jsonschema==4.26.0
+          .venv-examples/bin/python tools/check_transcript.py out/runs/transcript-collect.json out/runs/transcript-conclude.json
+      - name: Keep the ledger, the status and the sessions
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dodona-on-dodona
+          path: |
+            out/dodona.ledger
+            out/status.txt
+            out/status.json
+            out/runs/transcript-collect.json
+            out/runs/transcript-conclude.json
+            out/runs/runs.json
+          if-no-files-found: warn

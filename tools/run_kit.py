@@ -5,7 +5,8 @@ Stage-0 helper (decision 0023).
     python tools/run_kit.py -- <kernel command and arguments>
 
 For each scenario under conformance/kernel/, the kernel command is started
-with the scenario as JSON on standard input and must print one JSON object:
+with the scenario as JSON on standard input, without its expected results,
+and must print one JSON object:
 
     {"results": [ <result after step 1>, <result after step 2>, ... ]}
 
@@ -29,6 +30,17 @@ def contains(actual, expected) -> bool:
     if isinstance(expected, dict):
         return isinstance(actual, dict) and all(k in actual and contains(actual[k], v) for k, v in expected.items())
     return actual == expected
+
+
+def question(scenario: dict) -> dict:
+    """What the kernel is shown: the scenario without the answers or the notes about it.
+
+    The first version of this judge sent the whole scenario, expected results
+    included, and a program that echoed them back passed every scenario.
+    """
+    asked = {k: v for k, v in scenario.items() if k not in ("claim", "covers", "why")}
+    asked["steps"] = [{"do": step["do"]} for step in scenario["steps"]]
+    return asked
 
 
 def judge(scenario: dict, output: str) -> list[str]:
@@ -58,7 +70,7 @@ def main() -> int:
     for path in scenarios:
         scenario = json.loads(path.read_text(encoding="utf-8"))
         try:
-            done = subprocess.run(command, input=json.dumps(scenario), capture_output=True, text=True,
+            done = subprocess.run(command, input=json.dumps(question(scenario)), capture_output=True, text=True,
                                   encoding="utf-8", timeout=60)
             diffs = judge(scenario, done.stdout) if done.returncode == 0 else [f"kernel exited with {done.returncode}"]
         except (OSError, subprocess.TimeoutExpired) as err:

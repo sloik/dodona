@@ -3,6 +3,7 @@ id: "0002"
 title: The kernel's rules are checked before any kernel is written
 owner: project owner
 parent: "0001"
+checks: {"2": ["*/mutant_*", "*/assumption_*"], "3": ["*/design*"]}
 touches:
   - spec/
 ---
@@ -15,6 +16,6 @@ The rules that decide what counts as shown must themselves be shown to be sound,
 
 | # | Criterion | Gate | Checked by |
 |---|---|---|---|
-| 1 | Every claim in spec/CLAIMS.md has a model or scenario | hard | 24 of 37 so far, all checked in run 6 |
-| 2 | Every modelled claim has a planted defect that is caught | hard | spec/kernel/expected.json and spec/intent/expected.json |
-| 3 | Every modelled claim has a completed, recorded run | hard | spec/CLAIMS.md, Recorded runs |
+| 1 | Every claim in spec/CLAIMS.md has a model or scenario | hard | 18 of 37 checked by a model, 6 more sampled by the kit, 6 modelled and waiting for a run of the rewritten models; see spec/CLAIMS.md. Not an obligation a kernel can read yet |
+| 2 | Every modelled claim has a planted defect that is caught | hard | Every planted-defect case of every model, as obligations of the model-checker provider |
+| 3 | Every modelled claim has a completed, recorded run | hard | Every design case of every model, as obligations of the model-checker provider |

@@ -36,34 +36,30 @@ pub fn run(input: &Value) -> Vec<Value> {
             up = x.get("to").str() == "up"
         }
         if let Some(x) = a.opt("submit") {
-            let o = x.get("obligation").str();
-            attempts.push(Attempt {
-                key: key(o, obligations, &defs, &tool),
-                run: x.get("as").str().into(),
-                outcome: if up { "pending" } else { "unavailable" }.into(),
-            });
+            let run = x.get("as").str();
+            if in_flight(&attempts, run).is_none() {
+                attempts.push(Attempt {
+                    key: key(x.get("obligation").str(), obligations, &defs, &tool),
+                    run: run.into(),
+                    outcome: if up { "pending" } else { "unavailable" }.into(),
+                });
+            }
         }
         if let Some(x) = a.opt("complete") {
-            let attempt = attempts
-                .iter_mut()
-                .find(|a| a.run == x.get("run").str() && a.outcome == "pending")
-                .unwrap();
-            attempt.outcome = x.get("verdict").str().into()
+            if let Some(i) = in_flight(&attempts, x.get("run").str()) {
+                attempts[i].outcome = x.get("verdict").str().into();
+            }
         }
         if let Some(x) = a.opt("lose") {
-            let attempt = attempts
-                .iter_mut()
-                .find(|a| a.run == x.get("run").str() && a.outcome == "pending")
-                .unwrap();
-            attempt.outcome = "error".into()
+            if let Some(i) = in_flight(&attempts, x.get("run").str()) {
+                attempts[i].outcome = "error".into();
+            }
         }
         let mut out = Vec::new();
         for (name, _) in obligations.object() {
             let k = key(name, obligations, &defs, &tool);
             let relevant: Vec<_> = attempts.iter().filter(|a| a.key == k).collect();
-            let pass = relevant.iter().any(|a| a.outcome == "passed");
-            let fail = relevant.iter().any(|a| a.outcome == "failed");
-            let status = status(pass, fail);
+            let status = status(relevant.iter().map(|a| a.outcome.as_str()));
             let mut fields = vec![("status", json::string(status))];
             if status == "unknown" {
                 let reason = if relevant.iter().any(|a| a.outcome == "pending") {
@@ -96,7 +92,20 @@ fn key(name: &str, obligations: &Value, defs: &BTreeMap<String, String>, tool: &
     }
 }
 
-fn status(pass: bool, fail: bool) -> &'static str {
+/// The run of that name that has started and not yet ended, if there is one.
+fn in_flight(attempts: &[Attempt], run: &str) -> Option<usize> {
+    attempts
+        .iter()
+        .position(|a| a.run == run && a.outcome == "pending")
+}
+/// The status of an obligation from the verdicts of the records that count for it.
+/// Anything that is not a verdict, such as a run with no result, is passed over.
+pub fn status<'a>(verdicts: impl IntoIterator<Item = &'a str>) -> &'static str {
+    let (mut pass, mut fail) = (false, false);
+    for verdict in verdicts {
+        pass |= verdict == "passed";
+        fail |= verdict == "failed";
+    }
     match (pass, fail) {
         (true, true) => "conflict",
         (true, false) => "passed",
@@ -132,10 +141,7 @@ pub fn states(input: &Value) -> Vec<Value> {
                     .iter()
                     .filter(matches)
                     .collect();
-                let status = status(
-                    records.iter().any(|r| r.get("verdict").str() == "passed"),
-                    records.iter().any(|r| r.get("verdict").str() == "failed"),
-                );
+                let status = status(records.iter().map(|r| r.get("verdict").str()));
                 let pending =
                     status == "unknown" && state.get("running").array().iter().any(|r| matches(&r));
                 out.push((
@@ -152,12 +158,89 @@ pub fn states(input: &Value) -> Vec<Value> {
 }
 #[cfg(test)]
 mod tests {
-    use super::status;
+    use super::*;
     #[test]
     fn statuses() {
-        assert_eq!(status(false, false), "unknown");
-        assert_eq!(status(true, false), "passed");
-        assert_eq!(status(false, true), "failed");
-        assert_eq!(status(true, true), "conflict");
+        assert_eq!(status([]), "unknown");
+        assert_eq!(status(["pending", "error", "unavailable"]), "unknown");
+        assert_eq!(status(["passed", "passed"]), "passed");
+        assert_eq!(status(["failed", "error"]), "failed");
+        assert_eq!(status(["passed", "failed"]), "conflict");
+    }
+    #[test]
+    fn runs_in_flight() {
+        let attempt = |run: &str, outcome: &str| Attempt {
+            key: Key {
+                obligation: "o".into(),
+                tool: "t".into(),
+                inputs: Vec::new(),
+            },
+            run: run.into(),
+            outcome: outcome.into(),
+        };
+        let attempts = [
+            attempt("a", "passed"),
+            attempt("b", "unavailable"),
+            attempt("a", "pending"),
+        ];
+        assert_eq!(in_flight(&attempts, "a"), Some(2));
+        assert_eq!(in_flight(&attempts, "b"), None);
+        assert_eq!(in_flight(&attempts, "c"), None);
+    }
+    fn statuses_after(steps: &str) -> Vec<String> {
+        let input = format!(
+            r#"{{"obligations":{{"o":{{"depends_on":["d"]}}}},"start":{{"definitions":{{"d":"1"}},"tool":"t","backend":"up"}},"steps":[{steps}]}}"#
+        );
+        run(&json::parse(input.as_bytes()).unwrap())
+            .iter()
+            .map(|r| {
+                let o = r.get("o");
+                o.opt("reason").unwrap_or(o.get("status")).str().to_owned()
+            })
+            .collect()
+    }
+    #[test]
+    fn states_count_only_current_records() {
+        let input = json::parse(
+            br#"{"obligations":{"o":{"depends_on":["d"]},"q":{"depends_on":["d"]}},"states":[
+                {"definitions":{"d":"2"},"tool":"t","running":[{"obligation":"q","inputs":{"d":"2"},"tool":"t"}],
+                 "records":[{"obligation":"o","inputs":{"d":"2"},"tool":"t","verdict":"passed"},
+                            {"obligation":"o","inputs":{"d":"1"},"tool":"t","verdict":"failed"},
+                            {"obligation":"o","inputs":{"d":"2"},"tool":"old","verdict":"failed"}]},
+                {"definitions":{"d":"1"},"tool":"t","running":[{"obligation":"o","inputs":{"d":"1"},"tool":"t"}],
+                 "records":[{"obligation":"o","inputs":{"d":"1"},"tool":"t","verdict":"failed"},
+                            {"obligation":"o","inputs":{"d":"1"},"tool":"t","verdict":"passed"}]}]}"#,
+        )
+        .unwrap();
+        let got: Vec<String> = states(&input).iter().map(json::encode).collect();
+        assert_eq!(
+            got,
+            [
+                r#"{"o":{"pending":false,"status":"passed"},"q":{"pending":true,"status":"unknown"}}"#,
+                r#"{"o":{"pending":false,"status":"conflict"},"q":{"pending":false,"status":"unknown"}}"#
+            ]
+        );
+    }
+    #[test]
+    fn steps_out_of_turn() {
+        let got = statuses_after(
+            r#"{"do":{"complete":{"run":"j","verdict":"passed"}}},{"do":{"lose":{"run":"j"}}},
+               {"do":{"submit":{"obligation":"o","as":"j"}}},{"do":{"submit":{"obligation":"o","as":"j"}}},
+               {"do":{"complete":{"run":"j","verdict":"passed"}}},{"do":{"complete":{"run":"j","verdict":"failed"}}},
+               {"do":{"submit":{"obligation":"o","as":"j"}}},{"do":{"lose":{"run":"j"}}}"#,
+        );
+        assert_eq!(
+            got,
+            [
+                "never-run",
+                "never-run",
+                "pending",
+                "pending",
+                "passed",
+                "passed",
+                "passed",
+                "passed"
+            ]
+        );
     }
 }

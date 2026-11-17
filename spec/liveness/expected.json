@@ -21,27 +21,41 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "at most two edits, two outages and two lost runs",
+  "bounds": "one obligation; at most two edits, two outages and two failed runs",
   "cases": [
     {
       "config": "design.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "Under the stated assumptions, the obligation is eventually decided and stays decided."
+      "purpose": "Under the stated assumptions the obligation eventually has a verdict or a stated reason, for good."
     },
     {
       "config": "mutant_no_resubmit_after_unavailable.cfg",
       "expect": "temporal-violation",
       "expect_exit": 13,
       "purpose": "Planted defect: after finding the backend down, the kernel never tries again.",
-      "of": "EventuallyDecided"
+      "of": "EventuallyAnswered"
     },
     {
       "config": "mutant_no_resubmit_after_loss.cfg",
       "expect": "temporal-violation",
       "expect_exit": 13,
       "purpose": "Planted defect: after a run is lost, the kernel never tries again.",
-      "of": "EventuallyDecided"
+      "of": "EventuallyAnswered"
+    },
+    {
+      "config": "mutant_no_resubmit_after_error.cfg",
+      "expect": "temporal-violation",
+      "expect_exit": 13,
+      "purpose": "Planted defect: after a run ends in an error, the kernel never tries again.",
+      "of": "EventuallyAnswered"
+    },
+    {
+      "config": "mutant_resubmits_unsupported.cfg",
+      "expect": "temporal-violation",
+      "expect_exit": 13,
+      "purpose": "Planted defect: an obligation that cannot be checked is submitted again and again, so it never settles.",
+      "of": "EventuallyAnswered"
     }
   ]
 }

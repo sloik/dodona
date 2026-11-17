@@ -40,5 +40,10 @@
     "batch_driver.py",
     "manifest.json"
   ],
-  "batch_timeout_seconds": 3600
+  "batch_timeout_seconds": 3600,
+  "executor_name": "shared-queue",
+  "tool_files": {
+    "java/bin/java": "/usr/bin/java",
+    "tla2tools/tla2tools.jar": "/opt/tla/tla2tools-1.7.4.jar"
+  }
 }

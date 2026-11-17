@@ -3,7 +3,7 @@
   "name": "higher_levels_meet_the_floor",
   "claim": "C33",
   "covers": [],
-  "why": "Every attested level at or above the floor takes effect, and an attestation cannot earn the top level, which needs a credential.",
+  "why": "An attested level at or above the floor takes effect, one below it does not, and an attestation cannot earn the top level, which needs a credential.",
   "policy": {
     "exception_separation": "apart",
     "min_hard_gates": 1
