@@ -26,8 +26,7 @@
       "config": "design.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "The intended design satisfies every property, for the main bounds. Run with a state view that leaves out the history variable `changed`, which none of these properties read; see MCDesign.tla.",
-      "model": "MCDesign.tla"
+      "purpose": "The intended design satisfies every property, for the main bounds."
     },
     {
       "config": "design_three_hashes.cfg",
@@ -118,6 +117,5 @@
       "purpose": "Broken assumption: a provider reports a wrong verdict. Shows the assumption is load-bearing.",
       "of": "Sound"
     }
-  ],
-  "note": "Every case uses MC.tla as its root module unless it names another under `model`."
+  ]
 }

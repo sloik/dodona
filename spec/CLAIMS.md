@@ -18,9 +18,9 @@ What a `checked` status means here, and no more:
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C1 | Given a provider that is correct and declares all its inputs: a reported pass means the obligation holds for the current inputs, and a reported failure means it does not, under any interleaving of edits, tool changes, lost runs and completions | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` | Key leaves out the tool digest; result filed under the key at completion | **checked**, runs 1 and 2 |
-| C2 | Every reusable record was produced by a run that completed; an unreachable backend never produces one | [0005](../decisions/0005-closed-verdict-set.md) | `Provenance` | Unavailable recorded as passed | **checked**, runs 1 and 2 |
-| C3 | With a correct provider, no evidence key ever holds both a pass and a failure | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Consistent` | Result filed under the key at completion | **checked**, runs 1 and 2 |
+| C1 | Given a provider that is correct and declares all its inputs: a reported pass means the obligation holds for the current inputs, and a reported failure means it does not, under any interleaving of edits, tool changes, lost runs and completions | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` | Key leaves out the tool digest; result filed under the key at completion | **checked**, runs 1 and 5 |
+| C2 | Every reusable record was produced by a run that completed; an unreachable backend never produces one | [0005](../decisions/0005-closed-verdict-set.md) | `Provenance` | Unavailable recorded as passed | **checked**, runs 1 and 5 |
+| C3 | With a correct provider, no evidence key ever holds both a pass and a failure | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Consistent` | Result filed under the key at completion | **checked**, runs 1 and 5 |
 | C4 | Even with a provider that can be wrong, a pass is never reported while a failure is recorded for the same key | [0005](../decisions/0005-closed-verdict-set.md) | `NoPassOverFail`, small instance | With conflicting records, the pass wins | **checked**, run 1 |
 | C5 | The design does reuse records after a change that does not affect them, so C1 is not satisfied by rerunning everything | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | Reachability: `NeverReusedAfterChange` must be violated | (reachability) | **checked**, run 1 |
 | C6 | C1 depends on two trusted-base assumptions: complete declared inputs, and a correct provider. Removing either breaks it | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` must be violated in both cases | (the broken assumption is the check) | **checked**, run 1 |
@@ -110,9 +110,9 @@ Same checker, same `EvidenceReuse.tla` and `MC.tla` as run 1, with root module `
 |---|---|---|---|---|
 | `design` | no violation of `TypeOK`, `Sound`, `Provenance`, `Consistent`, `NoPassOverFail` | no violation, search complete, depth 33 | 12,599,304 / 1,540,096 | yes |
 
-With run 1, all 14 cases of this model now match. C1 to C6 are checked, for the bounds and assumptions stated at the top of this file, and for the model only.
+With run 1, all 14 cases of this model matched. C1 to C6 were checked on that basis, for the bounds and assumptions stated at the top of this file, and for the model only.
 
-The soundness of using a state view is an argument, not something the checker verified. It is the weakest step in this result.
+The soundness of using a state view was an argument, not something the checker verified. Run 5 repeats the case without the view, so nothing rests on that argument any more.
 
 ### Run 3: `intent/IntentGates.tla`, 2026-11-17 (superseded)
 
@@ -169,3 +169,13 @@ All 17 cases matched: 4 searches completed with no violation, 3 behaviours were 
 | `mutant_deferred_as_passed` | `FulfilledSound` violated | violated | 15 / 13 |
 
 This model is narrow, as said above. "Checked" here means these rules hold in a small model that takes a recorded separation level as given; whether a recorded level is true is outside it.
+
+### Run 5: the main design case without a state view, 2026-11-17
+
+Same checker and the same `EvidenceReuse.tla` and `MC.tla` as run 1; `design.cfg` (SHA-256 `5f767efdef33fd97ff843ae08cea81f6bce6d35150856d51faf0a9f76e4ce9b0`) at the main bounds with no state view. It could not complete before because one of the checker's working files exceeded the size allowed to a job; the project now has its own allowance.
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no violation of `TypeOK`, `Sound`, `Provenance`, `Consistent`, `NoPassOverFail` | no violation, search complete, depth 34 | 27,385,032 / 3,575,936 |
+
+C1 to C3 now rest on runs 1 and 5. The state view and its module have been removed from the repository; run 2 is kept as a record.
