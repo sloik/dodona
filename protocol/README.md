@@ -71,7 +71,9 @@ Still to be written: the submission and outcome ledger entries, the canonical en
 Validating a message against its schema is a first filter. The kernel also holds to these, and a breach ends the check or the session in `error`:
 
 - **Wire parsing is as strict as the canonical encoding.** A message with a repeated key, a number that is not an integer, a lone surrogate, or nesting deeper than the limit in `hello` is refused.
-- **Every path passes the [path check](path-check.md)**, not only the pattern in the schema. A program path must lie inside the tool tree it names.
+- **Every path passes the [path check](path-check.md)**, not only the pattern in the schema. A program path must lie inside the tool tree it names. The same holds for the starting directory of a run and for the path part of a `${tool:NAME}/PATH` argument.
+- **A tool is one the provider declared.** A run description that names a tool missing from the provider's manifest, in its program or in an argument, is refused.
+- **A run's inputs are in the key.** A run description that lists an input the check was not given is refused.
 - **Every file is re-hashed.** The identity a provider gives for a file is recomputed from its bytes.
 - **An answer matches its request**: same `id`, same capability, and an `id` that was asked.
 - **A verdict rests on a run.** A final `passed` or `failed` with no run behind it is refused.

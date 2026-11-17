@@ -18,9 +18,11 @@ import json
 import pathlib
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from judge import judge  # noqa: E402
+
 NAME, VERSION, PROTOCOL = "dodona.tla", "0.1.0", "0.2"
 STRENGTH = {"class": "bounded-model-check", "rank": "bounded"}
-NO_ERROR = "Model checking completed. No error has been found."
 
 
 def send(message: dict) -> None:
@@ -42,60 +44,57 @@ def enumerate_obligations(body: dict) -> dict:
         designs = [c for c in spec["cases"] if c["expect"] == "no-violation"]
         for case in spec["cases"]:
             config = f"{folder}/{case['config']}"
-            item = {"name": f"{pathlib.PurePosixPath(folder).name}/{case['config'][:-4]}", "kind": "check",
+            # A configuration that must show a violation is one of two things. If the property it
+            # breaks is one a design configuration checks, it is a planted defect of that design.
+            # Otherwise it shows that something can happen (a state can be reached, an assumption
+            # is needed), and what holds is that it can.
+            guards = [d for d in designs if case.get("of") in pathlib.Path(folder, d["config"]).read_text(encoding="utf-8").split()]
+            short = pathlib.PurePosixPath(folder).name
+            if case["config"].startswith("mutant_") and not guards:
+                rejected.append({"name": f"{short}/{case['config'][:-4]}", "code": "defect-of-nothing",
+                                 "detail": "no design configuration checks the property this planted defect must break"})
+                continue
+            item = {"name": f"{short}/{case['config'][:-4]}", "kind": "check",
                     "specified_by": modules, "targets": [config],
-                    "expect": "holds" if case["expect"] == "no-violation" else "violated",
+                    "expect": "violated" if guards and case["expect"] != "no-violation" else "holds",
                     "config": {"root": case.get("model", spec["model"]), "config": case["config"], "folder": folder,
-                               "arguments": spec["arguments"], "model": spec["model"]}}
-            if case["expect"] != "no-violation":
-                item["config"]["property"] = case["of"]
-                item["config"]["temporal"] = case["expect"] == "temporal-violation"
-                guarded = [d for d in designs if case["of"] in pathlib.Path(folder, d["config"]).read_text(encoding="utf-8").split()]
-                if guarded:
-                    item["defect_of"] = f"{pathlib.PurePosixPath(folder).name}/{guarded[0]['config'][:-4]}"
+                               "arguments": spec["arguments"], "model": spec["model"],
+                               "case": {k: case[k] for k in ("config", "expect", "expect_exit", "of") if k in case}}}
+            if item["expect"] == "violated":
+                item["defect_of"] = f"{short}/{guards[0]['config'][:-4]}"
             obligations.append(item)
     return {"obligations": obligations, "rejected": rejected}
 
 
 def describe_run(body: dict) -> dict:
     config = body["obligation"]["config"]
-    # The program starts in the working directory, so the files are named with their folder.
-    folder = config["folder"]
-    args = [f"{folder}/{config['root']}" if a == config["model"] else a.replace("<config>", f"{folder}/{config['config']}")
-            for a in config["arguments"]]
+    args = [config["root"] if a == config["model"] else a.replace("<config>", config["config"]) for a in config["arguments"]]
     return {"next": {"program": {"tool": "java", "path": "bin/java"},
                      "args": ["-cp", "${tool:tla2tools}/tla2tools.jar", "tlc2.TLC"] + args,
                      "inputs": [f for f in body["inputs"] if f["path"].startswith(config["folder"] + "/")],
                      "outputs": [], "limits": {"wall_ms": 1800000, "output_bytes": 33554432},
-                     "platform": body["platform"], "tools": body["tools"]}}
+                     "platform": body["platform"], "cwd": config["folder"],
+                     "tools": [{"name": t["name"], "digest": t["digest"]} for t in body["tools"]]}}
 
 
 def interpret(obligation: dict, report: dict) -> dict:
     text = pathlib.Path(report["captured_output"]["path"]).read_text(encoding="utf-8", errors="replace")
-    config, status = obligation["config"], report.get("exit_status")
-    complete = NO_ERROR in text and ", 0 states left on queue." in text
-    states = [line for line in text.splitlines() if "distinct states found" in line and "Progress" not in line]
+    status = report.get("exit_status")
+    seen = judge(obligation["config"]["case"], status if isinstance(status, int) else None, text)
     summary = {"exit_status": status if isinstance(status, int) else -1}
+    states = [line for line in text.splitlines() if "distinct states found" in line and "Progress" not in line]
     if states:
         numbers = [int(part) for part in states[-1].replace(",", "").split() if part.isdigit()]
         if len(numbers) >= 2:
             summary.update(states_generated=numbers[0], distinct_states=numbers[1])
-    if obligation["expect"] == "holds":
-        if status == 0 and complete:
-            return {"final": {"verdict": "passed", "strength": STRENGTH, "summary": summary}}
-        if status == 12 and "is violated" in text:
-            return {"final": {"verdict": "failed", "strength": STRENGTH, "summary": summary}}
-        return {"final": {"verdict": "error", "reason": "did-not-complete"}}
-    if config.get("temporal"):
-        found = status == 13 and "Temporal properties were violated." in text
-    else:
-        found = status == 12 and (f"Invariant {config['property']} is violated." in text
-                                  or f"Invariant {config['property']} is violated by the initial state:" in text)
-    if found:
+    if seen["match"]:
+        # For a planted defect this means the violation it must show was found.
         return {"final": {"verdict": "passed", "strength": STRENGTH, "summary": summary}}
-    if status == 0 and complete:
-        return {"final": {"verdict": "failed", "strength": STRENGTH, "summary": summary}}
-    return {"final": {"verdict": "error", "reason": "did-not-complete"}}
+    if seen["outcome"] in ("did-not-complete", "did-not-run"):
+        return {"final": {"verdict": "error", "reason": "did-not-complete"}}
+    # The run completed and showed something other than what the obligation expects.
+    summary["showed"] = seen["outcome"]
+    return {"final": {"verdict": "failed", "strength": STRENGTH, "summary": summary}}
 
 
 def main() -> int:

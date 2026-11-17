@@ -11,7 +11,8 @@ The manifest lists cases, each with a working directory, an argument list and
 a name. For each case the driver writes <out>/<name>.txt with the checker's
 output and <out>/<name>.exit with its exit status. A case that cannot be
 started gets the exit status "did-not-start". The driver itself judges
-nothing; tools/check_models.py does that from the files.
+nothing. Run anywhere but inside a job of the queue, it refuses with exit
+status 78 before reading anything.
 """
 import hashlib
 import json
@@ -21,7 +22,34 @@ import subprocess
 import sys
 
 
+def inside_the_executor() -> bool:
+    """True only inside a job of this site's queue.
+
+    The driver starts the model checker, and this site allows that in one
+    place only. Every fact below is set by the queue for its jobs and cannot
+    be arranged by whoever runs this file by hand: a marker in the
+    environment alone is not enough.
+    """
+    import os
+    import re
+    job = os.environ.get("TLA_QUEUE_JOB", "")
+    if not sys.platform.startswith("linux") or not re.fullmatch(r"[0-9a-f]{32}", job):
+        return False
+    try:
+        import pwd
+        worker = pwd.getpwnam("tla-job").pw_uid
+        if not (os.getuid() == os.geteuid() == worker) or pwd.getpwuid(os.getuid()).pw_name != "tla-job":
+            return False
+        groups = pathlib.Path("/proc/self/cgroup").read_text(encoding="ascii").splitlines()
+    except (KeyError, OSError, ValueError):
+        return False
+    return groups == [f"0::/system.slice/tla-q-{job}.service"]
+
+
 def main() -> int:
+    if not inside_the_executor():
+        print("refused: this driver runs only inside a job of the site's queue", file=sys.stderr)
+        return 78
     manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
     out = pathlib.Path(manifest["out"])
     for case in manifest["cases"]:

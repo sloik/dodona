@@ -3,6 +3,7 @@ id: "0002"
 title: The kernel's rules are checked before any kernel is written
 owner: project owner
 parent: "0001"
+checks: {"2": ["*/mutant_*", "*/assumption_*"], "3": ["*/design*"]}
 touches:
   - spec/
 ---

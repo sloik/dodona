@@ -291,6 +291,11 @@ def status() -> None:
              pol=dict(policy, required=[]))
     bare = {"owner": "owner-1", "worker": "worker-1", "children": [], "criteria": {"c1": {"gate": "hard", "checked_by": []}}}
     soft = {"owner": "owner-1", "worker": "worker-1", "children": [], "criteria": {"c1": {"gate": "soft", "checked_by": ["ob-a"]}}}
+    late = {"owner": "owner-1", "worker": "worker-1", "children": [], "criteria": {"c1": {"gate": "hard", "checked_by": ["ob-a"]}, "c2": {"gate": "deferred", "checked_by": []}}}
+    scenario("nothing_checked_is_nothing_met", "C30", "A criterion that nothing checks is not met, and a deferred one is still open. Found by running status on a real project: every uncovered criterion was being counted as met.",
+             [(evidence("ob-a", A), {"intents": {"i1": {"status": "draft", "gates": {"hard": 1, "soft": 0, "deferred": 1, "deferred_open": 1}, "score": {"met": 1, "of": 2}},
+                                                 "i2": {"status": "draft", "score": {"met": 0, "of": 1}}}})],
+             intents={"i1": late, "i2": bare}, pol=dict(policy, required=["i1", "i2"]))
     scenario("uncovered_and_unguarded", "C30", "A criterion with no check is uncovered. An intent with no hard gate is unguarded. Neither is ever delivered, confirmed or not.",
              [({"append": {"kind": "act", "body": confirm("i1", bare)}}, {"intents": {"i1": {"status": "uncovered"}, "i2": {"status": "draft"}}}),
               ({"append": {"kind": "act", "body": confirm("i2", soft)}}, {"intents": {"i2": {"status": "unguarded"}}}),

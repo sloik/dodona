@@ -201,11 +201,13 @@ The result has `obligations`, `intents`, `project` and `rejected`.
 
 Each intent also reports:
 
-- `gates`: how many criteria are `hard`, `soft` and `deferred`, and `deferred_open`, how many deferred criteria have an obligation that is not `passed`.
-- `score`: `met`, how many criteria have every obligation `passed`, `of` how many criteria.
+- `gates`: how many criteria are `hard`, `soft` and `deferred`, and `deferred_open`, how many deferred criteria are not met.
+- `score`: `met`, how many criteria are met, `of` how many criteria. A criterion is met when it has at least one obligation and every one is `passed`. A criterion that nothing checks is never met.
 - `separation`: there must be one act of kind `confirm-baseline` and one of kind `match-check` for each pairing of a criterion with an obligation that checks it. For each, take the highest level among the agreed act records for it in the ledger: for the confirmation, those that would confirm the intent but for the floor; for a pairing, those of kind `match-check` whose target is the identity of `{"intent": I, "criterion": C, "obligation": O}`. With no such record the level is `self`. `weakest` is the lowest of these levels; `act` is the kind it belongs to, `confirm-baseline` if both kinds have it; `apart_or_better` counts those at `apart` or above; `of` is how many there must be.
 
 **Project status** is `nothing-required` if `required` is empty; otherwise `failed` if a hard criterion of a required intent has an obligation that is `failed` or `conflict`; otherwise `passed` if every required intent is `delivered` or `fulfilled`; otherwise `unknown`.
+
+A ledger may hold entries of other kinds, and an evidence body may carry more fields than those named. A kernel ignores both: they take part in no rule.
 
 Exceptions, children and deferred time limits are left out of status scenarios; the intent and tree scenarios cover them.
 

@@ -57,8 +57,7 @@
       "required": [
         "name",
         "version",
-        "digest",
-        "root"
+        "digest"
       ],
       "additionalProperties": false,
       "properties": {
@@ -75,7 +74,7 @@
         },
         "root": {
           "$ref": "common.schema.json#/$defs/relpath",
-          "description": "Directory in the working directory that holds the pinned tool tree."
+          "description": "Directory in the working directory that holds the pinned tool tree. Absent when the tree is not placed there and exists only where runs are executed; a run description then names its files as ${tool:NAME}/PATH."
         }
       }
     },
@@ -298,6 +297,10 @@
         },
         "config": {
           "type": "object"
+        },
+        "defect_of": {
+          "$ref": "common.schema.json#/$defs/name",
+          "description": "For a planted defect: the name, in the same binding, of the obligation whose check it must break. Present exactly when expect is violated."
         }
       }
     },
@@ -363,7 +366,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Argument list. Never a string meant for a shell."
+          "description": "Argument list. Never a string meant for a shell. An argument may name a file inside a pinned tool tree as ${tool:NAME}/PATH; the executor replaces that with where the file is on its machine."
         },
         "inputs": {
           "type": "array",
@@ -412,6 +415,10 @@
             "type": "string"
           },
           "description": "Environment variables for the program, complete: nothing is inherited. A value may refer to the root of a pinned tool tree as ${tool:NAME} and to the working directory as ${work}. The program starts in the working directory."
+        },
+        "cwd": {
+          "$ref": "common.schema.json#/$defs/relpath",
+          "description": "Directory the program starts in, relative to the run's working directory. The working directory itself when absent."
         }
       }
     },

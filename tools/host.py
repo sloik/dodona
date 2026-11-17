@@ -28,6 +28,7 @@ import argparse
 import hashlib
 import json
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,7 @@ import provider_host  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 RANKS = ["documented", "sampled", "bounded", "exhaustive"]
 PLATFORM = {"os": "linux", "arch": "aarch64", "libc": "gnu"}
+TOOL_FILE = re.compile(r"\$\{tool:([^}]*)\}/(.*)")
 
 
 class Refused(Exception):
@@ -161,7 +163,11 @@ def check_run_description(run: dict, manifest: dict, known_inputs: set[str]) -> 
     program = run.get("program", {})
     if program.get("tool") not in declared:
         raise Refused("undeclared-tool")
-    for path in [program.get("path", "")] + [f.get("path", "") for f in run.get("inputs", []) + run.get("outputs", [])]:
+    placed = [m for a in run.get("args", []) if isinstance(a, str) for m in TOOL_FILE.findall(a)]
+    if any(tool not in declared for tool, _ in placed):
+        raise Refused("undeclared-tool")
+    for path in ([program.get("path", "")] + [f.get("path", "") for f in run.get("inputs", []) + run.get("outputs", [])]
+                 + [path for _, path in placed] + ([run["cwd"]] if "cwd" in run else [])):
         if pathcheck.check(str(path).encode("utf-8", errors="surrogatepass")) is not None:
             raise Refused("bad-path")
     for item in run.get("inputs", []):
@@ -216,6 +222,24 @@ def list_project(session: Session, root: pathlib.Path) -> tuple[list[dict], list
     return obligations, files
 
 
+def lock_tools() -> tuple[list[dict], dict]:
+    """The tools as the lock pins them. A tool that is not pinned yet has a digest of zeros,
+    which no measurement can equal, so nothing recorded in that state counts later."""
+    lock = json.loads((ROOT / "dodona.lock").read_text(encoding="utf-8"))
+    pinned = {t["name"]: t for t in lock["tools"]}
+    return [{"name": n, "version": pinned[n]["version"], "digest": "sha256:" + (pinned[n]["sha256"] or "0" * 64)} for n in sorted(pinned)], pinned
+
+
+def preimage(obligation: dict, inputs: list[dict], tools: list[dict], manifest: dict) -> dict:
+    """The inputs a result depends on (conformance/vectors/core-key.json)."""
+    return {"obligation": canonical.identity({"binding": obligation["binding"], "name": obligation["name"]}), "kind": "check",
+            "inputs": {"specified_by": canonical.sort_set([f["identity"] for f in inputs if f["path"] in obligation["specified_by"]]),
+                       "targets": canonical.sort_set([f["identity"] for f in inputs if f["path"] in obligation["targets"]]),
+                       "closure": canonical.sort_set([f["identity"] for f in inputs]),
+                       "tools": [{"name": t["name"], "digest": t["digest"]} for t in tools], "config": canonical.identity(obligation["config"]), "expect": obligation["expect"]},
+            "provider": {"name": manifest["name"], "version": manifest["version"], "protocol": manifest["protocol"]}}
+
+
 def inputs_of(obligation: dict, files: list[dict]) -> list[dict]:
     folder = obligation["config"]["folder"] + "/"
     return [f for f in files if f["path"].startswith(folder) and not f["path"].endswith(".json")]
@@ -226,7 +250,8 @@ def collect(args) -> int:
     out = args.out
     out.mkdir(parents=True, exist_ok=True)
     transcript: list = []
-    tools = [{"name": name, "digest": "sha256:" + "0" * 64} for name in sorted(site["tool_roots"])]
+    where = site["tool_files"]
+    tools, _ = lock_tools()
     session = Session([sys.executable, str(ROOT / "providers" / "tlc" / "provider.py")], ROOT, transcript)
     try:
         obligations, files = list_project(session, ROOT)
@@ -242,17 +267,16 @@ def collect(args) -> int:
     bundle, dest = work / "bundle", work / "fetched"
     shutil.copytree(ROOT / "spec", bundle / "spec", ignore=shutil.ignore_patterns("runs", "*.md", "expected.json"))
     shutil.copy(ROOT / ".github" / "site" / "batch_driver.py", bundle / "batch_driver.py")
-    roots = site["tool_roots"]
     cases = []
     for item in pending:
         run = item["run"]
-        argv = [f"{roots[run['program']['tool']]}/{run['program']['path']}"]
-        for arg in run["args"]:
-            for name, where in roots.items():
-                arg = arg.replace("${tool:" + name + "}", where)
-            argv.append(arg)
-        cases.append({"name": item["obligation"]["name"], "cwd": ".", "argv": argv})
-    measure = sorted({c["argv"][0] for c in cases} | set(site.get("measure", [])))
+        try:
+            argv = [where[f"{run['program']['tool']}/{run['program']['path']}"]]
+            argv += [TOOL_FILE.sub(lambda m: where[f"{m.group(1)}/{m.group(2)}"], arg) for arg in run["args"]]
+        except KeyError as err:
+            raise SystemExit(f"this site has no file for {err}; add it to tool_files") from None
+        cases.append({"name": item["obligation"]["name"], "cwd": run.get("cwd", "."), "argv": argv})
+    measure = sorted(set(where.values()))
     (bundle / "manifest.json").write_text(json.dumps({"out": "out", "cases": cases, "measure": measure}, indent=1), encoding="utf-8")
     values = {"source": str(bundle), "dest": str(dest), "timeout": str(site.get("batch_timeout_seconds", 3600))}
     print(f"sending {len(cases)} runs to the executor as one job", flush=True)
@@ -263,8 +287,9 @@ def collect(args) -> int:
         shutil.copytree(fetched, out / "outputs", dirs_exist_ok=True)
     else:
         print("the executor returned nothing; every run is recorded as unavailable:", (done.stderr or done.stdout)[-300:].strip())
-    measured = json.loads((fetched / "measured.json").read_text(encoding="utf-8")) if (fetched / "measured.json").exists() else {}
-    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "pending": pending, "measured": measured, "tool_roots": roots,
+    seen = json.loads((fetched / "measured.json").read_text(encoding="utf-8")) if (fetched / "measured.json").exists() else {}
+    measured = {name: seen.get(path) for name, path in where.items()}
+    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "pending": pending, "measured": measured,
                                                "executor": site.get("executor_name", "site")}, indent=1) + "\n", encoding="utf-8")
     (out / "transcript-collect.json").write_text(json.dumps(transcript, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({"obligations": len(pending), "reachable": reachable}))
@@ -279,35 +304,26 @@ def kernel(command: list[str], sub: str, payload: dict) -> dict:
 
 
 def conclude(args) -> int:
+    if not args.runs.resolve().is_relative_to(ROOT):
+        raise SystemExit("the saved runs must be inside the project directory, where the provider can read them by relative path")
     runs = json.loads((args.runs / "runs.json").read_text(encoding="utf-8"))
-    lock = json.loads((ROOT / "dodona.lock").read_text(encoding="utf-8"))
     transcript: list = []
+    tools, pinned = lock_tools()
     measured = runs["measured"]
-    pinned = {t["name"]: t for t in lock["tools"]}
-    tools, unpinned, mismatched = [], [], []
-    for name, entry in sorted(pinned.items()):
-        seen = measured.get(entry["measured_file"])
-        tools.append({"name": name, "digest": "sha256:" + (seen or "0" * 64)})
-        if entry["sha256"] is None:
-            unpinned.append(name)
-        elif seen != entry["sha256"]:
-            mismatched.append(name)
+    ran = [{"name": n, "digest": "sha256:" + (measured.get(pinned[n]["file"]) or "0" * 64)} for n in sorted(pinned)]
+    unpinned = [n for n in sorted(pinned) if pinned[n]["sha256"] is None]
+    mismatched = [n for n in sorted(pinned) if pinned[n]["sha256"] is not None and measured.get(pinned[n]["file"]) != pinned[n]["sha256"]]
     session = Session([sys.executable, str(ROOT / "providers" / "tlc" / "provider.py")], ROOT, transcript)
     counts = {"passed": 0, "failed": 0, "error": 0, "unavailable": 0, "unsupported": 0, "refused": 0}
-    project = {}
     try:
         obligations, files = list_project(session, ROOT)
         stored = {item["obligation"]["name"]: item for item in runs["pending"]}
         for obligation in obligations:
             name = obligation["name"]
             inputs = inputs_of(obligation, files)
-            preimage = {"obligation": canonical.identity({"binding": obligation["binding"], "name": name}), "kind": "check",
-                        "inputs": {"specified_by": canonical.sort_set([f["identity"] for f in inputs if f["path"] in obligation["specified_by"]]),
-                                   "targets": canonical.sort_set([f["identity"] for f in inputs if f["path"] in obligation["targets"]]),
-                                   "closure": canonical.sort_set([f["identity"] for f in inputs]),
-                                   "tools": tools, "config": canonical.identity(obligation["config"]), "expect": obligation["expect"]},
-                        "provider": {"name": session.manifest["name"], "version": session.manifest["version"], "protocol": session.manifest["protocol"]}}
-            project[name] = {"preimage": preimage}
+            # The key is made from what was measured to have run, so a result made with a tool
+            # the lock does not pin can never be taken for one made with the pinned tool.
+            made_with = preimage(obligation, inputs, ran, session.manifest)
 
             def report_for(number, description, name=name):
                 if not runs["reachable"]:
@@ -319,10 +335,10 @@ def conclude(args) -> int:
                 captured = args.runs / "outputs" / f"{name}.txt"
                 status = args.runs / "outputs" / f"{name}.exit"
                 if not captured.exists() or not status.exists() or status.read_text().strip() == "did-not-start":
-                    return {"end": "limit-exceeded"}
+                    return {"end": "no-output"}
                 return {"handle": name, "end": "exited", "exit_status": int(status.read_text().strip()), "platform": PLATFORM,
-                        "tools_ran": tools, "isolation": "best-effort", "outputs": [],
-                        "captured_output": {"path": captured.resolve().relative_to(ROOT).as_posix() if captured.resolve().is_relative_to(ROOT) else str(captured),
+                        "tools_ran": ran, "isolation": "best-effort", "outputs": [],
+                        "captured_output": {"path": captured.resolve().relative_to(ROOT).as_posix(),
                                             "identity": "sha256:" + hashlib.sha256(captured.read_bytes()).hexdigest()}}
             try:
                 got = drive_check(session, obligation, inputs, tools, report_for)
@@ -335,8 +351,8 @@ def conclude(args) -> int:
             verdict = "unavailable" if final.get("reason") == "run-unavailable" else final["verdict"]
             counts[verdict] += 1
             if verdict in ("passed", "failed"):
-                key = kernel(args.kernel, "key", preimage)["core_key"]
-                body = {"obligation": name, "preimage": preimage, "core_key": key, "platform": "linux/aarch64", "verdict": verdict,
+                key = kernel(args.kernel, "key", made_with)["core_key"]
+                body = {"obligation": name, "preimage": made_with, "core_key": key, "platform": "linux/aarch64", "verdict": verdict,
                         "writer": args.writer, "strength": final["strength"], "summary": final.get("summary", {}),
                         "executor": runs["executor"], "unpinned_tools": unpinned}
                 kernel(args.kernel, "ledger-append", {"ledger": str(args.ledger), "kind": "evidence", "body": body, "wait_ms": 5000})
@@ -346,7 +362,6 @@ def conclude(args) -> int:
     finally:
         session.close()
     (args.runs / "transcript-conclude.json").write_text(json.dumps(transcript, indent=1) + "\n", encoding="utf-8")
-    (args.runs / "project-obligations.json").write_text(json.dumps(project, indent=1) + "\n", encoding="utf-8")
     counts.update(unpinned_tools=unpinned, mismatched_tools=mismatched)
     print(json.dumps(counts))
     return 0
