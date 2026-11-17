@@ -1,0 +1,52 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 83 and seed 4138322126109175022 with 1 worker on 1 cores with 494MB heap and 64MB offheap memory [pid: 461840] (Linux 7.0.0-1013-oracle aarch64, Ubuntu 21.0.13.0.3 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /work/MC.tla
+Parsing file /work/IntentGates.tla
+Parsing file /tmp/TLC.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/FiniteSets.tla
+Parsing file /tmp/Sequences.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module IntentGates
+Semantic processing of module TLC
+Semantic processing of module MC
+Starting... (2026-11-17 17:20:37)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-17 17:20:38.
+Error: Invariant FloorHolds is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ chk = [c1 |-> "unknown", c2 |-> "unknown"]
+/\ confirmed = FALSE
+/\ effGate = [c1 |-> "hard", c2 |-> "deferred"]
+/\ base = [c1 |-> "hard", c2 |-> "deferred"]
+/\ amendments = {}
+
+State 2: <Confirm line 70, col 5 to line 73, col 45 of module IntentGates>
+/\ chk = [c1 |-> "unknown", c2 |-> "unknown"]
+/\ confirmed = TRUE
+/\ effGate = [c1 |-> "hard", c2 |-> "deferred"]
+/\ base = [c1 |-> "hard", c2 |-> "deferred"]
+/\ amendments = {}
+
+State 3: <Amend line 88, col 5 to line 101, col 41 of module IntentGates>
+/\ chk = [c1 |-> "unknown", c2 |-> "unknown"]
+/\ confirmed = TRUE
+/\ effGate = [c1 |-> "hard", c2 |-> "hard"]
+/\ base = [c1 |-> "hard", c2 |-> "deferred"]
+/\ amendments = { [ by |-> "owner",
+    recorded |-> "helper",
+    level |-> "helper",
+    counted |-> TRUE,
+    shown |-> "helper",
+    crit |-> "c2",
+    to |-> "hard" ] }
+
+55 states generated, 35 distinct states found, 28 states left on queue.
+The depth of the complete state graph search is 3.
+The average outdegree of the complete state graph is 7 (minimum is 5, the maximum 9 and the 95th percentile is 9).
+Finished in 01s at (2026-11-17 17:20:38)

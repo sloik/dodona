@@ -33,16 +33,16 @@ Bounds: one intent with two or three criteria (hard and deferred), at most one o
 
 This model is narrow. It takes a recorded separation level as given and checks only what the kernel does with it; whether the level is true is outside it. `DeliveredSound`, `DeliveredConfirmed`, `DeliveredGuarded` and `FulfilledSound` can only catch a kernel that computes the report wrongly. `GateProvenance` does not require the amendment to come before the change. Not covered: child intents, the text of criteria, assurance levels, time limits and checks that vary between runs.
 
-The model was rewritten on 2026-11-17 to add the baseline, the unguarded rule and graded separation. **Run 3 was of the earlier version and no longer supports any claim.** Every status below is unchecked until the new version has been run.
+The model was rewritten on 2026-11-17 to add the baseline, the unguarded rule and graded separation. Run 3 was of the earlier version and supports no claim. Run 4 is of the current version.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | modelled, unchecked |
-| C25 | While an intent is confirmed, a gate differs from the baseline only through an amendment on record that took effect, and only the owner's amendments take effect | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends` | A gate is edited and the intent stays confirmed; the worker's amendment takes effect | modelled, unchecked |
-| C28 | Amendments are live rules: a sufficiently separate owner's amendment can open the way to delivery, and one below the floor cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence when the grantor cannot reach the floor | (reachability) | modelled, unchecked |
-| C29 | An intent the owner has not confirmed, or that was edited since, is never reported delivered | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `DeliveredConfirmed` | An unconfirmed intent is reported delivered | modelled, unchecked |
-| C30 | An intent with fewer hard gates than policy demands is never reported delivered. Children are not modelled | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredGuarded` | An intent with no hard gate is reported delivered | modelled, unchecked |
-| C33 | An act with no separation recorded is graded `self`, as is the worker granting to itself; an amendment below policy's floor does not take effect; the level reported is the level used | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `DefaultIsLowest`, `WorkerIsSelf`, `FloorHolds`, `LevelShown` | Nothing recorded treated as a high level; the worker keeps the level it wrote down; an amendment below the floor takes effect; a higher level shown than recorded | modelled, unchecked |
+| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | **checked**, run 4 |
+| C25 | While an intent is confirmed, a gate differs from the baseline only through an amendment on record that took effect, and only the owner's amendments take effect | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends` | A gate is edited and the intent stays confirmed; the worker's amendment takes effect | **checked**, run 4 |
+| C28 | Amendments are live rules: a sufficiently separate owner's amendment can open the way to delivery, and one below the floor cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence when the grantor cannot reach the floor | (reachability) | **checked**, run 4 |
+| C29 | An intent the owner has not confirmed, or that was edited since, is never reported delivered | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `DeliveredConfirmed` | An unconfirmed intent is reported delivered | **checked**, run 4 |
+| C30 | An intent with fewer hard gates than policy demands is never reported delivered. Children are not modelled | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredGuarded` | An intent with no hard gate is reported delivered | **checked**, run 4 |
+| C33 | An act with no separation recorded is graded `self`, as is the worker granting to itself; an amendment below policy's floor does not take effect; the level reported is the level used | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `DefaultIsLowest`, `WorkerIsSelf`, `FloorHolds`, `LevelShown` | Nothing recorded treated as a high level; the worker keeps the level it wrote down; an amendment below the floor takes effect; a higher level shown than recorded | **checked**, run 4 |
 
 ## Not yet modelled
 
@@ -141,3 +141,31 @@ All 13 cases matched.
 A defect in the judge, found by this run: `tools/check_models.py` at first reported `mutant_delivered_ignores_unknown` as a mismatch. The checker had found the right property violated, and words a violation in the very first state differently. The judge was corrected to accept that wording for the named property only, with tests that a different or longer property name is still rejected. The mismatch was a fault in the judge, not in the model or the expectation.
 
 This model is narrow, as said above. "Checked" here means these few rules hold in a model that takes the declared gates and the identities of the parties as given.
+
+### Run 4: `intent/IntentGates.tla` as rewritten, 2026-11-17
+
+Checker: TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802), one worker. Model files (SHA-256): `IntentGates.tla` `5896839e889b178ed042599f8b2a7bf2f790dcc2f897832bd5f6c844b30dd166`, `MC.tla` `54684b83b7db18a142623ec57e894d8caea05181c6958966161d5a4dc064f266`.
+
+All 17 cases matched: 4 searches completed with no violation, 3 behaviours were shown reachable, and each of the 10 planted defects was caught by the property aimed at it.
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design_three_criteria` | no violation | no violation, search complete | 22,134,628 / 1,494,450 |
+| `design_two_criteria` | no violation | no violation, search complete | 12,170,818 / 969,246 |
+| `design_low_floor` | no violation | no violation, search complete | 14,153,698 / 1,018,818 |
+| `floor_blocks_weak_grantor` | no violation | no violation, search complete | 15,997,906 / 1,122,660 |
+| `reach_delivered` | `NeverDelivered` violated | violated | 237 / 137 |
+| `reach_fulfilled` | `NeverFulfilled` violated | violated | 4,617 / 1,255 |
+| `reach_delivered_by_amendment` | `NeverDeliveredByAmendment` violated | violated | 297 / 169 |
+| `mutant_worker_can_amend` | `OnlyOwnerAmends` violated | violated | 59 / 39 |
+| `mutant_worker_keeps_level` | `WorkerIsSelf` violated | violated | 59 / 39 |
+| `mutant_below_floor_counts` | `FloorHolds` violated | violated | 55 / 35 |
+| `mutant_missing_is_apart` | `DefaultIsLowest` violated | violated | 79 / 59 |
+| `mutant_hide_level` | `LevelShown` violated | violated | 55 / 35 |
+| `mutant_edit_keeps_confirmation` | `GateProvenance` violated | violated | 51 / 35 |
+| `mutant_draft_delivers` | `DeliveredConfirmed` violated | violated | 2 / 2 |
+| `mutant_unguarded_delivers` | `DeliveredGuarded` violated | violated | 56 / 36 |
+| `mutant_delivered_ignores_unknown` | `DeliveredSound` violated | violated | 6 / 6 |
+| `mutant_deferred_as_passed` | `FulfilledSound` violated | violated | 15 / 13 |
+
+This model is narrow, as said above. "Checked" here means these rules hold in a small model that takes a recorded separation level as given; whether a recorded level is true is outside it.

@@ -49,6 +49,25 @@
       },
       "claims": [],
       "note": "Superseded: the model was rewritten after this run."
+    },
+    {
+      "id": "run-4",
+      "date": "2026-11-17",
+      "model": "intent",
+      "outputs": "run-4-intent",
+      "files": {
+        "IntentGates.tla": "5896839e889b178ed042599f8b2a7bf2f790dcc2f897832bd5f6c844b30dd166",
+        "MC.tla": "54684b83b7db18a142623ec57e894d8caea05181c6958966161d5a4dc064f266"
+      },
+      "claims": [
+        "C23",
+        "C25",
+        "C28",
+        "C29",
+        "C30",
+        "C33"
+      ],
+      "note": "17 of 17 cases matched."
     }
   ]
 }
