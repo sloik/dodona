@@ -1,0 +1,99 @@
+{
+  "kind": "evidence",
+  "name": "unavailable_is_not_a_pass",
+  "claim": "C2",
+  "covers": [
+    "kernel/mutant_unavailable_is_pass"
+  ],
+  "why": "An unreachable backend produces no result. The obligation stays unknown until a check really completes.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "backend": {
+          "to": "down"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "unavailable"
+        }
+      }
+    },
+    {
+      "do": {
+        "backend": {
+          "to": "up"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "unavailable"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j2"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    }
+  ]
+}

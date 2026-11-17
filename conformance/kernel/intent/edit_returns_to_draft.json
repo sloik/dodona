@@ -1,0 +1,75 @@
+{
+  "kind": "intent",
+  "name": "edit_returns_to_draft",
+  "claim": "C25",
+  "covers": [
+    "intent/mutant_edit_keeps_confirmation"
+  ],
+  "why": "Editing a gate directly, instead of by a recorded exception, makes the intent a draft until the owner confirms again.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "criterion": "c2",
+          "to": "soft"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}

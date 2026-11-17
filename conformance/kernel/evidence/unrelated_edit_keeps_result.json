@@ -1,0 +1,71 @@
+{
+  "kind": "evidence",
+  "name": "unrelated_edit_keeps_result",
+  "claim": "C5",
+  "covers": [
+    "kernel/reach_reuse"
+  ],
+  "why": "Editing something an obligation does not depend on leaves its result in place.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {}
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d2",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        },
+        "o2": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    }
+  ]
+}

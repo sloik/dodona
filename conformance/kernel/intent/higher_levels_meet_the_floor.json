@@ -1,0 +1,83 @@
+{
+  "kind": "intent",
+  "name": "higher_levels_meet_the_floor",
+  "claim": "C33",
+  "covers": [],
+  "why": "Every level at or above the floor takes effect. The scale is ordered.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "owner",
+          "separation": "tested"
+        }
+      },
+      "expect": {
+        "status": "open",
+        "amendment": {
+          "takes_effect": true,
+          "level": "tested"
+        }
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c2",
+          "to": "soft",
+          "by": "owner",
+          "separation": "helper"
+        }
+      },
+      "expect": {
+        "status": "open",
+        "amendment": {
+          "takes_effect": false,
+          "level": "helper"
+        }
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c2",
+          "to": "deferred",
+          "by": "owner",
+          "separation": "cross-make"
+        }
+      },
+      "expect": {
+        "status": "unguarded",
+        "amendment": {
+          "takes_effect": true,
+          "level": "cross-make"
+        }
+      }
+    }
+  ]
+}

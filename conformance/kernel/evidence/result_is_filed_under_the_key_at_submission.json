@@ -1,0 +1,88 @@
+{
+  "kind": "evidence",
+  "name": "result_is_filed_under_the_key_at_submission",
+  "claim": "C1",
+  "covers": [
+    "kernel/mutant_complete_with_current_key",
+    "kernel/mutant_complete_with_current_key_consistent"
+  ],
+  "why": "A result that arrives after an edit belongs to the inputs the run was given, not to the current ones.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    }
+  ]
+}

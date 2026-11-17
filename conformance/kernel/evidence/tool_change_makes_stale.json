@@ -1,0 +1,79 @@
+{
+  "kind": "evidence",
+  "name": "tool_change_makes_stale",
+  "claim": "C1",
+  "covers": [
+    "kernel/mutant_key_omits_tool"
+  ],
+  "why": "The tool is part of the evidence key. Changing it makes results stale; changing it back restores them.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {}
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "repin": {
+          "to": "t2"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "repin": {
+          "to": "t1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    }
+  ]
+}

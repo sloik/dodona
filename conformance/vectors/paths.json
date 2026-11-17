@@ -1,0 +1,276 @@
+{
+  "about": "Test vectors for the path check (protocol/path-check.md). Hostile names are data here and never real files. `accept` paths pass the single-path check. Each `reject` entry fails with exactly the given reason, which is the first rule it breaks in the order the rules are listed. `collisions` are sets of individually acceptable paths, with whether the set check must report a collision.",
+  "unicode": "15.1",
+  "accept": [
+    "a",
+    "README.md",
+    "spec/kernel/EvidenceReuse.tla",
+    "a/b/c/d/e",
+    "za\u017c\u00f3\u0142\u0107/g\u0119\u015bl\u0105.txt",
+    "dir.with.dots/file",
+    "-leading-dash",
+    "a b/c d",
+    "com10.txt",
+    "console.log",
+    "nul0",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss",
+    ".hidden",
+    "a/.b",
+    "\u540d\u524d/\u30d5\u30a1\u30a4\u30eb"
+  ],
+  "reject": [
+    {
+      "path": "",
+      "reason": "empty"
+    },
+    {
+      "path": "/a",
+      "reason": "empty-segment"
+    },
+    {
+      "path": "a/",
+      "reason": "empty-segment"
+    },
+    {
+      "path": "a//b",
+      "reason": "empty-segment"
+    },
+    {
+      "path": "./a",
+      "reason": "dot-segment"
+    },
+    {
+      "path": "a/../b",
+      "reason": "dot-segment"
+    },
+    {
+      "path": "a/.",
+      "reason": "dot-segment"
+    },
+    {
+      "path": "a\\b",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "C:/x",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "a:b",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "what?",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "a*",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "a|b",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "a<b>",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "say\"hi\"",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "tab\there",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "line\nbreak",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "nul\u0000",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "del\u007f",
+      "reason": "forbidden-character"
+    },
+    {
+      "path": "spec.tla.",
+      "reason": "trailing-dot-or-space"
+    },
+    {
+      "path": "dir./x",
+      "reason": "trailing-dot-or-space"
+    },
+    {
+      "path": "a ",
+      "reason": "trailing-dot-or-space"
+    },
+    {
+      "path": "a /b",
+      "reason": "trailing-dot-or-space"
+    },
+    {
+      "path": " a",
+      "reason": "leading-space"
+    },
+    {
+      "path": "d/ x",
+      "reason": "leading-space"
+    },
+    {
+      "path": "CON",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "con",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "Con.txt",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "nul",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "d/NUL.tar.gz",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "PRN",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "aux",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "COM1",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "com9.log",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "LPT0",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "lpt\u00b9",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "COM\u00b2.txt",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "e\u0301.txt",
+      "reason": "not-nfc"
+    },
+    {
+      "path": "A\u030a",
+      "reason": "not-nfc"
+    },
+    {
+      "path": "\u212b",
+      "reason": "not-nfc"
+    },
+    {
+      "path": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "reason": "segment-too-long"
+    },
+    {
+      "path": "ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss/ssssssssssssssssssss",
+      "reason": "too-long"
+    },
+    {
+      "path": "aux.d/x",
+      "reason": "reserved-name"
+    },
+    {
+      "path": "\u212a",
+      "reason": "not-nfc"
+    },
+    {
+      "path": "\u0378",
+      "reason": "unassigned-character"
+    }
+  ],
+  "reject_bytes": [
+    {
+      "hex": "61ff62",
+      "reason": "not-utf8"
+    },
+    {
+      "hex": "c0af",
+      "reason": "not-utf8"
+    },
+    {
+      "hex": "eda0bd",
+      "reason": "not-utf8"
+    }
+  ],
+  "collisions": [
+    {
+      "name": "plain case",
+      "paths": [
+        "README.md",
+        "readme.md"
+      ],
+      "collide": true
+    },
+    {
+      "name": "case differs in a directory",
+      "paths": [
+        "Spec/a",
+        "spec/a"
+      ],
+      "collide": true
+    },
+    {
+      "name": "sharp s folds to ss",
+      "paths": [
+        "stra\u00dfe",
+        "strasse"
+      ],
+      "collide": true
+    },
+    {
+      "name": "Greek final sigma",
+      "paths": [
+        "\u03c3\u03bf\u03c2",
+        "\u03c3\u03bf\u03c3"
+      ],
+      "collide": true
+    },
+    {
+      "name": "dotless i does not fold to i",
+      "paths": [
+        "\u0131",
+        "i"
+      ],
+      "collide": false
+    },
+    {
+      "name": "different names",
+      "paths": [
+        "a/b",
+        "a/c"
+      ],
+      "collide": false
+    },
+    {
+      "name": "same name in different directories",
+      "paths": [
+        "a/x",
+        "b/x"
+      ],
+      "collide": false
+    }
+  ]
+}

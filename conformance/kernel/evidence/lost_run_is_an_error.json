@@ -1,0 +1,57 @@
+{
+  "kind": "evidence",
+  "name": "lost_run_is_an_error",
+  "claim": "C2",
+  "covers": [],
+  "why": "A run that ends without a result leaves the obligation unknown, with the reason.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "lose": {
+          "run": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "error"
+        }
+      }
+    }
+  ]
+}

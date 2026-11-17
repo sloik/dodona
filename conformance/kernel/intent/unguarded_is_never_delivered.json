@@ -1,0 +1,64 @@
+{
+  "kind": "intent",
+  "name": "unguarded_is_never_delivered",
+  "claim": "C30",
+  "covers": [
+    "intent/mutant_unguarded_delivers"
+  ],
+  "why": "An intent with no hard gate is unguarded, confirmed or not, whatever passes.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "edit": {
+          "criterion": "c1",
+          "to": "soft"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    }
+  ]
+}

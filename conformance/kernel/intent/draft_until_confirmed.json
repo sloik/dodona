@@ -1,0 +1,69 @@
+{
+  "kind": "intent",
+  "name": "draft_until_confirmed",
+  "claim": "C29",
+  "covers": [
+    "intent/mutant_draft_delivers",
+    "intent/reach_delivered",
+    "intent/reach_fulfilled"
+  ],
+  "why": "An intent the owner has not confirmed is a draft however many checks pass.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "check": {
+          "criterion": "c1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c3",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "fulfilled"
+      }
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "kind": "evidence",
+  "name": "nothing_ran",
+  "claim": "C2",
+  "covers": [],
+  "why": "With nothing submitted, everything is unknown and never run.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "backend": {
+          "to": "down"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        },
+        "o2": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    }
+  ]
+}

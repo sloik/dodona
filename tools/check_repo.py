@@ -16,6 +16,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import check_models  # noqa: E402
+import pathcheck  # noqa: E402
+import run_kit  # noqa: E402
 
 problems: list[str] = []
 
@@ -244,10 +246,95 @@ def gap_every_check_is_listed() -> None:
             problems.append(f"docs/gap-checks.md does not list {name.__name__}")
 
 
+def gap_path_check_matches_its_vectors() -> None:
+    """The path rules were first only prose; nothing showed an implementation agreed with them."""
+    vectors = json.loads((ROOT / "conformance" / "vectors" / "paths.json").read_text(encoding="utf-8"))
+    for path in vectors["accept"]:
+        got = pathcheck.check(path.encode("utf-8"))
+        if got is not None:
+            problems.append(f"path vectors: {path!r} must be accepted, the reference refuses it: {got}")
+    for item in vectors["reject"]:
+        got = pathcheck.check(item["path"].encode("utf-8", errors="surrogatepass"))
+        if got != item["reason"]:
+            problems.append(f"path vectors: {item['path']!r} must be refused as {item['reason']}, the reference says {got}")
+    for item in vectors["reject_bytes"]:
+        got = pathcheck.check(bytes.fromhex(item["hex"]))
+        if got != item["reason"]:
+            problems.append(f"path vectors: bytes {item['hex']} must be refused as {item['reason']}, the reference says {got}")
+    for item in vectors["collisions"]:
+        if bool(pathcheck.collisions(item["paths"])) != item["collide"]:
+            problems.append(f"path vectors: collision case {item['name']!r} disagrees with the reference")
+
+
+def gap_repository_paths_are_portable() -> None:
+    """dodona's own files must pass dodona's own path rules."""
+    paths = [p.relative_to(ROOT).as_posix() for p in ROOT.glob("**/*")
+             if ".git" not in p.relative_to(ROOT).parts and "__pycache__" not in p.parts]
+    for path in paths:
+        reason = pathcheck.check(path.encode("utf-8"))
+        if reason:
+            problems.append(f"{path}: fails the path check: {reason}")
+    for first, second in pathcheck.collisions(paths):
+        problems.append(f"{first} and {second} differ only by case")
+
+
+def gap_canonical_vectors_are_consistent() -> None:
+    """A vector whose hash does not match its own text would be worse than no vector."""
+    vectors = json.loads((ROOT / "conformance" / "vectors" / "canonical.json").read_text(encoding="utf-8"))
+    for item in vectors["accept"]:
+        if hashlib.sha256(item["canonical"].encode("utf-8")).hexdigest() != item["sha256"]:
+            problems.append(f"canonical vectors: {item['name']!r} has a hash that is not the hash of its text")
+        if json.loads(item["canonical"]) != item["value"]:
+            problems.append(f"canonical vectors: {item['name']!r} has a text that does not decode to its value")
+
+
+def gap_every_modelled_case_has_a_scenario() -> None:
+    """A planted defect in a model is no use to a kernel unless a scenario carries it over."""
+    kit = ROOT / "conformance" / "kernel"
+    excused = set(json.loads((kit / "index.json").read_text(encoding="utf-8"))["not_covered"])
+    covered: set[str] = set()
+    for path in sorted(kit.glob("*/*.json")):
+        scenario = json.loads(path.read_text(encoding="utf-8"))
+        for key in ("kind", "name", "claim", "covers", "why", "steps"):
+            if key not in scenario:
+                problems.append(f"conformance/kernel/{path.parent.name}/{path.name}: no '{key}'")
+        if scenario.get("name") != path.stem or scenario.get("kind") != path.parent.name:
+            problems.append(f"conformance/kernel/{path.parent.name}/{path.name}: name or kind does not match its location")
+        if not scenario.get("steps") or any("do" not in s or "expect" not in s for s in scenario.get("steps", [])):
+            problems.append(f"conformance/kernel/{path.parent.name}/{path.name}: a step lacks 'do' or 'expect'")
+        covered.update(scenario.get("covers", []))
+    modelled = set()
+    for expected in sorted(ROOT.glob("spec/*/expected.json")):
+        for case in json.loads(expected.read_text(encoding="utf-8"))["cases"]:
+            modelled.add(f"{expected.parent.name}/{case['config'].removesuffix('.cfg')}")
+    for case in sorted(modelled - covered - excused):
+        problems.append(f"model case {case} has no scenario in the conformance kit and no stated reason")
+    for case in sorted((covered | excused) - modelled):
+        problems.append(f"the conformance kit refers to model case {case}, which does not exist")
+    for case in sorted(covered & excused):
+        problems.append(f"model case {case} is both covered by a scenario and listed as not covered")
+
+
+def gap_kit_judge_is_strict() -> None:
+    """The kit's judge must not accept a kernel that says nothing, or the wrong number of things."""
+    scenario = {"steps": [{"do": {}, "expect": {"o1": {"status": "passed"}}}]}
+    cases = [("", False), ("{}", False), ('{"results": []}', False),
+             ('{"results": [{"o1": {"status": "failed"}}]}', False),
+             ('{"results": [{"o1": {}}]}', False),
+             ('{"results": [{"o1": {"status": "passed"}}, {}]}', False),
+             ('{"results": [{"o1": {"status": "passed", "extra": 1}}]}', True)]
+    for output, should_match in cases:
+        if (run_kit.judge(scenario, output) == []) != should_match:
+            problems.append(f"kit judge: wrong answer for kernel output {output!r}")
+
+
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
-              gap_workflows_are_safe, gap_every_check_is_listed]
+              gap_workflows_are_safe, gap_path_check_matches_its_vectors,
+              gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
+              gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
+              gap_every_check_is_listed]
 
 
 class JudgeTests(unittest.TestCase):

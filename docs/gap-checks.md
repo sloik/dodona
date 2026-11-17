@@ -14,6 +14,11 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_vocabulary_is_the_same_everywhere` | Capability names and level names differed between the schemas and the documents |
 | `gap_nothing_private_or_unportable` | The repository is public and must behave the same on three platforms: no private paths, no shell scripts |
 | `gap_workflows_are_safe` | A project runner must never execute code from a pull request, and an unpinned action can change under us |
+| `gap_path_check_matches_its_vectors` | The path rules were prose only, and reviewers showed names that would be accepted on one platform and refused on another. The reference implementation must agree with every hand-written vector |
+| `gap_repository_paths_are_portable` | dodona's own files must pass dodona's own path rules |
+| `gap_canonical_vectors_are_consistent` | A test vector whose hash is not the hash of its own text would mislead every implementer |
+| `gap_every_modelled_case_has_a_scenario` | A defect planted in a formal model protects a kernel only if a scenario carries it into the kit. Every modelled case needs a scenario or a stated reason |
+| `gap_kit_judge_is_strict` | The judge of model runs once misread a result. The kit's judge must refuse an empty, short or wrong answer |
 | `gap_every_check_is_listed` | A check whose reason is lost gets deleted by mistake |
 
 The judge that decides whether a model run matched its expectation has its own tests in the same file, for the same reason: it once misread a correct result, and it must never turn an unfinished run into a pass.

@@ -1,0 +1,48 @@
+{
+  "kind": "intent",
+  "name": "exception_that_removes_the_last_hard_gate",
+  "claim": "C30",
+  "covers": [
+    "intent/mutant_unguarded_delivers"
+  ],
+  "why": "An exception can take effect and still leave the intent unguarded.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "owner",
+          "separation": "apart"
+        }
+      },
+      "expect": {
+        "status": "unguarded",
+        "amendment": {
+          "takes_effect": true,
+          "level": "apart"
+        }
+      }
+    }
+  ]
+}

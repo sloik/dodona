@@ -1,0 +1,81 @@
+{
+  "kind": "evidence",
+  "name": "edit_makes_stale_and_revert_restores",
+  "claim": "C5",
+  "covers": [
+    "kernel/reach_reuse"
+  ],
+  "why": "Editing a dependency makes the result stale. Putting the content back makes the old result valid again.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {}
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    }
+  ]
+}

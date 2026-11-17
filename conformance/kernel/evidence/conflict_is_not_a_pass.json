@@ -1,0 +1,108 @@
+{
+  "kind": "evidence",
+  "name": "conflict_is_not_a_pass",
+  "claim": "C4",
+  "covers": [
+    "kernel/mutant_pass_outranks_fail",
+    "kernel/reach_conflict"
+  ],
+  "why": "A pass and a failure for the same inputs is a conflict. The pass never wins, and the conflict comes back with the inputs.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {}
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j2"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j2",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "conflict"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "conflict"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "kind": "intent",
+  "name": "exception_below_the_floor_is_recorded_only",
+  "claim": "C33",
+  "covers": [
+    "intent/mutant_below_floor_counts",
+    "intent/floor_blocks_weak_grantor"
+  ],
+  "why": "An exception from a grantor not separate enough is recorded and changes nothing.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "owner",
+          "separation": "helper"
+        }
+      },
+      "expect": {
+        "status": "open",
+        "amendment": {
+          "takes_effect": false,
+          "level": "helper"
+        }
+      }
+    }
+  ]
+}

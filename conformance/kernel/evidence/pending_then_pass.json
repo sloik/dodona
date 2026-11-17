@@ -1,0 +1,67 @@
+{
+  "kind": "evidence",
+  "name": "pending_then_pass",
+  "claim": "C1",
+  "covers": [
+    "kernel/reach_pass"
+  ],
+  "why": "A submitted check is pending, and a completed pass is reported as passed.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        },
+        "o2": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        },
+        "o2": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    }
+  ]
+}

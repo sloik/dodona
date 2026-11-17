@@ -1,0 +1,91 @@
+{
+  "kind": "evidence",
+  "name": "shared_dependency_makes_both_stale",
+  "claim": "C1",
+  "covers": [],
+  "why": "An edit to a shared dependency makes every dependent obligation stale.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {}
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o2",
+          "as": "j2"
+        }
+      },
+      "expect": {}
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {}
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        },
+        "o2": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        },
+        "o2": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    }
+  ]
+}

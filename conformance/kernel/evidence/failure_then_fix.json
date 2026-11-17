@@ -1,0 +1,106 @@
+{
+  "kind": "evidence",
+  "name": "failure_then_fix",
+  "claim": "C1",
+  "covers": [],
+  "why": "A fix gets its own result. The failure still belongs to the old content.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {}
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "failed"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j2"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "failed"
+        }
+      }
+    }
+  ]
+}

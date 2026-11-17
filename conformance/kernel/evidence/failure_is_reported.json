@@ -1,0 +1,59 @@
+{
+  "kind": "evidence",
+  "name": "failure_is_reported",
+  "claim": "C1",
+  "covers": [
+    "kernel/reach_fail"
+  ],
+  "why": "A completed failure is reported as failed.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "failed"
+        }
+      }
+    }
+  ]
+}

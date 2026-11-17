@@ -1,0 +1,204 @@
+{
+  "about": "Test vectors for the canonical encoding (protocol/canonical-encoding.md). `value` is the input; `canonical` is the exact text; `sha256` is the hash of its UTF-8 bytes. `reject` holds input texts that must be refused, with the reason.",
+  "accept": [
+    {
+      "name": "empty object",
+      "value": {},
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "empty array",
+      "value": [],
+      "canonical": "[]",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "name": "keys are sorted",
+      "value": {
+        "b": 1,
+        "a": 2,
+        "c": 3
+      },
+      "canonical": "{\"a\":2,\"b\":1,\"c\":3}",
+      "sha256": "e145110e712e3ed0a6b233551b27a90aa39b4c93ed67e111ba2002d16e5ed1fa"
+    },
+    {
+      "name": "nested objects are sorted at every level",
+      "value": {
+        "z": {
+          "y": 1,
+          "x": 2
+        },
+        "a": [
+          {
+            "d": 1,
+            "c": 2
+          }
+        ]
+      },
+      "canonical": "{\"a\":[{\"c\":2,\"d\":1}],\"z\":{\"x\":2,\"y\":1}}",
+      "sha256": "19193c50ead68635304bd8806c55581fdadcb60fdc6d19b7629101f9adb4460e"
+    },
+    {
+      "name": "arrays keep their order",
+      "value": [
+        3,
+        1,
+        2
+      ],
+      "canonical": "[3,1,2]",
+      "sha256": "51bda7ab4e44726cde71fcb6e4b515357059bb6b6dd5146d1fc50f73f11678c6"
+    },
+    {
+      "name": "no whitespace",
+      "value": {
+        "key": "a b"
+      },
+      "canonical": "{\"key\":\"a b\"}",
+      "sha256": "b8d8ed36bf891c7c82b60a71c61a578f86246f20afd241f8d33d58d9eca9855e"
+    },
+    {
+      "name": "true, false and null",
+      "value": {
+        "t": true,
+        "f": false,
+        "n": null
+      },
+      "canonical": "{\"f\":false,\"n\":null,\"t\":true}",
+      "sha256": "22e00dc2f7b01420f940fbdbfbdf34fa0667cc6500186495023ba37722cbd05e"
+    },
+    {
+      "name": "negative and zero",
+      "value": [
+        -1,
+        0,
+        0
+      ],
+      "canonical": "[-1,0,0]",
+      "sha256": "3f2a9ad2ba83bf98853d66b972dc3971c8eacca6fbbc25641303f71e36458f38"
+    },
+    {
+      "name": "largest and smallest integers",
+      "value": [
+        9007199254740991,
+        -9007199254740991
+      ],
+      "canonical": "[9007199254740991,-9007199254740991]",
+      "sha256": "84bad60c1793654a7cdca854230af90af531ecc8f7656e2c7b2bd91890017b37"
+    },
+    {
+      "name": "short escapes",
+      "value": {
+        "s": "\b\t\n\f\r\"\\"
+      },
+      "canonical": "{\"s\":\"\\b\\t\\n\\f\\r\\\"\\\\\"}",
+      "sha256": "bfe21ab9f72ad8147a595795d6cbcbe11585e094a9954a9a70021336a8141ca3"
+    },
+    {
+      "name": "other control characters use lowercase hex",
+      "value": {
+        "s": "\u0001\u001f"
+      },
+      "canonical": "{\"s\":\"\\u0001\\u001f\"}",
+      "sha256": "38dc5e0128fedab8edba6b02f7f09663f16bfe0f1afb41a5774a29154732a6e0"
+    },
+    {
+      "name": "slash and DEL are not escaped",
+      "value": {
+        "s": "a/b\u007f"
+      },
+      "canonical": "{\"s\":\"a/b\u007f\"}",
+      "sha256": "8e4216a53906effa7052496560d680dfef899d53db26733059b851daa070d51c"
+    },
+    {
+      "name": "non-ASCII is written as UTF-8, not escaped",
+      "value": {
+        "s": "za\u017c\u00f3\u0142\u0107 g\u0119\u015bl\u0105 ja\u017a\u0144"
+      },
+      "canonical": "{\"s\":\"za\u017c\u00f3\u0142\u0107 g\u0119\u015bl\u0105 ja\u017a\u0144\"}",
+      "sha256": "fd7c724424d5bb6f00367ee08b39d3bd06e11fc7c8ab26b77ffb7af6b576c43d"
+    },
+    {
+      "name": "keys sort by UTF-16 code units, so an emoji key comes before U+FF5E",
+      "value": {
+        "\uff5e": 1,
+        "\ud83d\ude00": 2,
+        "a": 3
+      },
+      "canonical": "{\"a\":3,\"\ud83d\ude00\":2,\"\uff5e\":1}",
+      "sha256": "a7915368a7154745dc7e6e4b7c6460cedd96f84c6b71163388efebfe0d285868"
+    },
+    {
+      "name": "digits sort before uppercase before lowercase",
+      "value": {
+        "a": 1,
+        "A": 2,
+        "1": 3,
+        "_": 4
+      },
+      "canonical": "{\"1\":3,\"A\":2,\"_\":4,\"a\":1}",
+      "sha256": "0be7cd640a9e8ff7db85c93399563f98ebf8edf5ab3539cd62a4926e00b68bbd"
+    },
+    {
+      "name": "a key that is a prefix of another comes first",
+      "value": {
+        "ab": 1,
+        "a": 2,
+        "abc": 3
+      },
+      "canonical": "{\"a\":2,\"ab\":1,\"abc\":3}",
+      "sha256": "92f83c9bae17aa0d5d5b3b7252b58495e169797336d5449f0ff8a4ea79c61ebe"
+    },
+    {
+      "name": "empty key and empty string",
+      "value": {
+        "": ""
+      },
+      "canonical": "{\"\":\"\"}",
+      "sha256": "86cfeee6df382a203f626305afbca44d228cac67acd151ccf2db29530c548fea"
+    }
+  ],
+  "reject": [
+    {
+      "name": "a fraction",
+      "text": "{\"n\":1.5}",
+      "reason": "not-an-integer"
+    },
+    {
+      "name": "an exponent, even for a whole number",
+      "text": "{\"n\":1e3}",
+      "reason": "not-an-integer"
+    },
+    {
+      "name": "a decimal point, even for a whole number",
+      "text": "[1.0]",
+      "reason": "not-an-integer"
+    },
+    {
+      "name": "one above the largest integer",
+      "text": "[9007199254740992]",
+      "reason": "integer-out-of-range"
+    },
+    {
+      "name": "one below the smallest integer",
+      "text": "[-9007199254740992]",
+      "reason": "integer-out-of-range"
+    },
+    {
+      "name": "the same key twice",
+      "text": "{\"a\":1,\"a\":2}",
+      "reason": "duplicate-key"
+    },
+    {
+      "name": "a lone surrogate",
+      "text": "[\"\\ud83d\"]",
+      "reason": "invalid-string"
+    },
+    {
+      "name": "not JSON",
+      "text": "{a:1}",
+      "reason": "not-json"
+    }
+  ]
+}

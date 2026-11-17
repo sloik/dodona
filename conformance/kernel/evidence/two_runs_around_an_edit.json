@@ -1,0 +1,114 @@
+{
+  "kind": "evidence",
+  "name": "two_runs_around_an_edit",
+  "claim": "C3",
+  "covers": [
+    "kernel/mutant_complete_with_current_key_consistent"
+  ],
+  "why": "Two runs submitted on either side of an edit each report for their own inputs.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o2",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o2": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d2",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "o2": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o2",
+          "as": "j2"
+        }
+      },
+      "expect": {
+        "o2": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "o2": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o2": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d2",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "o2": {
+          "status": "failed"
+        }
+      }
+    }
+  ]
+}

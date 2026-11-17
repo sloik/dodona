@@ -1,0 +1,62 @@
+{
+  "kind": "intent",
+  "name": "owner_exception_at_the_floor_takes_effect",
+  "claim": "C28",
+  "covers": [
+    "intent/reach_delivered_by_amendment"
+  ],
+  "why": "An exception granted by the owner, separate enough from the work, takes effect.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "owner",
+          "separation": "apart"
+        }
+      },
+      "expect": {
+        "status": "delivered",
+        "amendment": {
+          "takes_effect": true,
+          "level": "apart"
+        }
+      }
+    }
+  ]
+}

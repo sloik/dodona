@@ -1,0 +1,12 @@
+{
+  "about": "Which modelled cases have no scenario, and why. Every other case in spec/*/expected.json must be named in the `covers` list of at least one scenario; tools/check_repo.py enforces that.",
+  "not_covered": {
+    "kernel/design": "A search of the whole state space, not a behaviour. The scenarios sample it.",
+    "kernel/design_three_hashes": "As above.",
+    "kernel/design_flaky": "As above.",
+    "kernel/assumption_undeclared_dep": "About a provider declaring too few dependencies. A kernel cannot detect that from its inputs; it is a provider conformance case.",
+    "kernel/assumption_flaky_provider": "About a provider giving a wrong verdict. A kernel cannot detect that; the conflict scenario covers what the kernel does when verdicts disagree.",
+    "intent/design_three_criteria": "A search of the whole state space, not a behaviour.",
+    "intent/design_two_criteria": "As above."
+  }
+}

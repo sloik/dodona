@@ -1,0 +1,56 @@
+{
+  "kind": "intent",
+  "name": "unknown_hard_gate_is_open",
+  "claim": "C23",
+  "covers": [
+    "intent/mutant_delivered_ignores_unknown"
+  ],
+  "why": "A hard gate whose check has not run is not passed.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}

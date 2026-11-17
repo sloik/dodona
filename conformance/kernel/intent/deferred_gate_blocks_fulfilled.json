@@ -1,0 +1,78 @@
+{
+  "kind": "intent",
+  "name": "deferred_gate_blocks_fulfilled",
+  "claim": "C23",
+  "covers": [
+    "intent/mutant_deferred_as_passed"
+  ],
+  "why": "Delivered and fulfilled are different. An open or failing deferred gate does not block delivery and does block fulfilment.",
+  "policy": {
+    "exception_separation": "apart",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c3",
+          "status": "failed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c3",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "fulfilled"
+      }
+    }
+  ]
+}

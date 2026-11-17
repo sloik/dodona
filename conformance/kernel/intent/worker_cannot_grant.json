@@ -1,0 +1,63 @@
+{
+  "kind": "intent",
+  "name": "worker_cannot_grant",
+  "claim": "C25",
+  "covers": [
+    "intent/mutant_worker_can_amend",
+    "intent/mutant_worker_keeps_level"
+  ],
+  "why": "The worker granting to itself is graded self whatever it wrote down, and only the owner's exceptions take effect, even where the floor is the lowest level.",
+  "policy": {
+    "exception_separation": "self",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    },
+    "c2": {
+      "gate": "hard"
+    },
+    "c3": {
+      "gate": "deferred"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c2",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "worker",
+          "separation": "apart"
+        }
+      },
+      "expect": {
+        "status": "open",
+        "amendment": {
+          "takes_effect": false,
+          "level": "self"
+        }
+      }
+    }
+  ]
+}
