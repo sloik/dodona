@@ -316,6 +316,128 @@
         "kernel/src/unicode_tables.rs": "2807352dd6b0e44a6e40c1b473c0295d381995e8c6cece73ee9b099269497e08",
         "tools/check_states.py": "d94cc0df8dfd21c026cab751c3fbe73124c936ee6996c72d1217461b860661b9"
       }
+    },
+    {
+      "id": "run-7-assurance",
+      "date": "2026-11-18",
+      "model": "assurance",
+      "outputs": "run-7/assurance",
+      "files": {
+        "Assurance.tla": "5624f5b7993298edea5b2e21f9fed37ac80b855f8182f0c29b9fc2a2c8a90357",
+        "design.cfg": "17f24d71421810a43345b4f0d7261ae6e86cbad248386e5548feb68bcac71c5d",
+        "mutant_always_nothing.cfg": "0aca816b07e45df1f05a71b72ab183ef6bc3b2eac6fe0955e271fb5407c56457",
+        "mutant_average.cfg": "35911034191d7d04fdfefa4f22206cabf80fdb0e9ddc026061e948c8a2b70239",
+        "mutant_empty_is_shown.cfg": "da2536e928d63a49d48c93a6197d62fd56a99cfcaae2b7dff6c87a170694882a",
+        "mutant_ignore_unreported.cfg": "87d9d1cb0efe45c7291180ef7c32c0a2c8546f1f3a48eaf6512fcced476404e0",
+        "mutant_unknown_defect_counts.cfg": "5ae2e26329f2db4708c22004cca849ecde6ad16af40845b4c7f20ff8f0363c9a",
+        "reach_proven.cfg": "a0b14ed83985722eb94bf44c6e0be81dd1333cdb5d7237f6687993a06747a010",
+        "reach_shown.cfg": "417a5eb4d4246d985f1d5d3752564db1af101eae5d525f88cdc120f0b41779f2"
+      },
+      "claims": [
+        "C19",
+        "C24",
+        "C31"
+      ],
+      "note": "The model as rewritten after the review of 2026-11-17. Queue job 18f4ff73c1e141f7ba95b4ee3fe8482c, 8 cases, every one matched. Run from a development machine through the shared queue, not by CI."
+    },
+    {
+      "id": "run-7-attempts",
+      "date": "2026-11-18",
+      "model": "attempts",
+      "outputs": "run-7/attempts",
+      "files": {
+        "Attempts.tla": "90ea7cb09eb343a9355b909fb921d944a3ac0e077b5d0841f1d97c4e2588c0cb",
+        "design.cfg": "e905d02010197d8e5493004aa35d5a4b64a216b3a102ddf7dd195d08dc02ee5b",
+        "design_claims_self.cfg": "36607f89b5a6fea384e57737f5e94adfd8d37f091cad7a189d7ed9f2d3b8b294",
+        "mutant_cap_raises.cfg": "a9504875274ab8e7f5e6022d6366917ce3ffe15a911815e8d03f5f71c368ae7a",
+        "mutant_change_hides_history.cfg": "fe22331c037dac4c18273aa4040224cfd59006c346c8856ab33573a5a016c8a5",
+        "mutant_flag_does_not_cap.cfg": "5a313d1777cca625b536e731a4687ce86a371b43ba1f36b754bcd97f51faac66",
+        "mutant_flag_missed.cfg": "a20b804d086835e77a0493b313bf7baaabc860519e46b11e118bd5aba4f7cf55",
+        "mutant_latest_only.cfg": "84c66b3db4ebf3d275a050d32c56da0e3519db8657ae6e4269f961da8fea6dc7",
+        "mutant_open_ignored.cfg": "a2ce732aae3dea067f9e2b684bdd4ed53b7ca86e917c9dd5336bd7a342df4325",
+        "reach_agreed.cfg": "823321af444121763fe4f6d84267b684243b35572707125ee35e1d36af5fa626",
+        "reach_retried_across_change.cfg": "f11305352d8ef5b93b8cdeed867aa24724ac58691d13bc7a8bebdf8ffab09a15",
+        "reach_shopped.cfg": "4b05d7afebb7c4ecec85b349ac32b0fbdefd0a80497674176ba97b5634ff7232"
+      },
+      "claims": [
+        "C35"
+      ],
+      "note": "The model as rewritten after the review of 2026-11-17. Queue job 18f4ff73c1e141f7ba95b4ee3fe8482c, 11 cases, every one matched. Run from a development machine through the shared queue, not by CI."
+    },
+    {
+      "id": "run-7-decisions",
+      "date": "2026-11-18",
+      "model": "decisions",
+      "outputs": "run-7/decisions",
+      "files": {
+        "Decisions.tla": "af4ecde66c56aba85f92d24fadb3568002f5dc1b781b8e022e3f1693d6fab2e7",
+        "design.cfg": "07bd256fe2b87f17fd338e1f10714482e8a723f1398f5b27e658c8cec44ccb29",
+        "mutant_first_name_only.cfg": "726d59eef69878041db52e03fd467fc749479306d2b5fe58d03b902634764689",
+        "mutant_gone_is_not_flagged.cfg": "67d426501bc11e640adf40563d5ac12a6bfc2f6087929cd88b248ed0a776f607",
+        "mutant_identities_without_names.cfg": "e617c88cf4f880bb72999fec84957ac1f1d209d35548d9e27bf51759f11e57c2",
+        "mutant_refresh_on_edit.cfg": "6e532a4cf330b81c2cc462b643e6ccece614082ff2ecbfd60487e42dddfc9d2a",
+        "reach_flagged.cfg": "3f4691c209c60b21badd7ab1ebec242bea7f343c1032e5476bc83dfb4e8bf0b4"
+      },
+      "claims": [
+        "C16"
+      ],
+      "note": "The model as rewritten after the review of 2026-11-17. Queue job 18f4ff73c1e141f7ba95b4ee3fe8482c, 6 cases, every one matched. Run from a development machine through the shared queue, not by CI."
+    },
+    {
+      "id": "run-7-liveness",
+      "date": "2026-11-18",
+      "model": "liveness",
+      "outputs": "run-7/liveness",
+      "files": {
+        "Liveness.tla": "91c9d200b5ef5616ba4aae0f9931c9d2e7942359d071548d073625ca4be1f902",
+        "design.cfg": "a59b7bede17f44bc9161eef24942cc9ba26f87726950d7f610c9a558c978c37e",
+        "mutant_no_resubmit_after_error.cfg": "0a941ce96852296cb27c0f9dcef96ef31ff96f2e3bb34c561cba3da7cd869dc6",
+        "mutant_no_resubmit_after_loss.cfg": "43f3832870802a3f3941bfda07c361d0b63d28a6836966b3c007696e8048f13b",
+        "mutant_no_resubmit_after_unavailable.cfg": "97cf6ae9066ba25aaf391a738a9d722484621e1013190a37a7fd900fba88f43d",
+        "mutant_resubmits_unsupported.cfg": "6026859581a2c2f11a4e9a24dacb5b4d24fdb58203c1204cbf993571481032f3"
+      },
+      "claims": [
+        "C22"
+      ],
+      "note": "The model as rewritten after the review of 2026-11-17. Queue job 18f4ff73c1e141f7ba95b4ee3fe8482c, 5 cases, every one matched. Run from a development machine through the shared queue, not by CI."
+    },
+    {
+      "id": "run-7-kernel-on-every-state",
+      "date": "2026-11-18",
+      "model": "kernel",
+      "outputs": "run-6/kernel",
+      "files": {
+        "MCDump.tla": "c1b39f5370044992a73f78f21e2dca9cf8ab5b5fe3eeb1fbf09b02ebdbfe1c52",
+        "dump.cfg": "8d629107298bf6e2f9222508f993e1b5b51e0d7d1c0532cf79a39c56d71d6e97"
+      },
+      "claims": [
+        "C37"
+      ],
+      "needs": [
+        "run-6-kernel",
+        "run-6-intent"
+      ],
+      "note": "The seed kernel as extended on 2026-11-18 (acts, status, ledger, core keys) agreed with the model on the same 71,744 states of the evidence model and 78,894 of the intent model that run 6 wrote out; the two models are unchanged. State lists (SHA-256): kernel 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4, intent cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d. The second kernel, kernel2, agreed on the same states. Compared on a development machine; CI repeats it on every change to main.",
+      "other_files": {
+        "kernel/src/acts.rs": "095c211a762950ed8ddf8bf41c0b4306736826994acec1e7f366fd2be1470061",
+        "kernel/src/assurance.rs": "2ad0e0836157601e4419f275deea9f6f6335a7409c9fe63b095f56a72c009649",
+        "kernel/src/attempts.rs": "88b985453dd1af272ea8590e570322f025a3eab8d98d0beaf28d22b68fefa554",
+        "kernel/src/canonical.rs": "4b988ca178466f21e2ac52730b5391c548c80361bd9f0799ed65138602536c8f",
+        "kernel/src/decisions.rs": "0a29e0f0d21f4aabb08721674d9c9111713eff827a18af8eeb5a2b8109ea46ba",
+        "kernel/src/evidence.rs": "f67a60ce40d543f9bc354d60f83587070834bd89fb81e5ef4937a3e779fbaf3b",
+        "kernel/src/intent.rs": "4d1acb4952f6129640d96a8514632217900c681e4a387f7055da8ce1c602ee71",
+        "kernel/src/json.rs": "bab54c5ac989bd32cd6973b534356f43f12705109627b6f1beab6b40bcef3380",
+        "kernel/src/ledger.rs": "80457015c5b95a8d22e3955bc3f4298be38f77ee4689f614f1326e4671c2caa3",
+        "kernel/src/main.rs": "0a15eb8d54b12c92c57aa756cdfe3f724ba20ddad3be5f615a0ef410ac26b173",
+        "kernel/src/path.rs": "a227cac23810f69fafff764b9a593fa918bd0988ec07218ecce6458097442e9b",
+        "kernel/src/plan.rs": "02d907742502874b64801b972e8ddc6fb77927793140de00952d3438c6ca3a81",
+        "kernel/src/platforms.rs": "c3d3b718089578350b1c90cb7a77ab9629656340a58cb93a0a3deb0efaed0107",
+        "kernel/src/status.rs": "31ad4fd6020a791a4198f4695bbe6104c9ed793dfa24ec464621aeef1b4f2e48",
+        "kernel/src/tree.rs": "79328e62327161adde59fa5abe6503395426d21aacdc5ef2da5c5e674c6de105",
+        "kernel/src/unicode.rs": "c9e8139a873cb7cfcb26d531bb5ac740a7da7924111ee27ceda7c6e2ec558fc1",
+        "kernel/src/unicode_tables.rs": "2807352dd6b0e44a6e40c1b473c0295d381995e8c6cece73ee9b099269497e08",
+        "tools/check_states.py": "d94cc0df8dfd21c026cab751c3fbe73124c936ee6996c72d1217461b860661b9"
+      }
     }
   ]
 }
