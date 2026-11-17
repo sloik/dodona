@@ -10,12 +10,8 @@
         "EvidenceReuse.tla": "3d4b878a24d6e96d925b4c7d0406041eb42648974db8a59b4792a2d480312c20",
         "MC.tla": "85f57a901972d333d7939e49da4d89a91851c09c6cd26e1a0b6ec060b5b56c8c"
       },
-      "claims": [
-        "C4",
-        "C5",
-        "C6"
-      ],
-      "note": "13 of 14 cases matched; the design case did not complete."
+      "claims": [],
+      "note": "13 of 14 cases matched; the design case did not complete. Superseded by run 6, which reran every case."
     },
     {
       "id": "run-2",
@@ -68,15 +64,241 @@
         "MC.tla": "85f57a901972d333d7939e49da4d89a91851c09c6cd26e1a0b6ec060b5b56c8c",
         "design.cfg": "5f767efdef33fd97ff843ae08cea81f6bce6d35150856d51faf0a9f76e4ce9b0"
       },
-      "claims": [
-        "C1",
-        "C2",
-        "C3"
-      ],
+      "claims": [],
       "needs": [
         "run-1"
       ],
-      "note": "The design case at the full bounds with no state view."
+      "note": "The design case at the full bounds with no state view. Superseded by run 6, which reran every case."
+    },
+    {
+      "id": "run-6-assurance",
+      "date": "2026-11-17",
+      "model": "assurance",
+      "outputs": "run-6/assurance",
+      "files": {
+        "Assurance.tla": "8b73a41c58591d5223a62f48dfee1af4c3e6fb14fe39759beaa440a7b4424839",
+        "design.cfg": "9f6b69feda5bd38905a3dc6d574e46dadf23a894e42f9da5d0cfe183e88a79a2",
+        "mutant_always_nothing.cfg": "0aca816b07e45df1f05a71b72ab183ef6bc3b2eac6fe0955e271fb5407c56457",
+        "mutant_average.cfg": "35911034191d7d04fdfefa4f22206cabf80fdb0e9ddc026061e948c8a2b70239",
+        "mutant_empty_is_shown.cfg": "da2536e928d63a49d48c93a6197d62fd56a99cfcaae2b7dff6c87a170694882a",
+        "mutant_ignore_unreported.cfg": "87d9d1cb0efe45c7291180ef7c32c0a2c8546f1f3a48eaf6512fcced476404e0",
+        "mutant_unknown_defect_counts.cfg": "5ae2e26329f2db4708c22004cca849ecde6ad16af40845b4c7f20ff8f0363c9a",
+        "reach_proven.cfg": "a0b14ed83985722eb94bf44c6e0be81dd1333cdb5d7237f6687993a06747a010",
+        "reach_shown.cfg": "417a5eb4d4246d985f1d5d3752564db1af101eae5d525f88cdc120f0b41779f2"
+      },
+      "claims": [
+        "C19",
+        "C24",
+        "C31"
+      ],
+      "note": "Part of CI run 44164593817 on commit a4862ea: every case of every model in one executor job."
+    },
+    {
+      "id": "run-6-attempts",
+      "date": "2026-11-17",
+      "model": "attempts",
+      "outputs": "run-6/attempts",
+      "files": {
+        "Attempts.tla": "6ef7dacb40b66d981454e36dae42f552a41512494a339e4f0602a3ef2ba8e04e",
+        "design.cfg": "7730b81032f49601e67c02c8bf4cd0b24ce86228de3bc188c2e1ccae4e48013d",
+        "mutant_flag_does_not_cap.cfg": "b8091db7fb475e00dfd23b8ee3549f789a983344cef6824d1a3dc0a24cfa7e0e",
+        "mutant_flag_missed.cfg": "f0e5b5be35783a7eb152f98438043a3fad2c837b4cf221932a0e4069b5588443",
+        "mutant_latest_only.cfg": "5768a310247fe10e31a35c904d3e22586f3942aa6db962bae76f8aeaa256fa75",
+        "mutant_open_ignored.cfg": "a2de9494cf6af1e11a214f3d0b1b976ea09ba41874d0a0c2e1701febda430a6c",
+        "reach_agreed.cfg": "498ce7120952c140445a933df4b8990bad9a239c20c8338e8f0f1a39686c456e",
+        "reach_shopped.cfg": "a5ed60302941ebe0304eaa826d1225b6fe004de942b35c18ca5c4b7741a8c2c5"
+      },
+      "claims": [
+        "C35"
+      ],
+      "note": "Part of CI run 44164593817 on commit a4862ea: every case of every model in one executor job."
+    },
+    {
+      "id": "run-6-decisions",
+      "date": "2026-11-17",
+      "model": "decisions",
+      "outputs": "run-6/decisions",
+      "files": {
+        "Decisions.tla": "0367f2ede21bbba3c5cb03137095e9cdc177f2b64d92e6480e6e61c3c4cdd5ab",
+        "design.cfg": "cbdd6cd71ed1278dcadf5f46fe40e4dc5fe5b794df486ed090dce08ed3a15e2c",
+        "mutant_gone_is_not_flagged.cfg": "67d426501bc11e640adf40563d5ac12a6bfc2f6087929cd88b248ed0a776f607",
+        "mutant_identities_without_names.cfg": "e617c88cf4f880bb72999fec84957ac1f1d209d35548d9e27bf51759f11e57c2",
+        "reach_flagged.cfg": "3f4691c209c60b21badd7ab1ebec242bea7f343c1032e5476bc83dfb4e8bf0b4"
+      },
+      "claims": [
+        "C16"
+      ],
+      "note": "Part of CI run 44164593817 on commit a4862ea: every case of every model in one executor job."
+    },
+    {
+      "id": "run-6-intent",
+      "date": "2026-11-17",
+      "model": "intent",
+      "outputs": "run-6/intent",
+      "files": {
+        "IntentGates.tla": "fee7e98f2541e3990591bfbf59c4e30214479d1e8311598c93ae184ca471bd47",
+        "MC.tla": "54684b83b7db18a142623ec57e894d8caea05181c6958966161d5a4dc064f266",
+        "MCDump.tla": "71a3762cc92e8aab8b714b269c5c6410d833b7a0ee1c0d072543c6eb641e4f5d",
+        "design_low_floor.cfg": "27369c4c8b3e441ed401d5bf45feea1867d889a7200da6eee37ae7c5cdd53844",
+        "design_three_criteria.cfg": "cd4347fa0b70a6b8404613826af5a5aaf67f98ed421daf938ecab43caaf89eea",
+        "design_two_criteria.cfg": "b498f462aa532aa473577389f301d31c757c508d5864984ec95e1c385f2322e6",
+        "dump.cfg": "93fee9aabc5e63f910538eae23c32d42e54d3dd075e8066b4c7f00c9989553e2",
+        "floor_blocks_weak_grantor.cfg": "ca80238a20af213a34dd79cdb58fcbb2ccd22de5515eb0fb2a8c70943efe9299",
+        "mutant_below_floor_counts.cfg": "9b21a22d51db289fe17f0c3e6aeccb06c9c3bf617dee7b6b744d396df80fd900",
+        "mutant_declared_counts_in_full.cfg": "4224cf5ac6a80b20767359675436b538f7d56ac2974cd22895baf6822f6e776c",
+        "mutant_deferred_as_passed.cfg": "0f2ee9ef084a3f8104b94171136276104780e593c0b37b47f9fb5c6753ff2499",
+        "mutant_delivered_ignores_unknown.cfg": "4f77c1e6334ea7b41f3112ea2215878d5c145ac0bb89b07751ae790403a6f7a3",
+        "mutant_draft_delivers.cfg": "e8421695a1d151678b230f0d0c054df549612051a90c70dc4797a5639d30ea27",
+        "mutant_edit_keeps_confirmation.cfg": "62afbdc25b3b964222ee8d6af27911619fddaa08b1edb0cdea89de1d8dad3ccf",
+        "mutant_hide_level.cfg": "b6f97ed4ee172c303472a5a01fe78959d72bed41350304309f0e70628931311c",
+        "mutant_missing_is_apart.cfg": "5863c0d9c6b92ea565863815dca7500c7a660ffc631511114ad4f81478a170f1",
+        "mutant_unguarded_delivers.cfg": "fe788aaaad233edadb6863b8daddd47a7ddb83c3253ff5bedea01f1c5b293712",
+        "mutant_worker_can_amend.cfg": "53a6bc80ba54b2483910025df0322a554e745428a9c958ffd4373fb171621a09",
+        "mutant_worker_keeps_level.cfg": "0fd2c23e6b98c7118b095c7b158d780daa1cf22ea2d799c008f07d34bd2c26f6",
+        "reach_delivered.cfg": "7c728413a033190aeb5e121b15fa22c1db012318b17af5c52bece30c0ce4703c",
+        "reach_delivered_by_amendment.cfg": "cd98910f52552131ed9c7f3b757dddc285421753dca797814e388db2bd5083fd",
+        "reach_fulfilled.cfg": "a05bf1ac67af5b58d2a002ce50b06e4db76e6b39a06428f9f2bc0bcaeafd59a0"
+      },
+      "claims": [
+        "C23",
+        "C25",
+        "C28",
+        "C29",
+        "C30",
+        "C33"
+      ],
+      "note": "Part of CI run 44164593817 on commit a4862ea: every case of every model in one executor job."
+    },
+    {
+      "id": "run-6-kernel",
+      "date": "2026-11-17",
+      "model": "kernel",
+      "outputs": "run-6/kernel",
+      "files": {
+        "EvidenceReuse.tla": "3d4b878a24d6e96d925b4c7d0406041eb42648974db8a59b4792a2d480312c20",
+        "MC.tla": "85f57a901972d333d7939e49da4d89a91851c09c6cd26e1a0b6ec060b5b56c8c",
+        "MCDump.tla": "c1b39f5370044992a73f78f21e2dca9cf8ab5b5fe3eeb1fbf09b02ebdbfe1c52",
+        "assumption_flaky_provider.cfg": "f07bfe190fc7c8e68a5561eaaa69a953c77e300db062cda7f181020aea67419d",
+        "assumption_undeclared_dep.cfg": "86b2947aee65f4929e7357011d98f0a37d7cc7f9353256456f575d2fa572ef26",
+        "design.cfg": "5f767efdef33fd97ff843ae08cea81f6bce6d35150856d51faf0a9f76e4ce9b0",
+        "design_flaky.cfg": "1234ea3225a0d3d94da5d477f644c2f86a300b78d01eb6b6d9a4c1980c8e6447",
+        "design_three_hashes.cfg": "3740c846b54c295162611b4dba0a97edd954bf767dee7066b6469a7472f659ef",
+        "dump.cfg": "8d629107298bf6e2f9222508f993e1b5b51e0d7d1c0532cf79a39c56d71d6e97",
+        "mutant_complete_with_current_key.cfg": "4626e23625de3b60f6cd23134dd3714d70e841e1b0e45cc5f784da117d398094",
+        "mutant_complete_with_current_key_consistent.cfg": "c1aad8600bdb106d327f81993d8601667759d6636e5f3076e85750078e8a1cb7",
+        "mutant_key_omits_tool.cfg": "f4eecfcb61580c0bbcade45aa70c275ebddc83e87c994cfc8b9ef3d884a2f606",
+        "mutant_pass_outranks_fail.cfg": "9e01d9a69c16df24b66a9433c0fa8dfdd712671e7f4028a75b702c0c0ea196a9",
+        "mutant_unavailable_is_pass.cfg": "803106265fdf4b2063444ebd22bf280dd181f0cb9dfcca67da9d665abf6267d8",
+        "reach_conflict.cfg": "df95dad9b1b1fb580949a44536339daaf33b1b4bbb7710ad40e4933e7b28170b",
+        "reach_fail.cfg": "0e67cc8c89dd1d4acde830fcc7123cf353626e4bafbcfc9500dcccf577bed123",
+        "reach_pass.cfg": "c1253d113a6e0209c572761aea57afb8b5d9b628fbf894930c4d877123c6aefb",
+        "reach_reuse.cfg": "b8a6d839648056ac85d27d8ad842af7d37a1ab0020019a9d04381d247fc79cd7"
+      },
+      "claims": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C5",
+        "C6"
+      ],
+      "note": "Part of CI run 44164593817 on commit a4862ea: every case of every model in one executor job."
+    },
+    {
+      "id": "run-6-liveness",
+      "date": "2026-11-17",
+      "model": "liveness",
+      "outputs": "run-6/liveness",
+      "files": {
+        "Liveness.tla": "eef066655066722ba32e1f4d499bf5e4501ecc701743774c3cf58e99fc7f9417",
+        "design.cfg": "3b82b96f44a896f5bc76af73fcee7558fdc95406c9fa052616db81a092f12676",
+        "mutant_no_resubmit_after_loss.cfg": "1808c0dc9d579ef155524f6fe90705c7fe3d54a893cd9163f2c7a53f7417b12c",
+        "mutant_no_resubmit_after_unavailable.cfg": "b95e89f7314dc97027d70938b1f533ae317afb241ea6862c795c096617024878"
+      },
+      "claims": [
+        "C22"
+      ],
+      "note": "Part of CI run 44164593817 on commit a4862ea: every case of every model in one executor job."
+    },
+    {
+      "id": "run-6-planner",
+      "date": "2026-11-17",
+      "model": "planner",
+      "outputs": "run-6/planner",
+      "files": {
+        "Planner.tla": "4f55dcf81535500dcce5c91cfc5122f738fb6d12c0afd066e71439ef1acab8b7",
+        "design_definition.cfg": "32e271d1a5eea1434eb6f31a8ba214b6342dc0870db69f5165ff35049fb90a66",
+        "design_file.cfg": "6ed9ec0274b2f65853e1d605de152dd84d4a46a8e4eb96fbf09c05f05e0ffcac",
+        "file_costs_reruns.cfg": "f6552d4f48c050c4f8c9f9b04b051a92bd16d3ed6dda1edc4c24de4459b9b46d",
+        "mutant_direct_deps_only.cfg": "f4d8b62462f8c5ff641837db7e20b47a1b8eefd63ab333c1932e83fd8ada33be",
+        "mutant_fallback_direct_deps_only.cfg": "a52e12cef7fc52f7882cba9c09d2b4880e9a514899253b1a2a173de1c1c84064",
+        "mutant_key_omits_producer.cfg": "9cf78ff9de7d57449d44cb51d69192feb8fbcce0bfefb0f90841b37e029ddf0d",
+        "mutant_plan_everything.cfg": "8e8b5337520e901b800d3b2bcfb72a889bee36925ab0618d7d5c045ac500ca87",
+        "reach_all_current.cfg": "870446fe6b1af578fbafa343890cf95ddfb8bb8a923e5c2e877fc04d0a6629ee"
+      },
+      "claims": [
+        "C8",
+        "C9",
+        "C10"
+      ],
+      "note": "Part of CI run 44164593817 on commit a4862ea: every case of every model in one executor job."
+    },
+    {
+      "id": "run-6-platforms",
+      "date": "2026-11-17",
+      "model": "platforms",
+      "outputs": "run-6/platforms",
+      "files": {
+        "Platforms.tla": "21348c8f38a8b4e3447126b3a68da590a72ae73b1352d5a6dc77f3c3703c8fc4",
+        "design_stand_in_allowed.cfg": "4cbf9eb42852a2d3fe6ec84831dc6dcc26cca82dc06a47de97db90011439ab67",
+        "design_stand_in_forbidden.cfg": "650e5fdaf97be5d564944d5e30c87544a22c98628040b0cc94da072888a0fbc9",
+        "mutant_always_stand_in.cfg": "a77da8040a0b5802a96a3c60aa9f60637240b34643101aee030a9d0053e0fbbe",
+        "mutant_disagreement_ignored.cfg": "f81b2113197ed5529d882a9151a34785755898c8826be29b9f634b48eacb65b3",
+        "mutant_one_platform_reproduces.cfg": "59dd3648b5b1db38dcb1e84dcf3b64ef7a1e6cdfc7288406e396c9e57e1195dc",
+        "mutant_stand_in_unverified.cfg": "1d61985dfe3faf1dccc99f34486a0d486c68bee244ddb55b22eb4c0a37a7f810",
+        "reach_stand_in.cfg": "30d288e68c49a8d741042ba4c955bf06a1d5c06d89618ccd5c7a25f95edf8786"
+      },
+      "claims": [
+        "C15"
+      ],
+      "note": "Part of CI run 44164593817 on commit a4862ea: every case of every model in one executor job."
+    },
+    {
+      "id": "run-6-tree",
+      "date": "2026-11-17",
+      "model": "tree",
+      "outputs": "run-6/tree",
+      "files": {
+        "IntentTree.tla": "ea878688d02288dc7247558e7d95607f86c06d9ac2ef87c12df162cb67d381c1",
+        "design.cfg": "246d006c6e5ddac429e61444a943e37678ec83d86faa9280fce37c5655cf86f5",
+        "mutant_add_keeps_confirmation.cfg": "64fbee6cac1c771732931f2374e80c77710b9d63728fe209d3f2f1f0bb7fcd65",
+        "mutant_delivered_ignores_children.cfg": "537ed1a7e418307bffce3c662cb2df5a5f2a1a34cc67d56da524153a377128d4",
+        "mutant_remove_keeps_confirmation.cfg": "f9da1872900fc115d5861cacdc83230d62fdc28b1d4ee707ccbae4b21e40433b",
+        "mutant_soft_child_is_delivered.cfg": "27c5074426fcd5d4cad76787a991b4f59bd7e468e597e5adf3eb420d56093cf9",
+        "reach_delivered.cfg": "9d7252d706e176827c6e7a7b2820e23df4800a0804e7ddaf3edb16e1f1b398d6"
+      },
+      "claims": [
+        "C34"
+      ],
+      "note": "Part of CI run 44164593817 on commit a4862ea: every case of every model in one executor job."
+    },
+    {
+      "id": "run-6-kernel-on-every-state",
+      "date": "2026-11-17",
+      "model": "kernel",
+      "outputs": "run-6/kernel",
+      "files": {
+        "MCDump.tla": "c1b39f5370044992a73f78f21e2dca9cf8ab5b5fe3eeb1fbf09b02ebdbfe1c52",
+        "dump.cfg": "8d629107298bf6e2f9222508f993e1b5b51e0d7d1c0532cf79a39c56d71d6e97"
+      },
+      "claims": [
+        "C37"
+      ],
+      "needs": [
+        "run-6-kernel",
+        "run-6-intent"
+      ],
+      "note": "The seed kernel agreed with the model on 71,744 states of the evidence model and 78,894 of the intent model. State lists (SHA-256): kernel 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4, intent cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d. They are kept as a CI artifact, not in the repository."
     }
   ]
 }

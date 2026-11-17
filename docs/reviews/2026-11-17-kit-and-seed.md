@@ -28,3 +28,11 @@ It does not show the seed is correct. The scenarios sample behaviour; they do no
 In parallel, a separate agent drafted the message, lock, policy and status schemas, a configuration reference and a provider guide, from the documents alone, and validated every example in the guide against its own schemas. It reported eight contradictions or gaps in the existing documents. Those resolved so far: what an intent's identity covers and who works it out; time limits being lengths of time, not dates, so no clock enters an identity; a build record carrying no strength; and policy living in its own file. Still open: where the lock is stored and in what format, and which statement of a tool's requirements wins when the configuration, a provider and the resolver disagree.
 
 The schemas have not been reviewed by anyone but their author and a structural check.
+
+## Later the same day: the kernel on every state
+
+The seed was first judged on hand-picked scenarios, which is sampled evidence. It is now also judged on every state two of the formal models reach. Each of those models has a variant that writes its own answer into every state; the model checker lists the states, and the kernel must give the same answer for each.
+
+In the first complete run the kernel agreed on all 71,744 states of the evidence model and all 78,894 of the intent model. To show the check can fail, five defects were planted in the kernel one at a time; each made between 1,515 and 34,020 states disagree.
+
+For what those two models cover, the code is now tied to the model for every state within their bounds. The bounds are small, and the other seven models have no such check yet.

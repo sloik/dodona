@@ -25,7 +25,7 @@ The conformance kit exists and was committed before any kernel. dodona needs a f
 
 **What it may claim.** The seed is accepted when it passes every scenario and every encoding vector, on macOS, Linux and Windows. That is evidence at the level `sampled`: scenarios and vectors, 27 and 25 when this was written and more since. It is not a proof, and it says nothing about the claims the formal models do not cover. The path check is left out of the seed, because it needs Unicode tables the standard library does not carry; the reference implementation in `tools/` stands in until a kernel embeds the pinned tables.
 
-**The next step up.** Raise the link between the models and the code from `sampled` to `bounded` by having the model checker write out every reachable state of the bounded models and checking the kernel's answer on each one.
+**The next step up, since taken.** The model checker writes out every state two of the bounded models reach, and the kernel must give the model's answer on each one. For what those two models cover, the link between model and code is now `bounded`. For everything else it is still `sampled`.
 
 ## Consequences
 
