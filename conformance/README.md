@@ -170,7 +170,7 @@ The facts:
 
 `claims` is `self` if distinct does not hold; otherwise `helper`; `apart` if started, briefed, given, fresh and kept also hold; `tested` if tested holds as well; `cross-make` if other make holds as well. Each level needs every fact of the levels below it.
 
-A fact is **vouched for** when every field it reads is listed in `attestation.covers`, `attestation.key` names a key in `attestors`, and `attestation.mac` is the HMAC-SHA256, under that key, of the canonical encoding of `{"covers": C, "fields": F}`, where C is `covers` and F holds each covered field of the record under its name. `mac` is lowercase hexadecimal. A record with no attestation, a key the policy does not name, or a mac that does not match, has no fact vouched for.
+A fact is **vouched for** when every field it reads is listed in `attestation.covers`, `attestation.key` names a key in `attestors`, and `attestation.mac` is the HMAC-SHA256, under that key, of the canonical encoding of `{"covers": C, "fields": F}`, where C is `covers` and F holds each covered field of the record under its name. `mac` is lowercase hexadecimal. A record with no attestation, a key the policy does not name, a mac that does not match, or a covered field that the record does not have, has no fact vouched for. The fact distinct needs vouching like any other: without it nothing above `helper` is granted.
 
 `level` is the highest level, not above `claims`, that is `self` or `helper`, or all of whose facts and the facts of the levels below it are vouched for. `credentialed` is never granted.
 
@@ -190,7 +190,7 @@ What a kernel reports about a whole project. A scenario gives:
 | `{"change": {"obligation": O, "preimage": P}}` | The inputs of O are now P |
 | `{"set_gate": {"intent": I, "criterion": C, "to": G}}` | A gate is edited directly |
 
-The result has `obligations`, `intents`, `project` and `rejected`.
+The result has `obligations` and `intents`, each an object with one entry per name; `project`, an object with a `status`; and `rejected`, a number. A floor that policy does not give is `self`.
 
 **Obligations.** An evidence record is *rejected* if its `core_key` is not the identity of its own `preimage`; `rejected` is how many such records the ledger holds. A record that is not rejected *counts* for its obligation when its writer is this kernel or one of `trusted_writers`, its platform is this kernel's, and its `core_key` is the identity of the obligation's preimage as things stand. An obligation is `passed` if records count and all are passed, `failed` if all are failed, `conflict` if they differ, and otherwise `unknown` with `"reason": "never-run"`.
 
@@ -251,4 +251,6 @@ This judges that one host. No kernel hosts a provider yet.
 - Kit adequacy: running kernels with known defects against the kit and reporting the fraction it rejects.
 - Anything not modelled: the ledger's crash behaviour, time limits, varying checks, executors, the lock, more than one level of child intents.
 - The intent and attempts scenarios take a claim and its source as given. Working both out from an act record is in the acts and status scenarios.
+- Rules that are written above and have no scenario yet: an attestation that covers a field the record lacks; `min_hard_gates` below 1 in a tree, which is treated as 1 as everywhere else; a floor missing from policy. Both kernels were written from the same sentences, and nothing checks they read them the same way.
+- What happens when a ticket name is taken a second time. The contract does not say.
 - The levels above `helper` in the kit describe what a kernel must do when a harness vouches for an act. No harness that an agent cannot reach exists yet, so they are not reachable in practice today.

@@ -21,7 +21,7 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "four definitions in a chain plus one unrelated, two hash values, two tools, at most five records",
+  "bounds": "four definitions in a chain plus one unrelated in a shared file, two hash values, a compiler and a test runner; every behaviour of at most six steps from one starting state",
   "cases": [
     {
       "config": "design_definition.cfg",

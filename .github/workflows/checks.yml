@@ -63,6 +63,25 @@ jobs:
         run: ${{ matrix.python }} tools/run_attest_check.py -- kernel/target/release/dodona-kernel scenario
       - name: Compare the kernel's path check with the reference on random paths
         run: ${{ matrix.python }} tools/path_differential.py -- kernel/target/release/dodona-kernel
+      # The second kernel: JavaScript, written without sight of the first.
+      - name: Second kernel, unit tests
+        run: node --test kernel2/test.js
+      - name: Judge the second kernel with the conformance kit
+        run: ${{ matrix.python }} tools/run_kit.py -- node kernel2/dodona-kernel2.js scenario
+      - name: Judge the second kernel with the encoding, path and key vectors
+        run: |
+          ${{ matrix.python }} tools/run_vectors.py -- node kernel2/dodona-kernel2.js canonical
+          ${{ matrix.python }} tools/run_path_vectors.py -- node kernel2/dodona-kernel2.js path path-set
+          ${{ matrix.python }} tools/run_key_vectors.py -- node kernel2/dodona-kernel2.js key
+      - name: Judge the second kernel's ledger
+        run: ${{ matrix.python }} tools/run_ledger_cases.py -- node kernel2/dodona-kernel2.js
+      - name: Check the second kernel against values the reference signer makes now
+        run: ${{ matrix.python }} tools/run_attest_check.py -- node kernel2/dodona-kernel2.js scenario
+      - name: Compare the two kernels on inputs the kit does not contain
+        run: ${{ matrix.python }} tools/kernel_differential.py --rounds 6 --a kernel/target/release/dodona-kernel --b node kernel2/dodona-kernel2.js
+      - name: Plant known defects in the second kernel and check the kit rejects each
+        if: matrix.os == 'ubuntu-24.04'
+        run: node kernel2/plant.js
       - name: Plant known defects and check the kit rejects each
         if: matrix.os == 'ubuntu-24.04'
         run: ${{ matrix.python }} tools/kit_adequacy.py

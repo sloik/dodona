@@ -16,15 +16,21 @@
 (* built last. The properties compare key and truth.                       *)
 (*                                                                         *)
 (* Not covered: dependency relations that change, builds that fail, more   *)
-(* than one build target, runs that take time.                             *)
+(* than one build target, runs that take time, and any behaviour longer    *)
+(* than MaxSteps steps.                                                    *)
 (***************************************************************************)
 EXTENDS Naturals, FiniteSets
 
 CONSTANTS Granularity, Mutant
 
-VARIABLES defHash, compiler, runner, records, store, latest
+VARIABLES defHash, compiler, runner, records, store, latest, steps
 
-vars == <<defHash, compiler, runner, records, store, latest>>
+vars == <<defHash, compiler, runner, records, store, latest, steps>>
+
+\* The search is bounded by depth: every behaviour of at most this many steps
+\* from one starting state. Bounding the number of records instead left a
+\* state space too large to finish.
+MaxSteps == 6
 
 Defs        == {"d1", "d2", "d3", "d4"}
 Hashes      == {0, 1}
@@ -83,9 +89,10 @@ Plan == IF Mutant = "plan_everything" THEN Obligations
         ELSE {o \in Obligations : Reusable(o) = {}}
 
 Init ==
-    /\ defHash \in [Defs -> Hashes]
-    /\ compiler \in Hashes
-    /\ runner \in Hashes
+    /\ defHash = [d \in Defs |-> 0]
+    /\ compiler = 0
+    /\ runner = 0
+    /\ steps = 0
     /\ records = {}
     /\ store = {}
     /\ latest = "none"
@@ -112,17 +119,19 @@ Run(o) ==
     /\ UNCHANGED <<defHash, compiler, runner>>
 
 Next ==
-    \/ \E d \in Defs, h \in Hashes : Edit(d, h)
-    \/ \E h \in Hashes : RepinCompiler(h) \/ RepinRunner(h)
-    \/ \E o \in Obligations : Run(o)
+    /\ steps < MaxSteps
+    /\ steps' = steps + 1
+    /\ \/ \E d \in Defs, h \in Hashes : Edit(d, h)
+       \/ \E h \in Hashes : RepinCompiler(h) \/ RepinRunner(h)
+       \/ \E o \in Obligations : Run(o)
 
 Spec == Init /\ [][Next]_vars
 
-RecordBound == Cardinality(records) <= 5
 ----------------------------------------------------------------------------
 TypeOK ==
     /\ defHash \in [Defs -> Hashes]
     /\ compiler \in Hashes /\ runner \in Hashes
+    /\ steps \in 0..MaxSteps
     /\ \A r \in records : r.ob \in Obligations
     /\ Granularity \in {"definition", "file"}
 
