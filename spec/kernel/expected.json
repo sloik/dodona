@@ -1,8 +1,12 @@
 {
   "model": "MC.tla",
   "tool": {
-    "name": "tlc",
-    "version": "1.7.4"
+    "name": "tla2tools",
+    "version": "1.7.4",
+    "requires": [
+      "a Java runtime"
+    ],
+    "digest": "not yet pinned; no lock exists"
   },
   "arguments": [
     "-workers",
@@ -11,52 +15,107 @@
     "<config>",
     "MC.tla"
   ],
+  "exit_codes": {
+    "0": "completed, no violation",
+    "12": "safety violation found",
+    "other": "did not complete; counts as neither outcome"
+  },
+  "bounds": "two definitions, two obligations, hashes {0,1}, at most two runs in flight; small instance: one definition, one obligation",
   "cases": [
     {
       "config": "design.cfg",
       "expect": "no-violation",
-      "checks": [
-        "TypeOK",
-        "Sound",
-        "Consistent"
-      ],
-      "purpose": "The intended design satisfies the claim."
+      "expect_exit": 0,
+      "purpose": "The intended design satisfies every property, for the main bounds."
     },
     {
-      "config": "nonvacuous_pass.cfg",
-      "expect": "violation",
-      "of": "NeverPassed",
-      "purpose": "A reported pass is reachable, so Sound is not trivially true."
+      "config": "design_three_hashes.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "Same, with three hash values, so an edit is not always a toggle. Small instance."
     },
     {
-      "config": "nonvacuous_fail.cfg",
+      "config": "design_flaky.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "With a provider that can be wrong, a pass is still never reported over a recorded failure."
+    },
+    {
+      "config": "reach_pass.cfg",
       "expect": "violation",
-      "of": "NeverFailed",
-      "purpose": "A reported failure is reachable."
+      "expect_exit": 12,
+      "purpose": "A reported pass is reachable.",
+      "of": "NeverPassed"
+    },
+    {
+      "config": "reach_fail.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A reported failure is reachable.",
+      "of": "NeverFailed"
+    },
+    {
+      "config": "reach_reuse.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A record is reused after a change, so the design is not simply rerunning everything.",
+      "of": "NeverReusedAfterChange"
+    },
+    {
+      "config": "reach_conflict.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "With a flaky provider, a conflict is reachable.",
+      "of": "NeverConflict"
     },
     {
       "config": "mutant_key_omits_tool.cfg",
       "expect": "violation",
-      "of": "Sound",
-      "purpose": "Planted defect: the evidence key leaves out the tool digest."
+      "expect_exit": 12,
+      "purpose": "Planted defect: the evidence key leaves out the tool digest.",
+      "of": "Sound"
     },
     {
       "config": "mutant_complete_with_current_key.cfg",
       "expect": "violation",
-      "of": "Sound",
-      "purpose": "Planted defect: a result is filed under the key at completion, not at submission."
+      "expect_exit": 12,
+      "purpose": "Planted defect: a result is filed under the key at completion, not at submission.",
+      "of": "Sound"
+    },
+    {
+      "config": "mutant_complete_with_current_key_consistent.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "The same defect also breaks Consistent, showing that property can fail.",
+      "of": "Consistent"
     },
     {
       "config": "mutant_unavailable_is_pass.cfg",
       "expect": "violation",
-      "of": "Sound",
-      "purpose": "Planted defect: an unreachable backend is recorded as a pass."
+      "expect_exit": 12,
+      "purpose": "Planted defect: an unreachable backend is recorded as a pass.",
+      "of": "Provenance"
     },
     {
-      "config": "mutant_undeclared_dep.cfg",
+      "config": "mutant_pass_outranks_fail.cfg",
       "expect": "violation",
-      "of": "Sound",
-      "purpose": "Broken assumption: a provider under-declares its dependencies."
+      "expect_exit": 12,
+      "purpose": "Planted defect: with conflicting records, the pass wins.",
+      "of": "NoPassOverFail"
+    },
+    {
+      "config": "assumption_undeclared_dep.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Broken assumption: a provider under-declares its dependencies. Shows the assumption is load-bearing.",
+      "of": "Sound"
+    },
+    {
+      "config": "assumption_flaky_provider.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Broken assumption: a provider reports a wrong verdict. Shows the assumption is load-bearing.",
+      "of": "Sound"
     }
   ]
 }

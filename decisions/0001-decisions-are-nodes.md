@@ -16,9 +16,11 @@ Design reasons usually live in documents that nothing checks. They go stale with
 
 ## Decision
 
-Every decision is a node in dodona's graph. A decision record states its status, what it governs, and what it supersedes. `governs` links resolve to definition identities once an index exists; until then they are repository paths.
+Every decision is a node in dodona's graph. A decision record states its status, what it governs, and what it supersedes.
 
-The decision format is a provider. The default is Markdown with a small header, used in this directory. A formal decision language is equally valid: the layer exists to capture context, alternatives and reasons, in whatever form a project chooses.
+`governs` names definitions by their stable name, and the kernel records the content identity each name had when the decision was written. When the identity behind a governed name changes, or the name disappears, the decision is flagged for review. Until an index exists, the names in this directory are repository paths.
+
+The decision format is a provider. The default is Markdown with a small header, used in this directory. A formal decision language is equally valid: the layer exists to capture context, alternatives and reasons, in whatever form a project chooses. A provider maps its own status vocabulary onto `proposed`, `accepted`, `superseded` and `rejected`.
 
 ## Consequences
 

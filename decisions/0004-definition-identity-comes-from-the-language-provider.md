@@ -16,9 +16,11 @@ Selective reruns, evidence reuse and decision links all depend on knowing exactl
 
 ## Decision
 
-The `definition.index` capability returns, for each definition: its identity, the identities it depends on, and the granularity achieved (`definition`, `module` or `file`). Identity must be a function of content alone, never of time, location or machine.
+The `definition.index` capability returns, for each definition: a stable **name**, a content **identity**, the names it depends on, the granularity achieved (`definition`, `module` or `file`), and the files that materialise it for a tool to read. Identity must be a function of content alone, never of time, location or machine.
 
-When no provider indexes a file, the kernel uses file identity: the hash of the bytes, with dependencies taken as declared in configuration. Coarse identity causes extra reruns. It must never cause a wrong reuse.
+The name is what decisions and obligations refer to. A change is detected as a new identity behind an existing name; without a name, an edit in a content-addressed language cannot be told apart from a deletion and an unrelated addition.
+
+Configuration binds a provider to the files it claims. Two providers claiming the same file for the same capability is a resolve error. When no provider claims a file, the kernel uses file identity: the hash of the bytes, with dependencies taken as declared in configuration. Coarse identity causes extra reruns. It must never cause a wrong reuse.
 
 ## Consequences
 

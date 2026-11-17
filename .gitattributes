@@ -1,3 +1,5 @@
 * text=auto eol=lf
 *.tla text eol=lf
 *.cfg text eol=lf
+# Conformance vectors are byte-exact data and must never be converted.
+conformance/** -text

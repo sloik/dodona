@@ -13,9 +13,11 @@ Each record is a Markdown file with a header:
 | `governs` | What the decision constrains. Repository paths for now; definition identities once an index exists |
 | `supersedes` | Ids of decisions this one replaces |
 
-`accepted` means the project owner decided it. `proposed` means it is the current design and still open to challenge.
+`accepted` means the project owner decided it. `proposed` means it is the current design and still open to challenge. An accepted decision may rest on proposed ones for its detail; the accepted part is the direction stated in its title.
 
-A record is never edited to change its meaning. A changed decision is a new record that supersedes the old one.
+To propose a decision, add a record with status `proposed`. Only the project owner changes a status to `accepted`. Until the first public release, records may be revised in place; after it, a change of meaning is always a new record.
+
+After the first release, a record is never edited to change its meaning. A changed decision is a new record that supersedes the old one.
 
 Every record ends with **What would show this wrong**: an observable outcome that would falsify the decision. A decision without one is an opinion.
 
@@ -36,3 +38,6 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0011](0011-self-hosting-through-a-verified-seed.md) | Self-hosting through a verified seed; no implementation language is fixed | accepted |
 | [0012](0012-spec-to-code-conformance-is-an-explicit-seam.md) | Specification-to-code conformance is an explicit seam | proposed |
 | [0013](0013-initial-binding-for-kernel-models.md) | TLA+ is the initial binding for dodona's own kernel models | proposed |
+| [0014](0014-policy-is-separate-from-configuration.md) | Policy is separate from configuration | proposed |
+| [0015](0015-ledger-integrity-and-record-trust.md) | Ledger integrity, and trust in records from elsewhere | proposed |
+| [0016](0016-provider-isolation-is-stated-not-assumed.md) | Provider isolation is stated, not assumed | proposed |

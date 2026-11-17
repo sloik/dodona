@@ -17,9 +17,13 @@ The common failure of verification pipelines is a check that did not run being r
 
 ## Decision
 
-A check ends in exactly one of `passed`, `failed`, `pending`, `unavailable`, `error`, `unsupported`. The set is defined by the kernel and providers cannot extend it.
+A check run ends in exactly one of `passed`, `failed`, `pending`, `unavailable`, `error`, `unsupported`. The set is defined by the kernel and providers cannot extend it. A tool that answers "unknown" yields `error`. A result that holds only by relying on something policy does not allow, such as an unproven assumption inside a proof, is `failed`.
 
-Only `passed` and `failed` are reusable. Nothing converts another verdict into `passed`: not a retry policy, not a default, not a provider. An obligation with no reusable record for its current evidence key is reported as unknown.
+Only `passed` and `failed` are reusable. Nothing converts another verdict into `passed`: not a retry policy, not a default, not a provider.
+
+The status of an obligation is derived by the kernel from all reusable records for its current evidence key: `passed` if they all pass, `failed` if they all fail, `conflict` if they disagree, `unknown` with a reason if there are none. A pass never outranks a recorded failure. A rerun adds a record and never replaces one.
+
+A project is `passed` only when policy requires at least one obligation and every required one is `passed`. A project where nothing was required or nothing ran is never reported as passing.
 
 ## Consequences
 
@@ -34,4 +38,4 @@ Only `passed` and `failed` are reusable. Nothing converts another verdict into `
 
 ## What would show this wrong
 
-Any sequence of events makes an obligation report `passed` without a completed check whose result was a pass for the current inputs. Modelled in `spec/kernel/EvidenceReuse.tla` (mutant `unavailable_is_pass`).
+Any sequence of events makes an obligation report `passed` without a completed check whose result was a pass for the current inputs, or while a failure is recorded for the same inputs. Modelled in `spec/kernel/EvidenceReuse.tla` (properties `Provenance` and `NoPassOverFail`, with a planted defect for each).

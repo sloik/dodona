@@ -1,40 +1,67 @@
 # dodona's own project configuration: dodona used on dodona.
 #
 # No kernel exists yet to read this file. It records the intended bindings so
-# that they are decisions on record instead of habits. Format: draft 0.1.
+# that they are decisions on record instead of habits. Format: draft 0.2.
 
 [project]
 name = "dodona"
-config = "0.1"
+config = "0.2"
+eol = "lf"            # text files with other line endings are an error
+bom = "forbidden"
 
 # Platforms in support order (decision 0009). Only the first is exercised today.
 [[platform]]
 os = "macos"
-arch = "arm64"
+arch = "aarch64"
 
-[decisions]
-provider = "dodona.decision.markdown"   # reference provider, not yet written
-path = "decisions"
+# Bindings attach one capability of one provider to the files it claims.
+# Two bindings claiming the same file for the same capability is an error.
+# The provider names below are reference providers that are not yet written.
+
+[[binding]]
+name = "decisions"
+capability = "decision.index"
+provider = "dodona.decision.markdown"
+match = ["decisions/[0-9]*.md"]
 
 # Kernel models. TLA+ is the initial binding, not part of the architecture
 # (decision 0013).
-[[specification]]
+[[binding]]
+name = "kernel-models.index"
+capability = "definition.index"
+provider = "dodona.tla"
+match = ["spec/kernel/*.tla", "spec/kernel/*.cfg"]
+
+[[binding]]
 name = "kernel-models"
-provider = "dodona.verify.tlc"          # reference provider, not yet written
-path = "spec/kernel"
+capabilities = ["obligation.enumerate", "obligation.check"]
+provider = "dodona.tla"
+match = ["spec/kernel/*.cfg"]
 reproducibility = "evidence"
 
-  [[specification.tool]]
-  name = "tlc"
-  constraint = "=1.7.4"
+[[tool]]
+name = "tla2tools"
+constraint = "=1.7.4"
+requires = ["java"]
+
+[[tool]]
+name = "java"
+constraint = ">=17"
 
 # Where checks run is a separate choice from what checks them (decision 0007).
-# The executor is bound per site, outside the repository, and there is no
-# fallback: an unreachable executor yields the verdict "unavailable".
-[executor]
-default = "site"
+# Each site binds its executor outside the repository. There is no fallback:
+# an unreachable executor yields the verdict "unavailable".
+[[binding]]
+name = "executor"
+capability = "run.submit"
+provider = "@site"
+
+# What must pass is policy, not configuration (decision 0014). The policy file
+# does not exist yet; without one, project status is "nothing-required".
+[policy]
+path = "policy.toml"
+reference = "main"
 
 # No implementation is bound. The kernel's language is a binding to be chosen
 # when a seed is built (decision 0011), and is expected to have more than one
 # value over time.
-# [[implementation]]

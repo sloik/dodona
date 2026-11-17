@@ -16,9 +16,11 @@ A checked model proves things about the model. Whether the code behaves like the
 
 ## Decision
 
-Linking a specification to an implementation is its own obligation, checked by a `conformance.check` provider. Its evidence states the method (`proof`, `refinement`, `trace-replay`, `mapping-only`) and the trusted base, including any code the proof does not reach, such as foreign-function shells.
+Linking a specification to an implementation is its own obligation, checked by a `conformance.check` provider. Its evidence states the **method** (for example proof by construction, refinement, trace replay, or a mapping that is only documented) and the trusted base, including any code the proof does not reach, such as foreign-function shells.
 
-Results are reported per layer. "Specification verified" and "implementation conforms" are never merged into one green result.
+A build step between a verified source and what actually runs is part of the same chain: the build is an obligation, its output is a node, and what consumes the output depends on it.
+
+Evidence class and method are provider-named values with a declared strength, not a fixed list in the kernel. Results are reported per layer. "Specification verified" and "implementation conforms" are never merged into one green result.
 
 ## Consequences
 

@@ -2,49 +2,104 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/sloik/dodona/protocol/evidence-record.schema.json",
   "title": "Evidence record",
-  "description": "One entry in the append-only ledger.",
+  "description": "One entry in the ledger. Written only by the kernel.",
   "type": "object",
   "required": [
     "record",
     "obligation",
-    "key",
+    "core_key",
+    "platform",
     "verdict",
     "inputs",
     "provider",
     "executor",
-    "submitted_at_seq"
+    "strength",
+    "isolation",
+    "origin",
+    "runs"
   ],
+  "patternProperties": {
+    "^x-": {}
+  },
   "additionalProperties": false,
   "properties": {
     "record": {
       "$ref": "common.schema.json#/$defs/identity",
-      "description": "Identity of this record: hash of its canonical encoding without this field."
+      "description": "Hash of the canonical encoding of this record without this field and without signature."
+    },
+    "previous": {
+      "$ref": "common.schema.json#/$defs/identity",
+      "description": "The record this writer wrote before this one. Gives a causal order without a counter or a clock."
     },
     "obligation": {
       "$ref": "common.schema.json#/$defs/identity"
     },
-    "key": {
+    "core_key": {
       "$ref": "common.schema.json#/$defs/identity",
-      "description": "Evidence key, fixed at submission (decision 0006)."
+      "description": "Hash of inputs. Recomputed by the kernel whenever the record is read."
+    },
+    "platform": {
+      "$ref": "common.schema.json#/$defs/platform",
+      "description": "Where the check executed, as reported by the executor. Second part of the evidence key."
     },
     "verdict": {
-      "$ref": "common.schema.json#/$defs/verdict"
+      "enum": [
+        "passed",
+        "failed"
+      ],
+      "description": "Only reusable verdicts are written to the ledger. Other outcomes are reported and logged, not recorded as evidence."
     },
     "inputs": {
       "type": "object",
       "required": [
-        "definitions",
+        "specified_by",
+        "targets",
+        "closure",
         "tools",
         "config"
       ],
+      "patternProperties": {
+        "^x-": {}
+      },
       "additionalProperties": false,
       "properties": {
-        "definitions": {
+        "specified_by": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identity"
+          }
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identity"
+          }
+        },
+        "closure": {
           "type": "array",
           "items": {
             "$ref": "common.schema.json#/$defs/identity"
           },
-          "description": "Full dependency closure, sorted."
+          "description": "Everything reachable over depends-on, sorted by UTF-8 bytes."
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "artifact",
+              "produced_by_core_key"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "artifact": {
+                "$ref": "common.schema.json#/$defs/identity"
+              },
+              "produced_by_core_key": {
+                "$ref": "common.schema.json#/$defs/identity"
+              }
+            }
+          }
         },
         "tools": {
           "type": "array",
@@ -63,21 +118,19 @@
                 "$ref": "common.schema.json#/$defs/identity"
               }
             }
-          }
+          },
+          "description": "Whole requirement closure, including runtimes."
         },
         "config": {
           "$ref": "common.schema.json#/$defs/identity",
-          "description": "Hash of bounds, flags and seeds."
-        },
-        "platform": {
-          "$ref": "common.schema.json#/$defs/platform",
-          "description": "Absent only when the provider declared platform independence."
+          "description": "Hash of bounds, flags, seeds, worker counts and limits."
         },
         "declared": {
           "type": "array",
           "items": {
             "$ref": "common.schema.json#/$defs/identity"
-          }
+          },
+          "description": "Further inputs the provider declared before submission."
         }
       }
     },
@@ -117,29 +170,79 @@
         }
       }
     },
-    "evidence_class": {
-      "enum": [
-        "proof",
-        "bounded-model-check",
-        "test",
-        "mapping-only"
-      ]
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Every tool run this verdict was derived from, in order.",
+      "items": {
+        "type": "object",
+        "required": [
+          "exit_status",
+          "output",
+          "tools_ran"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "exit_status": {
+            "type": "integer"
+          },
+          "output": {
+            "$ref": "common.schema.json#/$defs/identity",
+            "description": "Digest of the raw captured output."
+          },
+          "tools_ran": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/identity"
+            },
+            "description": "Tool digests the executor reports it actually ran."
+          },
+          "handle": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "strength": {
+      "$ref": "common.schema.json#/$defs/strength"
+    },
+    "isolation": {
+      "$ref": "common.schema.json#/$defs/isolation"
+    },
+    "trusted_base": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Assumptions specific to this result, such as axioms a proof used."
     },
     "summary": {
       "type": "object",
-      "description": "Provider-defined, canonical. Compared across platforms at reproducibility level evidence."
+      "description": "Provider-defined. Only fields the manifest lists as comparable are compared across platforms."
     },
     "attachments": {
       "type": "array",
       "items": {
         "$ref": "common.schema.json#/$defs/identity"
       },
-      "description": "Logs, counterexamples and outputs, stored by a store.blob provider."
+      "description": "Logs, counterexamples and outputs, held by a store.blob provider."
     },
-    "submitted_at_seq": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "Ledger sequence number at submission. The ledger is ordered by sequence, never by wall-clock time."
+    "origin": {
+      "type": "object",
+      "required": [
+        "writer"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "writer": {
+          "type": "string",
+          "description": "Identifier of the kernel installation that wrote the record."
+        },
+        "signature": {
+          "type": "string",
+          "description": "Required for a record to be reusable anywhere but where it was written."
+        }
+      }
     }
   },
   "allOf": [

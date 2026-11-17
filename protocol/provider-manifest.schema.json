@@ -11,12 +11,14 @@
     "capabilities",
     "trusted_base"
   ],
+  "patternProperties": {
+    "^x-": {}
+  },
   "additionalProperties": false,
   "properties": {
     "protocol": {
       "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+$",
-      "description": "Protocol version the provider speaks. Same major version is required."
+      "pattern": "^[0-9]+\\.[0-9]+$"
     },
     "name": {
       "type": "string",
@@ -28,12 +30,14 @@
     "capabilities": {
       "type": "array",
       "minItems": 1,
-      "uniqueItems": true,
       "items": {
         "type": "object",
         "required": [
           "capability"
         ],
+        "patternProperties": {
+          "^x-": {}
+        },
         "additionalProperties": false,
         "properties": {
           "capability": {
@@ -47,22 +51,35 @@
             ],
             "description": "definition.index only."
           },
+          "text_files": {
+            "type": "boolean",
+            "description": "definition.index and decision.index: whether claimed files are text and subject to the project's line-ending rule."
+          },
+          "determinism": {
+            "enum": [
+              "deterministic",
+              "seeded",
+              "nondeterministic"
+            ],
+            "description": "Whether equal inputs give equal results. seeded: only with the seed fixed in configuration."
+          },
           "platform_independent": {
             "type": "boolean",
             "default": false,
-            "description": "True removes the platform from the evidence key. A claim, listed in the trusted base."
+            "description": "A claim that results do not depend on the platform. Never removes the platform from a record; honoured only after it has been checked on two platforms."
           },
           "max_reproducibility": {
-            "$ref": "common.schema.json#/$defs/reproducibility",
-            "description": "Strongest level this capability can meet."
+            "$ref": "common.schema.json#/$defs/reproducibility"
           },
-          "evidence_class": {
-            "enum": [
-              "proof",
-              "bounded-model-check",
-              "test",
-              "mapping-only"
-            ],
+          "comparable_summary": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Summary fields compared at reproducibility level evidence. Timing fields must not be listed."
+          },
+          "strength": {
+            "$ref": "common.schema.json#/$defs/strength",
             "description": "obligation.check and conformance.check only."
           }
         }
@@ -76,6 +93,9 @@
           "name",
           "constraint"
         ],
+        "patternProperties": {
+          "^x-": {}
+        },
         "additionalProperties": false,
         "properties": {
           "name": {
@@ -86,14 +106,14 @@
           }
         }
       },
-      "description": "External tools the provider needs. Resolved and pinned by a tool.resolve provider; the provider never finds tools itself."
+      "description": "Tools the provider needs. Resolved and pinned by a tool.resolve provider together with everything they require; the provider never finds tools itself."
     },
     "trusted_base": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "Assumptions a result from this provider rests on, beyond the kernel's own."
+      "description": "Standing assumptions a result from this provider rests on, beyond the kernel's own list."
     }
   }
 }

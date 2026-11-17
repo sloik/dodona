@@ -2,11 +2,18 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/sloik/dodona/protocol/common.schema.json",
   "title": "Shared definitions",
+  "description": "Draft 0.2. Below protocol 1.0 there is no compatibility promise. Objects accept extra fields only under an x- prefix.",
   "$defs": {
     "identity": {
       "type": "string",
-      "pattern": "^[a-z0-9]+:[0-9a-f]{32,}$",
-      "description": "Algorithm name, a colon, then the lowercase hexadecimal digest. Example: sha256:9f86d0..."
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Algorithm name, a colon, the lowercase hexadecimal digest. The algorithm fixes the length. sha256 is the only algorithm in this draft."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "Stable name of a node: survives edits to content."
     },
     "platform": {
       "type": "object",
@@ -17,13 +24,30 @@
       "additionalProperties": false,
       "properties": {
         "os": {
-          "type": "string"
+          "enum": [
+            "macos",
+            "linux",
+            "windows"
+          ]
         },
         "arch": {
-          "type": "string"
+          "enum": [
+            "aarch64",
+            "x86_64"
+          ]
         },
         "libc": {
-          "type": "string"
+          "enum": [
+            "gnu",
+            "musl"
+          ]
+        },
+        "emulated_on": {
+          "enum": [
+            "aarch64",
+            "x86_64"
+          ],
+          "description": "Present when the run executed under emulation on a different architecture."
         }
       }
     },
@@ -36,12 +60,23 @@
         "error",
         "unsupported"
       ],
-      "description": "Closed set (decision 0005). Only passed and failed are reusable."
+      "description": "Outcome of one run (decision 0005). Only passed and failed are reusable."
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "conflict",
+        "unknown"
+      ],
+      "description": "Derived by the kernel for an obligation. Never supplied by a provider."
     },
     "relpath": {
       "type": "string",
-      "pattern": "^(?!/)(?!.*(^|/)\\.\\.?(/|$))[^\\\\]+$",
-      "description": "Relative path with / separators, Unicode NFC, no . or .. segments, no backslash."
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^/\\\\:*?\"<>|\\u0000-\\u001f]+(/[^/\\\\:*?\"<>|\\u0000-\\u001f]+)*$",
+      "description": "First filter only. The normative path check (NFC, reserved names, trailing dot or space, case-fold collisions, . and .. segments) is a function published with test vectors, not a pattern."
     },
     "reproducibility": {
       "enum": [
@@ -50,14 +85,45 @@
         "artifact"
       ]
     },
+    "isolation": {
+      "enum": [
+        "enforced",
+        "best-effort",
+        "none"
+      ]
+    },
+    "strength": {
+      "type": "object",
+      "required": [
+        "class",
+        "rank"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "type": "string",
+          "description": "Provider-named evidence class or conformance method, for example proof, bounded-model-check, test, trace-replay."
+        },
+        "rank": {
+          "enum": [
+            "exhaustive",
+            "bounded",
+            "sampled",
+            "documented"
+          ],
+          "description": "Kernel-owned ordering used by policy: all inputs; all inputs within stated bounds; some inputs; no check, only a written mapping."
+        }
+      }
+    },
     "capability": {
       "enum": [
         "decision.index",
         "definition.index",
         "artifact.build",
+        "obligation.enumerate",
         "obligation.check",
         "conformance.check",
-        "run.execute",
+        "run.submit",
         "tool.resolve",
         "store.blob"
       ]

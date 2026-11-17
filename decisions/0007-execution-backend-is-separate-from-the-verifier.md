@@ -16,9 +16,11 @@ Which tool checks an obligation and where that tool runs are different choices. 
 
 ## Decision
 
-`obligation.check` providers describe a run: tool, arguments, inputs, expected outputs. `run.execute` providers perform runs. A verifier never starts a tool itself.
+Verifier, builder and conformance providers describe runs: tool, argument list, inputs, expected outputs, limits, the platform targeted and the tool digests expected. Executor providers perform runs. A verifier never starts a tool itself.
 
-An executor that cannot run the request returns `unavailable`. There is no automatic fallback to another executor: a fallback is a configuration choice the agent makes explicitly, and it is recorded.
+An executor accepts a run and returns a handle; the kernel polls or cancels by handle, so a long run survives a restart of the kernel and is not submitted twice. When a run ends, the executor reports the platform and the tool digests it actually ran. If these differ from what was asked, the outcome is `error`.
+
+An executor that cannot run the request returns `unavailable`. There is no automatic fallback to another executor: a fallback is an explicit, recorded configuration choice.
 
 ## Consequences
 

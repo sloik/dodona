@@ -17,11 +17,17 @@ Rerunning only what changed is safe only if the system knows everything a result
 
 ## Decision
 
-Each record carries an evidence key: a hash over the obligation's specification and target identities with their dependency closure, the provider identity and version, the protocol version, resolved tool digests, configuration, the platform unless declared independent, and any inputs the provider declares.
+Each record carries an evidence key in two parts.
 
-The key is fixed at submission from an immutable snapshot of the inputs. The result is recorded under that key even if the project changed during the run. A record is reused only when its key equals the key computed now.
+The **core key** is a hash over a published structure: the obligation; the identities of its specification and target definitions with their dependency closure; input artefacts, together with the inputs of the obligation that built them; the provider identity and version; the protocol version; the digest of every tool in the closure, including runtimes; and the configuration, which includes bounds, flags, seeds, worker counts and limits.
 
-The assumptions this rests on are listed, per provider, as the trusted base: declared inputs are complete, the verdict is correct for its inputs, the hash does not collide, the executor ran what it was asked to run.
+The second part is **the platform the check executed on**, as reported by the executor.
+
+The kernel computes the key. Providers never do, and may only add declared inputs before submission. The key is fixed at submission from a private copy of the inputs, and the result is filed under it even if the project changed during the run. A record is reused only when both parts equal the key computed now. Whenever a record is read, its key is recomputed from its stated inputs and the record is rejected on mismatch.
+
+Every record, including a pass, carries the exit status and the digest of the raw output it was derived from.
+
+The assumptions this rests on are kept as one list, the trusted base, in the data model. Every status reports the subset it rests on.
 
 ## Consequences
 
@@ -36,4 +42,4 @@ The assumptions this rests on are listed, per provider, as the trusted base: dec
 
 ## What would show this wrong
 
-A reused `passed` record whose obligation does not hold for the current inputs. Modelled (mutants `key_omits_tool`, `complete_with_current_key`, `undeclared_dep`).
+A reused `passed` record whose obligation does not hold for the current inputs. Modelled in `spec/kernel/EvidenceReuse.tla` (property `Sound`, with planted defects `key_omits_tool` and `complete_with_current_key`, and two cases showing which assumptions it depends on).
