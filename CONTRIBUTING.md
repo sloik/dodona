@@ -15,7 +15,7 @@ dodona is public while it is still a design, on purpose: it is cheapest to chang
 - **Break something.** Find a sequence of events in which dodona as designed would report something as delivered that was not. A concrete scenario is worth more than a general concern.
 - **Bring a tool.** Try, on paper, to fit a checker, compiler or decision format you know into the provider kinds, and report where it does not fit.
 - **Bring a use case.** Describe work you would want judged, and what could not be expressed.
-- **Take an open intent** from [intents/](intents/README.md).
+- **Take an open step.** Current pieces of work are [issues labelled `step`](https://github.com/sloik/dodona/issues?q=is%3Aissue+is%3Aopen+label%3Astep), each tied to an intent in [intents/](intents/README.md).
 
 ## Rules
 

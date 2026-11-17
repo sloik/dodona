@@ -14,3 +14,5 @@ Each intent has an owner, criteria, and for each criterion a gate ([data model](
 | [0006](0006-intent-to-delivery-is-traceable.md) | The path from an intent to what was delivered can be traced and scored | 0001 | uncovered |
 
 `uncovered` means at least one criterion has nothing that checks it yet. That is the honest state of a project at design stage.
+
+Each intent has an issue where work on it is discussed: [0001](https://github.com/sloik/dodona/issues/3), [0002](https://github.com/sloik/dodona/issues/4), [0003](https://github.com/sloik/dodona/issues/5), [0004](https://github.com/sloik/dodona/issues/6), [0005](https://github.com/sloik/dodona/issues/7), [0006](https://github.com/sloik/dodona/issues/8). Current pieces of work carry the [`step` label](https://github.com/sloik/dodona/issues?q=is%3Aissue+label%3Astep).
