@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -38,8 +39,9 @@ def judge(case: dict, exit_code: int | None, output: str) -> dict:
         if "is violated" in output:
             outcome = "violation"
         return {**result, "outcome": outcome, "match": ok}
-    named = f"Invariant {case['of']} is violated."
-    if exit_code == case["expect_exit"] and named in output:
+    # The checker words a violation found in the very first state differently.
+    named = re.compile(rf"Invariant {re.escape(case['of'])} is violated(\.| by the initial state:)")
+    if exit_code == case["expect_exit"] and named.search(output):
         return {**result, "outcome": f"violation of {case['of']}", "match": True}
     if "is violated" in output:
         outcome = "violation of a different property"

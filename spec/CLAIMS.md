@@ -35,9 +35,9 @@ This model is narrow, and a review said so. It takes the declared gates and the 
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | modelled, unchecked |
-| C25 | A gate changes only through an amendment on record granted by the owner; a self-granted amendment is always marked, and takes no effect where an independent approver is required | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends`, `NoSelfWhenIndependent`, `SelfShown` | Silent gate change; worker's amendment accepted; self-granted amendment takes effect; self-granted amendment not marked | modelled, unchecked |
-| C28 | Amendments are live rules: an owner's amendment can open the way to delivery, and under an independent-approver policy a self-granted one cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence in the strict case | (reachability) | modelled, unchecked |
+| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | **checked**, run 3 |
+| C25 | A gate changes only through an amendment on record granted by the owner; a self-granted amendment is always marked, and takes no effect where an independent approver is required | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends`, `NoSelfWhenIndependent`, `SelfShown` | Silent gate change; worker's amendment accepted; self-granted amendment takes effect; self-granted amendment not marked | **checked**, run 3 |
+| C28 | Amendments are live rules: an owner's amendment can open the way to delivery, and under an independent-approver policy a self-granted one cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence in the strict case | (reachability) | **checked**, run 3 |
 
 ## Not yet modelled
 
@@ -108,6 +108,28 @@ With run 1, all 14 cases of this model now match. C1 to C6 are checked, for the 
 
 The soundness of using a state view is an argument, not something the checker verified. It is the weakest step in this result.
 
-### `intent/IntentGates.tla`
+### Run 3: `intent/IntentGates.tla`, 2026-11-17
 
-Submitted. No case has completed.
+Checker: TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802), one worker. Model files (SHA-256): `IntentGates.tla` `164207df042124401ac7e40852621eb6ef8d25eec9ff9f2b983da53216039cfa`, `MC.tla` `858ad6b8f3cbb0b0efae74ac7a6dc208b248a3b955de0b5866b68d7cf1e7f9a5`.
+
+All 13 cases matched.
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design_separate_owner` | no violation | no violation, search complete | 11,989 / 999 |
+| `design_same_party_strict` | no violation | no violation, search complete | 7,129 / 594 |
+| `design_same_party_lenient` | no violation | no violation, search complete | 11,989 / 999 |
+| `strict_blocks_self_amendment` | no violation | no violation, search complete | 7,129 / 594 |
+| `reach_delivered` | `NeverDelivered` violated | violated | 15 / 14 |
+| `reach_fulfilled` | `NeverFulfilled` violated | violated | 160 / 86 |
+| `reach_delivered_by_amendment` | `NeverDeliveredByAmendment` violated | violated | 22 / 20 |
+| `mutant_worker_can_amend` | `OnlyOwnerAmends` violated | violated | 20 / 14 |
+| `mutant_self_counts` | `NoSelfWhenIndependent` violated | violated | 8 / 8 |
+| `mutant_hide_self` | `SelfShown` violated | violated | 8 / 8 |
+| `mutant_silent_change` | `GateProvenance` violated | violated | 14 / 14 |
+| `mutant_delivered_ignores_unknown` | `DeliveredSound` violated | violated, in the initial state | not reported by the checker |
+| `mutant_deferred_as_passed` | `FulfilledSound` violated | violated | 15 / 14 |
+
+A defect in the judge, found by this run: `tools/check_models.py` at first reported `mutant_delivered_ignores_unknown` as a mismatch. The checker had found the right property violated, and words a violation in the very first state differently. The judge was corrected to accept that wording for the named property only, with tests that a different or longer property name is still rejected. The mismatch was a fault in the judge, not in the model or the expectation.
+
+This model is narrow, as said above. "Checked" here means these few rules hold in a model that takes the declared gates and the identities of the parties as given.

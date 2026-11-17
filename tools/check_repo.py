@@ -107,6 +107,14 @@ class JudgeTests(unittest.TestCase):
     def test_named_violation_matches(self):
         self.assertTrue(check_models.judge(self.viol, 12, "Error: Invariant Sound is violated.\n")["match"])
 
+    def test_violation_in_the_initial_state_matches(self):
+        out = "Error: Invariant Sound is violated by the initial state:\n"
+        self.assertTrue(check_models.judge(self.viol, 12, out)["match"])
+
+    def test_a_longer_property_name_is_not_a_match(self):
+        self.assertFalse(check_models.judge(self.viol, 12, "Error: Invariant SoundX is violated.\n")["match"])
+        self.assertFalse(check_models.judge(self.viol, 12, "Error: Invariant XSound is violated by the initial state:\n")["match"])
+
     def test_other_violation_is_not_a_match(self):
         self.assertFalse(check_models.judge(self.viol, 12, "Error: Invariant TypeOK is violated.\n")["match"])
 
