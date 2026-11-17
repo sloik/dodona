@@ -1,0 +1,17 @@
+{
+  "about": "What dodona's own checks are pinned to. Draft: this file is written by hand until a resolver exists, and it pins files, not whole tool trees. `sha256` is the digest the executor must measure for `measured_file` before a result is accepted; null means not pinned yet, which every record made in that state says.",
+  "tools": [
+    {
+      "name": "tla2tools",
+      "version": "1.7.4",
+      "measured_file": "/opt/tla/tla2tools.jar",
+      "sha256": null
+    },
+    {
+      "name": "java",
+      "version": ">=17",
+      "measured_file": "/usr/bin/java",
+      "sha256": null
+    }
+  ]
+}

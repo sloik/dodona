@@ -13,6 +13,7 @@ output and <out>/<name>.exit with its exit status. A case that cannot be
 started gets the exit status "did-not-start". The driver itself judges
 nothing; tools/check_models.py does that from the files.
 """
+import hashlib
 import json
 import pathlib
 import shutil
@@ -41,6 +42,14 @@ def main() -> int:
         # The checker leaves its working files behind. Left to pile up over many
         # cases they would exhaust the space a job is allowed.
         shutil.rmtree(pathlib.Path(case["cwd"]) / "states", ignore_errors=True)
+    # What was actually run: the digest of each program and library the site asked to have measured.
+    measured = {}
+    for path in manifest.get("measure", []):
+        try:
+            measured[path] = hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+        except OSError:
+            measured[path] = None
+    (out / "measured.json").write_text(json.dumps(measured, indent=1), encoding="utf-8")
     return 0
 
 
