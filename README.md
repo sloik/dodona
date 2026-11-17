@@ -15,7 +15,7 @@ dodona is a tool an AI agent can ask that question, so nobody has to take the ag
 | **Stage** | Early. A first seed kernel exists and does only what the conformance kit can judge. dodona is not usable yet |
 | **Exists** | Architecture, data model, 25 proposed decisions, protocol schemas, nine formal models, a conformance kit, a seed kernel |
 | **Runs** | The seed kernel is built and judged by the kit on macOS, Linux and Windows on every change: 51 scenarios, 96 encoding and path vectors, and 37 planted defects the kit must reject. That is sampled evidence, not proof |
-| **Checked so far** | 24 of 37 design claims, by bounded model checks of small instances. The seed kernel agrees with two of the models on every state they reach, about 150,000 in all; see [the claims table](spec/CLAIMS.md) |
+| **Checked so far** | 24 of 37 design claims, by bounded model checks of small instances. **"Checked" is weaker than it reads**: a review found that in the seven newest models, behind 11 of the 24, almost every property restates the rule it checks, so it catches a planted defect and says nothing about whether the rule is right; two of those models also allowed what the design forbids. They are being rewritten and their claims will go back to unchecked ([issue 21](https://github.com/sloik/dodona/issues/21)). The seed kernel agrees with two of the models on every state they reach, about 150,000 in all; see [the claims table](spec/CLAIMS.md) |
 | **Guarded by** | Automatic checks on every change: a gap that is found becomes a check ([list](docs/gap-checks.md)) |
 | **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |
 

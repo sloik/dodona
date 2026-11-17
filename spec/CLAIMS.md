@@ -10,6 +10,7 @@ Status values:
 
 What a `checked` status means here, and no more:
 
+- **A review on 2026-11-17 found the seven newest models weaker than this table reads** (planner, assurance, tree, attempts, platforms, decisions, liveness; claims C8, C9, C10, C15, C16, C19, C22, C24, C31, C34, C35). In five of them every property restates its own definition: it catches the planted defects and cannot fail otherwise. Two contradicted the design: the attempts model let a change of target erase earlier attempts, and the planner's rule that a test runs only on a current build could be removed unnoticed. The cases below did run and match; what they show is that the rules are written down exactly and each planted defect is caught, not that the rules are right. The models are being rewritten and these claims will be reset to unchecked ([issue 21](https://github.com/sloik/dodona/issues/21)).
 - A bounded model check shows a property for the bounds in the configuration, not for all sizes. The bounds are two definitions, two obligations, two hash values and at most two runs in flight, with a smaller instance where noted.
 - The model has one kernel, a ledger that keeps what it is given, abstract hashes that never collide, and fixed dependency sets.
 - Nothing here says anything about an implementation. That is a separate conformance obligation ([decision 0012](../decisions/0012-spec-to-code-conformance-is-an-explicit-seam.md)).
