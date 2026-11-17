@@ -1,0 +1,7 @@
+{
+  "about": "Site binding for this repository's own CI (decision 0023). It says where model checks run for the dodona project itself. It is not part of dodona's design, and another site would supply its own file.",
+  "command": ["tla-queue", "run", "--project", "dodona", "--source", "{source}", "{includes}", "--timeout", "{timeout}", "--", "{tool}"],
+  "include_flag": "--include",
+  "tool": ["/usr/bin/java", "-cp", "/opt/tla/tla2tools-1.7.4.jar", "tlc2.TLC"],
+  "timeout_seconds": 2400
+}

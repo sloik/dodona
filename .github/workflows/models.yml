@@ -1,0 +1,39 @@
+name: Model checks
+# Runs every case in spec/*/expected.json through the project's own executor
+# and fails unless each one produced exactly its expected outcome. A case that
+# did not finish is a failure, never a pass.
+#
+# This runs only on the maintained main branch, on the project's own runner.
+# It never runs for pull requests: code from a fork must not execute there.
+# The job is skipped until the repository variable MODEL_RUNNER is "ready".
+on:
+  push:
+    branches: [main]
+    paths: ["spec/**", "tools/**", ".github/site/**", ".github/workflows/models.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: models-main
+  cancel-in-progress: true
+jobs:
+  models:
+    if: github.repository == 'sloik/dodona' && github.ref == 'refs/heads/main' && vars.MODEL_RUNNER == 'ready'
+    runs-on: [self-hosted, Linux, ARM64, oracle, dodona]
+    timeout-minutes: 180
+    steps:
+      - name: Checkout maintained main revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Run repository checks
+        run: python3 tools/check_repo.py
+      - name: Run and judge every model case
+        run: python3 tools/check_models.py --site .github/site/executor.json --report model-report.json
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: model-report
+          path: model-report.json
+          if-no-files-found: warn

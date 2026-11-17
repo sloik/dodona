@@ -50,3 +50,4 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0020](0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Exceptions are granted by the intent owner, and recorded | proposed, owner direction |
 | [0021](0021-dodona-judges-and-does-not-plan.md) | dodona judges; it does not plan or do the work | proposed, owner direction |
 | [0022](0022-open-project-published-as-it-evolves.md) | An open project, published as it evolves | proposed, owner direction |
+| [0023](0023-stage-0-checks-run-in-ci-with-disposable-helpers.md) | Stage-0 checks run in CI, with disposable helpers | proposed, owner direction |
