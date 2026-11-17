@@ -1,11 +1,12 @@
 # dodona
 
+[![Repository checks on main](https://github.com/sloik/dodona/actions/workflows/checks.yml/badge.svg?branch=main&event=push)](https://github.com/sloik/dodona/actions/workflows/checks.yml?query=branch%3Amain)
+[![Model checks on main](https://github.com/sloik/dodona/actions/workflows/models.yml/badge.svg?branch=main&event=push)](https://github.com/sloik/dodona/actions/workflows/models.yml?query=branch%3Amain)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+
 **Was what was defined actually built and delivered, and how sure is that?**
 
 dodona is a tool an AI agent can ask that question, so nobody has to take the agent's word for it. It is built for agents, including less capable ones.
-
-[![Repository checks](https://github.com/sloik/dodona/actions/workflows/checks.yml/badge.svg)](https://github.com/sloik/dodona/actions/workflows/checks.yml)
-[![Model checks](https://github.com/sloik/dodona/actions/workflows/models.yml/badge.svg)](https://github.com/sloik/dodona/actions/workflows/models.yml)
 
 > In the myth, the Argo carried a beam of oak from Dodona in its prow. The beam could speak, and it told the crew the truth.
 
