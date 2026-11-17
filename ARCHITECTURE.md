@@ -59,7 +59,7 @@ A provider implements one or more *capabilities*. Capabilities are the unit of m
 | Decision | `decision.index` | Decision nodes: status, what each governs (by name), what it supersedes |
 | Language | `definition.index` | Definitions: stable name, content identity, dependencies, and the files that materialise them |
 | Language | `artifact.build` | Build outputs as graph nodes, and whether the output is deterministic |
-| Verifier | `obligation.enumerate` | The obligations a specification gives rise to, each with a stable name |
+| Verifier, language, conformance | `obligation.enumerate` | The obligations a binding gives rise to, each with a stable name. Required of any provider that checks, builds or tests conformance |
 | Verifier | `obligation.check` | A verdict and evidence for one obligation |
 | Conformance | `conformance.check` | Evidence that an implementation matches a specification, with method and trusted base |
 | Executor | `run.submit` | A place for a tool to run: submit, poll, cancel; reports what actually ran and where |
@@ -84,19 +84,19 @@ Everything hangs on identity ([0004](decisions/0004-definition-identity-comes-fr
 The rules are fixed by the kernel so identity cannot depend on the platform ([0009](decisions/0009-platform-order-and-portability-rules.md)):
 
 - File content is hashed as raw bytes. The project declares its line-ending and byte-order-mark convention; a text file that violates it is an error, never silently normalised. Which files are text is declared by the provider that claims them.
-- Paths pass one normative check, defined once and published with test vectors: valid UTF-8, Unicode NFC (rejected if not, never normalised), `/` separators, no empty, `.` or `..` segments, no characters or names any supported platform cannot represent, bounded length, and no two paths equal under case folding.
+- Paths pass one normative check, listed once in [decision 0009](decisions/0009-platform-order-and-portability-rules.md) and published with test vectors. A path is accepted on every platform or on none.
 - Symbolic links and similar indirections inside a project are rejected at index time. File modes never take part in identity.
 - Structured values are hashed over one canonical encoding: keys and sets in UTF-8 byte order, integers only, no floating point.
 - The algorithm is named in every identity and fixes the digest length.
 
 ## 5. Verdicts, status and evidence
 
-A single check **run** ends in exactly one verdict ([0005](decisions/0005-closed-verdict-set.md)):
+A **check** is one attempt to decide an obligation. It is made of one or more tool **runs** and ends in exactly one verdict ([0005](decisions/0005-closed-verdict-set.md)):
 
 | Verdict | Meaning | Reusable |
 |---|---|---|
-| `passed` | The check ran to completion and the obligation holds | Yes |
-| `failed` | The check ran to completion and the obligation does not hold, or it holds only by relying on something policy does not allow | Yes |
+| `passed` | The check ran to completion and found what the obligation expects: the property holds, or for a planted defect, the violation was found | Yes |
+| `failed` | The check ran to completion and found the opposite of what the obligation expects, or met the expectation only by relying on something policy does not allow | Yes |
 | `pending` | Submitted, not finished | No |
 | `unavailable` | The executor or a tool could not be reached | No |
 | `error` | The check did not complete or could not decide: crash, timeout, cancelled, malformed output, tool answered "unknown" | No |
@@ -113,16 +113,16 @@ An **obligation's status** is derived by the kernel from the ledger, never suppl
 
 Only `passed` is ever a pass. Nothing converts anything else into one, and a pass never outranks a failure recorded for the same inputs.
 
-A **project's status** is relative to policy. It is `passed` only when the policy names at least one required obligation and every required obligation is `passed` at or above the required evidence class. A project where nothing was required, or nothing ran, is not green; it is `nothing-required` or `unknown`.
+A **project's status** is relative to policy. It is `passed` only when the policy names at least one required obligation and every required obligation is `passed` on every platform it is required on, at the strength, non-vacuity and isolation policy demands; the full rule is in [the data model](MODEL.md#4-status). A project where nothing was required, or nothing ran, is not green; it is `nothing-required` or `unknown`.
 
 Every record carries an **evidence key** ([0006](decisions/0006-evidence-key-and-trusted-base.md)), in two parts:
 
-- the **core key**, a hash over a published structure: the obligation, the identities of its specification and target definitions with their dependency closure, input artefacts and the obligation that produced them, the provider identity and protocol version, the digests of every tool in the closure, and the configuration: bounds, flags, seeds, worker counts and limits
+- the **core key**, a hash over a published structure: the obligation and what it expects (`holds` or `violated`), the identities of its specification and target definitions with their dependency closure, input artifacts and the obligation that produced them, the provider identity and protocol version, the digests of every tool in the closure, and the configuration: bounds, flags, seeds, worker counts and limits
 - the **platform the check actually executed on**, as reported by the executor
 
 The kernel computes the key; providers never do. It is fixed at submission from an immutable copy of the inputs, and the result is filed under it even if the project changed during the run. Status is always asked **for a platform**. Policy names the platforms on which an obligation is required; by default it is the platform of the executor bound to it. A record counts towards an obligation's status on a platform only when its core key equals the core key computed now and its platform is that platform. Keeping the platform outside the core key is what lets the kernel pair records from different platforms and compare them.
 
-There is one exception, and it is explicit: where a provider's claim to be platform-independent has been verified as policy demands, a record from another platform may stand in. The status then says so, naming the platform the record came from.
+There is one exception, and it is explicit: where a provider's claim to be platform-independent has been verified, meaning the same core key has been checked on at least two platforms with agreeing results and policy accepts that, a record from another platform may stand in. The status then says so, naming the platform the record came from.
 
 Every record, including every pass, also carries the exit status and the digest of the raw output it was derived from, so any verdict can be audited later.
 
@@ -135,7 +135,7 @@ Reproducing a project on another machine means resolving the same lock and getti
 - **Configuration** states intent: bindings, tools, version ranges. It has no absolute paths, no shell fragments, and no platform-specific values outside labelled per-platform sections.
 - **The lock** pins every provider and tool tree to an exact version, with one digest per platform, the upstream source the digest was verified against, and the tool's requirements. It is generated, committed, identical on all platforms, and replaced atomically. Adding a platform adds entries and never changes existing ones.
 - **The executor attests.** A run names the platform it targets and the tool digests it expects. The executor reports the platform and digests it actually ran. A mismatch is an `error`, never a result.
-- **The level is chosen by the agent**, per obligation or build target:
+- **The level is chosen by the agent**, per obligation or build target, with a default per binding:
 
 | Level | Guarantee |
 |---|---|
@@ -160,7 +160,7 @@ A reported pass is worth only as much as the path it took ([0015](decisions/0015
 
 ## 8. Building dodona with dodona
 
-No implementation language is chosen ([0011](decisions/0011-self-hosting-through-a-verified-seed.md)). The source of truth for dodona is its own decisions and its own formal specification, kept in this repository in dodona's own formats. An implementation is a *derived artefact*: it is accepted because it conforms to the specification, and it can be replaced by another one in a different language that also conforms.
+No implementation language is chosen ([0011](decisions/0011-self-hosting-through-a-verified-seed.md)). The source of truth for dodona is its own decisions and its own formal specification, kept in this repository in dodona's own formats. An implementation is a *derived artifact*: it is accepted because it conforms to the specification, and it can be replaced by another one in a different language that also conforms.
 
 | Stage | What exists | What it establishes |
 |---|---|---|

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/sloik/dodona/protocol/common.schema.json",
   "title": "Shared definitions",
-  "description": "Draft 0.2. Below protocol 1.0 there is no compatibility promise. Objects accept extra fields only under an x- prefix.",
+  "description": "Draft 0.2. Below protocol 1.0 there is no compatibility promise. Top-level objects of a manifest and a record accept extra fields under an x- prefix; nested objects are closed.",
   "$defs": {
     "identity": {
       "type": "string",

@@ -56,7 +56,8 @@
         "targets",
         "closure",
         "tools",
-        "config"
+        "config",
+        "expect"
       ],
       "patternProperties": {
         "^x-": {}
@@ -131,6 +132,13 @@
             "$ref": "common.schema.json#/$defs/identity"
           },
           "description": "Further inputs the provider declared before submission."
+        },
+        "expect": {
+          "enum": [
+            "holds",
+            "violated"
+          ],
+          "description": "What the obligation expects. Part of the core key."
         }
       }
     },
@@ -225,7 +233,7 @@
       "items": {
         "$ref": "common.schema.json#/$defs/identity"
       },
-      "description": "Logs, counterexamples and outputs, held by a store.blob provider."
+      "description": "Logs, counterexamples and outputs, held by a store.blob provider. A failure found by a tool carries its counterexample or diagnostic here."
     },
     "origin": {
       "type": "object",
@@ -244,21 +252,5 @@
         }
       }
     }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "verdict": {
-            "const": "failed"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "attachments"
-        ]
-      }
-    }
-  ]
+  }
 }

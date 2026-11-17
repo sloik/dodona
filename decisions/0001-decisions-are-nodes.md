@@ -36,4 +36,4 @@ The decision format is a provider. The default is Markdown with a small header, 
 
 ## What would show this wrong
 
-A governed definition changes and no decision is flagged, or a decision can be edited in place without a superseding record.
+A governed definition changes and no decision is flagged, or, after the first release, a decision can be edited in place without a superseding record.

@@ -19,7 +19,7 @@ Rerunning only what changed is safe only if the system knows everything a result
 
 Each record carries an evidence key in two parts.
 
-The **core key** is a hash over a published structure: the obligation; the identities of its specification and target definitions with their dependency closure; input artefacts, together with the inputs of the obligation that built them; the provider identity and version; the protocol version; the digest of every tool in the closure, including runtimes; and the configuration, which includes bounds, flags, seeds, worker counts and limits.
+The **core key** is a hash over a published structure: the obligation and what it expects; the identities of its specification and target definitions with their dependency closure; input artifacts, together with the inputs of the obligation that built them; the provider identity and version; the protocol version; the digest of every tool in the closure, including runtimes; and the configuration, which includes bounds, flags, seeds, worker counts and limits.
 
 The second part is **the platform the check executed on**, as reported by the executor.
 
@@ -42,4 +42,4 @@ The assumptions this rests on are kept as one list, the trusted base, in the dat
 
 ## What would show this wrong
 
-A reused `passed` record whose obligation does not hold for the current inputs. Modelled in `spec/kernel/EvidenceReuse.tla` (property `Sound`, with planted defects `key_omits_tool` and `complete_with_current_key`, and two cases showing which assumptions it depends on).
+A reused `passed` record whose obligation does not hold for the current inputs. Modelled in `spec/kernel/EvidenceReuse.tla` (properties `Sound` and `Consistent`, a reachability case showing records are in fact reused after an unrelated change, planted defects `key_omits_tool` and `complete_with_current_key`, and two cases showing which assumptions it depends on).

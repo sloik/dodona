@@ -20,7 +20,7 @@ Linking a specification to an implementation is its own obligation, checked by a
 
 A build step between a verified source and what actually runs is part of the same chain: the build is an obligation, its output is a node, and what consumes the output depends on it.
 
-Evidence class and method are provider-named values with a declared strength, not a fixed list in the kernel. Results are reported per layer. "Specification verified" and "implementation conforms" are never merged into one green result.
+Evidence class and method are provider-named, so a new kind of tool needs no kernel change. Each comes with a rank the provider picks from a short list the kernel owns (exhaustive, bounded, sampled, documented), which is what policy compares. Results are reported per layer. "Specification verified" and "implementation conforms" are never merged into one green result.
 
 ## Consequences
 

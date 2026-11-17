@@ -1,6 +1,6 @@
 # Conformance kit
 
-Not yet written. This is stage 1 of [the bootstrap](../ARCHITECTURE.md#7-building-dodona-with-dodona), and it comes before any kernel.
+Not yet written. This is stage 1 of [the bootstrap](../ARCHITECTURE.md#8-building-dodona-with-dodona), and it comes before any kernel.
 
 The kit is data, independent of every implementation, in two parts.
 

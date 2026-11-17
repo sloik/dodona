@@ -12,7 +12,7 @@ Every node has a **name** (stable, how it is referred to) and an **identity** (a
 | Specification | A definition whose role is to state what must hold | Same as a definition | `definition.index` for the specification language |
 | Decision | Its id | Hash of the record | `decision.index` |
 | Obligation | Binding name plus a provider-chosen locator | Hash of binding and name. Stable across edits | `obligation.enumerate` |
-| Artefact | Producing obligation plus output path | Hash of content | `artifact.build` |
+| Artifact | Producing obligation plus output path | Hash of content | `artifact.build` |
 | Tool | Name and version | Hash of the canonical tree listing | `tool.resolve` |
 | Record | None | Hash of its canonical encoding | The kernel |
 | Policy | None | Hash of the policy file | The project owner |
@@ -27,23 +27,23 @@ A specification is not a different kind of thing from a definition. Specificatio
 | `governs` | Decision → definition name | The decision constrains this definition; records the identity at the time of writing |
 | `supersedes` | Decision → decision | The older decision no longer applies |
 | `specified-by` | Obligation → definitions | The specification side of an obligation |
-| `targets` | Obligation → definitions or artefacts | What is being checked |
-| `produced-by` | Artefact → obligation | The build that produced it |
+| `targets` | Obligation → definitions or artifacts | What is being checked |
+| `produced-by` | Artifact → obligation | The build that produced it |
 | `requires` | Tool → tool | A tool that needs another to run |
 | `evidences` | Record → obligation | A check that ran |
 
-The **closure** of a definition is everything reachable from it over `depends-on`. An obligation's inputs are the closures of everything it is `specified-by` and `targets`, plus for each artefact the inputs of the obligation that produced it.
+The **closure** of a definition is everything reachable from it over `depends-on`. An obligation's inputs are the closures of everything it is `specified-by` and `targets`, plus for each artifact the inputs of the obligation that produced it.
 
 ## 3. Obligations
 
 An obligation is one question with a yes or no answer: *do these targets satisfy this specification, as judged by this provider with this configuration?*
 
-Obligations are **enumerated by the verifier or conformance provider**, not invented by the kernel, because only the provider knows what its tool can check separately: one model with one configuration, one lemma, one test. The kernel asks each binding for its obligations and receives, for each:
+Obligations are **enumerated by providers**, not invented by the kernel, because only the provider knows what its tool can do separately: one model with one configuration, one lemma, one test, one build target. Any provider offering `obligation.check`, `artifact.build` or `conformance.check` must also offer `obligation.enumerate`. The one exception is `reproducibility` obligations, which the kernel derives from policy and the records it holds. The kernel asks each binding for its obligations and receives, for each:
 
 | Field | Meaning |
 |---|---|
 | `name` | Stable locator within the binding. Survives edits to the content |
-| `specified_by`, `targets` | Definition or artefact names |
+| `specified_by`, `targets` | Definition or artifact names |
 | `kind` | `check`, `build`, `conformance` or `reproducibility` |
 | `expect` | `holds` or `violated` |
 | `defect_of` | For a planted defect: the obligation whose check it must break |
@@ -51,23 +51,23 @@ Obligations are **enumerated by the verifier or conformance provider**, not inve
 
 **Planted defects are obligations.** An obligation with `expect: violated` passes when the checker finds the violation it names. Its `defect_of` field ties it to the obligation it guards. This is how dodona's own rule, that a check must be shown able to fail, becomes something the kernel tracks instead of a habit.
 
-**Build is an obligation too.** `artifact.build` produces artefact nodes under an obligation of kind `build`. Anything that consumes the artefact depends on that obligation's inputs, so changing the compiler invalidates the tests of what it compiled.
+**Build is an obligation too.** `artifact.build` produces artifact nodes under an obligation of kind `build`. Anything that consumes the artifact depends on that obligation's inputs, so changing the compiler invalidates the tests of what it compiled.
 
 ## 4. Status
 
-A **run** ends in one of six verdicts, defined in [the architecture](ARCHITECTURE.md#5-verdicts-status-and-evidence). Status is what the kernel derives from the ledger.
+A **check** is one attempt to decide an obligation; it consists of one or more tool **runs** and ends in one of six verdicts, defined in [the architecture](ARCHITECTURE.md#5-verdicts-status-and-evidence). Status is what the kernel derives from the ledger.
 
 **Ledger entries**
 
 | Entry | Written | Holds |
 |---|---|---|
-| Submission | Before a run is sent to an executor; updated with the handle when the executor accepts | Obligation, core key, target platform, executor, handle |
+| Submission | Once per check, before its first run is sent to an executor; updated with each run's handle as the executor accepts it | Obligation, core key, target platform, executor, handles |
 | Evidence record | When a check ends `passed` or `failed` | Everything in the [record schema](protocol/evidence-record.schema.json) |
 | Outcome | When a check ends `unavailable`, `error` or `unsupported` | The submission it closes, the verdict, a reason code, the log |
 
 A submission with no closing entry is `pending`. Only evidence records are reusable. Outcome entries are what give `unknown` its reason.
 
-**Status is per platform.** Policy names the platforms on which each obligation is required; the default is the platform of the executor bound to it. In the rules below, "the current key" means the core key computed now together with the platform being asked about. A record from a different platform counts only as a *stand-in*: when the provider claims platform independence and that claim has been verified as policy demands. A status resting on a stand-in says so.
+**Status is per platform.** Policy names the platforms on which each obligation is required; the default is the platform of the executor bound to it. In the rules below, "the current key" means the core key computed now together with the platform being asked about. A record from a different platform counts only as a *stand-in*: when the provider claims platform independence, the same core key has been checked on at least two platforms with agreeing results, and policy accepts that. A status resting on a stand-in says so.
 
 **Obligation status**
 
@@ -80,7 +80,7 @@ A submission with no closing entry is `pending`. Only evidence records are reusa
 
 Each status also reports:
 
-- `evidence_class`: the weakest class among the records it rests on
+- `strength`: the provider's name for its kind of evidence (its evidence class, such as proof, bounded model check, test) together with a **rank** the provider picks from a list the kernel owns: `exhaustive` (all inputs), `bounded` (all inputs within stated bounds), `sampled` (some inputs), `documented` (no check, only a written mapping). Policy sets minimums by rank. A status reports the weakest rank among the records it rests on
 - `non_vacuous`: `shown` if every planted defect of this obligation is itself `passed`, `not-shown` if any is not, `none-planted` if there are none
 - `trusted_base`: the union of the kernel's, the provider's and the records' assumptions
 - `isolation`: the weakest isolation level among the runs

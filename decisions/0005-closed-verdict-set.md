@@ -17,7 +17,7 @@ The common failure of verification pipelines is a check that did not run being r
 
 ## Decision
 
-A check run ends in exactly one of `passed`, `failed`, `pending`, `unavailable`, `error`, `unsupported`. The set is defined by the kernel and providers cannot extend it. A tool that answers "unknown" yields `error`. A result that holds only by relying on something policy does not allow, such as an unproven assumption inside a proof, is `failed`.
+A check, which may consist of several tool runs, ends in exactly one of `passed`, `failed`, `pending`, `unavailable`, `error`, `unsupported`. The set is defined by the kernel and providers cannot extend it. A tool that answers "unknown" yields `error`. A result that holds only by relying on something policy does not allow, such as an unproven assumption inside a proof, is `failed`.
 
 Only `passed` and `failed` are reusable. Nothing converts another verdict into `passed`: not a retry policy, not a default, not a provider.
 

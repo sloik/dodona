@@ -18,7 +18,7 @@ dodona should be built with dodona and verified from the start, without committi
 
 ## Decision
 
-The source of truth is dodona's own decisions and formal specification, in this repository, in dodona's own formats. An implementation is a derived artefact accepted because it conforms to the specification. The implementation language is a binding in dodona's own configuration, replaceable like any other project's.
+The source of truth is dodona's own decisions and formal specification, in this repository, in dodona's own formats. An implementation is a derived artifact accepted because it conforms to the specification. The implementation language is a binding in dodona's own configuration, replaceable like any other project's.
 
 Bootstrap proceeds in stages: specification and models; a conformance kit independent of any implementation; a seed kernel in whatever language the chosen providers support; the seed running dodona's own obligations; the seed building its successor, which rebuilds itself; and a second kernel built independently from the same specification.
 

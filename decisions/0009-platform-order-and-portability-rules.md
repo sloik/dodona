@@ -20,10 +20,10 @@ Support arrives in order: macOS, Linux, Windows, then others. Portability proble
 These rules bind the kernel, the protocol and reference providers from the start, although only macOS is exercised at first:
 
 - No shell. Commands are argument lists. The program is an exact file inside a pinned tool tree; nothing is found by searching. Script wrappers that re-parse arguments through a command interpreter are not valid entry points.
-- Paths pass one normative check, published with test vectors: valid UTF-8, Unicode NFC or rejected, `/` separators, no empty, `.` or `..` segments, no character or reserved name that any supported platform cannot represent, no trailing dot or space, bounded length, and no two paths equal under case folding.
+- Paths pass one normative check, published with test vectors: valid UTF-8, Unicode NFC or rejected, `/` separators, no empty, `.` or `..` segments, no character or reserved name that any supported platform cannot represent, no trailing dot or space, at most 200 bytes, and no two paths equal under case folding.
 - File content is hashed as raw bytes. The project declares its line-ending and byte-order-mark convention; a violation in a text file is an error, never normalised away. Which files are text is declared by the provider claiming them.
 - Symbolic links and similar indirections inside a project are rejected. File modes never take part in identity.
-- A platform is `os`, `arch` and, where it matters, the C library, each from a closed list. It is data in the lock, never a code path in configuration.
+- A platform is `os`, `arch` and, where it matters, the C library, each from a closed list. A run under emulation is recorded as such and is a different platform for status. Platform is data in the lock, never a code path in configuration.
 - Message framing is exact: UTF-8, one line-feed byte as delimiter, no byte-order mark, bounded line length.
 - A timed-out or cancelled run has its whole process tree terminated.
 

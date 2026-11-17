@@ -30,7 +30,7 @@ A message that fails validation, a missing required field, or a mismatched `id` 
 | `obligation.enumerate` | A binding and its indexed definitions | Obligations: name, specified-by, targets, kind, expectation, planted-defect link, configuration |
 | `obligation.check` | One obligation with its inputs materialised | A run description, or a final verdict with evidence |
 | `artifact.build` | A build obligation with its inputs materialised | A run description, or final output identities |
-| `conformance.check` | A specification, an implementation or artefact, a mapping | A run description, or a final verdict with method and trusted base |
+| `conformance.check` | A specification, an implementation or artifact, a mapping | A run description, or a final verdict with method and trusted base |
 | `run.submit` | A run description | A handle. Then `run.poll` and `run.cancel` by handle |
 | `tool.resolve` | Tool name, constraint, platform | Version, tree digest, requirements, upstream source; on request, the tree |
 | `store.blob` | An identity, or a file | A file, or an identity |
@@ -44,7 +44,7 @@ Verifiers, builders and conformance checkers never start tools ([decision 0007](
 3. For `next`, the kernel submits the run to the configured executor, waits for it by handle, and sends the provider the exit status and the output files.
 4. Back to step 2.
 
-Every run in the loop is recorded in the evidence. A provider may add declared inputs only before the first run is submitted, because the evidence key is fixed at that point.
+Every run in the loop is recorded in the evidence. A provider may add declared inputs only before the first run is submitted, because the evidence key is fixed at that point. Every later run in the same check may name only tools and inputs already in the key; anything else ends the check in `error`.
 
 A **run description** names: the program as an exact file inside a pinned tool tree, the argument list, the input files, the declared outputs, limits, the target platform, and the tool digests expected. The executor's final report names the platform and tool digests it actually ran; any difference is an `error`.
 

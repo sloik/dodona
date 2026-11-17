@@ -14,7 +14,8 @@ bom = "forbidden"
 os = "macos"
 arch = "aarch64"
 
-# Bindings attach one capability of one provider to the files it claims.
+# A binding attaches one provider, for a set of its capabilities, to the files
+# it claims.
 # Two bindings claiming the same file for the same capability is an error.
 # The provider names below are reference providers that are not yet written.
 
@@ -37,7 +38,7 @@ name = "kernel-models"
 capabilities = ["obligation.enumerate", "obligation.check"]
 provider = "dodona.tla"
 match = ["spec/kernel/*.cfg"]
-reproducibility = "evidence"
+reproducibility = "evidence"   # default for this binding's obligations
 
 [[tool]]
 name = "tla2tools"
@@ -55,6 +56,17 @@ constraint = ">=17"
 name = "executor"
 capabilities = ["run.submit"]
 provider = "@site"
+
+# Tools are resolved and pinned, and attachments stored, by providers too.
+[[binding]]
+name = "toolchain"
+capabilities = ["tool.resolve"]
+provider = "@site"
+
+[[binding]]
+name = "store"
+capabilities = ["store.blob"]
+provider = "dodona.store.local"
 
 # What must pass is policy, not configuration (decision 0014). The policy file
 # does not exist yet; without one, project status is "nothing-required".

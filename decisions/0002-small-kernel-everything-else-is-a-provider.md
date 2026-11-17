@@ -17,7 +17,7 @@ Projects must be able to bring their own decision format, verification tools and
 
 ## Decision
 
-The kernel knows the graph, identity, the planner, the ledger and the provider protocol. It contains no knowledge of any language, checker, compiler or decision format.
+The kernel knows the graph, identity, the resolver, the planner, the ledger, policy, the provider protocol and the agent interface. It contains no knowledge of any language, checker, compiler or decision format.
 
 Each replaceable part is a provider kind with named capabilities. A project configures which provider supplies each capability. The earlier comparison of two foundations (TLA+ with Unison, Dafny with Go and JavaScript) is not resolved by picking a winner: both become provider combinations, and the comparison's scenario corpus becomes the conformance kit.
 

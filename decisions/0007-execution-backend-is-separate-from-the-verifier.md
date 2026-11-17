@@ -16,7 +16,7 @@ Which tool checks an obligation and where that tool runs are different choices. 
 
 ## Decision
 
-Verifier, builder and conformance providers describe runs: tool, argument list, inputs, expected outputs, limits, the platform targeted and the tool digests expected. Executor providers perform runs. A verifier never starts a tool itself.
+Verifier, language and conformance providers describe runs: tool, argument list, inputs, expected outputs, limits, the platform targeted and the tool digests expected. Executor providers perform runs. A verifier never starts a tool itself.
 
 The kernel journals a submission in the ledger before sending it. An executor accepts a run and returns a handle, which is added to the journal entry; the kernel polls or cancels by handle. After a restart the kernel reattaches to open submissions, so a long run is neither lost nor submitted twice. Executors must treat a repeated submission with the same key as the same run. When a run ends, the executor reports the platform and the tool digests it actually ran. If these differ from what was asked, the outcome is `error`.
 
