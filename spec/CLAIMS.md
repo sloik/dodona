@@ -53,9 +53,9 @@ The model keeps the kernel's key and the truth of a result apart: the truth of a
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C9 | Nothing stale is reused, including what is stale through a dependency of a dependency, and with per-definition identity nothing current is rerun. A test is run only on the artifact built from the current inputs | [0002](../decisions/0002-small-kernel-everything-else-is-a-provider.md) | `NoWrongReuse`, `NoNeedlessRerun` | The key follows one level of dependencies only; the key covers no dependencies; the test runs on whatever was built last; the planner reruns everything | modelled, unchecked |
-| C8 | File-level fallback identity never causes a wrong reuse. It does cause extra reruns, and that is shown too | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md) | `NoWrongReuse` with file identity; `NoNeedlessRerun` must be violated there | The fallback misses a dependency of a dependency | modelled, unchecked |
-| C10 | Changing a build tool makes checks of what it built stale | [data model](../MODEL.md#3-obligations) | `NoWrongReuse` | A test's key leaves out the build that produced what it tests | modelled, unchecked |
+| C9 | Nothing stale is reused, including what is stale through a dependency of a dependency, and with per-definition identity nothing current is rerun. A test is run only on the artifact built from the current inputs | [0002](../decisions/0002-small-kernel-everything-else-is-a-provider.md) | `NoWrongReuse`, `NoNeedlessRerun` | The key follows one level of dependencies only; the key covers no dependencies; the test runs on whatever was built last; the planner reruns everything | **checked**, run 7 |
+| C8 | File-level fallback identity never causes a wrong reuse. It does cause extra reruns, and that is shown too | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md) | `NoWrongReuse` with file identity; `NoNeedlessRerun` must be violated there | The fallback misses a dependency of a dependency | **checked**, run 7 |
+| C10 | Changing a build tool makes checks of what it built stale | [data model](../MODEL.md#3-obligations) | `NoWrongReuse` | A test's key leaves out the build that produced what it tests | **checked**, run 7 |
 
 ## Modelled in `assurance/Assurance.tla`
 
@@ -75,7 +75,7 @@ Bounds: a root with up to two children, one criterion each, hard or soft; floors
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C34 | A tree is delivered only when it is confirmed, has at least the hard gates policy demands counted over root and children, every hard gate passes and every child has a hard gate; and a tree that meets all that is delivered. Adding or removing a child, or changing a gate, needs confirming again | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `TreeSound`, `TreeGuarded`, `TreeComplete`, `ShapeIsConfirmed` | A child is removed or added and the root stays confirmed; the root is delivered whatever its children are; a child made soft counts as delivered; the floor is ignored; only the root's gates are counted | modelled, unchecked |
+| C34 | A tree is delivered only when it is confirmed, has at least the hard gates policy demands counted over root and children, every hard gate passes and every child has a hard gate; and a tree that meets all that is delivered. Adding or removing a child, or changing a gate, needs confirming again | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `TreeSound`, `TreeGuarded`, `TreeComplete`, `ShapeIsConfirmed` | A child is removed or added and the root stays confirmed; the root is delivered whatever its children are; a child made soft counts as delivered; the floor is ignored; only the root's gates are counted | **checked**, run 7 |
 
 ## Modelled in `attempts/Attempts.tla`
 
@@ -93,7 +93,7 @@ Bounds: two sets of inputs and three platforms.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C15 | A platform's own record decides its status. A status with no record of its own exists only when policy allows stand-ins, the provider claims platform independence and that weak notion of verified holds; it is then another platform's verdict, and is reported as a stand-in. Reproducibility agrees only with at least two agreeing platforms and differs on any disagreement | [0008](../decisions/0008-reproducibility-levels.md) | `OwnRecordDecides`, `StandInIsEarned`, `StandInIsReported`, `ReproSound` | A record always stands in; stands in unverified; stands in unclaimed; a stand-in is always reported as passed; another platform's record overrides a platform's own; a stand-in is not reported; one platform alone is reported as reproduced; a disagreement is not a failure | modelled, unchecked |
+| C15 | A platform's own record decides its status. A status with no record of its own exists only when policy allows stand-ins, the provider claims platform independence and that weak notion of verified holds; it is then another platform's verdict, and is reported as a stand-in. Reproducibility agrees only with at least two agreeing platforms and differs on any disagreement | [0008](../decisions/0008-reproducibility-levels.md) | `OwnRecordDecides`, `StandInIsEarned`, `StandInIsReported`, `ReproSound` | A record always stands in; stands in unverified; stands in unclaimed; a stand-in is always reported as passed; another platform's record overrides a platform's own; a stand-in is not reported; one platform alone is reported as reproduced; a disagreement is not a failure | **checked**, run 7 |
 
 ## Modelled in `decisions/Decisions.tla`
 
@@ -388,6 +388,57 @@ Two earlier attempts at this run stopped partway, at a limit on the space a job 
 ### Run 7: the kernel again, on run 6's states
 
 2026-11-18. The seed kernel was extended, so its agreement with the two dump models was measured again on the state lists run 6 wrote out: 71,744 and 78,894 states, no difference. The second kernel agrees on the same states. No model was run for this.
+
+### Run 7: three of the rewritten models
+
+2026-11-18. The planner, platforms and tree models as rewritten after the review, run through the shared queue from a development machine: platforms and tree in job `8d41ae3f84254c84b62384ef67d84fbc`, the planner in job `f1e82dbabf9d42e0940ed943d1e3a3ae` after one of its defect cases was found to compare values of two kinds and was corrected. Both jobs completed. Outputs: [runs/run-7/](runs/run-7/). The other four rewritten models (assurance, attempts, decisions, liveness) have no completed run yet.
+
+**`planner`** (10 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design_definition` | no-violation | no-violation | 19,951 / 8,988 |
+| `design_file` | no-violation | no-violation | 29,378 / 15,161 |
+| `file_costs_reruns` | violation | violation of NoNeedlessRerun | 60 / 40 |
+| `reach_all_current` | violation | violation of NeverAllCurrent | 321 / 172 |
+| `mutant_direct_deps_only` | violation | violation of NoWrongReuse | 61 / 40 |
+| `mutant_no_deps` | violation | violation of NoWrongReuse | 59 / 39 |
+| `mutant_fallback_direct_deps_only` | violation | violation of NoWrongReuse | 61 / 41 |
+| `mutant_key_omits_producer` | violation | violation of NoWrongReuse | 354 / 186 |
+| `mutant_test_without_build` | violation | violation of NoWrongReuse | 330 / 178 |
+| `mutant_plan_everything` | violation | violation of NoNeedlessRerun | 8 / 8 |
+
+**`platforms`** (12 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design_stand_in_allowed` | no-violation | no-violation | 2,917 / 729 |
+| `design_stand_in_forbidden` | no-violation | no-violation | 2,917 / 729 |
+| `design_not_claimed` | no-violation | no-violation | 2,917 / 729 |
+| `reach_stand_in` | violation | violation of NeverStoodIn | 15 / 15 |
+| `mutant_always_stand_in` | violation | violation of StandInIsEarned | 2 / 2 |
+| `mutant_stand_in_unverified` | violation | violation of StandInIsEarned | 2 / 2 |
+| `mutant_stand_in_unclaimed` | violation | violation of StandInIsEarned | 15 / 15 |
+| `mutant_stand_in_always_passed` | violation | violation of StandInIsEarned | 80 / 60 |
+| `mutant_other_overrides_own` | violation | violation of OwnRecordDecides | 20 / 20 |
+| `mutant_stand_in_not_reported` | violation | violation of StandInIsReported | 15 / 15 |
+| `mutant_one_platform_reproduces` | violation | violation of ReproSound | 2 / 2 |
+| `mutant_disagreement_ignored` | violation | violation of ReproSound | 20 / 20 |
+
+**`tree`** (10 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 341,312 / 28,512 |
+| `design_floor_two` | no-violation | no-violation | 341,312 / 28,512 |
+| `reach_delivered` | violation | violation of NeverDelivered | 1,710 / 943 |
+| `reach_delivered_floor_two` | violation | violation of NeverDelivered | 10,531 / 3,482 |
+| `mutant_remove_keeps_confirmation` | violation | violation of ShapeIsConfirmed | 1,642 / 929 |
+| `mutant_add_keeps_confirmation` | violation | violation of ShapeIsConfirmed | 498 / 465 |
+| `mutant_delivered_ignores_children` | violation | violation of TreeSound | 147 / 147 |
+| `mutant_soft_child_is_delivered` | violation | violation of TreeSound | 2,163 / 1,134 |
+| `mutant_ignores_floor` | violation | violation of TreeGuarded | 51 / 51 |
+| `mutant_floor_counts_root_only` | violation | violation of TreeComplete | 10,531 / 3,482 |
 
 ### Not a run: the first attempt at the rewritten models
 
