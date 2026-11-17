@@ -1,0 +1,40 @@
+# dodona's own project configuration: dodona used on dodona.
+#
+# No kernel exists yet to read this file. It records the intended bindings so
+# that they are decisions on record instead of habits. Format: draft 0.1.
+
+[project]
+name = "dodona"
+config = "0.1"
+
+# Platforms in support order (decision 0009). Only the first is exercised today.
+[[platform]]
+os = "macos"
+arch = "arm64"
+
+[decisions]
+provider = "dodona.decision.markdown"   # reference provider, not yet written
+path = "decisions"
+
+# Kernel models. TLA+ is the initial binding, not part of the architecture
+# (decision 0013).
+[[specification]]
+name = "kernel-models"
+provider = "dodona.verify.tlc"          # reference provider, not yet written
+path = "spec/kernel"
+reproducibility = "evidence"
+
+  [[specification.tool]]
+  name = "tlc"
+  constraint = "=1.7.4"
+
+# Where checks run is a separate choice from what checks them (decision 0007).
+# The executor is bound per site, outside the repository, and there is no
+# fallback: an unreachable executor yields the verdict "unavailable".
+[executor]
+default = "site"
+
+# No implementation is bound. The kernel's language is a binding to be chosen
+# when a seed is built (decision 0011), and is expected to have more than one
+# value over time.
+# [[implementation]]

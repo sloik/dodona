@@ -1,0 +1,62 @@
+{
+  "model": "MC.tla",
+  "tool": {
+    "name": "tlc",
+    "version": "1.7.4"
+  },
+  "arguments": [
+    "-workers",
+    "1",
+    "-config",
+    "<config>",
+    "MC.tla"
+  ],
+  "cases": [
+    {
+      "config": "design.cfg",
+      "expect": "no-violation",
+      "checks": [
+        "TypeOK",
+        "Sound",
+        "Consistent"
+      ],
+      "purpose": "The intended design satisfies the claim."
+    },
+    {
+      "config": "nonvacuous_pass.cfg",
+      "expect": "violation",
+      "of": "NeverPassed",
+      "purpose": "A reported pass is reachable, so Sound is not trivially true."
+    },
+    {
+      "config": "nonvacuous_fail.cfg",
+      "expect": "violation",
+      "of": "NeverFailed",
+      "purpose": "A reported failure is reachable."
+    },
+    {
+      "config": "mutant_key_omits_tool.cfg",
+      "expect": "violation",
+      "of": "Sound",
+      "purpose": "Planted defect: the evidence key leaves out the tool digest."
+    },
+    {
+      "config": "mutant_complete_with_current_key.cfg",
+      "expect": "violation",
+      "of": "Sound",
+      "purpose": "Planted defect: a result is filed under the key at completion, not at submission."
+    },
+    {
+      "config": "mutant_unavailable_is_pass.cfg",
+      "expect": "violation",
+      "of": "Sound",
+      "purpose": "Planted defect: an unreachable backend is recorded as a pass."
+    },
+    {
+      "config": "mutant_undeclared_dep.cfg",
+      "expect": "violation",
+      "of": "Sound",
+      "purpose": "Broken assumption: a provider under-declares its dependencies."
+    }
+  ]
+}

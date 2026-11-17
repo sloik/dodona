@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sloik/dodona/protocol/evidence-record.schema.json",
+  "title": "Evidence record",
+  "description": "One entry in the append-only ledger.",
+  "type": "object",
+  "required": [
+    "record",
+    "obligation",
+    "key",
+    "verdict",
+    "inputs",
+    "provider",
+    "executor",
+    "submitted_at_seq"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "record": {
+      "$ref": "common.schema.json#/$defs/identity",
+      "description": "Identity of this record: hash of its canonical encoding without this field."
+    },
+    "obligation": {
+      "$ref": "common.schema.json#/$defs/identity"
+    },
+    "key": {
+      "$ref": "common.schema.json#/$defs/identity",
+      "description": "Evidence key, fixed at submission (decision 0006)."
+    },
+    "verdict": {
+      "$ref": "common.schema.json#/$defs/verdict"
+    },
+    "inputs": {
+      "type": "object",
+      "required": [
+        "definitions",
+        "tools",
+        "config"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "definitions": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identity"
+          },
+          "description": "Full dependency closure, sorted."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "digest"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "digest": {
+                "$ref": "common.schema.json#/$defs/identity"
+              }
+            }
+          }
+        },
+        "config": {
+          "$ref": "common.schema.json#/$defs/identity",
+          "description": "Hash of bounds, flags and seeds."
+        },
+        "platform": {
+          "$ref": "common.schema.json#/$defs/platform",
+          "description": "Absent only when the provider declared platform independence."
+        },
+        "declared": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identity"
+          }
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "protocol"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        }
+      }
+    },
+    "executor": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "evidence_class": {
+      "enum": [
+        "proof",
+        "bounded-model-check",
+        "test",
+        "mapping-only"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "description": "Provider-defined, canonical. Compared across platforms at reproducibility level evidence."
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/identity"
+      },
+      "description": "Logs, counterexamples and outputs, stored by a store.blob provider."
+    },
+    "submitted_at_seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Ledger sequence number at submission. The ledger is ordered by sequence, never by wall-clock time."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "attachments"
+        ]
+      }
+    }
+  ]
+}

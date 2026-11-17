@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sloik/dodona/protocol/common.schema.json",
+  "title": "Shared definitions",
+  "$defs": {
+    "identity": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+:[0-9a-f]{32,}$",
+      "description": "Algorithm name, a colon, then the lowercase hexadecimal digest. Example: sha256:9f86d0..."
+    },
+    "platform": {
+      "type": "object",
+      "required": [
+        "os",
+        "arch"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "os": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "libc": {
+          "type": "string"
+        }
+      }
+    },
+    "verdict": {
+      "enum": [
+        "passed",
+        "failed",
+        "pending",
+        "unavailable",
+        "error",
+        "unsupported"
+      ],
+      "description": "Closed set (decision 0005). Only passed and failed are reusable."
+    },
+    "relpath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(^|/)\\.\\.?(/|$))[^\\\\]+$",
+      "description": "Relative path with / separators, Unicode NFC, no . or .. segments, no backslash."
+    },
+    "reproducibility": {
+      "enum": [
+        "verdict",
+        "evidence",
+        "artifact"
+      ]
+    },
+    "capability": {
+      "enum": [
+        "decision.index",
+        "definition.index",
+        "artifact.build",
+        "obligation.check",
+        "conformance.check",
+        "run.execute",
+        "tool.resolve",
+        "store.blob"
+      ]
+    }
+  }
+}
