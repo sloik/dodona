@@ -16,6 +16,6 @@ What is set up on one operating system gives the same results on another: macOS 
 
 | # | Criterion | Gate | Checked by |
 |---|---|---|---|
-| 1 | The canonical encoding and the path check exist as test vectors | hard | Not yet covered |
-| 2 | The vectors give identical results on macOS and Linux | hard | Not yet covered |
-| 3 | The vectors give identical results on Windows | deferred | Not yet covered |
+| 1 | The canonical encoding and the path check exist as test vectors | hard | conformance/vectors/, checked by the repository checks. Not an obligation a kernel can read yet |
+| 2 | The vectors give identical results on macOS and Linux | hard | Both kernels are judged with the vectors on both in CI. Not an obligation a kernel can read yet |
+| 3 | The vectors give identical results on Windows | deferred | Both kernels are judged with the vectors on Windows in CI. Not an obligation a kernel can read yet |

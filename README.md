@@ -12,10 +12,11 @@ dodona is a tool an AI agent can ask that question, so nobody has to take the ag
 
 | | |
 |---|---|
-| **Stage** | Early. A first seed kernel exists and does only what the conformance kit can judge. dodona is not usable yet |
-| **Exists** | Architecture, data model, 25 proposed decisions, protocol schemas, nine formal models, a conformance kit, a seed kernel |
-| **Runs** | The seed kernel is built and judged by the kit on macOS, Linux and Windows on every change: 51 scenarios, 96 encoding and path vectors, and 37 planted defects the kit must reject. That is sampled evidence, not proof |
-| **Checked so far** | 24 of 37 design claims, by bounded model checks of small instances. The seed kernel agrees with two of the models on every state they reach, about 150,000 in all; see [the claims table](spec/CLAIMS.md) |
+| **Stage** | Early. Two seed kernels exist and do only what the conformance kit can judge. dodona is not usable yet |
+| **Exists** | Architecture, data model, 27 proposed decisions, protocol schemas, nine formal models, a conformance kit, two seed kernels written apart, a first real provider, a ledger format |
+| **Runs** | Both kernels are built and judged on macOS, Linux and Windows on every change: KIT_SCENARIOS scenarios, 104 encoding, path and key vectors, a ledger damaged at every byte and written by two kernels at once, and KIT_DEFECTS planted defects the kit must reject. The two are then compared on inputs the kit does not contain. That is sampled evidence, not proof |
+| **Checked so far** | 12 of 37 design claims, by bounded model checks of small instances. Seven models were rewritten after a review found most of their properties could not fail; their 11 claims are unchecked until the rewritten models have run. 5 more claims are sampled by the kit and not counted. See [the claims table](spec/CLAIMS.md) |
+| **dodona on dodona** | On every change to `main`, a provider describes dodona's own model checks, the results go into a ledger, and a kernel works out the status of this project from it. Today that status is `draft` for every intent and `unknown` for the project: nobody has confirmed the criteria in a way a kernel can read, and the tools are not pinned yet. That is the honest answer |
 | **Guarded by** | Automatic checks on every change: a gap that is found becomes a check ([list](docs/gap-checks.md)) |
 | **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |
 
@@ -121,7 +122,7 @@ Agents can and should start other agents to check their work. dodona cannot make
 
 Nothing recorded means `self`. A project sets the lowest level at which an exception or a confirmation counts.
 
-**A claim is not a grade.** An agent can write down that its checker was separate. dodona shows the claim and caps the grade by who stands behind the facts: a say-so earns `helper` at most, and anything higher needs a signature from something the working agent does not control. Nothing can provide that yet, so today the highest grade is `helper`, shown as `helper (claims apart)`. A review showed a lone agent could otherwise have claimed the fifth level of six.
+**A claim is not a grade.** An agent can write down that its checker was separate. dodona shows the claim and caps the grade by who stands behind the facts: a say-so earns `helper` at most, and anything higher needs a signature from something the working agent does not control. The way to vouch now exists: a keyed check value over the facts, under a key that the project's protected policy lists, which both kernels verify. What does not exist is anything trustworthy to hold such a key, so today the highest grade is still `helper`, shown as `helper (claims apart)`. A review showed a lone agent could otherwise have claimed the fifth level of six.
 
 ## Nothing is built in
 
@@ -155,11 +156,13 @@ flowchart LR
     S0["<b>0</b> design<br/>and models"] --> S1["<b>1</b> conformance kit"] --> S2["<b>2</b> seed kernel"] --> S3["<b>3</b> seed checks<br/>dodona"] --> S4["<b>4</b> seed builds<br/>its successor"] --> S5["<b>5</b> second,<br/>independent kernel"]
     classDef done fill:#d9f2e3,stroke:#2e8555,color:#123
     classDef now fill:#fff3cd,stroke:#b8860b,color:#332
-    class S0,S1 done
-    class S2 now
+    class S0,S1,S2 done
+    class S3,S5 now
 ```
 
-The project is at stage 2, in a small way: a first seed, written by a different make of AI model from the one that wrote the kit, passes the kit. It covers only what the formal models cover. A kernel checking itself adds no trust in itself; that is what the independent second kernel is for.
+The project is between stages. A first seed in Rust and a second in JavaScript pass the same kit. The second was written without sight of the first, from the documents alone. Run on dodona's own repository, the seed reports honestly that nothing is delivered yet. A kernel checking itself adds no trust in itself; that is what the second kernel is for, and the two are compared on every change.
+
+Who wrote what matters here, so it is stated: the kit and the documents were written by one make of AI model. The first kernel was mostly written by a different make and finished by the first; the second kernel was written by the same make as the kit. Agreement between them is weaker evidence than two kernels from unrelated authors would give.
 
 ## Where to go next
 
@@ -173,8 +176,9 @@ The project is at stage 2, in a small way: a first seed, written by a different 
 | How providers talk to the kernel | [protocol/](protocol/README.md), [writing a provider](docs/writing-a-provider.md) |
 | How a project is configured | [docs/configuration.md](docs/configuration.md) |
 | What a correct kernel must do | [conformance/](conformance/README.md) |
-| The first kernel | [kernel/](kernel/README.md) |
-| What reviewers found wrong | [docs/reviews/](docs/reviews/2026-11-17-draft-0.1.md) |
+| The two kernels | [kernel/](kernel/README.md), [kernel2/](kernel2/README.md) |
+| The first real provider, and how its results reach a status | [providers/tlc/](providers/tlc/provider.py), [decision 0026](decisions/0026-the-first-host-and-status-are-stage-0-helpers.md) |
+| What reviewers found wrong | [docs/reviews/](docs/reviews/2026-11-17-newest-models-and-scenarios.md) |
 | To take part | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Rules for agents working here | [AGENTS.md](AGENTS.md) |
 
