@@ -25,7 +25,9 @@ Every criterion is tied to its obligations through a **gate**, declared up front
 
 A check on something that varies from run to run declares that in advance: how many runs, and how many must agree. Its result is the measured rate with the number of runs, never a single lucky pass. Disagreement that was not declared in advance remains a conflict.
 
-An intent is **delivered** when every hard gate has passed. It is **fulfilled** when every deferred gate has closed as well. dodona never reports either state otherwise.
+Gates are part of what the owner confirms before work starts, so declaring them is not a free choice of the agent doing the work, and changing one later is an amendment. Policy sets a floor: a minimum of hard gates, a longest limit for a deferred gate, and minimum runs and agreement for a varying check. An intent with no hard gate, or fewer than policy demands, is reported as `unguarded` and never as delivered.
+
+An intent is **delivered** when every hard gate has passed at the level policy demands. It is **fulfilled** when every deferred gate has closed as well. dodona never reports either state otherwise.
 
 ## Consequences
 
@@ -40,4 +42,4 @@ An intent is **delivered** when every hard gate has passed. It is **fulfilled** 
 
 ## What would show this wrong
 
-An intent is reported delivered with a hard gate not passed, or fulfilled with a deferred gate still open, or a varying check is reported as passed from one run.
+An intent is reported delivered with a hard gate not passed, or fulfilled with a deferred gate still open, a varying check is reported as passed from one run, or an intent whose gates are all soft or deferred is reported as delivered.

@@ -9,7 +9,7 @@ dodona is a tool an AI agent can ask that question, so nobody has to take the ag
 | | |
 |---|---|
 | **Stage** | Design. There is no kernel and nothing to run yet |
-| **Exists** | Architecture, data model, 22 proposed decisions, draft protocol schemas, one formal model |
+| **Exists** | Architecture, data model, 22 proposed decisions, draft protocol schemas, two formal models |
 | **Checked so far** | Nothing yet. The first model check is partly run; see [the claims table](spec/CLAIMS.md) |
 | **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |
 
@@ -38,6 +38,17 @@ Every link gets a level from one scale, strongest first:
 | `none` | Nothing behind it |
 
 **The score is the weakest link, never an average.** A chain is as strong as its weakest part, and dodona shows which part that is.
+
+Two of the links are judgements no tool can make: whether the criteria say what was meant, and whether a check really tests its criterion. dodona does not pretend to. It records whose word each one is and whether that party is independent of the work.
+
+The status is never one word. Every result leads with the whole picture:
+
+```
+delivered · gates: 4 hard, 1 soft, 1 deferred (open)
+          · shown: bounded (weakest link: specification → code)
+          · agreed: criteria confirmed by the owner; checks matched by a reviewer
+          · exceptions: 1, self-granted: 0 · independence: verified
+```
 
 ## Only a pass is a pass
 
@@ -73,7 +84,8 @@ Unproven work is not reported as delivered. But some things can only be seen on 
 ```mermaid
 stateDiagram-v2
     direction LR
-    [*] --> uncovered
+    [*] --> draft
+    draft --> uncovered: owner confirms the criteria and gates
     uncovered --> open: every criterion has a check
     open --> delivered: every hard gate passed
     delivered --> fulfilled: every deferred gate closed
@@ -83,7 +95,7 @@ stateDiagram-v2
     fulfilled --> open: something changed and a check is stale
 ```
 
-Nobody sets these states by hand. They follow from evidence.
+Nobody sets these states by hand. They follow from evidence. An intent with no hard gate is reported as `unguarded` and can never be delivered, so declaring everything soft is not a way through.
 
 **Exceptions leave a mark.** Changing a criterion or loosening a gate is a recorded amendment, granted only by the owner of the intent, human or agent. Best practice: the one who grants an exception is never the one whose work is being judged. An exception an agent grants to itself is shown first in every report, and a project can rule such exceptions out entirely.
 

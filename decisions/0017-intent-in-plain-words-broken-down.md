@@ -24,6 +24,8 @@ An intent can be broken into child intents. A parent is met when its children ar
 
 Each criterion is linked to the obligations that check it. A criterion with no obligation is reported as uncovered; it does not silently count.
 
+An intent's identity covers everything that sets the bar: statement, criteria, gates, limits, the links from criteria to checks, and its set of children. The owner confirms an intent by a record naming that identity; this is the baseline, and an unconfirmed intent is a draft that can never be delivered. Splitting a criterion off into a child, or removing a child, changes the identity and is therefore an amendment. Totals are taken over all descendants, so nothing is lost by moving it.
+
 Everything else about an intent is derived, never set by hand: whether it is covered, delivered or fulfilled follows from evidence. dodona stores no assignees, estimates, schedules or workflow states.
 
 ## Consequences

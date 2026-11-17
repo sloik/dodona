@@ -4,7 +4,7 @@ What dodona is meant to do, in plain words. This directory is dodona used on its
 
 Each intent has an owner, criteria, and for each criterion a gate ([data model](../MODEL.md#5-intent-gates-and-assurance)). Children can be worked on in parallel where they touch different things.
 
-| Id | Intent | Parent | Status today |
+| Id | Intent | Parent | Status today (worked out by hand, unverified) |
 |---|---|---|---|
 | [0001](0001-dodona.md) | An agent can find out whether what was defined was built and delivered, and how sure that is | | open |
 | [0002](0002-kernel-design-is-checked.md) | The kernel's rules are checked before any kernel is written | 0001 | open |

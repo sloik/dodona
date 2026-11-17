@@ -19,7 +19,7 @@ dodona is used by agents, some of them not very capable. It could help them by g
 
 For now dodona judges only. It says what was defined, what has been shown, how strongly, what is missing and why, and it explains any of its answers on request. It does not choose the next step, break work down by itself, or do any of the work.
 
-Its answers are written so that a less capable agent can act on them without understanding the whole system: every result names the exact thing concerned, the reason in a fixed vocabulary, and what evidence would change it. That is description of the gap, not direction of the work.
+Its answers are written so that a less capable agent can act on them without understanding the whole system: every result names the exact thing concerned, the reason in a fixed vocabulary, and what evidence would change it. That is description of the gap, not direction of the work. The headline of every result is fixed and complete, so an agent that reads only the first line still sees the gate mix, the weakest link and any self-granted exception, not a bare status word.
 
 This is to be revisited once dodona has been used on itself.
 

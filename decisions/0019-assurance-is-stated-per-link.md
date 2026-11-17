@@ -17,19 +17,15 @@ Not everything will be fully checked, and the loss does not happen in one place.
 
 ## Decision
 
-For every criterion, dodona reports the **assurance** of each link in the chain from intent to running system:
+Between an intent in plain words and a running system there are links of two different kinds, and dodona reports them separately.
 
-| Link | Question |
-|---|---|
-| Intent to definition | Did the owner confirm the written criteria say what was meant? |
-| Definition to specification | Is the criterion covered by a formal statement, fully or in part? |
-| Specification to code | How was the code checked against it? |
-| Code to what runs | Was what was built and delivered the thing that was checked? |
-| What runs to the world | Was it observed working where it is used? |
+**Judgement links** can only ever be someone's word: whether the written criteria say what was meant, and whether a given check really tests a given criterion. dodona cannot judge these and says so. It records whose word it is, ties that word to an exact identity of what was confirmed, and shows whether that party is independent of the work.
 
-Each link has a level from one ordered scale: `proven` for all cases, `bounded` (all cases within stated limits), `sampled` (some cases, with the count), `observed` (seen working live), `asserted` (someone says so, and who), `none`.
+**Evidence links** are what can be shown: how the code was checked against the specification, whether what was delivered is the thing that was checked, and whether it was observed working where it is used. Each has a level from one ordered scale: `proven` for all cases, `bounded` (all cases within stated limits), `sampled` (some cases, with the count), `observed` (seen working live), `asserted` (someone says so), `none`.
 
-The assurance of a criterion is its **weakest link**, never an average, because a chain is as strong as its weakest part. The score of an intent is a plain count: how many of its criteria reach the level their gate demands, out of how many. Where a figure is a real measurement, such as a pass rate over many runs, it is shown with its sample size. dodona does not invent probabilities.
+Every evidence link is always evaluated; one with nothing reported is `none`. A criterion's shown level is its **weakest evidence link**, never an average. The score of an intent is a plain count: how many criteria reach the level policy demands for their gate, out of how many. Where a figure is a real measurement, such as a pass rate, it is shown with its sample size. dodona does not invent probabilities.
+
+The status word is never reported alone. Every result leads with the gate mix, the shown level and where the weakest link is, who agreed the judgement links, the exceptions, and whether independence is verified.
 
 ## Consequences
 
@@ -44,4 +40,4 @@ The assurance of a criterion is its **weakest link**, never an average, because 
 
 ## What would show this wrong
 
-A criterion is reported at a level higher than its weakest link, or a number is shown that no recorded evidence produced.
+A criterion is reported at a level higher than its weakest evidence link; an unreported link raises a score; a judgement link is shown as if it were evidence; or a status is shown without its headline.

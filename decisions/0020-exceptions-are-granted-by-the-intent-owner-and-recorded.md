@@ -17,7 +17,7 @@ Things change after work starts: a criterion turns out to be wrong, a check cann
 
 ## Decision
 
-Any change to what was defined, or to how strictly it is checked, is an **amendment**: changing a criterion, moving a gate from hard to soft or deferred, accepting a varying result, retiring conflicting records. An amendment records what changed, from what to what, why, and who granted it.
+Any difference from the baseline the owner confirmed is an **amendment**: changing a criterion, moving a gate, extending a limit, lowering a sample size or threshold, declaring a check to be varying, re-linking a criterion to a different check, adding or removing a child, retiring conflicting records. A change to policy itself, such as switching off the independent-approver requirement, is recorded and reported in the same way. An amendment records what changed, from what to what, why, and who granted it.
 
 Only the owner of the intent can grant one. The owner may be a person or an agent; either way the identity is recorded. Whoever does the work can request an amendment and cannot grant it. **The risk, stated plainly.** If the party that owns an intent also does the work, it can approve its own exceptions, and a weak agent could reach "delivered" without showing anything. The guarantee then rests on nothing but that agent's word.
 
@@ -26,6 +26,8 @@ Only the owner of the intent can grant one. The owner may be a person or an agen
 dodona supports that practice in three ways. An amendment granted by the party that did the work is marked **self-granted**, and that mark is shown first, not buried, in every report that rests on it. A self-granted amendment caps the affected criterion at the lowest level above nothing, `asserted`, and the report says the claim is unreviewed. And a project's policy can require an independent approver, in which case a self-granted amendment does not count at all and the gate stays closed. Requiring one is the recommended setting, and dodona's own repository uses it.
 
 Amendments are never erased and never applied silently. A report on an intent states how many amendments it rests on and which criteria they touched, and the assurance of an amended criterion can be no higher than `asserted` for the part the amendment covers.
+
+**Independence is only as good as identity.** An agent that can invent a second identity can approve its own work under another name. How identities are established is not designed yet. Until an owner's identity is bound to something the working agent cannot create, every report states `independence: unverified`.
 
 ## Consequences
 

@@ -1,6 +1,6 @@
 # dodona architecture
 
-Status: **draft 0.3**. Nothing in this document is implemented. Draft 0.1 was reviewed by five independent reviewers; what they found and what changed is in [docs/reviews/](docs/reviews/2026-11-17-draft-0.1.md). Where a claim has a formal model, the [claims table](spec/CLAIMS.md) says whether a model checker has actually run on it.
+Status: **draft 0.4**. Nothing in this document is implemented. Draft 0.1 was reviewed by five independent reviewers; what they found and what changed is in [docs/reviews/](docs/reviews/2026-11-17-draft-0.1.md). Where a claim has a formal model, the [claims table](spec/CLAIMS.md) says whether a model checker has actually run on it.
 
 The decisions behind this document are recorded in [`decisions/`](decisions/README.md). No decision is accepted yet: all are proposals, and those marked `direction: owner` follow a direction the project owner gave. Once a decision is accepted it overrides this file. Terms are defined in [the data model](MODEL.md).
 

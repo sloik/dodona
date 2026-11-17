@@ -1,6 +1,6 @@
 # dodona data model
 
-Status: **draft 0.3**, not implemented. This file defines the terms the [architecture](ARCHITECTURE.md) uses. Field-level schemas live in [protocol/](protocol/README.md).
+Status: **draft 0.4**, not implemented. This file defines the terms the [architecture](ARCHITECTURE.md) uses. Field-level schemas live in [protocol/](protocol/README.md).
 
 ## 1. Nodes
 
@@ -107,7 +107,9 @@ The result also names the policy identity it was judged against, and whether tha
 
 This is the layer that answers the question dodona exists for: *was what was defined actually built and delivered, and how sure is that?* ([0017](decisions/0017-intent-in-plain-words-broken-down.md) to [0020](decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md))
 
-**Intent.** A statement in plain words, such as a problem, a feature or a story, with an owner and a list of criteria. It may break into child intents. Each intent declares what it expects to touch, so independent intents can be worked on in parallel and colliding ones are reported.
+**Intent.** A statement in plain words, such as a problem, a feature or a story, with an owner and a list of criteria. It may break into child intents. Each intent declares what it expects to touch, so independent intents can be worked on in parallel and colliding ones are reported. A check that touches something its intent did not declare is reported as an undeclared touch.
+
+**Baseline.** An intent's identity covers everything that sets the bar: its statement, criteria, the gate of each criterion, time limits, sample sizes and thresholds, the links from criteria to checks, and its set of children. The owner **confirms** an intent by a record that names that identity and the confirmer. The confirmed identity is the baseline. Any later difference from it, in any of those parts, is an amendment, and voids the confirmation until the owner confirms again. An intent that has never been confirmed is a `draft` and can never be delivered.
 
 **Gate.** How a criterion is tied to the obligations that check it:
 
@@ -117,35 +119,59 @@ This is the layer that answers the question dodona exists for: *was what was def
 | Soft | No; lowers stated assurance | Before delivery |
 | Deferred | No; blocks *fulfilled* | After delivery, by a stated limit, typically on a live system |
 
-A check on something that varies between runs declares the number of runs and how many must agree, and reports the measured rate with its sample size.
+Policy sets the floor that an owner's choices cannot go below without it showing: the minimum number or share of hard gates, the longest limit a deferred gate may have, and the minimum number of runs and agreement for a check on something that varies. A deferred gate is closed by an observation; an observation made by the party that did the work is marked as such.
 
 **Intent status**, always derived:
 
 | Status | Rule |
 |---|---|
-| `uncovered` | At least one criterion has no obligation and no amendment |
-| `open` | Covered; at least one hard gate is not passed |
-| `delivered` | Every hard gate passed. Reports the open deferred gates |
+| `draft` | Not confirmed by its owner, or changed since it was |
+| `uncovered` | At least one criterion has no obligation |
+| `unguarded` | No hard gate anywhere in the intent or its descendants, or fewer than policy demands. Never becomes delivered |
+| `open` | Covered and guarded; at least one hard gate is not passed, or a hard criterion is below the level policy demands |
+| `delivered` | Every hard gate passed at the demanded level. Reports the open deferred gates |
 | `fulfilled` | Delivered, and every deferred gate closed |
 | `overdue` | Delivered, and a deferred gate passed its limit while open |
 
-A parent needs its children delivered and its own criteria met.
+A parent needs its children delivered and its own criteria met. Gate counts and scores are totalled over all descendants, so moving a criterion into a child changes nothing in the total.
 
-**Assurance.** Each criterion reports a level for each link from intent to running system, on one scale:
+**The status word is never reported alone.** Every result for an intent leads with the same line, in this order:
+
+```
+delivered · gates: 4 hard, 1 soft, 1 deferred (open, due 2027-01-31)
+          · shown: bounded (weakest evidence link: specification → code)
+          · agreed: criteria confirmed by <who>; checks matched to criteria by <who>
+          · exceptions: 1, self-granted: 0 · independence: verified | unverified
+```
+
+**Two kinds of link.** Between plain words and a running system there are links of two different kinds, and dodona never mixes them into one figure.
+
+*Judgement links* can only ever be someone's word. dodona records whose word, and whether that party is independent of the work.
+
+| Link | Whose word |
+|---|---|
+| Intent → criteria: do the criteria say what was meant? | The owner, by confirming the baseline |
+| Criterion → check: does this check really test this criterion? | A named reviewer. If that reviewer did the work, it is marked self-reviewed |
+
+dodona cannot judge either of these, and says so. What it can do is make sure the answer is on record, tied to an exact identity, and visibly independent or not.
+
+*Evidence links* have a level from one scale, strongest first:
 
 `proven` > `bounded` > `sampled` > `observed` > `asserted` > `none`
 
-| Link | Typical source of the level |
+| Link | Source of the level |
 |---|---|
-| Intent → definition | Owner confirmed the criteria: `asserted` by the owner. Unconfirmed: `none` |
-| Definition → specification | Share of the criterion covered by formal statements |
-| Specification → code | The rank of the conformance evidence |
-| Code → what runs | Whether the delivered artifact is the one that was checked, by identity |
-| What runs → the world | Deferred gates: `observed`, with how many observations |
+| Specification → code | The rank of the checking or conformance evidence |
+| Code → what runs | Whether the delivered artifact is, by identity, the one that was checked |
+| What runs → the world | Deferred gates: `observed`, with how many observations and by whom |
 
-The criterion's assurance is its **weakest link**. The intent's score is a count: criteria at or above the level their gate demands, out of all criteria. Every report shows the count, the weakest link, and where it is.
+Every evidence link is always evaluated. One with nothing reported is `none`; a link can be declared not applicable only in the baseline, where the owner confirmed it. A result measured over several runs is `sampled` with its count, so one run is `sampled (1 of 1)` and reads as what it is.
 
-**Amendment.** Any change to criteria or gates after work started. Granted only by the intent owner, recorded with what changed, why and by whom, never erased. An amended criterion is at most `asserted` for the part amended. An amendment granted by the party that did the work is **self-granted**: shown first in every report, and not counted at all where policy requires an independent approver, which is the recommended setting.
+A criterion's **shown** level is its weakest evidence link. An intent's score is a count: criteria whose shown level is at or above what policy demands for their gate, out of all criteria.
+
+**Amendment.** Any difference from the baseline: a changed criterion, gate, limit, sample size, threshold, link to a check, or child. Granted only by the intent owner, recorded with what changed, why and by whom, never erased. An amended criterion is at most `asserted` for the part amended. An amendment granted by the party that did the work is **self-granted**: shown in the headline of every report, and not counted at all where policy requires an independent approver, which is the recommended setting.
+
+**Independence is only as good as identity.** Whether owner, reviewer and worker are really different parties depends on how identities are established, which is not designed yet. Until an owner's identity is bound to something the working agent cannot create, every report says `independence: unverified`.
 
 ## 6. Trusted base
 
@@ -164,6 +190,8 @@ Assumed by the kernel's design:
 9. The specification states the property that was actually intended.
 10. Whoever can change policy is authorised to.
 11. An intent's owner is who the record says, and an owner confirming criteria has read them.
+12. A reviewer who says a check tests a criterion is right.
+13. Owner, reviewer and worker are the separate parties the records say they are.
 
 Declared by each provider in its manifest, for example: the model checker is correct, the language runtime under it is correct, the foreign-function shell is not covered by the proof.
 

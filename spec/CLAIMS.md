@@ -29,7 +29,9 @@ C6 does not show the assumptions hold. It shows they are load-bearing, which is 
 
 ## Modelled in `intent/IntentGates.tla`
 
-Bounds: one intent with three criteria (two hard, one deferred) and at most two amendments. Not covered: child intents, assurance levels, time limits, checks that vary between runs, and how an identity is established.
+Bounds: one intent with three criteria (two hard, one deferred) and at most two amendments.
+
+This model is narrow, and a review said so. It takes the declared gates and the identities of the parties as given, so it says nothing about a baseline, about an intent with no hard gate, or about an agent inventing a second identity. `DeliveredSound` and `FulfilledSound` can only catch a kernel that computes the report wrongly; they do not model deriving status from evidence. `GateProvenance` does not require the amendment to come before the change. Also not covered: child intents, assurance levels, time limits and checks that vary between runs.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -60,6 +62,10 @@ Bounds: one intent with three criteria (two hard, one deferred) and at most two 
 | C24 | A criterion's reported assurance is never above its weakest link | [0019](../decisions/0019-assurance-is-stated-per-link.md) | Model, plus scenarios | Kernel that averages the links |
 | C26 | A varying check is never reported from fewer runs than it declared | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Scenarios with declared sample sizes | Kernel that stops at the first passing run |
 | C27 | Two intents that touch the same definition are reported as colliding before work starts | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Scenarios | Index that compares declared paths only as text |
+| C29 | An intent that was never confirmed, or changed since, is never delivered; any difference from the confirmed baseline is an amendment | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | Model with a baseline identity | Kernel that hashes the statement and not the gates |
+| C30 | An intent with no hard gate, or fewer than policy demands, is never delivered, including when the hard criterion was moved into a child | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | Model with children and a policy floor | Kernel that counts gates per intent instead of over descendants |
+| C31 | An evidence link with nothing reported counts as none, and never raises a score | [0019](../decisions/0019-assurance-is-stated-per-link.md) | Scenarios | Kernel that takes the weakest of the reported links only |
+| C32 | A status is never shown without its headline, and a self-granted exception or unverified independence is always in it | [0019](../decisions/0019-assurance-is-stated-per-link.md), [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Scenarios on the agent interface | Interface that returns the status word alone |
 
 ## Recorded runs
 
