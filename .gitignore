@@ -24,3 +24,5 @@ kernel/target/
 # Python bytecode
 __pycache__/
 *.pyc
+
+.ucd/

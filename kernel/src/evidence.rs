@@ -63,12 +63,7 @@ pub fn run(input: &Value) -> Vec<Value> {
             let relevant: Vec<_> = attempts.iter().filter(|a| a.key == k).collect();
             let pass = relevant.iter().any(|a| a.outcome == "passed");
             let fail = relevant.iter().any(|a| a.outcome == "failed");
-            let status = match (pass, fail) {
-                (true, true) => "conflict",
-                (true, false) => "passed",
-                (false, true) => "failed",
-                _ => "unknown",
-            };
+            let status = status(pass, fail);
             let mut fields = vec![("status", json::string(status))];
             if status == "unknown" {
                 let reason = if relevant.iter().any(|a| a.outcome == "pending") {
@@ -98,5 +93,71 @@ fn key(name: &str, obligations: &Value, defs: &BTreeMap<String, String>, tool: &
             .iter()
             .map(|d| defs[d.str()].clone())
             .collect(),
+    }
+}
+
+fn status(pass: bool, fail: bool) -> &'static str {
+    match (pass, fail) {
+        (true, true) => "conflict",
+        (true, false) => "passed",
+        (false, true) => "failed",
+        _ => "unknown",
+    }
+}
+pub fn states(input: &Value) -> Vec<Value> {
+    let obligations = input.get("obligations");
+    input
+        .get("states")
+        .array()
+        .iter()
+        .map(|state| {
+            let mut out = Vec::new();
+            for (name, obligation) in obligations.object() {
+                let matches = |entry: &&Value| {
+                    let inputs = entry.get("inputs");
+                    let deps = obligation.get("depends_on").array();
+                    entry.get("obligation").str() == name
+                        && entry.get("tool").str() == state.get("tool").str()
+                        && inputs.object().len() == deps.len()
+                        && deps.iter().all(|d| {
+                            match (inputs.opt(d.str()), state.get("definitions").opt(d.str())) {
+                                (Some(a), Some(b)) => a.str() == b.str(),
+                                _ => false,
+                            }
+                        })
+                };
+                let records: Vec<_> = state
+                    .get("records")
+                    .array()
+                    .iter()
+                    .filter(matches)
+                    .collect();
+                let status = status(
+                    records.iter().any(|r| r.get("verdict").str() == "passed"),
+                    records.iter().any(|r| r.get("verdict").str() == "failed"),
+                );
+                let pending =
+                    status == "unknown" && state.get("running").array().iter().any(|r| matches(&r));
+                out.push((
+                    name.clone(),
+                    json::object(vec![
+                        ("status", json::string(status)),
+                        ("pending", Value::Bool(pending)),
+                    ]),
+                ));
+            }
+            Value::Object(out)
+        })
+        .collect()
+}
+#[cfg(test)]
+mod tests {
+    use super::status;
+    #[test]
+    fn statuses() {
+        assert_eq!(status(false, false), "unknown");
+        assert_eq!(status(true, false), "passed");
+        assert_eq!(status(false, true), "failed");
+        assert_eq!(status(true, true), "conflict");
     }
 }
