@@ -12,8 +12,8 @@
       "name": "result filed under the key at completion",
       "model_case": "kernel/mutant_complete_with_current_key",
       "file": "src/evidence.rs",
-      "find": "            attempt.outcome = x.get(\"verdict\").str().into()",
-      "replace": "            attempt.key = key(&attempt.key.obligation.clone(), obligations, &defs, &tool);\n            attempt.outcome = x.get(\"verdict\").str().into()"
+      "find": "                attempts[i].outcome = x.get(\"verdict\").str().into();",
+      "replace": "                attempts[i].key = key(&attempts[i].key.obligation.clone(), obligations, &defs, &tool);\n                attempts[i].outcome = x.get(\"verdict\").str().into();"
     },
     {
       "name": "unavailable recorded as passed",
@@ -33,8 +33,8 @@
       "name": "lost run recorded as passed",
       "model_case": null,
       "file": "src/evidence.rs",
-      "find": "            attempt.outcome = \"error\".into()",
-      "replace": "            attempt.outcome = \"passed\".into()"
+      "find": "attempts[i].outcome = \"error\".into();",
+      "replace": "attempts[i].outcome = \"passed\".into();"
     },
     {
       "name": "draft is delivered",
@@ -47,29 +47,29 @@
       "name": "unguarded is delivered",
       "model_case": "intent/mutant_unguarded_delivers",
       "file": "src/intent.rs",
-      "find": "count() as i64) < min {",
-      "replace": "count() as i64) < 0 {"
+      "find": "hard < min.max(1)",
+      "replace": "hard < 0"
     },
     {
       "name": "unknown hard gate passes",
       "model_case": "intent/mutant_delivered_ignores_unknown",
       "file": "src/intent.rs",
-      "find": "any(|(g, s)| g == \"hard\" && s != \"passed\")",
-      "replace": "any(|(g, s)| g == \"hard\" && s == \"failed\")"
+      "find": "} else if lacking(\"hard\") {",
+      "replace": "} else if criteria.iter().any(|c| c.gate == \"hard\" && c.checks.iter().any(|s| s == \"failed\")) {"
     },
     {
       "name": "deferred gate ignored",
       "model_case": "intent/mutant_deferred_as_passed",
       "file": "src/intent.rs",
-      "find": "        .any(|(g, s)| g == \"deferred\" && s != \"passed\")",
-      "replace": "        .any(|(g, s)| g == \"deferred\" && s == \"never\")"
+      "find": "} else if lacking(\"deferred\") {",
+      "replace": "} else if false {"
     },
     {
       "name": "edit keeps confirmation",
       "model_case": "intent/mutant_edit_keeps_confirmation",
       "file": "src/intent.rs",
-      "find": "            criteria.get_mut(a.get(\"criterion\").str()).unwrap().0 = a.get(\"to\").str().into();\n            confirmed = false",
-      "replace": "            criteria.get_mut(a.get(\"criterion\").str()).unwrap().0 = a.get(\"to\").str().into();"
+      "find": "                confirmed = false;",
+      "replace": "                let _ = confirmed;"
     },
     {
       "name": "worker's exception takes effect",
@@ -103,8 +103,8 @@
       "name": "level shown higher than used",
       "model_case": "intent/mutant_hide_level",
       "file": "src/intent.rs",
-      "find": "(\"level\", json::string(level)),",
-      "replace": "(\"level\", json::string(\"apart\")),"
+      "find": "            amendment = Some(json::object(vec![\n                (\"takes_effect\", Value::Bool(effective)),\n                (\"level\", json::string(level)),",
+      "replace": "            amendment = Some(json::object(vec![\n                (\"takes_effect\", Value::Bool(effective)),\n                (\"level\", json::string(\"apart\")),"
     },
     {
       "name": "declared counts in full",
@@ -118,7 +118,7 @@
       "model_case": "planner/mutant_direct_deps_only",
       "file": "src/plan.rs",
       "find": "            closure(t.str(), defs, &mut names);",
-      "replace": "            names.insert(t.str().into());"
+      "replace": "            names.insert(t.str().to_owned());\n            for d in defs.get(t.str()).get(\"depends_on\").array() {\n                names.insert(d.str().to_owned());\n            }"
     },
     {
       "name": "key omits producer",
@@ -166,15 +166,15 @@
       "name": "remove keeps confirmation",
       "model_case": "tree/mutant_remove_keeps_confirmation",
       "file": "src/tree.rs",
-      "find": "                children.remove(r.get(\"child\").str());\n                confirmed = false;",
-      "replace": "                children.remove(r.get(\"child\").str());"
+      "find": "if children.remove(r.get(\"child\").str()).is_some() {\n                    confirmed = false;",
+      "replace": "if children.remove(r.get(\"child\").str()).is_some() {\n                    let _ = confirmed;"
     },
     {
       "name": "add keeps confirmation",
       "model_case": "tree/mutant_add_keeps_confirmation",
       "file": "src/tree.rs",
-      "find": "                confirmed = false;\n            }\n            json::object",
-      "replace": "            }\n            json::object"
+      "find": "                    confirmed = false;\n                }\n            }\n            json::object",
+      "replace": "                    let _ = confirmed;\n                }\n            }\n            json::object"
     },
     {
       "name": "delivered ignores children",
@@ -236,8 +236,8 @@
       "name": "one platform reproduces",
       "model_case": "platforms/mutant_one_platform_reproduces",
       "file": "src/platforms.rs",
-      "find": "if values.len() < 2 {",
-      "replace": "if values.is_empty() {"
+      "find": "values.len() >= 2",
+      "replace": "values.len() >= 1"
     },
     {
       "name": "disagreement ignored",
@@ -250,8 +250,8 @@
       "name": "identities without names",
       "model_case": "decisions/mutant_identities_without_names",
       "file": "src/decisions.rs",
-      "find": "flagged(names.get(governed).map(String::as_str), &recorded)",
-      "replace": "!names.values().any(|v| v == &recorded)"
+      "find": "flagged(names.get(n).map(String::as_str), &recorded[n])",
+      "replace": "!names.values().any(|v| v == &recorded[n])"
     },
     {
       "name": "gone is not flagged",
@@ -259,6 +259,307 @@
       "file": "src/decisions.rs",
       "find": "current != Some(recorded)",
       "replace": "current.is_some() && current != Some(recorded)"
+    },
+    {
+      "name": "no dependencies",
+      "model_case": "planner/mutant_no_deps",
+      "file": "src/plan.rs",
+      "find": "            closure(t.str(), defs, &mut names);",
+      "replace": "            names.insert(t.str().to_owned());"
+    },
+    {
+      "name": "test without build",
+      "model_case": "planner/mutant_test_without_build",
+      "file": "src/plan.rs",
+      "find": "let go = ready",
+      "replace": "let go = { let _ = ready; true }"
+    },
+    {
+      "name": "current run reports true",
+      "model_case": null,
+      "file": "src/plan.rs",
+      "find": "ran = Some(go);",
+      "replace": "ran = Some(true);"
+    },
+    {
+      "name": "every definition in one file",
+      "model_case": null,
+      "file": "src/plan.rs",
+      "find": "files.contains(d.get(\"file\").str())",
+      "replace": "{ let _ = (&files, d); true }"
+    },
+    {
+      "name": "ignore middle assurance link",
+      "model_case": null,
+      "file": "src/assurance.rs",
+      "find": "[\"spec-to-code\", \"code-to-runs\", \"runs-to-world\"]",
+      "replace": "[\"spec-to-code\", \"runs-to-world\"]"
+    },
+    {
+      "name": "swap observed and sampled",
+      "model_case": null,
+      "file": "src/assurance.rs",
+      "find": "\"none\", \"asserted\", \"observed\", \"sampled\", \"bounded\", \"proven\",",
+      "replace": "\"none\", \"asserted\", \"sampled\", \"observed\", \"bounded\", \"proven\","
+    },
+    {
+      "name": "shown always none",
+      "model_case": "assurance/mutant_always_nothing",
+      "file": "src/assurance.rs",
+      "find": "(levels[shown], non_vacuous)",
+      "replace": "(levels[0], non_vacuous)"
+    },
+    {
+      "name": "tree checks always pass",
+      "model_case": null,
+      "file": "src/tree.rs",
+      "find": "node.1 = c.get(\"status\").str().into();",
+      "replace": "node.1 = \"passed\".into();"
+    },
+    {
+      "name": "tree floor root only",
+      "model_case": "tree/mutant_floor_counts_root_only",
+      "file": "src/tree.rs",
+      "find": ".chain(children.values())",
+      "replace": ".chain(std::iter::empty())"
+    },
+    {
+      "name": "tree ignores floor",
+      "model_case": "tree/mutant_ignores_floor",
+      "file": "src/tree.rs",
+      "find": "        < min",
+      "replace": "        < 0"
+    },
+    {
+      "name": "close latest open",
+      "model_case": null,
+      "file": "src/attempts.rs",
+      "find": ".find(|(t, r)| t == c.get(\"ticket\").str() && r == \"open\")",
+      "replace": ".rev().find(|(_, r)| r == \"open\")"
+    },
+    {
+      "name": "shopping ignores order",
+      "model_case": null,
+      "file": "src/attempts.rs",
+      "find": "if r == \"agreed\" && prior_failure {",
+      "replace": "if r == \"agreed\" && attempts.iter().any(|(_, x)| x != \"agreed\") {"
+    },
+    {
+      "name": "change hides attempt history",
+      "model_case": "attempts/mutant_change_hides_history",
+      "file": "src/attempts.rs",
+      "find": "current = all.len();",
+      "replace": "all.clear();"
+    },
+    {
+      "name": "cap raises",
+      "model_case": "attempts/mutant_cap_raises",
+      "file": "src/attempts.rs",
+      "find": "if shopped && rank > 1 {",
+      "replace": "if shopped {"
+    },
+    {
+      "name": "verification ignores disagreement",
+      "model_case": null,
+      "file": "src/platforms.rs",
+      "find": "&& !keys\n                    .iter()\n                    .any(|k| reproducibility(&records, k.str()) == \"differs\")",
+      "replace": "&& true"
+    },
+    {
+      "name": "stand in unsorted",
+      "model_case": null,
+      "file": "src/platforms.rs",
+      "find": "            stood.sort();",
+      "replace": "            stood.reverse();"
+    },
+    {
+      "name": "stand in always passes",
+      "model_case": "platforms/mutant_stand_in_always_passed",
+      "file": "src/platforms.rs",
+      "find": "let value = own.or(stand);",
+      "replace": "let passed = \"passed\".to_owned(); let value = own.or(stand.map(|_| &passed));"
+    },
+    {
+      "name": "stand in unclaimed",
+      "model_case": "platforms/mutant_stand_in_unclaimed",
+      "file": "src/platforms.rs",
+      "find": "&& !matches!(input.opt(\"provider_claims\"), Some(Value::Bool(false)))",
+      "replace": "&& true"
+    },
+    {
+      "name": "only first governed",
+      "model_case": "decisions/mutant_first_name_only",
+      "file": "src/decisions.rs",
+      "find": ".any(|n| flagged(names.get(n).map(String::as_str), &recorded[n]))",
+      "replace": ".take(1).any(|n| flagged(names.get(n).map(String::as_str), &recorded[n]))"
+    },
+    {
+      "name": "refresh record on edit",
+      "model_case": "decisions/mutant_refresh_on_edit",
+      "file": "src/decisions.rs",
+      "find": "if a.opt(\"review\").is_some() {",
+      "replace": "if a.opt(\"review\").is_some() || a.opt(\"edit\").is_some() {"
+    },
+    {
+      "name": "soft gate blocks",
+      "model_case": null,
+      "file": "src/intent.rs",
+      "find": "} else if lacking(\"hard\") {",
+      "replace": "} else if lacking(\"hard\") || lacking(\"soft\") {"
+    },
+    {
+      "name": "hard minimum always one",
+      "model_case": null,
+      "file": "src/intent.rs",
+      "find": "hard < min.max(1)",
+      "replace": "hard < 1"
+    },
+    {
+      "name": "floor capped apart",
+      "model_case": null,
+      "file": "src/intent.rs",
+      "find": "    let floor = rank(policy.get(\"exception_separation\").str());\n    let min",
+      "replace": "    let floor = rank(policy.get(\"exception_separation\").str()).min(2);\n    let min"
+    },
+    {
+      "name": "unclaimed attestation earns cap",
+      "model_case": null,
+      "file": "src/intent.rs",
+      "find": "let claim = a.opt(\"claims\").map(Value::str).unwrap_or(\"self\");",
+      "replace": "let claim = a.opt(\"claims\").map(Value::str).unwrap_or(\"cross-make\");"
+    },
+    {
+      "name": "missing started by counts",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "text(a, \"started_by\").is_some() && ",
+      "replace": "true || "
+    },
+    {
+      "name": "missing acts omitted",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "            let mut levels = vec![(\n                \"confirm-baseline\",\n                confirmations.into_iter().max().unwrap_or(0),\n            )];",
+      "replace": "            let mut levels = Vec::new();\n            if let Some(best) = confirmations.into_iter().max().filter(|b| *b > 0) {\n                levels.push((\"confirm-baseline\", best));\n            }"
+    },
+    {
+      "name": "nothing required passes",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "        \"nothing-required\"\n    } else if required.iter().any",
+      "replace": "        \"passed\"\n    } else if required.iter().any"
+    },
+    {
+      "name": "unchecked mac",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "if hmac(&key, json::encode(&payload).as_bytes()) == mac {",
+      "replace": "if { let _ = (&key, &payload, mac); true } {"
+    },
+    {
+      "name": "uncovered facts vouched",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "names.iter().all(|n| covered.iter().any(|x| x == n))",
+      "replace": "{ let _ = (names, &covered); true }"
+    },
+    {
+      "name": "tested without known examples",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "&& examples.iter().all(|(role, field)| {",
+      "replace": "&& examples.iter().take(0).all(|(role, field)| {"
+    },
+    {
+      "name": "wrong preimage key counts",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "&& stated_key(body).as_deref() == key",
+      "replace": "&& text(body, \"core_key\") == key"
+    },
+    {
+      "name": "any writer counts",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "        && accepted\n}",
+      "replace": "        && (accepted || true)\n}"
+    },
+    {
+      "name": "any platform counts",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "&& text(body, \"platform\") == text(own, \"platform\")",
+      "replace": "&& true"
+    },
+    {
+      "name": "any actor confirms",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "&& r.opt(\"actor\").and_then(|a| text(a, \"id\")) == owner",
+      "replace": "&& true"
+    },
+    {
+      "name": "different baseline confirms",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "&& text(r, \"target\") == Some(base.as_str())",
+      "replace": "&& { let _ = &base; true }"
+    },
+    {
+      "name": "confirmation below floor counts",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "confirmations.iter().any(|l| *l >= floor)",
+      "replace": "confirmations.iter().any(|l| { let _ = floor; *l >= 0 })"
+    },
+    {
+      "name": "missing pair acts omitted",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "levels.push((\"match-check\", best));",
+      "replace": "if best > 0 { levels.push((\"match-check\", best)); }"
+    },
+    {
+      "name": "unlisted key accepted",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "let key = p.opt(\"attestors\").and_then(|a| text(a, keyname));",
+      "replace": "let key = p.opt(\"attestors\").and_then(|a| text(a, keyname).or_else(|| match a.object().first() { Some((_, Value::String(s))) => Some(s.as_str()), _ => None }));"
+    },
+    {
+      "name": "flag sticky after edit back",
+      "model_case": null,
+      "file": "src/decisions.rs",
+      "find": "    let mut recorded = names.clone();\n    input\n        .get(\"steps\")\n        .array()\n        .iter()\n        .map(|step| {\n            let a = step.get(\"do\");\n            if let Some(e) = a.opt(\"edit\") {\n                let name = e.get(\"name\").str();\n                if let Value::String(v) = e.get(\"to\") {\n                    names.insert(name.into(), v.clone());\n                } else {\n                    names.remove(name);\n                }\n            }\n            if a.opt(\"review\").is_some() {\n                if governed.iter().all(|n| names.contains_key(n)) {\n                    recorded = names.clone();\n                }\n            }\n            json::object(vec![(\n                \"flagged\",\n                Value::Bool(\n                    governed\n                        .iter()\n                        .any(|n| flagged(names.get(n).map(String::as_str), &recorded[n])),\n                ),\n            )])\n        })",
+      "replace": "    let mut recorded = names.clone();\n    let mut sticky = false;\n    input\n        .get(\"steps\")\n        .array()\n        .iter()\n        .map(|step| {\n            let a = step.get(\"do\");\n            if let Some(e) = a.opt(\"edit\") {\n                let name = e.get(\"name\").str();\n                if let Value::String(v) = e.get(\"to\") {\n                    names.insert(name.into(), v.clone());\n                } else {\n                    names.remove(name);\n                }\n            }\n            if a.opt(\"review\").is_some() {\n                if governed.iter().all(|n| names.contains_key(n)) {\n                    recorded = names.clone();\n                }\n            }\n            sticky |= governed.iter().any(|n| flagged(names.get(n).map(String::as_str), &recorded[n]));\n            json::object(vec![(\n                \"flagged\",\n                Value::Bool(\n                    sticky,\n                ),\n            )])\n        })"
+    },
+    {
+      "name": "completing a run that is not in flight records a result",
+      "model_case": null,
+      "file": "src/evidence.rs",
+      "find": "            if let Some(i) = in_flight(&attempts, x.get(\"run\").str()) {\n                attempts[i].outcome = x.get(\"verdict\")",
+      "replace": "            if let Some(i) = attempts.iter().rposition(|a| a.run == x.get(\"run\").str()) {\n                attempts[i].outcome = x.get(\"verdict\")"
+    },
+    {
+      "name": "a submit under a name in flight starts a second run",
+      "model_case": null,
+      "file": "src/evidence.rs",
+      "find": "if in_flight(&attempts, run).is_none() {",
+      "replace": "if true {"
+    },
+    {
+      "name": "status: a criterion that nothing checks counts as met",
+      "model_case": null,
+      "file": "src/intent.rs",
+      "find": "!self.checks.is_empty() && !self.lacking()",
+      "replace": "!self.lacking()"
+    },
+    {
+      "name": "status: an unchecked deferred criterion is not counted as open",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": ".filter(|c| c.gate == \"deferred\" && !c.met())",
+      "replace": ".filter(|c| c.gate == \"deferred\" && c.checks.iter().any(|s| s != \"passed\"))"
     }
   ]
 }

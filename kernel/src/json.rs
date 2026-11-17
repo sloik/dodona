@@ -20,6 +20,13 @@ impl Value {
             None
         }
     }
+    pub fn opt_mut(&mut self, key: &str) -> Option<&mut Value> {
+        if let Value::Object(v) = self {
+            v.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v)
+        } else {
+            None
+        }
+    }
     pub fn str(&self) -> &str {
         if let Value::String(s) = self {
             s
@@ -337,6 +344,15 @@ mod tests {
         ] {
             assert_eq!(parse(s.as_bytes()).unwrap_err(), r);
         }
+    }
+    #[test]
+    fn fields() {
+        let mut v = parse(br#"{"a":{"b":1}}"#).unwrap();
+        assert!(v.opt("x").is_none());
+        assert!(v.opt_mut("x").is_none());
+        *v.opt_mut("a").unwrap().opt_mut("b").unwrap() = Value::Number(2);
+        assert_eq!(encode(&v), r#"{"a":{"b":2}}"#);
+        assert!(Value::Null.opt_mut("a").is_none());
     }
     #[test]
     fn utf16_order() {

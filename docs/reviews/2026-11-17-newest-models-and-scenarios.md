@@ -31,8 +31,22 @@ The others were rules exercised with only one value, in only one order, or not a
 
 Each now has a scenario, written by the reviewer and worked out by hand, that the wrong kernel fails. The reviewer also listed where the contract was silent, and those rules are now written down.
 
+## What using it found afterwards
+
+The reviews read the work. These were found by running it, the same day.
+
+| Found by | Finding | Change |
+|---|---|---|
+| Running status on dodona itself | Every criterion that nothing checks was counted as met, and an unchecked deferred criterion as closed. The first real report said "met: 4 of 4" for an intent with no checks at all | A criterion is met only if it has a check and every one passed. A scenario and two planted defects |
+| Comparing the two kernels on reshuffled steps | The contract said nothing about a step that arrives out of turn, such as finishing a run that was never started. One kernel crashed | Every step is valid at any point; the rule for each case is written; a scenario and planted defects |
+| Validating a recorded provider session | The first real provider sent three kinds of message its own schemas refused | The schemas and the provider were corrected; recorded sessions are validated in CI |
+| The second kernel's author, working from the documents alone | Six places where the contract had to be guessed, among them the shape of the project result and what to sign when a covered field is absent | Written into the contract; those still without a scenario are listed as such |
+| The agent that finished the first kernel | A required intent that does not exist let the project pass; unknown gate names counted as deferred; one rule written in up to four places; two planted defects that had never compiled and so had always counted as caught | Fixed. A planted defect that does not build is now reported as broken, not caught |
+| Planting defects against the final kit | One planted defect, another platform's record overriding a platform's own, cannot be observed in a kernel: a stand-in is only ever taken when all verdicts for the key agree | Removed from the list. The formal model still has the case |
+| The shared model checker | The rewritten planner model was too large to finish within the space a job is allowed | It is now bounded by depth: every behaviour of at most six steps from one starting state |
+
 ## What the reviews did not cover
 
-- The scenarios added in response, and the new ones for acts, status and the ledger, have not themselves been reviewed.
+- The scenarios added in response, and the new ones for acts, status and the ledger, have not been read by a reviewer looking for holes. They have been through two kernel authors working apart, which found the points above.
 - The planted defects are still chosen by the people who wrote the kit. The reviewer's fourteen were not on the list before.
 - The first two models (evidence reuse and intent delivery) were reviewed earlier and not again.

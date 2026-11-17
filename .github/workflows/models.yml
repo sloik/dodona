@@ -11,7 +11,7 @@ on:
     branches: [main]
     # Records of runs and the claims table are not inputs to a run; changing them
     # must not start another one on the shared queue.
-    paths: ["spec/**", "!spec/runs/**", "!spec/CLAIMS.md", "!spec/README.md", "tools/check_models.py", "tools/check_states.py", "tools/host.py", "tools/status.py", "providers/**", "dodona.lock", "kernel/**", ".github/site/**", ".github/workflows/models.yml"]
+    paths: ["spec/**", "!spec/runs/**", "!spec/CLAIMS.md", "!spec/README.md", "tools/check_models.py", "tools/check_states.py", "tools/host.py", "tools/status.py", "providers/**", "dodona.lock", "kernel/**", "kernel2/**", ".github/site/**", ".github/workflows/models.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -73,6 +73,10 @@ jobs:
         run: python3 tools/check_states.py --model kernel --dump out/runs/outputs/kernel/dump.states.dump --settings spec/kernel/dump-settings.json -- kernel/target/release/dodona-kernel
       - name: Intent delivery, every state
         run: python3 tools/check_states.py --model intent --dump out/runs/outputs/intent/dump.states.dump --settings spec/intent/dump-settings.json -- kernel/target/release/dodona-kernel
+      - name: Second kernel, evidence reuse, every state
+        run: python3 tools/check_states.py --model kernel --dump out/runs/outputs/kernel/dump.states.dump --settings spec/kernel/dump-settings.json -- node kernel2/dodona-kernel2.js
+      - name: Second kernel, intent delivery, every state
+        run: python3 tools/check_states.py --model intent --dump out/runs/outputs/intent/dump.states.dump --settings spec/intent/dump-settings.json -- node kernel2/dodona-kernel2.js
       # dodona used on dodona: the provider reads what the runs printed, the
       # kernel writes each verdict to a ledger and works out the status of this
       # project from it. A run that did not happen is recorded as unavailable.

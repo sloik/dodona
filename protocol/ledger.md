@@ -9,7 +9,7 @@ An entry is an object with three fields:
 | Field | Meaning |
 |---|---|
 | `previous` | The identity of the entry before it, or null for the first |
-| `kind` | `evidence`, `act`, `submission` or `outcome` |
+| `kind` | A name for what the entry is. `evidence` and `act` take part in status; a reader keeps entries of every other kind and gives them no meaning |
 | `body` | The content. Its shape depends on the kind |
 
 The **identity** of an entry is the identity of that object under the [canonical encoding](canonical-encoding.md). Because each entry names the one before it, changing, removing or reordering any entry breaks every identity after it.

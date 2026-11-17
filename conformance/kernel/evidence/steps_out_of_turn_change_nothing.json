@@ -102,6 +102,20 @@
     },
     {
       "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
         "complete": {
           "run": "j1",
           "verdict": "passed"

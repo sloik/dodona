@@ -99,7 +99,7 @@ The result has `"shown"`: the weakest of the three links, on the scale `none`, `
 
 ### Tree scenarios
 
-A scenario gives a `root` and `children`, each with the gate of its one criterion, `hard` or `soft`, and a policy with `min_hard_gates`. There may be no children. Adding a child that is already there, or setting a gate to what it already is, changes nothing.
+A scenario gives a `root` and `children`, each with the gate of its one criterion, `hard` or `soft`, and a policy with `min_hard_gates`. There may be no children. Adding a child that is already there, setting a gate to what it already is, or a step that names a child that is not there, changes nothing.
 
 | Step | Meaning |
 |---|---|
@@ -170,7 +170,7 @@ The facts:
 
 `claims` is `self` if distinct does not hold; otherwise `helper`; `apart` if started, briefed, given, fresh and kept also hold; `tested` if tested holds as well; `cross-make` if other make holds as well. Each level needs every fact of the levels below it.
 
-A fact is **vouched for** when every field it reads is listed in `attestation.covers`, `attestation.key` names a key in `attestors`, and `attestation.mac` is the HMAC-SHA256, under that key, of the canonical encoding of `{"covers": C, "fields": F}`, where C is `covers` and F holds each covered field of the record under its name. `mac` is lowercase hexadecimal. A record with no attestation, a key the policy does not name, a mac that does not match, or a covered field that the record does not have, has no fact vouched for. The fact distinct needs vouching like any other: without it nothing above `helper` is granted.
+A fact is **vouched for** when every field it reads is listed in `attestation.covers`, `attestation.key` names a key in `attestors`, and `attestation.mac` is the HMAC-SHA256, under that key, of the canonical encoding of `{"covers": C, "fields": F}`, where C is `covers` and F holds each covered field of the record under its name. `mac` is lowercase hexadecimal. A record with no attestation, a key the policy does not name, or a mac that does not match, has no fact vouched for. A covered field that the record does not have is left out of F; the facts that read it do not hold anyway. The fact distinct needs vouching like any other: without it nothing above `helper` is granted.
 
 `level` is the highest level, not above `claims`, that is `self` or `helper`, or all of whose facts and the facts of the levels below it are vouched for. `credentialed` is never granted.
 
@@ -192,9 +192,9 @@ What a kernel reports about a whole project. A scenario gives:
 
 The result has `obligations` and `intents`, each an object with one entry per name; `project`, an object with a `status`; and `rejected`, a number. A floor that policy does not give is `self`.
 
-**Obligations.** An evidence record is *rejected* if its `core_key` is not the identity of its own `preimage`; `rejected` is how many such records the ledger holds. A record that is not rejected *counts* for its obligation when its writer is this kernel or one of `trusted_writers`, its platform is this kernel's, and its `core_key` is the identity of the obligation's preimage as things stand. An obligation is `passed` if records count and all are passed, `failed` if all are failed, `conflict` if they differ, and otherwise `unknown` with `"reason": "never-run"`.
+**Obligations.** An evidence record is *rejected* if its `core_key` is not the identity of its own `preimage`, or its preimage is one the core-key vectors say must be refused; `rejected` is how many such records the ledger holds. A record that is not rejected *counts* for its obligation when its writer is this kernel or one of `trusted_writers`, its platform is this kernel's, and its `core_key` is the identity of the obligation's preimage as things stand. An obligation is `passed` if records count and all are passed, `failed` if all are failed, `conflict` if they differ, and otherwise `unknown` with `"reason": "never-run"`.
 
-**Baseline.** The baseline of an intent is the identity of `{"owner": O, "children": [sorted], "criteria": {C: {"gate": G, "checked_by": [sorted]}}}`.
+**Baseline.** Lists marked sorted are sorted as the canonical encoding sorts keys. The baseline of an intent is the identity of `{"owner": O, "children": [sorted], "criteria": {C: {"gate": G, "checked_by": [sorted]}}}`.
 
 **Acts.** An act record is graded as in acts scenarios, with one more rule: if its `worker.id` is not the intent's `worker`, its level is `self`. An intent is *confirmed* when the ledger holds an act of kind `confirm-baseline` whose `lineage.intent` is the intent, whose `result` is `agreed`, whose `target` is the intent's baseline as things stand, whose `actor.id` is the intent's owner, and whose level is at or above `floors["confirm-baseline"]`.
 
@@ -209,6 +209,8 @@ Each intent also reports:
 **Project status** is `nothing-required` if `required` is empty; otherwise `failed` if a hard criterion of a required intent has an obligation that is `failed` or `conflict`; otherwise `passed` if every required intent is `delivered` or `fulfilled`; otherwise `unknown`.
 
 A ledger may hold entries of other kinds, and an evidence body may carry more fields than those named. A kernel ignores both: they take part in no rule.
+
+A step that names an obligation, intent or criterion that does not exist changes nothing. The floor for `match-check` is read by no rule yet: a pairing's level is reported, and nothing is withheld for it.
 
 Exceptions, children and deferred time limits are left out of status scenarios; the intent and tree scenarios cover them.
 
@@ -251,6 +253,6 @@ This judges that one host. No kernel hosts a provider yet.
 - Kit adequacy: running kernels with known defects against the kit and reporting the fraction it rejects.
 - Anything not modelled: the ledger's crash behaviour, time limits, varying checks, executors, the lock, more than one level of child intents.
 - The intent and attempts scenarios take a claim and its source as given. Working both out from an act record is in the acts and status scenarios.
-- Rules that are written above and have no scenario yet: an attestation that covers a field the record lacks; `min_hard_gates` below 1 in a tree, which is treated as 1 as everywhere else; a floor missing from policy. Both kernels were written from the same sentences, and nothing checks they read them the same way.
+- Rules that are written above and have no scenario yet: `min_hard_gates` below 1 in a tree, which is treated as 1 as everywhere else; a floor missing from policy. Both kernels were written from the same sentences, and nothing checks they read them the same way.
 - What happens when a ticket name is taken a second time. The contract does not say.
 - The levels above `helper` in the kit describe what a kernel must do when a harness vouches for an act. No harness that an agent cannot reach exists yet, so they are not reachable in practice today.

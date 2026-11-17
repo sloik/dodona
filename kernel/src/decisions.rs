@@ -10,8 +10,13 @@ pub fn run(input: &Value) -> Vec<Value> {
         .iter()
         .map(|(k, v)| (k.clone(), v.str().into()))
         .collect();
-    let governed = input.get("governs").str();
-    let mut recorded = names[governed].clone();
+    let governed: Vec<String> = input
+        .get("governs")
+        .array()
+        .iter()
+        .map(|x| x.str().to_owned())
+        .collect();
+    let mut recorded = names.clone();
     input
         .get("steps")
         .array()
@@ -27,13 +32,17 @@ pub fn run(input: &Value) -> Vec<Value> {
                 }
             }
             if a.opt("review").is_some() {
-                if let Some(v) = names.get(governed) {
-                    recorded = v.clone();
+                if governed.iter().all(|n| names.contains_key(n)) {
+                    recorded = names.clone();
                 }
             }
             json::object(vec![(
                 "flagged",
-                Value::Bool(flagged(names.get(governed).map(String::as_str), &recorded)),
+                Value::Bool(
+                    governed
+                        .iter()
+                        .any(|n| flagged(names.get(n).map(String::as_str), &recorded[n])),
+                ),
             )])
         })
         .collect()

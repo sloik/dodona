@@ -14,7 +14,7 @@ the checker itself, and sign only what it observed. None exists yet.
 
 The check value is HMAC-SHA256 under the key, over the canonical encoding of
 {"covers": C, "fields": F}: C is the sorted list of covered field names and F
-holds each of those fields of the record under its name.
+holds each of those fields that the record has, under its name.
 """
 from __future__ import annotations
 
@@ -30,15 +30,12 @@ import canonical  # noqa: E402
 
 
 def check_value(record: dict, covers: list[str], key: bytes) -> str:
-    covered = {"covers": covers, "fields": {name: record[name] for name in covers}}
+    covered = {"covers": covers, "fields": {name: record[name] for name in covers if name in record}}
     return hmac.new(key, canonical.encode(covered).encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def sign(record: dict, covers: list[str], key: bytes, key_name: str) -> dict:
     covers = canonical.sort_set(covers)
-    missing = [name for name in covers if name not in record]
-    if missing:
-        raise ValueError(f"the record has no field {missing[0]}")
     signed = {k: v for k, v in record.items() if k != "attestation"}
     signed["attestation"] = {"harness": key_name, "key": key_name, "covers": covers, "mac": check_value(signed, covers, key)}
     return signed
@@ -46,7 +43,7 @@ def sign(record: dict, covers: list[str], key: bytes, key_name: str) -> dict:
 
 def verify(record: dict, key: bytes) -> bool:
     given = record.get("attestation")
-    if not isinstance(given, dict) or any(name not in record for name in given.get("covers", [])):
+    if not isinstance(given, dict):
         return False
     return hmac.compare_digest(check_value(record, given["covers"], key), str(given.get("mac", "")))
 

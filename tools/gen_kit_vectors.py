@@ -95,7 +95,7 @@ def act(**changes) -> dict:
 
 def attest(record: dict, key_hex: str = KEY_GOOD, key_id: str = "harness-1", covers=None) -> dict:
     covers = canonical.sort_set(covers if covers is not None else [f for f in FIELDS if f in record])
-    message = canonical.encode({"covers": covers, "fields": {f: record[f] for f in covers}})
+    message = canonical.encode({"covers": covers, "fields": {f: record[f] for f in covers if f in record}})
     mac = hmac.new(bytes.fromhex(key_hex), message.encode("utf-8"), hashlib.sha256).hexdigest()
     out = dict(record)
     out["attestation"] = {"harness": "harness-1", "key": key_id, "covers": covers, "mac": mac}
@@ -134,6 +134,9 @@ def acts() -> None:
     scenario("only_covered_facts_are_vouched_for", "A harness vouches only for the fields it signed. A level needs every fact below it vouched for, so one uncovered fact holds the grade down.", [],
              [(attest(full, covers=[f for f in FIELDS if f != "fresh_context"]), want("helper", "cross-make", "declared")),
               (attest(full, covers=[f for f in FIELDS if f != "known_bad"]), want("apart", "cross-make", "attested")),
+              # A covered field the record does not have is left out of what is signed; the value still verifies.
+              (attest(act(known_bad=None, given=[g for g in full["given"] if not g["role"].startswith("known")]), covers=FIELDS),
+               want("apart", "apart", "attested")),
               (attest(full, covers=["actor", "worker"]), want("helper", "cross-make", "declared"))])
     scenario("the_worker_is_never_separate", "An act by the worker, or by something the worker started, briefed or fed, is self or helper whoever signs it.", [],
              [(attest(act(actor=dict(full["actor"], id="worker-1"))), want("self", "self", "declared")),
