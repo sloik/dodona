@@ -26,7 +26,7 @@ flowchart LR
     R -->|"was it seen<br/>working live?"| W["<b>The world</b>"]
 ```
 
-Every link gets a level from one scale, strongest first:
+The links that evidence can show (the last three) get a level from one scale, strongest first:
 
 | Level | Meaning |
 |---|---|
@@ -39,7 +39,7 @@ Every link gets a level from one scale, strongest first:
 
 **The score is the weakest link, never an average.** A chain is as strong as its weakest part, and dodona shows which part that is.
 
-Two of the links are judgements no tool can make: whether the criteria say what was meant, and whether a check really tests its criterion. dodona does not pretend to. It records whose word each one is and whether that party is independent of the work.
+The first two links are judgements no tool can make: whether the criteria say what was meant, and whether a check really tests its criterion. dodona does not pretend to. It records whose word each one is and whether that party is independent of the work.
 
 The status is never one word. Every result leads with the whole picture:
 
