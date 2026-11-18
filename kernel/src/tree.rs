@@ -9,17 +9,19 @@ fn status(
     children: &BTreeMap<String, (String, String)>,
     min: i64,
 ) -> &'static str {
-    if !confirmed {
-        "draft"
-    } else if (std::iter::once(root)
+    // The policy's number is counted over the whole tree; each child needs a
+    // hard gate of its own but is not held to that number (decision 0030).
+    let tree_hard = std::iter::once(root)
         .chain(children.values())
         .filter(|(g, _)| g == "hard")
-        .count() as i64)
-        < min
-    {
+        .count() as i64;
+    let child_unguarded = children.values().any(|(g, _)| g != "hard");
+    if !confirmed {
+        "draft"
+    } else if tree_hard < min || child_unguarded {
         "unguarded"
     } else if (root.0 == "hard" && root.1 != "passed")
-        || children.values().any(|(g, s)| g != "hard" || s != "passed")
+        || children.values().any(|(g, s)| g == "hard" && s != "passed")
     {
         "open"
     } else {
@@ -115,9 +117,19 @@ mod tests {
         assert_eq!(status(false, &root, &c, 1), "draft");
         assert_eq!(status(true, &root, &c, 2), "unguarded");
         c.insert("a".into(), ("soft".into(), "passed".into()));
-        assert_eq!(status(true, &root, &c, 1), "open");
+        // A child with no hard gate holds the tree, whatever the count.
+        assert_eq!(status(true, &root, &c, 1), "unguarded");
         c.get_mut("a").unwrap().0 = "hard".into();
         assert_eq!(status(true, &root, &c, 1), "delivered");
+        // The floor is met over the tree; the child is not held to it alone.
+        assert_eq!(status(true, &root, &c, 2), "delivered");
+        assert_eq!(status(true, &root, &c, 3), "unguarded");
+        c.get_mut("a").unwrap().1 = "conflict".into();
+        assert_eq!(status(true, &root, &c, 2), "open");
+        let soft_root = ("soft".to_owned(), "unknown".to_owned());
+        c.get_mut("a").unwrap().1 = "passed".into();
+        assert_eq!(status(true, &soft_root, &c, 1), "delivered");
+        assert_eq!(status(true, &soft_root, &BTreeMap::new(), 1), "unguarded");
         let mut root = root;
         assert!(node(&mut root, &mut c, "root").is_some());
         assert!(node(&mut root, &mut c, "a").is_some());

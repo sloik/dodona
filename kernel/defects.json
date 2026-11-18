@@ -178,17 +178,17 @@
     },
     {
       "name": "delivered ignores children",
-      "model_case": "tree/mutant_delivered_ignores_children",
+      "model_case": "tree/mutant_delivered_ignores_child",
       "file": "src/tree.rs",
-      "find": "|| children.values().any(|(g, s)| g != \"hard\" || s != \"passed\")",
+      "find": "|| children.values().any(|(g, s)| g == \"hard\" && s != \"passed\")",
       "replace": "|| false"
     },
     {
       "name": "soft child is delivered",
       "model_case": "tree/mutant_soft_child_is_delivered",
       "file": "src/tree.rs",
-      "find": "g != \"hard\" || s != \"passed\"",
-      "replace": "g == \"hard\" && s != \"passed\""
+      "find": "let child_unguarded = children.values().any(|(g, _)| g != \"hard\");",
+      "replace": "let child_unguarded = false;"
     },
     {
       "name": "latest only",
@@ -208,8 +208,8 @@
       "name": "flag does not cap",
       "model_case": "attempts/mutant_flag_does_not_cap",
       "file": "src/attempts.rs",
-      "find": "if shopped {\n                        json::string(\"helper\")",
-      "replace": "if false {\n                        json::string(\"helper\")"
+      "find": "let cap = capped(&all, shopped, retried, limit);",
+      "replace": "let cap = { let _ = capped(&all, shopped, retried, limit); false };"
     },
     {
       "name": "flag missed",
@@ -327,8 +327,8 @@
       "name": "tree ignores floor",
       "model_case": "tree/mutant_ignores_floor",
       "file": "src/tree.rs",
-      "find": "        < min",
-      "replace": "        < 0"
+      "find": "} else if tree_hard < min || child_unguarded {",
+      "replace": "} else if false {"
     },
     {
       "name": "close latest open",
@@ -355,15 +355,15 @@
       "name": "cap raises",
       "model_case": "attempts/mutant_cap_raises",
       "file": "src/attempts.rs",
-      "find": "if shopped && rank > 1 {",
-      "replace": "if shopped {"
+      "find": "if cap && rank > 1 {",
+      "replace": "if cap {"
     },
     {
       "name": "verification ignores disagreement",
       "model_case": null,
       "file": "src/platforms.rs",
-      "find": "&& !keys\n                    .iter()\n                    .any(|k| reproducibility(&records, k.str()) == \"differs\")",
-      "replace": "&& true"
+      "find": "reproducibility(records, key) == \"agrees\"",
+      "replace": "reproducibility(records, key) != \"unknown\""
     },
     {
       "name": "stand in unsorted",
@@ -945,6 +945,48 @@
       "file": "src/status.rs",
       "find": "&& matches!(body.opt(\"preimage\"), Some(Value::Object(_)))",
       "replace": "&& body.opt(\"preimage\").is_some()"
+    },
+    {
+      "name": "tree floor applied to each child",
+      "model_case": "tree/mutant_floor_applied_to_each_child",
+      "file": "src/tree.rs",
+      "find": "let child_unguarded = children.values().any(|(g, _)| g != \"hard\");",
+      "replace": "let child_unguarded = children.values().any(|(g, _)| ((g == \"hard\") as i64) < min);"
+    },
+    {
+      "name": "refusal limit ignored",
+      "model_case": "attempts/mutant_cap_on_shopping_only",
+      "file": "src/attempts.rs",
+      "find": "shopped || (retried && not_agreed >= limit)",
+      "replace": "shopped || { let _ = (retried, not_agreed, limit); false }"
+    },
+    {
+      "name": "refusal limit not read",
+      "model_case": null,
+      "file": "src/attempts.rs",
+      "find": "Some(Value::Number(n)) if *n >= 1 => *n,",
+      "replace": "Some(Value::Number(n)) if *n >= 1 => 2,"
+    },
+    {
+      "name": "refusal limit off by one",
+      "model_case": "attempts/mutant_limit_off_by_one",
+      "file": "src/attempts.rs",
+      "find": "not_agreed >= limit",
+      "replace": "not_agreed > limit"
+    },
+    {
+      "name": "every retry capped",
+      "model_case": "attempts/mutant_cap_line_wide",
+      "file": "src/attempts.rs",
+      "find": "shopped || (retried && not_agreed >= limit)",
+      "replace": "shopped || { let _ = (not_agreed, limit); retried }"
+    },
+    {
+      "name": "verified across keys",
+      "model_case": "platforms/mutant_verified_globally",
+      "file": "src/platforms.rs",
+      "find": "let verified = verified(&records, key);",
+      "replace": "let verified = keys.iter().any(|j| verified(&records, j.str())) && !keys.iter().any(|j| reproducibility(&records, j.str()) == \"differs\");"
     }
   ]
 }

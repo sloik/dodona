@@ -17,6 +17,10 @@ fn reproducibility(records: &BTreeMap<(String, String), String>, key: &str) -> &
         "unknown"
     }
 }
+/// Whether the provider's claim of platform independence is verified for `key`.
+fn verified(records: &BTreeMap<(String, String), String>, key: &str) -> bool {
+    reproducibility(records, key) == "agrees"
+}
 pub fn run(input: &Value) -> Vec<Value> {
     let keys = input.get("keys").array();
     let platforms = input.get("platforms").array();
@@ -50,17 +54,14 @@ pub fn run(input: &Value) -> Vec<Value> {
                     *entry = "conflict".into();
                 }
             }
-            let verified = keys
-                .iter()
-                .any(|k| reproducibility(&records, k.str()) == "agrees")
-                && !keys
-                    .iter()
-                    .any(|k| reproducibility(&records, k.str()) == "differs");
             let mut stood = Vec::new();
             let mut statuses = Vec::new();
             let mut repro = Vec::new();
             for k in keys {
                 let key = k.str();
+                // The claim is verified for this key alone: one verdict on at least
+                // two platforms and the other on none. Another key verifies nothing.
+                let verified = verified(&records, key);
                 let mut ps = Vec::new();
                 for p in platforms {
                     let platform = p.str();
@@ -115,6 +116,14 @@ mod tests {
         assert_eq!(reproducibility(&r, "k"), "agrees");
         r.insert(("k".into(), "b".into()), "failed".into());
         assert_eq!(reproducibility(&r, "k"), "differs");
+        assert!(!verified(&r, "k"));
+        r.insert(("j".into(), "a".into()), "failed".into());
+        r.insert(("j".into(), "b".into()), "failed".into());
+        assert!(verified(&r, "j"));
+        // One key agreeing verifies nothing about another.
+        r.insert(("m".into(), "a".into()), "passed".into());
+        assert!(!verified(&r, "m"));
+        assert!(!verified(&r, "gone"));
         let input = json::parse(
             br#"{"keys":["k"],"platforms":["a","b"],"stand_in_allowed":true,"steps":[
                 {"do":{"record":{"key":"k","platform":"a","verdict":"passed"}}},
