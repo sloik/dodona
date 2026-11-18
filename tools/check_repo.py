@@ -287,20 +287,50 @@ def gap_every_tool_compiles() -> None:
 
 
 def gap_an_intent_reads_one_way_only() -> None:
-    """Criterion rows written `2.`, `**2**`, with an invisible character, or with a gate like `Hard` were shown and then
-    skipped or not held as hard, so an intent could be reported fulfilled with a hard criterion never checked."""
-    import status
-    table = "| # | Criterion | Gate | Checked by |\n|---|---|---|---|\n| 1 | a | hard | b |\n"
-    if status.unclear(table) is not None:
-        problems.append("tools/status.py refuses a plain criteria table")
-    for row in ("| 2. | x | hard | y |", "| **2** | x | hard | y |", "| 2\u200b | x | hard | y |", "| 2 | x | Hard | y |",
-                "| 2 | a \\| b | hard | y |", "2 | x | hard | y", " | 2 | x | hard | y |", "<!-- | 2 | x | hard | y | -->",
-                "| 1 | again | soft | y |", "| \uff12 | x | hard | y |"):
-        if status.unclear(table + row + "\n") is None:
-            problems.append(f"tools/status.py reads an intent with the row {row!r} without refusing it")
+    """Free-form criteria tables could always be written so that a person and the reader saw different things,
+    and results written by hand into the owner's ledger counted as passed."""
+    import intents
+    problems_before = len(problems)
+    try:
+        for path in sorted((ROOT / "intents").glob("[0-9]*.md")):
+            intents.read(path)
+    except intents.Unreadable as err:
+        problems.append(f"intents: {err}")
+    sample = sorted((ROOT / "intents").glob("[0-9]*.md"))[0].read_text(encoding="utf-8")
+    fields, body = intents.front(sample)
+    head = sample[: len(sample) - len(body)]
+    shown = body[body.index(intents.BEGIN): body.index(intents.END) + len(intents.END)]
+    tampered = {
+        "an extra row outside the table": body + "\n|  | Every release is signed | hard | nobody |\n",
+        "a table in a blockquote": body + "\n> | 9 | x | hard | y |\n",
+        "an HTML table": body + "\n<table><tr><td>9</td><td>hard</td></tr></table>\n",
+        "a code block": body + "\n```\n| 9 | x | hard | y |\n```\n",
+        "a hidden comment": body + "\n<!-- x -->\n",
+        "a hand-edited table": body.replace(shown, shown.replace("| hard |", "| soft |", 1)) if "| hard |" in shown else body + "|",
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, new_body in tampered.items():
+            path = pathlib.Path(tmp) / "0001-probe.md"
+            path.write_text(head + new_body, encoding="utf-8")
+            try:
+                intents.read(path)
+                problems.append(f"tools/intents.py reads an intent with {name} without refusing it")
+            except intents.Unreadable:
+                pass
+        for bad in ('"Hard"', '"hard\\u200b"'):
+            path = pathlib.Path(tmp) / "0001-probe.md"
+            changed = sample.replace('"gate": "hard"', f'"gate": {bad}', 1)
+            items = json.loads(intents.front(changed)[0]["criteria"])
+            old_table = changed[changed.index(intents.BEGIN): changed.index(intents.END) + len(intents.END)]
+            path.write_text(changed.replace(old_table, intents.table(items)), encoding="utf-8")  # only the gate rule can refuse it
+            try:
+                intents.read(path)
+                problems.append(f"tools/intents.py accepts a gate written {bad}")
+            except intents.Unreadable:
+                pass
     source = (ROOT / "tools" / "status.py").read_text(encoding="utf-8")
-    if 'e.get("kind") == "act"' not in source:
-        problems.append("tools/status.py must read only acts from the owner's ledger: a result found there was not produced by a run")
+    if 'e.get("kind") == "act"' not in source or "OWNER_LEDGER.resolve()" not in source:
+        problems.append("tools/status.py must read only acts from the owner's ledger, and compare ledger paths after resolving them")
 
 
 def gap_one_reader_of_checker_output() -> None:

@@ -30,7 +30,7 @@ The owner's view, 2026-11-18: this is a somewhat artificial case, because the us
 
 **The owner's ledger holds acts only.** Anything else written there, a result for instance, is not read: a result counts only when a run produced it.
 
-**What the owner sees is what is read.** An intent file is refused unless it can be read one way only: every criterion row numbered in plain digits, every gate exactly `hard`, `soft` or `deferred`, no hidden comments, no repeated numbers, no row a reader might skip. A review showed rows like `| 2. |` that a person sees and the reader skipped.
+**What the owner sees is what is read.** An intent's criteria are data, one line of JSON in its front matter, and nothing else is read. The table a person sees is written from that line by `tools/intents.py`, and a file is refused if the table differs, or if it holds anything else that could be taken for criteria: another table, an HTML table, a code block, a blockquote or a hidden comment. Two reviews found that a free-form table could always be written so that a person and the reader saw different things (a row numbered `2.`, a blank first cell, reordered columns, a table in a quote); the format no longer allows the choice.
 
 **Only the owner's ledger counts.** A confirmation is read only from `records/owner.ledger`. An act found in any other ledger, such as the one CI keeps, is not read at all, so an agent cannot confirm by writing to a ledger it controls. A review showed that the first version counted one from anywhere.
 

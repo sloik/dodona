@@ -21,64 +21,42 @@ import tomllib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import host  # noqa: E402
+import intents as intents_tool  # noqa: E402
 
 ROOT = host.ROOT
 OWNER_LEDGER = ROOT / "records" / "owner.ledger"
 
 
 def unclear(text: str) -> str | None:
-    """Why an intent file could be read two ways, or None. A reader and an owner must see the same criteria."""
-    if "<!--" in text:
-        return "it has a hidden comment"
-    rows = [line for line in text.splitlines() if line.lstrip().startswith("|")]
-    numbered = [line.strip().strip("|").split("|")[0].strip() for line in rows]
-    numbered = [n for n in numbered if n.isdigit()]
-    if len(numbered) != len(set(numbered)):
-        return "two criteria have the same number"
-    if any(line != line.lstrip() for line in rows):
-        return "a table row is indented"
-    if any("\\|" in line for line in rows):
-        return "a table row has an escaped bar"
-    if any(re.match(r"\s*\d+\s*\|", line) and not line.lstrip().startswith("|") for line in text.splitlines()):
-        return "a criterion row does not start with a bar, so a reader might not see it"
-    for line in rows:
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        first = cells[0] if cells else ""
-        # Every row is a header, a separator, or a criterion numbered in plain ASCII digits. A row
-        # numbered `2.`, `**2**` or with an invisible character would show and not be read.
-        if not (first == "#" or set(first) <= set("-: ") or (first.isascii() and first.isdigit())):
-            return f"a table row starts with {first!r}, which is not a plain criterion number"
-        if first.isascii() and first.isdigit() and (len(cells) < 4 or cells[2] not in ("hard", "soft", "deferred")):
-            return f"criterion {cells[0]} has a gate that is not hard, soft or deferred: {cells[2] if len(cells) > 2 else 'none'!r}"
+    """Why an intent's text could be read two ways, or None. The rules are in tools/intents.py."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        path = pathlib.Path(tmp) / "0000-probe.md"
+        path.write_text(text, encoding="utf-8")
+        try:
+            intents_tool.read(path)
+        except intents_tool.Unreadable as err:
+            return str(err)
     return None
 
 
 def read_intents(obligations: list[str]) -> dict:
-    """Intents from intents/*.md: the front matter, and the criteria table.
+    """Intents from intents/*.md, read by tools/intents.py: criteria come from the front matter only.
 
-    `checks` in the front matter ties a criterion to obligations by name
-    pattern. A criterion with none is not covered, whatever its table says.
+    `checks` in each criterion ties it to obligations by name pattern. A
+    criterion with none is not covered, whatever its words say.
     """
     intents, parents = {}, {}
     for path in sorted((ROOT / "intents").glob("[0-9]*.md")):
-        text = path.read_text(encoding="utf-8")
-        front = text.split("---")[1]
-        fields = {}
-        for line in front.splitlines():
-            if line and not line.startswith(" ") and ":" in line:
-                key, _, value = line.partition(":")
-                fields[key.strip()] = value.strip()
+        try:
+            fields, items, text = intents_tool.read(path)
+        except intents_tool.Unreadable as err:
+            raise SystemExit(f"{path.relative_to(ROOT)} cannot be read one way only: {err}") from None
         ident = fields["id"].strip('"')
-        problem = unclear(text)
-        if problem:
-            raise SystemExit(f"{path.relative_to(ROOT)} cannot be read unambiguously: {problem}")
-        checks = json.loads(fields["checks"]) if fields.get("checks") else {}
         criteria = {}
-        for line in text.splitlines():
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            if line.startswith("|") and len(cells) >= 3 and cells[0].isdigit():
-                names = sorted(n for pattern in checks.get(cells[0], []) for n in obligations if fnmatch.fnmatchcase(n, pattern))
-                criteria[cells[0]] = {"words": cells[1], "gate": cells[2], "checked_by": sorted(set(names))}
+        for item in items:
+            names = sorted({n for pattern in item.get("checks", []) for n in obligations if fnmatch.fnmatchcase(n, pattern)})
+            criteria[item["id"]] = {"words": item["words"], "gate": item["gate"], "checked_by": names}
         intents[ident] = {"owner": fields.get("owner", ""), "worker": fields.get("worker", ""), "children": [],
                           "words": text, "criteria": criteria}
         parents[ident] = fields.get("parent", "").strip('"')
@@ -115,7 +93,10 @@ def read_ledgers(paths: list[pathlib.Path], kernel: list[str]) -> list[dict] | N
         if "refused" in read:
             print(f"the ledger {path} is damaged at line {read.get('at')}; no status is reported")
             return None
-        if pathlib.Path(path).absolute() == OWNER_LEDGER.absolute() and OWNER_LEDGER.resolve() == OWNER_LEDGER.absolute():
+        if OWNER_LEDGER.exists() and OWNER_LEDGER.resolve() != OWNER_LEDGER.absolute():
+            print("records/owner.ledger is a link to somewhere else; no status is reported")
+            return None
+        if pathlib.Path(path).resolve() == OWNER_LEDGER.resolve():
             # The owner's ledger holds owners' acts and nothing else. A result found there was not
             # produced by a run, so it is not read.
             entries += [e for e in read["entries"] if e.get("kind") == "act"]
@@ -175,7 +156,7 @@ def main() -> int:
     ap.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     args = ap.parse_args()
     owner = OWNER_LEDGER
-    ledgers = ([owner] if owner.exists() and owner not in args.ledger else []) + args.ledger
+    ledgers = ([owner] if owner.exists() and all(p.resolve() != owner.resolve() for p in args.ledger) else []) + args.ledger
     entries = read_ledgers(ledgers, args.kernel)
     if entries is None:
         return 1

@@ -7,6 +7,7 @@ parent: "0001"
 touches:
   - conformance/vectors
   - protocol/
+criteria: [{"id": "1", "words": "The canonical encoding and the path check exist as test vectors", "gate": "hard", "checked_by": "conformance/vectors/, checked by the repository checks. Not an obligation a kernel can read yet"}, {"id": "2", "words": "The vectors give identical results on macOS and Linux", "gate": "hard", "checked_by": "Both kernels are judged with the vectors on both in CI. Not an obligation a kernel can read yet"}, {"id": "3", "words": "The vectors give identical results on Windows", "gate": "deferred", "checked_by": "Both kernels are judged with the vectors on Windows in CI. Not an obligation a kernel can read yet"}]
 ---
 
 # 0004. The same project gives the same answers on every platform
@@ -15,8 +16,10 @@ What is set up on one operating system gives the same results on another: macOS 
 
 ## Criteria
 
+<!-- criteria: written by tools/intents.py from the front matter; do not edit -->
 | # | Criterion | Gate | Checked by |
 |---|---|---|---|
 | 1 | The canonical encoding and the path check exist as test vectors | hard | conformance/vectors/, checked by the repository checks. Not an obligation a kernel can read yet |
 | 2 | The vectors give identical results on macOS and Linux | hard | Both kernels are judged with the vectors on both in CI. Not an obligation a kernel can read yet |
 | 3 | The vectors give identical results on Windows | deferred | Both kernels are judged with the vectors on Windows in CI. Not an obligation a kernel can read yet |
+<!-- end of criteria -->
