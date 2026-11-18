@@ -393,7 +393,7 @@ def evidence(name: str, pre: dict, verdict: str = "passed", writer: str = "kerne
 
 
 def baseline(intent: dict) -> str:
-    return canonical.identity({"owner": intent["owner"], "children": canonical.sort_set(intent.get("children", [])),
+    return canonical.identity({"owner": intent["owner"], "words": intent.get("words", ""), "children": canonical.sort_set(intent.get("children", [])),
                                "criteria": {c: {"words": v.get("words", ""), "gate": v["gate"], "checked_by": canonical.sort_set(v["checked_by"])}
                                             for c, v in intent["criteria"].items()}})
 
@@ -453,12 +453,13 @@ def status() -> None:
               ({"set_gate": {"intent": "i1", "criterion": "c2", "to": "soft"}}, {"intents": {"i1": {"status": "draft", "gates": {"hard": 1, "soft": 1, "deferred": 0, "deferred_open": 0}}}}),
               ({"append": {"kind": "act", "body": confirm("i1", {**intent, "criteria": {**intent["criteria"], "c2": {"gate": "soft", "checked_by": ["ob-b"]}}})}}, {"intents": {"i1": {"status": "open"}}}),
               ({"set_gate": {"intent": "i1", "criterion": "c2", "to": "deferred"}}, {"intents": {"i1": {"status": "open"}}})])
-    worded = {"owner": "owner-1", "worker": "worker-1", "children": [],
+    worded = {"owner": "owner-1", "worker": "worker-1", "children": [], "words": "# The kit is adequate\n\nEvery planted defect is caught.\n",
               "criteria": {"c1": {"words": "Every planted defect is caught", "gate": "hard", "checked_by": ["ob-a"]}}}
     reworded = {**worded, "criteria": {"c1": {**worded["criteria"]["c1"], "words": "Nothing needs to be caught"}}}
-    scenario("a_confirmation_is_of_the_words_too", "C29", "The baseline includes each criterion's words. A confirmation of the criteria as worded counts; one made before they were reworded, or of an intent whose words were left out of what was confirmed, does not.",
+    scenario("a_confirmation_is_of_the_words_too", "C29", "The baseline includes the intent as written and each criterion's words. A confirmation of exactly that counts; one made before a criterion was reworded, of an intent whose words were left out, or of a different text of the intent, does not.",
              [({"append": {"kind": "act", "body": confirm("i1", reworded)}}, {"intents": {"i1": {"status": "draft", "baseline": baseline(worded)}}}),
               ({"append": {"kind": "act", "body": confirm("i1", {**worded, "criteria": {"c1": {"gate": "hard", "checked_by": ["ob-a"]}}})}}, {"intents": {"i1": {"status": "draft"}}}),
+              ({"append": {"kind": "act", "body": confirm("i1", {**worded, "words": "# The kit is adequate\n"})}}, {"intents": {"i1": {"status": "draft"}}}),
               ({"append": {"kind": "act", "body": confirm("i1", worded)}}, {"intents": {"i1": {"status": "open", "baseline": baseline(worded)}}})],
              intents={"i1": worded})
     scenario("evidence_counts_only_for_the_inputs_it_states", "C18", "A record counts for the inputs it was made from, and only if its key really is the key of the inputs it states. A record with the wrong key is rejected and counted as rejected, whoever wrote it.",

@@ -43,6 +43,7 @@ More checks run as their own tools in CI, because they need to build or install 
 | `tools/check_transcript.py` | The first real provider sent three kinds of message its own schemas refused, and nothing noticed until a recorded session was validated |
 | `tools/run_ledger_cases.py` | A ledger entry cut short by a crash, or two writers at once, could lose or corrupt a record silently |
 | `tools/run_ledger_cases.py`, again | The ledger judge changed bytes only where the chain of entries would notice, so a reader that compared neither the length nor the checksum passed. Twenty-four whole files now break one thing each |
+| `tools/run_input_cases.py` | One kernel read a repeated key or a number written as `1.0` without complaint, so a record could be signed with one value and read with another |
 | `tools/run_harness_check.py` | Separation above helper rested on a signer that signed whatever it was handed. The reference harness must really start a checker, a kernel must grade its record above helper, and a checker that agrees with everything must be seen through |
 | `tools/run_attest_check.py` | Check values in the kit were made once by the kit's author. A kernel must also accept ones made now and refuse them once the record is changed |
 | `tools/kernel_differential.py` | Two kernels can both pass the kit and still differ where the kit does not look. On its first run it found a step order the contract said nothing about, on which one kernel crashed |

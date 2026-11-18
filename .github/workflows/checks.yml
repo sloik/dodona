@@ -68,6 +68,8 @@ jobs:
           python3 tools/status.py --ledger out/empty.ledger --writer ci --kernel kernel/target/release/dodona-kernel
           set +e; python3 tools/confirm.py --intent 0002 --kernel kernel/target/release/dodona-kernel < /dev/null; code=$?; set -e
           test "$code" = 2
+      - name: Judge how strictly the kernel reads its input
+        run: ${{ matrix.python }} tools/run_input_cases.py -- kernel/target/release/dodona-kernel
       - name: Run the reference harness on a real checker and have the kernel grade what it signs
         run: ${{ matrix.python }} tools/run_harness_check.py -- kernel/target/release/dodona-kernel scenario
       - name: Compare the kernel's path check with the reference on random paths
@@ -87,6 +89,8 @@ jobs:
         run: ${{ matrix.python }} tools/run_ledger_cases.py -- node kernel2/dodona-kernel2.js
       - name: Check the second kernel against values the reference signer makes now
         run: ${{ matrix.python }} tools/run_attest_check.py -- node kernel2/dodona-kernel2.js scenario
+      - name: Judge how strictly the second kernel reads its input
+        run: ${{ matrix.python }} tools/run_input_cases.py -- node kernel2/dodona-kernel2.js
       - name: Run the reference harness and have the second kernel grade what it signs
         run: ${{ matrix.python }} tools/run_harness_check.py -- node kernel2/dodona-kernel2.js scenario
       - name: Compare the two kernels on inputs the kit does not contain

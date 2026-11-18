@@ -227,7 +227,7 @@
           "body": {
             "ticket": "t-1",
             "kind": "confirm-baseline",
-            "target": "sha256:715e829bbf5c1ff4cce37bf3beb843b09eea67d0a3913c2a693756ae21c1aa84",
+            "target": "sha256:f32ebdfc7703066be9c596f441d11aa1a9e5d94a9abeac410cdd511c0b2bd24a",
             "lineage": {
               "intent": "i1",
               "kind": "confirm-baseline"
@@ -270,7 +270,7 @@
                 "transcript",
                 "worker"
               ],
-              "mac": "342807443d6151efc4638ffe802433b2a2fea9d0e1d11c9bf11ba33780a98f03"
+              "mac": "751d0e678adca9d96b36a216bfec4dfec69716200738e168d6aaaefdf1616564"
             }
           }
         }
@@ -296,7 +296,7 @@
           "body": {
             "ticket": "t-1",
             "kind": "confirm-baseline",
-            "target": "sha256:715e829bbf5c1ff4cce37bf3beb843b09eea67d0a3913c2a693756ae21c1aa84",
+            "target": "sha256:f32ebdfc7703066be9c596f441d11aa1a9e5d94a9abeac410cdd511c0b2bd24a",
             "lineage": {
               "intent": "i1",
               "kind": "confirm-baseline"

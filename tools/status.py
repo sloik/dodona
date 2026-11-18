@@ -25,6 +25,20 @@ ROOT = host.ROOT
 OWNER_LEDGER = ROOT / "records" / "owner.ledger"
 
 
+def unclear(text: str) -> str | None:
+    """Why an intent file could be read two ways, or None. A reader and an owner must see the same criteria."""
+    if "<!--" in text:
+        return "it has a hidden comment"
+    rows = [line for line in text.splitlines() if line.lstrip().startswith("|")]
+    numbered = [line.strip().strip("|").split("|")[0].strip() for line in rows]
+    numbered = [n for n in numbered if n.isdigit()]
+    if len(numbered) != len(set(numbered)):
+        return "two criteria have the same number"
+    if any(line != line.lstrip() for line in rows):
+        return "a table row is indented"
+    return None
+
+
 def read_intents(obligations: list[str]) -> dict:
     """Intents from intents/*.md: the front matter, and the criteria table.
 
@@ -41,6 +55,9 @@ def read_intents(obligations: list[str]) -> dict:
                 key, _, value = line.partition(":")
                 fields[key.strip()] = value.strip()
         ident = fields["id"].strip('"')
+        problem = unclear(text)
+        if problem:
+            raise SystemExit(f"{path.relative_to(ROOT)} cannot be read unambiguously: {problem}")
         checks = json.loads(fields["checks"]) if fields.get("checks") else {}
         criteria = {}
         for line in text.splitlines():
@@ -48,7 +65,8 @@ def read_intents(obligations: list[str]) -> dict:
             if line.startswith("|") and len(cells) >= 3 and cells[0].isdigit():
                 names = sorted(n for pattern in checks.get(cells[0], []) for n in obligations if fnmatch.fnmatchcase(n, pattern))
                 criteria[cells[0]] = {"words": cells[1], "gate": cells[2], "checked_by": sorted(set(names))}
-        intents[ident] = {"owner": fields.get("owner", ""), "worker": fields.get("worker", ""), "children": [], "criteria": criteria}
+        intents[ident] = {"owner": fields.get("owner", ""), "worker": fields.get("worker", ""), "children": [],
+                          "words": text, "criteria": criteria}
         parents[ident] = fields.get("parent", "").strip('"')
     for ident, parent in parents.items():
         if parent in intents:
@@ -83,7 +101,7 @@ def read_ledgers(paths: list[pathlib.Path], kernel: list[str]) -> list[dict] | N
         if "refused" in read:
             print(f"the ledger {path} is damaged at line {read.get('at')}; no status is reported")
             return None
-        if pathlib.Path(path).resolve() == OWNER_LEDGER.resolve():
+        if pathlib.Path(path).absolute() == OWNER_LEDGER.absolute() and not OWNER_LEDGER.is_symlink():
             entries += read["entries"]
         else:
             # Acts of owners count only from the owner's ledger kept in the repository, where every

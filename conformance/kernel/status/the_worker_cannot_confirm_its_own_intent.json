@@ -124,7 +124,7 @@
           "body": {
             "ticket": "t-1",
             "kind": "confirm-baseline",
-            "target": "sha256:7cf405dfbdc8864c9d36546a557310af4c7138388596deeaf0824ddd56db9cc8",
+            "target": "sha256:a85a4a94a7a98d11f3dd379706f6143f7955faa1afcc78196f4bc710c561095a",
             "lineage": {
               "intent": "i1",
               "kind": "confirm-baseline"

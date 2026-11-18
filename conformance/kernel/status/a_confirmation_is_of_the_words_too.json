@@ -3,7 +3,7 @@
   "name": "a_confirmation_is_of_the_words_too",
   "claim": "C29",
   "covers": [],
-  "why": "The baseline includes each criterion's words. A confirmation of the criteria as worded counts; one made before they were reworded, or of an intent whose words were left out of what was confirmed, does not.",
+  "why": "The baseline includes the intent as written and each criterion's words. A confirmation of exactly that counts; one made before a criterion was reworded, of an intent whose words were left out, or of a different text of the intent, does not.",
   "self": {
     "writer": "kernel-a",
     "platform": "p1"
@@ -100,6 +100,7 @@
       "owner": "owner-1",
       "worker": "worker-1",
       "children": [],
+      "words": "# The kit is adequate\n\nEvery planted defect is caught.\n",
       "criteria": {
         "c1": {
           "words": "Every planted defect is caught",
@@ -119,7 +120,7 @@
           "body": {
             "ticket": "t-1",
             "kind": "confirm-baseline",
-            "target": "sha256:2c841037dc005a23d01a307fed0f99389bd90f63a191eb46389474dffef1f2fc",
+            "target": "sha256:dab2e7486abd57243a0531e15f086804025e6daf221f0f88651b6437c944afc9",
             "lineage": {
               "intent": "i1",
               "kind": "confirm-baseline"
@@ -153,7 +154,7 @@
         "intents": {
           "i1": {
             "status": "draft",
-            "baseline": "sha256:7fc9ef200dc222c4e46fc0cb1f3e052447d033099dd50eff995456eed78fe4f8"
+            "baseline": "sha256:416a3d730c233c7422e1200d054c85afeeae13e933cfb85c6f46963b8a216943"
           }
         }
       }
@@ -165,7 +166,7 @@
           "body": {
             "ticket": "t-1",
             "kind": "confirm-baseline",
-            "target": "sha256:17f8e596ca89387be8ea0a1102b69ca1eea7251ac2f711dfa7718aa55b271db4",
+            "target": "sha256:e1b907564f7d9ddcec1638982feccbb0dfea3a2a920e9a44a54008ec09e53f4d",
             "lineage": {
               "intent": "i1",
               "kind": "confirm-baseline"
@@ -210,7 +211,52 @@
           "body": {
             "ticket": "t-1",
             "kind": "confirm-baseline",
-            "target": "sha256:7fc9ef200dc222c4e46fc0cb1f3e052447d033099dd50eff995456eed78fe4f8",
+            "target": "sha256:870884d92b4d2b0e2e5daac5657fdc5863cf6a9639d49449ba61648460f0942e",
+            "lineage": {
+              "intent": "i1",
+              "kind": "confirm-baseline"
+            },
+            "result": "agreed",
+            "actor": {
+              "id": "owner-1",
+              "session": "s-owner",
+              "started_by": "harness-1"
+            },
+            "worker": {
+              "id": "worker-1",
+              "session": "s-100"
+            },
+            "brief": {
+              "issued_by": "kernel",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            "given": [
+              {
+                "role": "criteria",
+                "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+              }
+            ],
+            "fresh_context": true,
+            "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6"
+          }
+        }
+      },
+      "expect": {
+        "intents": {
+          "i1": {
+            "status": "draft"
+          }
+        }
+      }
+    },
+    {
+      "do": {
+        "append": {
+          "kind": "act",
+          "body": {
+            "ticket": "t-1",
+            "kind": "confirm-baseline",
+            "target": "sha256:416a3d730c233c7422e1200d054c85afeeae13e933cfb85c6f46963b8a216943",
             "lineage": {
               "intent": "i1",
               "kind": "confirm-baseline"
@@ -244,7 +290,7 @@
         "intents": {
           "i1": {
             "status": "open",
-            "baseline": "sha256:7fc9ef200dc222c4e46fc0cb1f3e052447d033099dd50eff995456eed78fe4f8"
+            "baseline": "sha256:416a3d730c233c7422e1200d054c85afeeae13e933cfb85c6f46963b8a216943"
           }
         }
       }

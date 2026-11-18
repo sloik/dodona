@@ -122,7 +122,7 @@
           "body": {
             "ticket": "t-1",
             "kind": "confirm-baseline",
-            "target": "sha256:988a17b426f036c1bda80bb00b22772688dc76e32f64a16057e00bf2bafac007",
+            "target": "sha256:4c79e449fe8e1589fd4535c258a2dd218e984761171616fe1f4be4c4568b7728",
             "lineage": {
               "intent": "i1",
               "kind": "confirm-baseline"

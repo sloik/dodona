@@ -339,6 +339,46 @@
       "reason": "bad-path",
       "ran": false,
       "why": "So is a URL."
+    },
+    {
+      "mode": "path-glued-to-a-flag",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "ran": false,
+      "why": "A path glued to a flag is still a path."
+    },
+    {
+      "mode": "parent-glued-to-a-flag",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "ran": false,
+      "why": "So is the parent directory glued to a flag."
+    },
+    {
+      "mode": "tool-file-with-a-tail",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "ran": false,
+      "why": "A tool file must be the whole argument; anything appended is refused."
+    },
+    {
+      "mode": "an-environment",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "env-not-allowed",
+      "ran": false,
+      "why": "A variable can change what a program loads; the stage-0 host allows none."
+    },
+    {
+      "mode": "output-over-an-input",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "output-overwrites-input",
+      "ran": false,
+      "why": "A run may not write over a file it was given."
     }
   ]
 }

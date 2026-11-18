@@ -50,6 +50,9 @@ def main() -> int:
     ap.add_argument("--policy-ref", default="origin/main")
     ap.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     args = ap.parse_args()
+    if args.ledger.is_symlink():
+        print("refused: the owner's ledger must be a file in the repository, not a link to one elsewhere")
+        return 2
     args.ledger = args.ledger.resolve()
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         print("refused: a confirmation is the owner's own act and is made at a terminal")

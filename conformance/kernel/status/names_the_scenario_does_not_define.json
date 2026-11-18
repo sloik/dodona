@@ -102,7 +102,7 @@
           "body": {
             "ticket": "t-1",
             "kind": "confirm-baseline",
-            "target": "sha256:17f8e596ca89387be8ea0a1102b69ca1eea7251ac2f711dfa7718aa55b271db4",
+            "target": "sha256:e441b29e2a2cb9b3242dfca1e52f5f3f8abee5b530c2326bda5f499127c7c292",
             "lineage": {
               "intent": "i1",
               "kind": "confirm-baseline"
@@ -153,7 +153,7 @@
           "body": {
             "ticket": "t-1",
             "kind": "confirm-baseline",
-            "target": "sha256:dcfc7afe33288ff6bd6647c9be6d18060e5fb366a7dcccec4104c2b576731b0e",
+            "target": "sha256:72f3a06636681316e6c5d3dd550a69dfc08846b407590da28d6aa5b30d2c565d",
             "lineage": {
               "intent": "i2",
               "kind": "confirm-baseline"

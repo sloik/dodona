@@ -47,10 +47,10 @@ RANKS = ["documented", "sampled", "bounded", "exhaustive"]
 # A provider states how strong its check is by rank; the status report speaks in levels of the assurance scale.
 LEVEL_OF_RANK = {"documented": "asserted", "sampled": "sampled", "bounded": "bounded", "exhaustive": "proven"}
 PLATFORM = {"os": "linux", "arch": "aarch64", "libc": "gnu"}
-# A path that leaves the run's own files, alone or inside an option: an absolute path, a home
-# directory, a drive letter, a URL with a scheme, or a file name read from another file (`@`).
-OUTSIDE = re.compile(r"(^|[=:@,])\s*([/\\~]|[A-Za-z]:[/\\])|^@|[A-Za-z][A-Za-z0-9+.-]*://")
-TOOL_FILE = re.compile(r"\$\{tool:([^}]*)\}/(.*)")
+# Characters that can start or join a path, or make a program read one: a separator, the parent
+# directory, a home directory, an argument file, a variable.
+PATHLIKE = re.compile(r"[/\\~@$%]|\.\.")
+TOOL_FILE = re.compile(r"\$\{tool:([A-Za-z0-9._-]+)\}/([A-Za-z0-9._/-]+)")
 TOOL_NAME = re.compile(r"\$\{tool:([^}]*)\}")  # every mention of a tool in an argument, with or without a file after it
 MAX_RUNS = 8  # a check may ask for this many runs and no more
 
@@ -195,12 +195,6 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
     `platform` is the platform the check was asked for; `named_files` the files its obligation names."""
     if platform is not None and run.get("platform") != platform:
         raise Refused("platform-mismatch")  # a run must target the platform the check was asked for
-    for arg in run.get("args", []):
-        text = str(arg)
-        if TOOL_FILE.fullmatch(text):
-            continue  # a file of a pinned tool, checked below
-        if OUTSIDE.search(text) or ".." in re.split(r"[/\\=:@,]", text):
-            raise Refused("bad-path")  # an argument may not point outside the run's own files, not even inside an option
     declared = {t["name"] for t in manifest.get("tools", [])}
     program = run.get("program", {})
     named = [program.get("tool")] + [name for a in run.get("args", []) if isinstance(a, str) for name in TOOL_NAME.findall(a)]
@@ -218,6 +212,20 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
                  + [path for _, path in placed] + ([run["cwd"]] if "cwd" in run else [])):
         if pathcheck.check(str(path).encode("utf-8", errors="surrogatepass")) is not None:
             raise Refused("bad-path")
+    # Arguments by allowlist, not by looking for what is forbidden: that can never be complete.
+    # An argument with any character that can start or join a path must be, exactly, one of the
+    # run's input files or one file of a declared tool. Anything else is a word: an option, a number.
+    inputs = {f.get("path") for f in run.get("inputs", [])}
+    for arg in run.get("args", []):
+        text = str(arg)
+        if text in inputs or TOOL_FILE.fullmatch(text):
+            continue
+        if PATHLIKE.search(text):
+            raise Refused("bad-path")  # an argument may name only the run's own files, and only as a whole argument
+    if run.get("env"):
+        raise Refused("env-not-allowed")  # a variable can change what a program loads; the stage-0 host allows none
+    if {f.get("path") for f in run.get("outputs", [])} & inputs:
+        raise Refused("output-overwrites-input")
     for item in run.get("inputs", []):
         if item["path"] not in known_inputs:
             raise Refused("input-not-in-key")
