@@ -1,7 +1,9 @@
 name: Model checks
-# Runs every case in spec/*/expected.json through the project's own executor
-# and fails unless each one produced exactly its expected outcome. A case that
-# did not finish is a failure, never a pass.
+# Runs the model checks that have no current result, through the project's own
+# executor, and records every verdict in a ledger kept from one run to the next.
+# A check whose inputs, tools and provider are unchanged since its last result
+# is not run again: that result still counts (decision 0029). A case that did
+# not finish is a failure, never a pass.
 #
 # This runs only on the maintained main branch, on the project's own runner.
 # It never runs for pull requests: code from a fork must not execute there.
@@ -15,14 +17,51 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read   # to fetch the ledger kept by the last successful run
 # A newer push waits for the run in progress. Cancelling would leave its jobs
-# behind on the shared queue.
+# behind on the shared queue, and two runs must not both extend the ledger.
 concurrency:
   group: models-main
   cancel-in-progress: false
 jobs:
-  models:
+  # Which checks still have a current result? The kernel answers, from the
+  # ledger the last successful run kept.
+  plan:
     if: github.repository == 'sloik/dodona' && github.ref == 'refs/heads/main' && vars.MODEL_RUNNER == 'ready'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch the ledger and lists of states kept by the last successful run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p kept
+          last=$(gh run list -R "$GITHUB_REPOSITORY" --workflow models.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          if [ -n "$last" ] && gh run download "$last" -R "$GITHUB_REPOSITORY" -n dodona-kept -D kept; then
+            echo "kept from run $last"
+          else
+            echo "nothing kept: every check runs"
+          fi
+          echo "$last" > kept/from-run.txt
+      - name: Build the seed kernel
+        run: cargo build --release --locked --manifest-path kernel/Cargo.toml
+      - name: Ask the kernel which checks have a current result
+        run: |
+          git fetch --quiet --depth 1 origin main
+          python3 tools/host.py plan --ledger kept/dodona.ledger --dumps-from kept/dumps --writer ci --out plan.json --kernel kernel/target/release/dodona-kernel
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plan
+          path: |
+            plan.json
+            kept
+          if-no-files-found: error
+
+  models:
+    needs: plan
     runs-on: [self-hosted, Linux, ARM64, oracle, dodona]
     # Long, because the shared queue may be busy with other projects' work.
     timeout-minutes: 720
@@ -33,11 +72,14 @@ jobs:
           persist-credentials: false
       - name: Run repository checks
         run: python3 tools/check_repo.py
-      # One job on the shared queue for everything. The provider says what to
-      # run, the executor runs it, and what came back is saved as files.
-      - name: Have the provider describe every check and the executor run them
-        run: python3 tools/host.py collect --site .github/site/executor.json --out out/runs --dumps
-      - name: Judge every model case
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plan
+      # One job on the shared queue for what has no current result. The provider
+      # says what to run, the executor runs it, and what came back is saved as files.
+      - name: Have the provider describe the checks to run and the executor run them
+        run: python3 tools/host.py collect --site .github/site/executor.json --out out/runs --plan plan.json --dumps
+      - name: Judge every model case that ran
         run: python3 tools/check_models.py --runs out/runs --report model-report.json
       - name: Keep the report, the raw outputs and the lists of states
         if: always()
@@ -49,12 +91,11 @@ jobs:
             out/runs
           if-no-files-found: warn
 
-  # The model checker wrote out every state the two dump models reached, each
-  # with the model's own answer. The kernel must give that answer for every one.
-  # This job builds the kernel, so it runs on a hosted machine; it executes no
-  # model checker.
+  # The kernels give the model's own answer on every state the two dump models
+  # reached; every verdict goes into the kept ledger; the status of this project
+  # is worked out from it. Runs on a hosted machine; it executes no model checker.
   kernel-on-every-state:
-    needs: models
+    needs: [plan, models]
     # Also when the cases did not all match or the executor could not be
     # reached: then that is what gets recorded.
     if: always() && needs.models.result != 'skipped' && needs.models.result != 'cancelled'
@@ -66,36 +107,55 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
+          name: plan
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
           name: model-run
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
+      - name: Gather the lists of states, from this run or kept from the last
+        run: python3 tools/keep.py dumps --plan plan.json --fresh out/runs/outputs --kept kept/dumps --into keep/dumps
       - name: Evidence reuse, every state
-        run: python3 tools/check_states.py --model kernel --dump out/runs/outputs/kernel/dump.states.dump --settings spec/kernel/dump-settings.json -- kernel/target/release/dodona-kernel
+        run: python3 tools/check_states.py --model kernel --dump keep/dumps/kernel/dump.states.dump --settings spec/kernel/dump-settings.json -- kernel/target/release/dodona-kernel
       - name: Intent delivery, every state
-        run: python3 tools/check_states.py --model intent --dump out/runs/outputs/intent/dump.states.dump --settings spec/intent/dump-settings.json -- kernel/target/release/dodona-kernel
+        run: python3 tools/check_states.py --model intent --dump keep/dumps/intent/dump.states.dump --settings spec/intent/dump-settings.json -- kernel/target/release/dodona-kernel
       - name: Second kernel, evidence reuse, every state
-        run: python3 tools/check_states.py --model kernel --dump out/runs/outputs/kernel/dump.states.dump --settings spec/kernel/dump-settings.json -- node kernel2/dodona-kernel2.js
+        run: python3 tools/check_states.py --model kernel --dump keep/dumps/kernel/dump.states.dump --settings spec/kernel/dump-settings.json -- node kernel2/dodona-kernel2.js
       - name: Second kernel, intent delivery, every state
-        run: python3 tools/check_states.py --model intent --dump out/runs/outputs/intent/dump.states.dump --settings spec/intent/dump-settings.json -- node kernel2/dodona-kernel2.js
+        run: python3 tools/check_states.py --model intent --dump keep/dumps/intent/dump.states.dump --settings spec/intent/dump-settings.json -- node kernel2/dodona-kernel2.js
       # dodona used on dodona: the provider reads what the runs printed, the
-      # kernel writes each verdict to a ledger and works out the status of this
-      # project from it. A run that did not happen is recorded as unavailable.
-      - name: Record every verdict in a ledger
+      # kernel adds each verdict to the kept ledger and works out the status of
+      # this project from it. A run that did not happen is recorded as unavailable.
+      - name: Record every new verdict in the kept ledger
         if: always()
-        run: python3 tools/host.py conclude --runs out/runs --ledger out/dodona.ledger --writer ci --kernel kernel/target/release/dodona-kernel
+        run: |
+          mkdir -p out
+          if [ -f kept/dodona.ledger ]; then cp kept/dodona.ledger out/dodona.ledger; fi
+          python3 tools/host.py conclude --runs out/runs --ledger out/dodona.ledger --writer ci --kernel kernel/target/release/dodona-kernel | tee out/conclude.json
       - name: Status of this project, worked out by the kernel
         if: always()
         run: |
           git fetch --quiet --depth 1 origin main
           python3 tools/status.py --ledger out/dodona.ledger --writer ci --kernel kernel/target/release/dodona-kernel | tee out/status.txt
           python3 tools/status.py --ledger out/dodona.ledger --writer ci --json --kernel kernel/target/release/dodona-kernel > out/status.json
-          { echo '### Status of dodona, worked out by its own kernel'; echo; echo '```'; cat out/status.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/keep.py summary --plan plan.json --conclude out/conclude.json --status out/status.json --kept-from kept/from-run.txt >> "$GITHUB_STEP_SUMMARY"
+          { echo; echo '```'; cat out/status.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Every model check has a passing result for the inputs as they are now
+        run: python3 tools/keep.py require-passed --status out/status.json
       - name: Validate every message of both provider sessions against the schemas
         if: always()
         run: |
           python3 -m venv .venv-examples
           .venv-examples/bin/python -m pip install --quiet jsonschema==4.26.0
           .venv-examples/bin/python tools/check_transcript.py out/runs/transcript-collect.json out/runs/transcript-conclude.json
+      - name: Keep the ledger and the lists of states for the next run
+        run: python3 tools/keep.py finish --plan plan.json --ledger out/dodona.ledger --into keep
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dodona-kept
+          path: keep
+          if-no-files-found: error
+          retention-days: 90
       - name: Keep the ledger, the status and the sessions
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -105,6 +165,7 @@ jobs:
             out/dodona.ledger
             out/status.txt
             out/status.json
+            out/conclude.json
             out/runs/transcript-collect.json
             out/runs/transcript-conclude.json
             out/runs/runs.json

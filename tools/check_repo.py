@@ -5,6 +5,7 @@ Exit status is 0 only if every check passed.
 """
 from __future__ import annotations
 
+import argparse
 import contextlib
 import io
 import hashlib
@@ -371,6 +372,28 @@ def gap_runner_versions_agree() -> None:
                         + "): change them all together, as an update to one is easy to miss")
 
 
+def gap_reuse_is_decided_by_a_kernel_and_checked() -> None:
+    """Every run used to start from nothing. Reuse must come from the kept ledger through a kernel, and a run must still fail when a check has no passing result."""
+    workflow = (ROOT / ".github" / "workflows" / "models.yml").read_text(encoding="utf-8")
+    for needed, why in (("tools/host.py plan", "what runs must be decided by a kernel from the kept ledger"),
+                        ("--plan plan.json", "collect must send only what the plan says"),
+                        ("keep.py require-passed", "a run must fail unless every check has a passing result now"),
+                        ("--status success", "only a successful run's ledger may be the starting point"),
+                        ("--branch main", "only a ledger kept on main may be the starting point")):
+        if needed not in workflow:
+            problems.append(f".github/workflows/models.yml: {why} ({needed!r} is missing)")
+    import keep
+    with tempfile.TemporaryDirectory() as tmp:
+        report = pathlib.Path(tmp) / "status.json"
+        for checks, want in (({"a": {"status": "passed"}}, 0), ({"a": {"status": "passed"}, "b": {"status": "unknown"}}, 1),
+                             ({"a": {"status": "failed"}}, 1), ({}, 1)):
+            report.write_text(json.dumps({"obligations": checks}), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                got = keep.require_passed(argparse.Namespace(status=report))
+            if got != want:
+                problems.append(f"tools/keep.py require-passed gives {got} for {checks}; it must give {want}")
+
+
 def gap_one_reader_of_checker_output() -> None:
     """The provider and the older model tool each had their own reading of the checker's output and could have disagreed."""
     provider = (ROOT / "providers" / "tlc" / "provider.py").read_text(encoding="utf-8")
@@ -644,7 +667,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
-              gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree]
+              gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
+              gap_reuse_is_decided_by_a_kernel_and_checked]
 
 
 class JudgeTests(unittest.TestCase):

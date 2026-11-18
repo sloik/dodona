@@ -8,8 +8,12 @@ a kernel writes the results to a ledger and reports status.
 It is in two halves, because the executor and the kernel may live on
 different machines:
 
-    python tools/host.py collect  --site FILE --out DIR
+    python tools/host.py plan     --ledger FILE --dumps-from DIR --writer NAME --out PLAN --kernel CMD...
+    python tools/host.py collect  --site FILE --out DIR [--plan PLAN] [--dumps]
     python tools/host.py conclude --runs DIR --ledger FILE --writer NAME --kernel CMD...
+
+`plan` reads the ledger kept from earlier runs and asks a kernel which checks
+still have a current result; only the others are sent.
 
 `collect` needs the executor. It asks the provider what to run, has it run,
 and saves what came back. `conclude` needs a kernel. It gives the provider the
@@ -341,9 +345,12 @@ def collect(args) -> int:
     transcript: list = []
     where = site["tool_files"]
     tools, _ = lock_tools()
+    chosen = json.loads(args.plan.read_text(encoding="utf-8")) if args.plan else None
     session = Session([sys.executable, str(ROOT / "providers" / "tlc" / "provider.py")], ROOT, transcript)
     try:
         obligations, files = list_project(session, ROOT)
+        if chosen is not None:
+            obligations = [o for o in obligations if o["name"] in set(chosen["run"])]
         pending = []
         for obligation in obligations:
             got = drive_check(session, obligation, inputs_of(obligation, files), tools, lambda n, d: None)
@@ -367,15 +374,22 @@ def collect(args) -> int:
     if args.dumps:
         # Not obligations yet: two models also write out every state they reach, for tools/check_states.py.
         for config in sorted(ROOT.glob("spec/*/dump.cfg")):
+            if chosen is not None and config.parent.name not in chosen["dumps_run"]:
+                continue
             folder = config.parent.relative_to(ROOT).as_posix()
             cases.append({"name": f"{config.parent.name}/dump", "cwd": folder, "keep": ["states.dump"],
                           "argv": [where["java/bin/java"], "-cp", where["tla2tools/tla2tools.jar"], "tlc2.TLC",
                                    "-workers", "1", "-config", "dump.cfg", "-dump", "states", "MCDump.tla"]})
-    job = send_job(site, bundle, cases)
+    if not cases:
+        # Everything has a current result. Nothing is sent, and nothing new will be recorded.
+        print("nothing to run: every check has a current result")
+        job = {"reachable": True, "complete": True, "exit": None, "measured": {}, "fetched": None}
+    else:
+        job = send_job(site, bundle, cases)
     reachable, complete, measured = job["reachable"], job["complete"], job["measured"]
-    if reachable:
+    if reachable and job["fetched"] is not None:
         shutil.copytree(job["fetched"], out / "outputs", dirs_exist_ok=True)
-    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "complete": complete, "queue_exit": job["exit"], "pending": pending, "measured": measured,
+    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "complete": complete, "queue_exit": job["exit"], "sent": len(cases), "plan": chosen, "pending": pending, "measured": measured,
                                                "executor": site.get("executor_name", "site")}, indent=1) + "\n", encoding="utf-8")
     (out / "transcript-collect.json").write_text(json.dumps(transcript, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({"obligations": len(pending), "reachable": reachable, "complete": complete}))
@@ -445,6 +459,40 @@ def kernel(command: list[str], sub: str, payload: dict) -> dict:
     return json.loads(done.stdout.decode("utf-8"))
 
 
+def dump_key(model_dir: pathlib.Path) -> str:
+    """What a list of states written out by a dump model depends on: its files and the pinned tools."""
+    files = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(model_dir.iterdir()) if p.suffix in (".tla", ".cfg")}
+    return canonical.identity({"files": files, "tools": lock_tools()[0]})
+
+
+def plan(args) -> int:
+    """Decide what must run, from the ledger kept from earlier runs. The kernel decides; this only asks.
+
+    An obligation is reused when the kernel reports it passed or failed from records that count:
+    written by this writer, on this platform, under the key of the inputs as they are now. Anything
+    else (never run, an error, a conflict, a record under an old key) runs again.
+    """
+    import status as status_tool  # the same scenario the status report is worked out from
+    entries = status_tool.read_ledgers([args.ledger] if args.ledger.exists() else [], args.kernel)
+    if entries is None:
+        print("the kept ledger is damaged; everything runs again")
+        entries = []
+    policy, _ = status_tool.anchored_policy(args.policy_ref)
+    asked = status_tool.scenario([e for e in entries if e.get("kind") == "evidence"], args.writer, policy)
+    report = kernel(args.kernel, "scenario", asked)["results"][-1] if asked["steps"] else {"obligations": {}}
+    current = sorted(n for n, o in report["obligations"].items() if o["status"] in ("passed", "failed"))
+    every = sorted(asked["obligations"])
+    dumps_kept = json.loads((args.dumps_from / "dumps.json").read_text(encoding="utf-8")) if (args.dumps_from / "dumps.json").exists() else {}
+    dumps = {d.parent.name: dump_key(d.parent) for d in sorted(ROOT.glob("spec/*/dump.cfg"))}
+    chosen = {"run": [n for n in every if n not in current], "reuse": current, "ledger_entries": len(entries),
+              "dumps_run": sorted(m for m, k in dumps.items() if dumps_kept.get(m) != k or not (args.dumps_from / m / "dump.states.dump").exists()),
+              "dumps_reuse": sorted(m for m, k in dumps.items() if dumps_kept.get(m) == k and (args.dumps_from / m / "dump.states.dump").exists()),
+              "dump_keys": dumps}
+    args.out.write_text(json.dumps(chosen, indent=1) + "\n", encoding="utf-8")
+    print(json.dumps({"run": len(chosen["run"]), "reuse": len(chosen["reuse"]), "dumps_run": chosen["dumps_run"], "dumps_reuse": chosen["dumps_reuse"]}))
+    return 0
+
+
 def conclude(args) -> int:
     if not args.runs.resolve().is_relative_to(ROOT):
         raise SystemExit("the saved runs must be inside the project directory, where the provider can read them by relative path")
@@ -457,12 +505,16 @@ def conclude(args) -> int:
     unpinned = [n for n in sorted(pinned) if pinned[n]["sha256"] is None]
     mismatched = [n for n in sorted(pinned) if pinned[n]["sha256"] is not None and measured.get(pinned[n]["file"]) != pinned[n]["sha256"]]
     session = Session([sys.executable, str(ROOT / "providers" / "tlc" / "provider.py")], ROOT, transcript)
-    counts = {"passed": 0, "failed": 0, "error": 0, "unavailable": 0, "unsupported": 0, "refused": 0}
+    counts = {"passed": 0, "failed": 0, "error": 0, "unavailable": 0, "unsupported": 0, "refused": 0, "reused": 0}
     try:
         obligations, files = list_project(session, ROOT)
         stored = {item["obligation"]["name"]: item for item in runs["pending"]}
+        reused = set((runs.get("plan") or {}).get("reuse", []))
         for obligation in obligations:
             name = obligation["name"]
+            if name in reused:
+                counts["reused"] += 1  # its record from an earlier run still counts; nothing new is written
+                continue
             inputs = inputs_of(obligation, files)
             # The key is made from what was measured to have run, so a result made with a tool
             # the lock does not pin can never be taken for one made with the pinned tool.
@@ -519,13 +571,21 @@ def main() -> int:
     one.add_argument("--site", type=pathlib.Path, required=True)
     one.add_argument("--out", type=pathlib.Path, required=True)
     one.add_argument("--dumps", action="store_true", help="also have each model that has a dump.cfg write out its states")
+    one.add_argument("--plan", type=pathlib.Path, help="run only what this plan says has no current result")
+    three = sub.add_parser("plan")
+    three.add_argument("--ledger", type=pathlib.Path, required=True, help="the ledger kept from earlier runs; may be absent")
+    three.add_argument("--dumps-from", type=pathlib.Path, required=True, help="where lists of states kept from earlier runs are")
+    three.add_argument("--writer", required=True)
+    three.add_argument("--out", type=pathlib.Path, required=True)
+    three.add_argument("--policy-ref", default="origin/main")
+    three.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     two = sub.add_parser("conclude")
     two.add_argument("--runs", type=pathlib.Path, required=True)
     two.add_argument("--ledger", type=pathlib.Path, required=True)
     two.add_argument("--writer", required=True)
     two.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     args = ap.parse_args()
-    return collect(args) if args.command == "collect" else conclude(args)
+    return {"collect": collect, "conclude": conclude, "plan": plan}[args.command](args)
 
 
 if __name__ == "__main__":
