@@ -180,7 +180,7 @@ The check value is exact:
 - `covers` is used in the order the record gives it. It must already be sorted as the canonical encoding sorts keys, with no name repeated. A list in any other order, or with a repeat, vouches for nothing, even if the mac was made over that very list.
 - A key in `attestors` is a non-empty string of lowercase hexadecimal digits, of even length. Anything else (an empty string, an odd number of digits, an uppercase digit, a character that is not a digit) names no key: nothing is vouched for under it. The attestation's `harness` must be the same as its `key`: a value that names one harness and was made with another's key vouches for nothing. An attestation with no `harness` vouches for nothing either.
 
-**A check value binds what was judged.** No level above `helper` is granted unless `covers` also lists `ticket`, `kind`, `target`, `result` and `lineage`, in addition to the fields the facts read. Without this a vouched refusal could be copied as an agreement, or onto another target or ticket, and keep its level. With it, changing any of the five after signing breaks the mac. A record signed without them keeps its `claims` and is graded `helper`, `declared`.
+**A check value binds the whole record.** No level above `helper` is granted unless `covers` lists every field the record has at the top level, other than `attestation` itself, and lists at least `ticket`, `kind`, `target`, `result` and `lineage`. So nothing can be added to a signed record, or changed in it, without breaking the mac: not what was judged, not the ticket, and not a field nobody reads today. An attestation with a field other than `harness`, `key`, `covers` and `mac` vouches for nothing. A record that does not meet this keeps its `claims` and is graded `helper`, `declared`.
 
 **A malformed record is `self`.** Its `claims` is `self`, its `level` is `self` and its `source` is `declared`, whatever it says and whoever signed it. A record is malformed when any of these is true, and in no other case:
 
@@ -195,7 +195,8 @@ The check value is exact:
   - `known_bad` is not an object, or lacks a string `wrong`, `right` or `supplied_by`, or a boolean `rejected_wrong` or `accepted_right`;
   - `attestation` is not an object with a string `key`, a string `mac` and a list of strings `covers`;
   - `kind`, `target` or `result` is not a string;
-  - `lineage` is not an object.
+  - `lineage` is not an object;
+  - `attempt` is not an object with an integer `number` and an integer `prior`.
 
 A field that is simply absent does not make a record malformed, except that `actor` and `worker` must be there. A value of the right type that no table allows, such as a role of `other`, is not malformed either.
 
@@ -208,7 +209,7 @@ What a kernel reports about a whole project. A scenario gives:
 - `self`: this kernel's `writer` name and its `platform`.
 - `policy`: `min_hard_gates`; `required`, the intents that must be delivered; `trusted_writers`; `floors`, the least separation at which an act of each kind counts; and `attestors` and `makes` as in acts scenarios.
 - `obligations`: for each name, the `preimage` of its core key as things stand ([vectors](vectors/core-key.json)).
-- `intents`: for each id, its `owner`, its `worker`, its `children`, and its `criteria`, each with a `gate` and `checked_by`, a list of obligation names.
+- `intents`: for each id, its `owner`, its `worker`, its `children`, and its `criteria`, each with a `gate`, `checked_by`, a list of obligation names, and optionally `words`, the criterion as written.
 
 | Step | Meaning |
 |---|---|
@@ -221,7 +222,7 @@ The result has `obligations` and `intents`, each an object with one entry per na
 
 **Obligations.** An evidence record is *not a record* if its body is not an object, if its `verdict` is not `passed` or `failed`, or if it lacks `obligation`, `platform`, `writer`, `core_key` or `preimage`. Such an entry does not count for anything and is not counted as rejected either. Any other evidence record is *rejected* if its `core_key` is not the identity of its own `preimage`, or its preimage is one the core-key rules say must be refused; `rejected` is how many such records the ledger holds. A record that is not rejected *counts* for the obligation it names, and for no other, when its writer is this kernel or one of `trusted_writers`, its platform is this kernel's, and its `core_key` is the identity of the obligation's preimage as things stand. An obligation is `passed` if records count and all are passed, `failed` if all are failed, `conflict` if they differ, and otherwise `unknown` with `"reason": "never-run"`. An obligation named in a `checked_by` that the scenario does not define is `unknown`, `never-run`: the criterion has an obligation, and it has not passed.
 
-**Baseline.** Lists marked sorted are sorted as the canonical encoding sorts keys. The baseline of an intent is the identity of `{"owner": O, "children": [sorted], "criteria": {C: {"gate": G, "checked_by": [sorted]}}}`.
+**Baseline.** Lists marked sorted are sorted as the canonical encoding sorts keys. The baseline of an intent is the identity of `{"owner": O, "children": [sorted], "criteria": {C: {"words": W, "gate": G, "checked_by": [sorted]}}}`, where W is the criterion's wording as the scenario gives it, the empty string when it gives none. Rewording a criterion changes the baseline, so a confirmation of the old words stops counting.
 
 **Acts.** An act record is graded as in acts scenarios, a malformed one as `self`, with one more rule: if its `worker.id` is not the intent's `worker`, its level is `self`. An act entry whose body is not an object takes part in no rule. An intent is *confirmed* when the ledger holds an act of kind `confirm-baseline` whose `lineage.intent` is the intent, whose `result` is `agreed`, whose `target` is the intent's baseline as things stand, whose `actor.id` is the intent's owner, and whose level is at or above `floors["confirm-baseline"]`.
 

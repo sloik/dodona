@@ -47,7 +47,7 @@ def read_intents(obligations: list[str]) -> dict:
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
             if line.startswith("|") and len(cells) >= 3 and cells[0].isdigit():
                 names = sorted(n for pattern in checks.get(cells[0], []) for n in obligations if fnmatch.fnmatchcase(n, pattern))
-                criteria[cells[0]] = {"gate": cells[2], "checked_by": sorted(set(names))}
+                criteria[cells[0]] = {"words": cells[1], "gate": cells[2], "checked_by": sorted(set(names))}
         intents[ident] = {"owner": fields.get("owner", ""), "worker": fields.get("worker", ""), "children": [], "criteria": criteria}
         parents[ident] = fields.get("parent", "").strip('"')
     for ident, parent in parents.items():

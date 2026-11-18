@@ -50,6 +50,7 @@ def main() -> int:
     ap.add_argument("--policy-ref", default="origin/main")
     ap.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     args = ap.parse_args()
+    args.ledger = args.ledger.resolve()
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         print("refused: a confirmation is the owner's own act and is made at a terminal")
         return 2

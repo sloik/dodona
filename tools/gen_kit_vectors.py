@@ -199,7 +199,12 @@ def acts() -> None:
               (dict(bound, ticket="t-copied"), HELP),
               (dict(bound, note="added after signing"), SELF),
               (dict(bound, exceptions=["granted"]), SELF),
-              (dict(bound, attestation=dict(bound["attestation"], harness="harness-2")), HELP)]
+              (dict(bound, attestation=dict(bound["attestation"], harness="harness-2")), HELP),
+              (dict(bound, attestation=dict(bound["attestation"], exceptions=["granted"])), HELP),
+              (dict(bound, attempt={"number": 1, "prior": 0}), HELP),
+              (dict(bound, attempt="granted"), SELF),
+              (dict(bound, attempt={"note": "x"}), SELF),
+              (attest(dict(full, attempt={"number": 2, "prior": 1})), TOP)]
              + [(attest(full, covers=FIELDS + [b for b in BIND if b != left_out], bind=False), HELP) for left_out in BIND])
     scenario("every_field_a_fact_reads_must_be_covered", "A fact is vouched for only if every field it reads is covered. Leaving out any one of worker, actor, brief, given or transcript holds the grade at helper, whatever else is signed.", [],
              [(attest(full, covers=[f for f in FIELDS if f != left_out]), HELP) for left_out in ["worker", "actor", "brief", "given", "transcript"]])
@@ -387,7 +392,7 @@ def evidence(name: str, pre: dict, verdict: str = "passed", writer: str = "kerne
 
 def baseline(intent: dict) -> str:
     return canonical.identity({"owner": intent["owner"], "children": canonical.sort_set(intent.get("children", [])),
-                               "criteria": {c: {"gate": v["gate"], "checked_by": canonical.sort_set(v["checked_by"])}
+                               "criteria": {c: {"words": v.get("words", ""), "gate": v["gate"], "checked_by": canonical.sort_set(v["checked_by"])}
                                             for c, v in intent["criteria"].items()}})
 
 

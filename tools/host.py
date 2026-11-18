@@ -47,6 +47,9 @@ RANKS = ["documented", "sampled", "bounded", "exhaustive"]
 # A provider states how strong its check is by rank; the status report speaks in levels of the assurance scale.
 LEVEL_OF_RANK = {"documented": "asserted", "sampled": "sampled", "bounded": "bounded", "exhaustive": "proven"}
 PLATFORM = {"os": "linux", "arch": "aarch64", "libc": "gnu"}
+# A path that leaves the run's own files, alone or inside an option: an absolute path, a home
+# directory, a drive letter, a URL with a scheme, or a file name read from another file (`@`).
+OUTSIDE = re.compile(r"(^|[=:@,])\s*([/\\~]|[A-Za-z]:[/\\])|^@|[A-Za-z][A-Za-z0-9+.-]*://")
 TOOL_FILE = re.compile(r"\$\{tool:([^}]*)\}/(.*)")
 TOOL_NAME = re.compile(r"\$\{tool:([^}]*)\}")  # every mention of a tool in an argument, with or without a file after it
 MAX_RUNS = 8  # a check may ask for this many runs and no more
@@ -196,9 +199,8 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
         text = str(arg)
         if TOOL_FILE.fullmatch(text):
             continue  # a file of a pinned tool, checked below
-        parts = text.replace("\\", "/").split("/")
-        if text.startswith(("/", "\\")) or (len(text) > 1 and text[1] == ":") or ".." in parts:
-            raise Refused("bad-path")  # an argument may not point outside the run's own files
+        if OUTSIDE.search(text) or ".." in re.split(r"[/\\=:@,]", text):
+            raise Refused("bad-path")  # an argument may not point outside the run's own files, not even inside an option
     declared = {t["name"] for t in manifest.get("tools", [])}
     program = run.get("program", {})
     named = [program.get("tool")] + [name for a in run.get("args", []) if isinstance(a, str) for name in TOOL_NAME.findall(a)]
@@ -249,6 +251,8 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
     """Take one obligation through start, runs and final. `report_for(run_number, description)` returns
     the executor's report for a run, or None if there is none yet, in which case the description is returned."""
     known = {f["path"]: f["identity"] for f in inputs}
+    if not set(obligation.get("specified_by", []) + obligation.get("targets", [])) <= set(known):
+        raise Refused("unknown-file")  # an obligation names a file the check was not given
     known_tools = {t["name"]: t["digest"] for t in tools}
     check_key = canonical.identity({"obligation": obligation, "inputs": inputs})
     keys: list[str] = []
@@ -263,7 +267,7 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
         if runs >= MAX_RUNS:
             raise Refused("too-many-runs")  # refused when the next run is asked for, before it starts
         check_run_description(body["next"], session.manifest, known, known_tools, PLATFORM,
-                              {p for p in obligation.get("specified_by", []) + obligation.get("targets", []) if p in known})
+                              set(obligation.get("specified_by", []) + obligation.get("targets", [])))
         keys.append(run_key(check_key, runs + 1, body["next"]))
         report = report_for(runs + 1, body["next"])
         if report is None:

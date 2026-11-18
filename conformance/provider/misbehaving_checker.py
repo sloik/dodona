@@ -55,6 +55,14 @@ def run(body: dict) -> dict:
         described["tools"] = described["tools"] + [{"name": "shell", "digest": "sha256:" + "e" * 64}]
     if MODE == "nul-in-argument":
         described["args"][2] = "a.txt\u0000--other"
+    if MODE == "path-inside-an-option":
+        described["args"] = ["-config=/etc/passwd", "a.txt"]
+    if MODE == "file-list-from-elsewhere":
+        described["args"] = ["@/etc/passwd", "a.txt"]
+    if MODE == "home-directory":
+        described["args"] = ["~/.ssh/id_rsa", "a.txt"]
+    if MODE == "a-url":
+        described["args"] = ["file:///etc/passwd", "a.txt"]
     if MODE == "argument-outside":
         described["args"] = ["/etc/passwd", "a.txt"]
     if MODE == "argument-climbs-out":

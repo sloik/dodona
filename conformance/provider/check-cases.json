@@ -307,6 +307,38 @@
       "reason": "platform-mismatch",
       "ran": false,
       "why": "A run must target the platform the check was asked for."
+    },
+    {
+      "mode": "path-inside-an-option",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "ran": false,
+      "why": "An absolute path inside an option is still outside the run's files."
+    },
+    {
+      "mode": "file-list-from-elsewhere",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "ran": false,
+      "why": "So is a list of arguments read from another file."
+    },
+    {
+      "mode": "home-directory",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "ran": false,
+      "why": "So is a path in a home directory."
+    },
+    {
+      "mode": "a-url",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "ran": false,
+      "why": "So is a URL."
     }
   ]
 }
