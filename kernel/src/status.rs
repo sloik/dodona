@@ -26,6 +26,8 @@ fn baseline(i: &Value) -> String {
                 (
                     n.clone(),
                     json::object(vec![
+                        // The criterion as written; the empty string when the scenario gives none.
+                        ("words", json::string(text(c, "words").unwrap_or(""))),
                         ("gate", c.get("gate").clone()),
                         ("checked_by", sorted(c.get("checked_by"))),
                     ]),
@@ -405,6 +407,22 @@ mod tests {
             r#"{"owner":"o","children":["a","z"],"criteria":{"c":{"gate":"soft","checked_by":["a","b"]}}}"#,
         );
         assert_ne!(baseline(&a), baseline(&soft));
+        // Rewording a criterion changes it; no words is the empty string.
+        let worded = |words: &str| {
+            value(&format!(
+                r#"{{"owner":"o","children":["a","z"],"criteria":{{"c":{{{words}"gate":"hard","checked_by":["a","b"]}}}}}}"#
+            ))
+        };
+        assert_eq!(baseline(&a), baseline(&worded(r#""words":"","#)));
+        assert_ne!(baseline(&a), baseline(&worded(r#""words":"it works","#)));
+        assert_eq!(
+            baseline(&value(
+                r#"{"owner":"o","children":[],"criteria":{"c":{"gate":"hard","checked_by":[]}}}"#
+            )),
+            canonical::identity(&value(
+                r#"{"owner":"o","children":[],"criteria":{"c":{"words":"","gate":"hard","checked_by":[]}}}"#
+            ))
+        );
         // The worker is not part of what the owner confirms.
         let with_worker = value(
             r#"{"owner":"o","worker":"w","children":["a","z"],"criteria":{"c":{"gate":"hard","checked_by":["a","b"]}}}"#,

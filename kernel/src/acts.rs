@@ -116,6 +116,12 @@ fn covered<'a>(r: &'a Value, p: &Value) -> Vec<&'a str> {
     else {
         return Vec::new();
     };
+    // An attestation is these four fields and nothing more.
+    let known = ["harness", "key", "covers", "mac"];
+    if !matches!(att, Value::Object(fields) if fields.iter().all(|(k, _)| known.contains(&k.as_str())))
+    {
+        return Vec::new();
+    }
     // A value that names one harness and was made with another's key vouches for nothing.
     if text(att, "harness") != Some(keyname) {
         return Vec::new();
@@ -222,6 +228,10 @@ fn malformed(r: &Value) -> bool {
             .iter()
             .any(|k| wrong(k, &string))
         || wrong("lineage", &object)
+        || wrong("attempt", &|a| {
+            let integer = |k: &str| matches!(a.opt(k), Some(Value::Number(_)));
+            object(a) && integer("number") && integer("prior")
+        })
 }
 /// Grade an act record under a policy. This is the one grading rule: acts
 /// scenarios report it and status scenarios count with it.
@@ -249,7 +259,14 @@ pub fn grade(r: &Value, p: &Value) -> Grade {
         &["actor", "worker"],
     ];
     let mut level = claims.min(1);
-    if !vouched(BOUND) {
+    // The check value must bind the whole record: every field it has, and at least what was judged.
+    let whole = match r {
+        Value::Object(fields) => fields
+            .iter()
+            .all(|(k, _)| k == "attestation" || vouched(&[k.as_str()])),
+        _ => false,
+    };
+    if !vouched(BOUND) || !whole {
         return Grade { claims, level };
     }
     for (i, fields) in reads.iter().enumerate() {
@@ -515,8 +532,16 @@ mod tests {
             }
             assert_eq!(graded(&signed), ("self", "self"), "{extra}");
         }
-        let attempt = record(|f| set(f, "attempt", "2"));
+        let attempt = record(|f| set(f, "attempt", r#"{"number":2,"prior":1}"#));
         assert!(!malformed(&attempt));
+        for bad in [
+            "2",
+            r#"{"number":2}"#,
+            r#"{"number":"2","prior":1}"#,
+            "null",
+        ] {
+            assert!(malformed(&record(|f| set(f, "attempt", bad))), "{bad}");
+        }
         // The harness named must be the one whose key was used.
         for harness in [r#""stranger""#, "7", ""] {
             let mut r = attested(record(|_| ()), &ALL, "h", KEY);
@@ -533,10 +558,28 @@ mod tests {
             graded(&attested(full(), &ALL, "h", KEY)),
             ("cross-make", "cross-make")
         );
+        // A field the record has and the check value does not cover: nothing above helper.
         assert_eq!(
             graded(&attested(full(), &APART, "h", KEY)),
-            ("cross-make", "apart")
+            ("cross-make", "helper")
         );
+        let mut tried = ALL.to_vec();
+        tried.insert(1, "attempt");
+        let again = || record(|f| set(f, "attempt", r#"{"number":2,"prior":1}"#));
+        assert_eq!(
+            graded(&attested(again(), &tried, "h", KEY)),
+            ("cross-make", "cross-make")
+        );
+        assert_eq!(
+            graded(&attested(again(), &ALL, "h", KEY)),
+            ("cross-make", "helper")
+        );
+        // An attestation holds four fields and no more.
+        let mut extra = attested(full(), &ALL, "h", KEY);
+        if let Some(Value::Object(att)) = extra.opt_mut("attestation") {
+            set(att, "note", r#""x""#);
+        }
+        assert_eq!(graded(&extra), ("cross-make", "helper"));
         // Each field a fact reads must be covered, and so must what was judged.
         for field in APART {
             let r = attested(full(), &without(&ALL, field), "h", KEY);

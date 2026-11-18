@@ -18,7 +18,7 @@ function sortedCopy(list) {
 function baselineOf(intent) {
   const criteria = {};
   for (const [name, criterion] of Object.entries(intent.criteria)) {
-    criteria[name] = { gate: criterion.gate, checked_by: sortedCopy(criterion.checked_by) };
+    criteria[name] = { words: typeof criterion.words === 'string' ? criterion.words : '', gate: criterion.gate, checked_by: sortedCopy(criterion.checked_by) };
   }
   return identityOf({ owner: intent.owner, children: sortedCopy(intent.children), criteria });
 }

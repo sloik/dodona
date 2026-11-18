@@ -145,6 +145,16 @@ def gap_readme_counts() -> None:
     m = re.search(r"(\d+) proposed decisions", readme)
     if not m or int(m.group(1)) != decisions:
         problems.append(f"README.md decision count does not match the {decisions} records in decisions/")
+    counts = []
+    for name in ("kernel/defects.json", "kernel2/defects.json"):
+        data = json.loads((ROOT / name).read_text(encoding="utf-8"))
+        counts.append(len(data["defects"] if isinstance(data, dict) else data))
+    m = re.search(r"(\d+) planted defects, (\d+) in one kernel and (\d+) in the other", readme)
+    if not m or [int(m.group(2)), int(m.group(3))] != counts or int(m.group(1)) != sum(counts):
+        problems.append(f"README.md: the planted-defect counts must say {sum(counts)}, {counts[0]} in one kernel and {counts[1]} in the other")
+    claims = (ROOT / "spec" / "CLAIMS.md").read_text(encoding="utf-8")
+    if f"{counts[0]} in the first kernel and {counts[1]} in the second" not in claims:
+        problems.append(f"spec/CLAIMS.md C20: the counts must say {counts[0]} in the first kernel and {counts[1]} in the second")
     ids = [cid for cid, _ in rows]
     if len(ids) != len(set(ids)):
         problems.append("spec/CLAIMS.md lists a claim id twice")

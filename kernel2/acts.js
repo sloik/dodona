@@ -31,6 +31,8 @@ const GRADED_LEVELS = ['helper', 'apart', 'tested', 'cross-make'];
 
 const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];
 
+const ATTESTATION_FIELDS = ['harness', 'key', 'covers', 'mac'];
+
 // The fields an act record may have at the top level.
 const RECORD_FIELDS = [...BOUND_FIELDS, 'actor', 'worker', 'brief', 'given', 'fresh_context', 'known_bad', 'attempt', 'transcript', 'attestation'];
 
@@ -63,6 +65,7 @@ function isMalformed(record) {
       && typeof value.rejected_wrong === 'boolean' && typeof value.accepted_right === 'boolean'),
     absentOr(attestation, (value) => isObject(value) && isString(value.key) && isString(value.mac)
       && Array.isArray(value.covers) && value.covers.every(isString)),
+    absentOr(record.attempt, (value) => isObject(value) && Number.isInteger(value.number) && Number.isInteger(value.prior)),
     absentOr(record.ticket, isString),
     absentOr(record.kind, isString),
     absentOr(record.target, isString),
@@ -132,6 +135,8 @@ function attestationHolds(record, policy) {
   const attestation = record.attestation;
   if (!attestation || !Array.isArray(attestation.covers)) return false;
   const attestors = policy.attestors || {};
+  // An attestation has harness, key, covers and mac, and nothing else.
+  if (Object.keys(attestation).some((name) => !ATTESTATION_FIELDS.includes(name))) return false;
   // The harness named must be the one whose key made the check value.
   if (attestation.harness !== attestation.key) return false;
   if (!Object.hasOwn(attestors, attestation.key)) return false;
@@ -154,7 +159,9 @@ function vouchedFacts(record, policy) {
   const vouched = {};
   const holds = attestationHolds(record, policy);
   // The check value must also bind what was judged: its kind, target, result and lineage.
-  const binds = holds && BOUND_FIELDS.every((field) => record.attestation.covers.includes(field));
+  const covers = holds ? record.attestation.covers : [];
+  const everyFieldCovered = Object.keys(record).filter((name) => name !== 'attestation').every((name) => covers.includes(name));
+  const binds = holds && BOUND_FIELDS.every((field) => covers.includes(field)) && everyFieldCovered;
   for (const [fact, reads] of Object.entries(FACT_READS)) {
     vouched[fact] = holds && binds && reads.every((field) => record.attestation.covers.includes(field));
   }

@@ -889,6 +889,34 @@
       "file": "status.js",
       "find": "  return identityOf({ owner: intent.owner, children: sortedCopy(intent.children), criteria });",
       "replace": "  return identityOf({ owner: intent.owner, children: [], criteria });"
+    },
+    {
+      "name": "acts: a top-level field present but not covered is still vouched",
+      "model_case": "(round 6)",
+      "file": "acts.js",
+      "find": " && everyFieldCovered;",
+      "replace": ";"
+    },
+    {
+      "name": "acts: an extra field inside the attestation is ignored",
+      "model_case": "(round 6)",
+      "file": "acts.js",
+      "find": "  if (Object.keys(attestation).some((name) => !ATTESTATION_FIELDS.includes(name))) return false;\n",
+      "replace": ""
+    },
+    {
+      "name": "acts: an attempt of the wrong type is not malformed",
+      "model_case": "(round 6)",
+      "file": "acts.js",
+      "find": "    absentOr(record.attempt, (value) => isObject(value) && Number.isInteger(value.number) && Number.isInteger(value.prior)),\n",
+      "replace": ""
+    },
+    {
+      "name": "status: the baseline leaves out the words",
+      "model_case": "(round 6)",
+      "file": "status.js",
+      "find": "criteria[name] = { words: typeof criterion.words === 'string' ? criterion.words : '', gate: criterion.gate,",
+      "replace": "criteria[name] = { gate: criterion.gate,"
     }
   ]
 }

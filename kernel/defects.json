@@ -751,34 +751,6 @@
       "replace": "    if unknown && false {"
     },
     {
-      "name": "acts: a level above helper is granted without kind covered",
-      "model_case": null,
-      "file": "src/acts.rs",
-      "find": "&[\"ticket\", \"kind\", \"target\", \"result\", \"lineage\"]",
-      "replace": "&[\"ticket\", \"target\", \"result\", \"lineage\"]"
-    },
-    {
-      "name": "acts: a level above helper is granted without target covered",
-      "model_case": null,
-      "file": "src/acts.rs",
-      "find": "&[\"ticket\", \"kind\", \"target\", \"result\", \"lineage\"]",
-      "replace": "&[\"ticket\", \"kind\", \"result\", \"lineage\"]"
-    },
-    {
-      "name": "acts: a level above helper is granted without result covered",
-      "model_case": null,
-      "file": "src/acts.rs",
-      "find": "&[\"ticket\", \"kind\", \"target\", \"result\", \"lineage\"]",
-      "replace": "&[\"ticket\", \"kind\", \"target\", \"lineage\"]"
-    },
-    {
-      "name": "acts: a level above helper is granted without lineage covered",
-      "model_case": null,
-      "file": "src/acts.rs",
-      "find": "&[\"ticket\", \"kind\", \"target\", \"result\", \"lineage\"]",
-      "replace": "&[\"ticket\", \"kind\", \"target\", \"result\"]"
-    },
-    {
       "name": "acts: an empty attestor key is accepted",
       "model_case": null,
       "file": "src/acts.rs",
@@ -884,13 +856,6 @@
       "replace": "    let (kind, body) = (kind.unwrap_or(\"evidence\"), v.opt(\"body\").unwrap_or(&Value::Null));"
     },
     {
-      "name": "acts: a level above helper is granted without ticket covered",
-      "model_case": null,
-      "file": "src/acts.rs",
-      "find": "&[\"ticket\", \"kind\", \"target\", \"result\", \"lineage\"]",
-      "replace": "&[\"kind\", \"target\", \"result\", \"lineage\"]"
-    },
-    {
       "name": "acts: an unknown top-level field is ignored",
       "model_case": null,
       "file": "src/acts.rs",
@@ -910,6 +875,41 @@
       "file": "src/status.rs",
       "find": "(\"gate\", c.get(\"gate\").clone()),",
       "replace": "(\"gate\", Value::Null),"
+    },
+    {
+      "name": "acts: a top-level field present but not covered is still vouched",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "if !vouched(BOUND) || !whole {",
+      "replace": "if !vouched(BOUND) || !whole && false {"
+    },
+    {
+      "name": "acts: an extra field inside the attestation is ignored",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "fields.iter().all(|(k, _)| known.contains(&k.as_str())))",
+      "replace": "fields.iter().all(|(k, _)| known.contains(&k.as_str()) || !k.is_empty()))"
+    },
+    {
+      "name": "acts: an attempt of the wrong type is not malformed",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "object(a) && integer(\"number\") && integer(\"prior\")",
+      "replace": "object(a) && integer(\"number\") && integer(\"prior\") || true"
+    },
+    {
+      "name": "status: the baseline leaves out the words",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "text(c, \"words\").unwrap_or(\"\")",
+      "replace": "text(c, \"words\").map_or(\"\", |_| \"\")"
+    },
+    {
+      "name": "acts: the five binding fields are not required of a record that lacks them",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "if !vouched(BOUND) || !whole {",
+      "replace": "if !whole {"
     }
   ]
 }

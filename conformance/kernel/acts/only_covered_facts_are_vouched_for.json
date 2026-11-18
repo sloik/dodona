@@ -3,7 +3,7 @@
   "name": "only_covered_facts_are_vouched_for",
   "claim": "C36",
   "covers": [],
-  "why": "A harness vouches only for the fields it signed. A level needs every fact below it vouched for, so one uncovered fact holds the grade down.",
+  "why": "A harness vouches only for the fields it signed, and a record with any field it did not sign earns nothing above helper: one uncovered field holds the grade down, whichever fact reads it.",
   "policy": {
     "attestors": {
       "harness-1": "6b65792d666f722d7468652d6b69742d6f6e6c792d6e6f742d612d736563726574"
@@ -196,9 +196,9 @@
         }
       },
       "expect": {
-        "level": "apart",
+        "level": "helper",
         "claims": "cross-make",
-        "source": "attested"
+        "source": "declared"
       }
     },
     {

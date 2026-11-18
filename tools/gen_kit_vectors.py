@@ -125,7 +125,7 @@ def attest(record: dict, key_hex: str = KEY_GOOD, key_id: str = "harness-1", cov
     """Sign with the reference signer's check value. `covers` is the fields the facts read; the five
     fields that bind what was judged are added unless `bind` is false. `key` gives the key as bytes,
     for keys that are not hexadecimal."""
-    names = list(covers) if covers is not None else [f for f in FIELDS if f in record]
+    names = list(covers) if covers is not None else [f for f in record if f != "attestation" and (bind or f not in BIND)]
     covers = canonical.sort_set(names + (BIND if bind else []))
     mac = signer.check_value(record, covers, bytes.fromhex(key_hex) if key is None else key)
     out = dict(record)
@@ -162,9 +162,9 @@ def acts() -> None:
               (attest(full, key_id="harness-9"), want("helper", "cross-make", "declared")),
               (tampered, want("helper", "cross-make", "declared")),
               (dict(attest(full), attestation=dict(attest(full)["attestation"], mac="00" * 32)), want("helper", "cross-make", "declared"))])
-    scenario("only_covered_facts_are_vouched_for", "A harness vouches only for the fields it signed. A level needs every fact below it vouched for, so one uncovered fact holds the grade down.", [],
+    scenario("only_covered_facts_are_vouched_for", "A harness vouches only for the fields it signed, and a record with any field it did not sign earns nothing above helper: one uncovered field holds the grade down, whichever fact reads it.", [],
              [(attest(full, covers=[f for f in FIELDS if f != "fresh_context"]), want("helper", "cross-make", "declared")),
-              (attest(full, covers=[f for f in FIELDS if f != "known_bad"]), want("apart", "cross-make", "attested")),
+              (attest(full, covers=[f for f in FIELDS if f != "known_bad"]), want("helper", "cross-make", "declared")),
               # A covered field the record does not have is left out of what is signed; the value still verifies.
               (attest(act(known_bad=None, given=[g for g in full["given"] if not g["role"].startswith("known")]), covers=FIELDS),
                want("apart", "apart", "attested")),
@@ -205,7 +205,9 @@ def acts() -> None:
               (dict(bound, attempt="granted"), SELF),
               (dict(bound, attempt={"note": "x"}), SELF),
               (attest(dict(full, attempt={"number": 2, "prior": 1})), TOP)]
-             + [(attest(full, covers=FIELDS + [b for b in BIND if b != left_out], bind=False), HELP) for left_out in BIND])
+             + [(attest(full, covers=FIELDS + [b for b in BIND if b != left_out], bind=False), HELP) for left_out in BIND]
+             + [(attest({k: v for k, v in full.items() if k != left_out}, covers=FIELDS + [b for b in BIND if b != left_out], bind=False), HELP)
+                for left_out in BIND])
     scenario("every_field_a_fact_reads_must_be_covered", "A fact is vouched for only if every field it reads is covered. Leaving out any one of worker, actor, brief, given or transcript holds the grade at helper, whatever else is signed.", [],
              [(attest(full, covers=[f for f in FIELDS if f != left_out]), HELP) for left_out in ["worker", "actor", "brief", "given", "transcript"]])
     wrong, right = full["known_bad"]["wrong"], full["known_bad"]["right"]
@@ -451,6 +453,14 @@ def status() -> None:
               ({"set_gate": {"intent": "i1", "criterion": "c2", "to": "soft"}}, {"intents": {"i1": {"status": "draft", "gates": {"hard": 1, "soft": 1, "deferred": 0, "deferred_open": 0}}}}),
               ({"append": {"kind": "act", "body": confirm("i1", {**intent, "criteria": {**intent["criteria"], "c2": {"gate": "soft", "checked_by": ["ob-b"]}}})}}, {"intents": {"i1": {"status": "open"}}}),
               ({"set_gate": {"intent": "i1", "criterion": "c2", "to": "deferred"}}, {"intents": {"i1": {"status": "open"}}})])
+    worded = {"owner": "owner-1", "worker": "worker-1", "children": [],
+              "criteria": {"c1": {"words": "Every planted defect is caught", "gate": "hard", "checked_by": ["ob-a"]}}}
+    reworded = {**worded, "criteria": {"c1": {**worded["criteria"]["c1"], "words": "Nothing needs to be caught"}}}
+    scenario("a_confirmation_is_of_the_words_too", "C29", "The baseline includes each criterion's words. A confirmation of the criteria as worded counts; one made before they were reworded, or of an intent whose words were left out of what was confirmed, does not.",
+             [({"append": {"kind": "act", "body": confirm("i1", reworded)}}, {"intents": {"i1": {"status": "draft", "baseline": baseline(worded)}}}),
+              ({"append": {"kind": "act", "body": confirm("i1", {**worded, "criteria": {"c1": {"gate": "hard", "checked_by": ["ob-a"]}}})}}, {"intents": {"i1": {"status": "draft"}}}),
+              ({"append": {"kind": "act", "body": confirm("i1", worded)}}, {"intents": {"i1": {"status": "open", "baseline": baseline(worded)}}})],
+             intents={"i1": worded})
     scenario("evidence_counts_only_for_the_inputs_it_states", "C18", "A record counts for the inputs it was made from, and only if its key really is the key of the inputs it states. A record with the wrong key is rejected and counted as rejected, whoever wrote it.",
              [(evidence("ob-a", A2), {"obligations": {"ob-a": U}, "rejected": 0}),
               (evidence("ob-a", A, key=canonical.identity(A2)), {"obligations": {"ob-a": U}, "rejected": 1}),
