@@ -104,6 +104,37 @@ def check_claims_match_runs() -> None:
             (ROOT / name).exists() and hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == digest
             for name, digest in run.get("other_files", {}).items()
         ) and (ROOT / "spec" / "runs" / run["outputs"]).is_dir()
+    # A run supports claims only if it was recorded against the expected outcomes too, and its
+    # saved output, judged again by the provider's own judge, still matches every case listed.
+    sys.path.insert(0, str(ROOT / "providers" / "tlc"))
+    from judge import judge  # noqa: E402
+
+    for run in index["runs"]:
+        if not current[run["id"]] or not run["claims"]:
+            continue
+        if "expected.json" not in run["files"]:
+            current[run["id"]] = False
+            continue
+        out = ROOT / "spec" / "runs" / run["outputs"]
+        cases = json.loads((ROOT / "spec" / run["model"] / "expected.json").read_text(encoding="utf-8"))["cases"]
+        listed = {c["config"].removesuffix(".cfg") for c in cases}
+        saved = {f.stem for f in out.iterdir() if f.suffix in (".txt", ".exit")}
+        if saved != listed:
+            problems.append(f"spec/runs/{run['outputs']}: saved outputs {sorted(saved ^ listed)} do not match the cases in expected.json")
+            current[run["id"]] = False
+            continue
+        for case in cases:
+            name = case["config"].removesuffix(".cfg")
+            txt, code = out / f"{name}.txt", out / f"{name}.exit"
+            if not txt.is_file() or not code.is_file():
+                problems.append(f"spec/runs/{run['outputs']}/{name}: output or exit code not kept")
+                current[run["id"]] = False
+                break
+            verdict = judge(case, int(code.read_text().strip()), txt.read_text(encoding="utf-8", errors="replace"))
+            if not verdict["match"]:
+                problems.append(f"spec/runs/{run['outputs']}/{name}: the saved output shows {verdict['outcome']}, not what expected.json says")
+                current[run["id"]] = False
+                break
     supported = set()
     for run in index["runs"]:
         if current[run["id"]] and all(current.get(n) for n in run.get("needs", [])):
