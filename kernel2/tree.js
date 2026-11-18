@@ -7,8 +7,14 @@
 // policy's number on its own (decision 0030, decision 0017).
 const vocabulary = require('./vocabulary');
 
-// The gates a tree allows. Any other gate in an `edit` or an `add` changes nothing.
-const TREE_GATES = ['hard', 'soft'];
+// The gate a string in an `edit` or an `add` counts as: `soft` only if it is exactly
+// `soft`; any other text (`Hard`, `deferred`, ...) counts as `hard`, so a mistake in
+// writing a gate can only make delivery harder. A gate that is not a string is of the
+// wrong type: null, and the step changes nothing.
+function gateCountsAs(gate) {
+  if (!vocabulary.isString(gate)) return null;
+  return gate === 'soft' ? 'soft' : 'hard';
+}
 
 function treeStatus(policy, confirmed, root, children) {
   const nodes = [root, ...children];
@@ -38,15 +44,17 @@ function runScenario(scenario) {
       if (node && vocabulary.CHECKS.includes(step.check.status)) node.check = step.check.status;
     } else if (step.edit) {
       const node = nodeNamed(step.edit.node);
-      if (node && TREE_GATES.includes(step.edit.to) && node.gate !== step.edit.to) {
-        node.gate = step.edit.to;
+      const gate = gateCountsAs(step.edit.to);
+      if (node && gate !== null && node.gate !== gate) {
+        node.gate = gate;
         confirmed = false;
       }
     } else if (step.remove && isString(step.remove.child)) {
       if (children.delete(step.remove.child)) confirmed = false;
     } else if (step.add) {
-      if (isString(step.add.child) && !children.has(step.add.child) && TREE_GATES.includes(step.add.gate)) {
-        children.set(step.add.child, { gate: step.add.gate, check: 'unknown' });
+      const gate = gateCountsAs(step.add.gate);
+      if (isString(step.add.child) && !children.has(step.add.child) && gate !== null) {
+        children.set(step.add.child, { gate, check: 'unknown' });
         confirmed = false;
       }
     }
@@ -55,4 +63,4 @@ function runScenario(scenario) {
   return results;
 }
 
-module.exports = { treeStatus, runScenario };
+module.exports = { gateCountsAs, treeStatus, runScenario };

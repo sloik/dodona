@@ -1073,25 +1073,25 @@
       "replace": "attempts.filter((attempt) => attempt.state === 'refused').length"
     },
     {
-      "name": "a tree edit accepts a gate other than hard or soft",
-      "model_case": "(tree gates kit)",
-      "file": "tree.js",
-      "find": "TREE_GATES.includes(step.edit.to)",
-      "replace": "vocabulary.GATES.includes(step.edit.to)"
-    },
-    {
-      "name": "a tree add accepts a gate other than hard or soft",
-      "model_case": "(tree gates kit)",
-      "file": "tree.js",
-      "find": "TREE_GATES.includes(step.add.gate)",
-      "replace": "vocabulary.GATES.includes(step.add.gate)"
-    },
-    {
       "name": "the reason comes from the attempt that ended last, not the one asked for last",
       "model_case": "(reason order kit)",
       "file": "evidence.js",
       "find": "outcomes.reduce((best, outcome) => (outcome.asked > best.asked ? outcome : best))",
       "replace": "outcomes[outcomes.length - 1]"
+    },
+    {
+      "name": "an unreadable tree gate read as soft",
+      "model_case": "(tree gates kit)",
+      "file": "tree.js",
+      "find": "return gate === 'soft' ? 'soft' : 'hard';",
+      "replace": "return gate === 'hard' ? 'hard' : 'soft';"
+    },
+    {
+      "name": "an unreadable tree gate changes nothing",
+      "model_case": "(tree gates kit)",
+      "file": "tree.js",
+      "find": "return gate === 'soft' ? 'soft' : 'hard';",
+      "replace": "return gate === 'soft' || gate === 'hard' ? gate : null;"
     }
   ]
 }

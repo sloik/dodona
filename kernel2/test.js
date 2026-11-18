@@ -146,10 +146,16 @@ test('tree status', () => {
   assert.equal(tree.treeStatus(two, true, node('hard', 'passed'), [node('hard', 'passed')]), 'delivered');
   assert.equal(tree.treeStatus(two, true, node('hard', 'passed'), []), 'unguarded');
   assert.equal(tree.treeStatus({ min_hard_gates: 0 }, true, node('soft', 'passed'), []), 'unguarded'); // below 1 is 1
-  // A gate other than hard or soft in an edit or an add changes nothing.
+  // A string gate other than exactly hard or soft counts as hard; a gate that is not a string changes nothing.
+  assert.equal(tree.gateCountsAs('soft'), 'soft');
+  assert.equal(tree.gateCountsAs('Hard'), 'hard');
+  assert.equal(tree.gateCountsAs('deferred'), 'hard');
+  assert.equal(tree.gateCountsAs(1), null);
   const run = (...steps) => tree.runScenario({ policy, root: { gate: 'hard' }, children: {}, steps: [{ do: { confirm: {} } }, ...steps.map((step) => ({ do: step }))] });
-  assert.deepEqual(run({ edit: { node: 'root', to: 'deferred' } }).map((r) => r.status), ['open', 'open']);
-  assert.deepEqual(run({ add: { child: 'k', gate: 'deferred' } }).map((r) => r.status), ['open', 'open']);
+  assert.deepEqual(run({ edit: { node: 'root', to: 'deferred' } }).map((r) => r.status), ['open', 'open']); // already counts as hard
+  assert.deepEqual(run({ edit: { node: 'root', to: 'Soft' } }).map((r) => r.status), ['open', 'open']);
+  assert.deepEqual(run({ add: { child: 'k', gate: 'deferred' } }, { confirm: {} }).map((r) => r.status), ['open', 'draft', 'open']);
+  assert.deepEqual(run({ add: { child: 'k', gate: null } }, { edit: { node: 'root', to: ['soft'] } }).map((r) => r.status), ['open', 'open', 'open']);
 });
 
 test('attempts: refusal then agreement is shopping', () => {
