@@ -113,7 +113,7 @@ A scenario gives a `root` and `children`, each with the gate of its one criterio
 | `{"remove": {"child": K}}` | Child K is removed |
 | `{"add": {"child": K, "gate": G}}` | Child K is added, its check unknown |
 
-The result has `"status"`, the first of these that applies: `draft` if the owner has not confirmed, or anything was edited, added or removed since; `unguarded` if the whole tree has fewer hard gates than `min_hard_gates`; `open` if any hard gate's check is not `passed`, or any child has no hard gate; otherwise `delivered`.
+The result has `"status"`, the first of these that applies: `draft` if the owner has not confirmed, or anything was edited, added or removed since; `unguarded` if the root, or any child, has fewer hard gates of its own than `min_hard_gates`: every intent in a tree is held to the floor, a child as much as the root; `open` if any hard gate's check is not `passed`; otherwise `delivered`. In these scenarios each node has one criterion, so with a floor of two nothing is ever delivered.
 
 ### Attempts scenarios
 
@@ -129,16 +129,16 @@ The result has these fields. The first three are worked out from the attempts on
 
 - `"result"`: `none` if there are none; `agreed` if every one is closed as agreed; otherwise `refused`. An open attempt counts as a failure.
 - `"shopped"`: true if some attempt closed as agreed was taken after one that is not agreed.
-- `"cap"`: `helper` when shopped, otherwise null.
+- `"cap"`: `helper` when retried, otherwise null. A change of target does not escape the cap (decision 0024): the kernel cannot tell a real fix from a trivial change.
 - `"attempts"`: how many tickets have been taken in all, across changes of target.
 - `"retried"`: true if, among all attempts across changes of target, some attempt closed as agreed was taken after one that is not agreed.
-- `"granted"`, when the scenario gives `claims`: the claimed level, lowered to `helper` if the cap applies and the claim was higher. The cap never raises a level.
+- `"granted"`, when the scenario gives `claims`: the claimed level, lowered to `helper` if retried and the claim was higher. The cap never raises a level.
 
 ### Platforms scenarios
 
 A scenario gives `keys` (sets of inputs), any number of `platforms`, whether policy allows a record from one platform to stand in for another, `stand_in_allowed`, and whether the provider claims its results do not depend on the platform, `provider_claims`, true when absent. Each step is `{"record": {"key": K, "platform": P, "verdict": "passed" or "failed"}}`. A second record for the same key and platform with the same verdict changes nothing; with the other verdict it makes that platform's own status `conflict`.
 
-- `"status"`, by key then platform: the platform's own verdict if it has one, or `conflict`; otherwise another platform's verdict for the same key, if standing in is allowed, the provider claims platform independence, and the claim is verified; otherwise `unknown`. The claim is verified when some key has the same verdict on at least two platforms, whether passed or failed, and no key has different verdicts anywhere. When a stand-in is allowed all of a key's verdicts are the same, so it does not matter which platform's is taken.
+- `"status"`, by key then platform: the platform's own verdict if it has one, or `conflict`; otherwise another platform's verdict for the same key, if standing in is allowed, the provider claims platform independence, and the claim is verified; otherwise `unknown`. The claim is verified for a key when that key has the same verdict on at least two platforms, whether passed or failed, and no platform has the other verdict for it, its own record included. Another key agreeing verifies nothing about this one. When a stand-in is allowed all of the key's verdicts are the same, so it does not matter which platform's is taken.
 - `"stood_in"`: the list of `[key, platform]` pairs whose status rests on another platform's record, sorted by key and then platform.
 - `"reproducibility"`, by key: `differs` if the key has both verdicts recorded, on one platform or several; `agrees` if at least two platforms have a verdict and all are the same; otherwise `unknown`.
 

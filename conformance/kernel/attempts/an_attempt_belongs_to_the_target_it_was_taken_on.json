@@ -1,0 +1,46 @@
+{
+  "kind": "attempts",
+  "name": "an_attempt_belongs_to_the_target_it_was_taken_on",
+  "claim": "C35",
+  "covers": [
+    "attempts/mutant_filed_at_close"
+  ],
+  "why": "A ticket taken before a change of target and closed after it judged the old target. It is counted on the line but says nothing about the new target.",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "change_target": {}
+      },
+      "expect": {
+        "result": "none",
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "none",
+        "shopped": false,
+        "retried": false,
+        "cap": null,
+        "attempts": 1
+      }
+    }
+  ]
+}

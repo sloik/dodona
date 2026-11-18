@@ -2,7 +2,9 @@
   "kind": "assurance",
   "name": "observed_is_below_sampled",
   "claim": "C24",
-  "covers": [],
+  "covers": [
+    "assurance/mutant_observed_above_sampled"
+  ],
   "why": "Seen working live is below shown for some cases. The order of the scale matters.",
   "steps": [
     {

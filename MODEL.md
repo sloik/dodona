@@ -200,7 +200,7 @@ Separation is graded for the acts that rest on someone's word:
 
 The result of a check anyone can run again from locked inputs is graded on the evidence scale, not here; saying that it tests the criterion is still an act, and is graded. Separation is a separate axis: it is never multiplied into the evidence level. The kernel works out which acts there must be, and one with no record is at `self`. The headline shows the weakest separation among them, which act that is, and a count of acts at `apart` or better out of the number there must be. Anything resting on an act at `self` is at most `asserted`, whatever floor policy sets.
 
-Trying again is recorded: a checker takes a ticket before each attempt, an attempt with no result counts as a failure, the worst result on an unchanged target counts, and a pass after a failure without a change is flagged and graded no higher than `helper`.
+Trying again is recorded: a checker takes a ticket before each attempt, an attempt with no result counts as a failure, and the worst result on the current target counts. A pass after any earlier attempt along the same line that did not pass is flagged as retried and graded no higher than `helper`, whether or not the thing judged changed in between: a kernel cannot tell a real fix from a trivial change made to get a fresh try (decision 0024).
 
 **Amendment.** Any difference from the baseline: a changed criterion, gate, limit, sample size, threshold, link to a check, or child. Granted only by the intent owner, recorded with what changed, why, by whom and at what separation, never erased. An amended criterion is at most `asserted` for the part amended. An amendment takes effect only at or above the separation floor policy sets; `apart` is the recommended floor.
 

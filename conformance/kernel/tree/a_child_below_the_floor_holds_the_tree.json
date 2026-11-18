@@ -1,0 +1,60 @@
+{
+  "kind": "tree",
+  "name": "a_child_below_the_floor_holds_the_tree",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_floor_counts_root_only",
+    "tree/mutant_ignores_floor"
+  ],
+  "why": "A root that meets the floor does not carry a child that does not.",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "soft"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "remove": {
+          "child": "k1"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}

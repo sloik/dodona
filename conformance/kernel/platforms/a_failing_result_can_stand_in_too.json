@@ -5,7 +5,7 @@
   "covers": [
     "platforms/mutant_stand_in_always_passed"
   ],
-  "why": "Two platforms agreeing on a failure verify the claim just as two passes do, and what stands in is the other platform's verdict, whatever it is.",
+  "why": "Two platforms agreeing on a failure verify the key just as two passes do, and what stands in is the verdict, whatever it is.",
   "stand_in_allowed": true,
   "keys": [
     "k1",
@@ -16,6 +16,7 @@
     "p2",
     "p3"
   ],
+  "provider_claims": true,
   "steps": [
     {
       "do": {
@@ -26,8 +27,22 @@
         }
       },
       "expect": {
+        "status": {
+          "k1": {
+            "p1": "failed",
+            "p2": "unknown",
+            "p3": "unknown"
+          },
+          "k2": {
+            "p1": "unknown",
+            "p2": "unknown",
+            "p3": "unknown"
+          }
+        },
+        "stood_in": [],
         "reproducibility": {
-          "k1": "unknown"
+          "k1": "unknown",
+          "k2": "unknown"
         }
       }
     },
@@ -45,6 +60,11 @@
             "p1": "failed",
             "p2": "failed",
             "p3": "failed"
+          },
+          "k2": {
+            "p1": "unknown",
+            "p2": "unknown",
+            "p3": "unknown"
           }
         },
         "stood_in": [
@@ -54,7 +74,8 @@
           ]
         ],
         "reproducibility": {
-          "k1": "agrees"
+          "k1": "agrees",
+          "k2": "unknown"
         }
       }
     },
@@ -68,6 +89,44 @@
       },
       "expect": {
         "status": {
+          "k1": {
+            "p1": "failed",
+            "p2": "failed",
+            "p3": "failed"
+          },
+          "k2": {
+            "p1": "unknown",
+            "p2": "failed",
+            "p3": "unknown"
+          }
+        },
+        "stood_in": [
+          [
+            "k1",
+            "p2"
+          ]
+        ],
+        "reproducibility": {
+          "k1": "agrees",
+          "k2": "unknown"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p1",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k1": {
+            "p1": "failed",
+            "p2": "failed",
+            "p3": "failed"
+          },
           "k2": {
             "p1": "failed",
             "p2": "failed",
@@ -81,15 +140,12 @@
           ],
           [
             "k2",
-            "p1"
-          ],
-          [
-            "k2",
             "p3"
           ]
         ],
         "reproducibility": {
-          "k2": "unknown"
+          "k1": "agrees",
+          "k2": "agrees"
         }
       }
     }

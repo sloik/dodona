@@ -3,7 +3,10 @@
   "name": "history_survives_a_change_of_target",
   "claim": "C35",
   "covers": [
+    "attempts/mutant_cap_on_shopping_only",
     "attempts/mutant_change_hides_history",
+    "attempts/mutant_retried_hidden",
+    "attempts/mutant_retried_only_on_same_target",
     "attempts/reach_retried_across_change"
   ],
   "why": "Changing the thing judged gets a new answer and does not hide the earlier attempts. An agreement after a refusal is reported as retried even across the change, and is shopped only when the target did not change.",
@@ -70,9 +73,9 @@
         "result": "agreed",
         "shopped": false,
         "retried": true,
-        "cap": null,
+        "cap": "helper",
         "attempts": 2,
-        "granted": "apart"
+        "granted": "helper"
       }
     },
     {

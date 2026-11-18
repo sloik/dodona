@@ -1,0 +1,256 @@
+{
+  "kind": "platforms",
+  "name": "a_disagreement_voids_that_keys_stand_in",
+  "claim": "C15",
+  "covers": [
+    "platforms/mutant_verified_globally"
+  ],
+  "why": "A disagreement about one key, here a platform's with itself, withdraws that key's stand-ins and leaves other keys' alone. The list of stand-ins is sorted.",
+  "stand_in_allowed": true,
+  "keys": [
+    "k3",
+    "k2",
+    "k1"
+  ],
+  "platforms": [
+    "p1",
+    "p2",
+    "p3"
+  ],
+  "provider_claims": true,
+  "steps": [
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k3": {
+            "p1": "unknown",
+            "p2": "unknown",
+            "p3": "unknown"
+          },
+          "k2": {
+            "p1": "passed",
+            "p2": "unknown",
+            "p3": "unknown"
+          },
+          "k1": {
+            "p1": "unknown",
+            "p2": "unknown",
+            "p3": "unknown"
+          }
+        },
+        "stood_in": [],
+        "reproducibility": {
+          "k3": "unknown",
+          "k2": "unknown",
+          "k1": "unknown"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k3": {
+            "p1": "unknown",
+            "p2": "unknown",
+            "p3": "unknown"
+          },
+          "k2": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "passed"
+          },
+          "k1": {
+            "p1": "unknown",
+            "p2": "unknown",
+            "p3": "unknown"
+          }
+        },
+        "stood_in": [
+          [
+            "k2",
+            "p3"
+          ]
+        ],
+        "reproducibility": {
+          "k3": "unknown",
+          "k2": "agrees",
+          "k1": "unknown"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k3": {
+            "p1": "unknown",
+            "p2": "unknown",
+            "p3": "unknown"
+          },
+          "k2": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "passed"
+          },
+          "k1": {
+            "p1": "unknown",
+            "p2": "passed",
+            "p3": "unknown"
+          }
+        },
+        "stood_in": [
+          [
+            "k2",
+            "p3"
+          ]
+        ],
+        "reproducibility": {
+          "k3": "unknown",
+          "k2": "agrees",
+          "k1": "unknown"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k1",
+          "platform": "p1",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k3": {
+            "p1": "unknown",
+            "p2": "unknown",
+            "p3": "unknown"
+          },
+          "k2": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "passed"
+          },
+          "k1": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "passed"
+          }
+        },
+        "stood_in": [
+          [
+            "k1",
+            "p3"
+          ],
+          [
+            "k2",
+            "p3"
+          ]
+        ],
+        "reproducibility": {
+          "k3": "unknown",
+          "k2": "agrees",
+          "k1": "agrees"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p2",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k3": {
+            "p1": "unknown",
+            "p2": "unknown",
+            "p3": "unknown"
+          },
+          "k2": {
+            "p1": "passed",
+            "p2": "conflict",
+            "p3": "unknown"
+          },
+          "k1": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "passed"
+          }
+        },
+        "stood_in": [
+          [
+            "k1",
+            "p3"
+          ]
+        ],
+        "reproducibility": {
+          "k3": "unknown",
+          "k2": "differs",
+          "k1": "agrees"
+        }
+      }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k3",
+          "platform": "p1",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k3": {
+            "p1": "failed",
+            "p2": "unknown",
+            "p3": "unknown"
+          },
+          "k2": {
+            "p1": "passed",
+            "p2": "conflict",
+            "p3": "unknown"
+          },
+          "k1": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "passed"
+          }
+        },
+        "stood_in": [
+          [
+            "k1",
+            "p3"
+          ]
+        ],
+        "reproducibility": {
+          "k3": "unknown",
+          "k2": "differs",
+          "k1": "agrees"
+        }
+      }
+    }
+  ]
+}

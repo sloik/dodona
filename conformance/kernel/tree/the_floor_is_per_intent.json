@@ -1,0 +1,52 @@
+{
+  "kind": "tree",
+  "name": "the_floor_is_per_intent",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_floor_counts_tree"
+  ],
+  "why": "With a floor of two, a root and a child with one hard gate each are not delivered, though the tree has two hard gates in all.",
+  "policy": {
+    "min_hard_gates": 2
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    }
+  ]
+}

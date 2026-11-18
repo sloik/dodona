@@ -2,8 +2,10 @@
   "kind": "attempts",
   "name": "a_real_change_gets_a_new_answer_and_the_count_stays",
   "claim": "C35",
-  "covers": [],
-  "why": "When the thing judged changes, the old refusal no longer decides the answer. The number of attempts along the same line is still shown, so repeated retries with small changes stay visible.",
+  "covers": [
+    "attempts/mutant_cap_on_shopping_only"
+  ],
+  "why": "When the thing judged changes, the old refusal no longer decides the answer on the new target. It is still part of the line: an agreement after it is retried and capped at helper, because a kernel cannot tell a real fix from a trivial change made to get a fresh try (decision 0024). The number of attempts along the line is still shown.",
   "steps": [
     {
       "do": {
@@ -66,7 +68,7 @@
       "expect": {
         "result": "agreed",
         "shopped": false,
-        "cap": null,
+        "cap": "helper",
         "attempts": 2
       }
     }

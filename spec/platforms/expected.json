@@ -21,67 +21,95 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "two core keys, three platforms",
+  "bounds": "two sets of inputs and three platforms; each platform may record each verdict once, so it can disagree with itself",
   "cases": [
     {
       "config": "design_stand_in_allowed.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "With stand-ins allowed and claimed, every property holds."
+      "purpose": "With stand-ins allowed and claimed, the kernel's answers are the ones the records call for."
     },
     {
       "config": "design_stand_in_forbidden.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "With stand-ins forbidden by policy, no status ever rests on another platform's record."
+      "purpose": "With stand-ins forbidden by policy."
     },
     {
       "config": "design_not_claimed.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "Where the provider makes no claim of platform independence, nothing stands in."
+      "purpose": "Where the provider makes no claim of platform independence."
     },
     {
       "config": "reach_stand_in.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "A verified claim does let a record stand in, so the rule is live.",
+      "purpose": "A key verified on two platforms does stand in on the third, so the rule is live.",
       "of": "NeverStoodIn"
+    },
+    {
+      "config": "reach_self_conflict.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A platform disagreeing with itself is reachable.",
+      "of": "NeverSelfConflict"
     },
     {
       "config": "mutant_always_stand_in.cfg",
       "expect": "violation",
       "expect_exit": 12,
       "purpose": "Planted defect: one platform's record is reused for another whatever policy says.",
-      "of": "StandInIsEarned"
+      "of": "StatusMatches"
     },
     {
       "config": "mutant_stand_in_unverified.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a record stands in although the claim was never verified.",
-      "of": "StandInIsEarned"
+      "purpose": "Planted defect: a record stands in although the key was never verified.",
+      "of": "StatusMatches"
     },
     {
       "config": "mutant_stand_in_unclaimed.cfg",
       "expect": "violation",
       "expect_exit": 12,
       "purpose": "Planted defect: a record stands in although the provider never claimed platform independence.",
-      "of": "StandInIsEarned"
+      "of": "StatusMatches"
+    },
+    {
+      "config": "mutant_verified_globally.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: one key agreeing on two platforms lets another key stand in: the rule the model had before, which the design text forbids.",
+      "of": "StatusMatches"
     },
     {
       "config": "mutant_stand_in_always_passed.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a stand-in is reported as passed whatever the other platform's verdict was.",
-      "of": "StandInIsEarned"
+      "purpose": "Planted defect: a stand-in is reported as passed whatever the other platform's verdict.",
+      "of": "StatusMatches"
     },
     {
       "config": "mutant_other_overrides_own.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: another platform's record replaces a platform's own.",
-      "of": "OwnRecordDecides"
+      "purpose": "Planted defect: another platform's record replaces a platform's own; nothing else changes.",
+      "of": "StatusMatches"
+    },
+    {
+      "config": "mutant_self_disagreement_ignored.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a platform with both verdicts is reported as passed.",
+      "of": "StatusMatches"
+    },
+    {
+      "config": "mutant_latest_only_filed.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: only the latest verdict for a platform is filed, so a platform disagreeing with itself is lost.",
+      "of": "StatusMatches"
     },
     {
       "config": "mutant_stand_in_not_reported.cfg",
@@ -95,14 +123,14 @@
       "expect": "violation",
       "expect_exit": 12,
       "purpose": "Planted defect: one platform alone is reported as reproduced.",
-      "of": "ReproSound"
+      "of": "ReproMatches"
     },
     {
       "config": "mutant_disagreement_ignored.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: two platforms disagree and it is not a failure.",
-      "of": "ReproSound"
+      "purpose": "Planted defect: a key with both verdicts is reported as agreeing.",
+      "of": "ReproMatches"
     }
   ]
 }

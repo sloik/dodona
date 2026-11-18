@@ -3,10 +3,9 @@
   "name": "hard_gate_only_in_a_child",
   "claim": "C34",
   "covers": [
-    "tree/mutant_floor_counts_root_only",
-    "tree/reach_delivered_floor_two"
+    "tree/mutant_floor_counts_tree"
   ],
-  "why": "A hard gate in a child counts towards the tree's total.",
+  "why": "A hard gate in a child does not make up for a root with none: every intent in a tree meets the floor on its own.",
   "policy": {
     "min_hard_gates": 1
   },
@@ -24,7 +23,7 @@
         "confirm": {}
       },
       "expect": {
-        "status": "open"
+        "status": "unguarded"
       }
     },
     {
@@ -35,7 +34,7 @@
         }
       },
       "expect": {
-        "status": "delivered"
+        "status": "unguarded"
       }
     }
   ]
