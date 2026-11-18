@@ -1,17 +1,19 @@
 {
-  "about": "The files this site's executor must be found to run before a result from it is accepted, for dodona's own checks. This is NOT dodona's lock: the lock (protocol/lock.schema.json) pins whole tool trees by a digest verified against what upstream publishes, and nothing computes that yet. `sha256` is the digest the executor must measure for the file; null means not pinned yet, and nothing recorded in that state ever counts. The Java runtime is whatever the executor's system provides; `system` is not a version, and pinning its launcher file says little about the runtime.",
+  "about": "The files this site's executor must be found to run before a result from it is accepted, for dodona's own checks. This is NOT dodona's lock: the lock (protocol/lock.schema.json) pins whole tool trees by a digest verified against what upstream publishes, and nothing computes that yet. `sha256` is the digest the executor must measure for the file, and `basis` says where that digest came from; null would mean not pinned, and nothing recorded in that state ever counts. The Java runtime is whatever the executor's system provides; `system` is not a version, and pinning its launcher file says little about the runtime.",
   "tools": [
     {
       "name": "java",
       "version": "system",
       "file": "java/bin/java",
-      "sha256": null
+      "sha256": "8b0b19593a7ce6f677dcd0d637b962c011671371c4b19dee33193b4d87523707",
+      "basis": "Taken from the executor's own measurement in CI run 44201829244, on first use. Nothing upstream to compare it with: it is the launcher of whatever Java that machine has."
     },
     {
       "name": "tla2tools",
       "version": "1.7.4",
       "file": "tla2tools/tla2tools.jar",
-      "sha256": null
+      "sha256": "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88",
+      "basis": "Measured on the executor in CI run 44201829244 and equal, byte for byte, to tla2tools.jar of the upstream release v1.7.4 (github.com/tlaplus/tlaplus), downloaded and hashed on 2026-11-18."
     }
   ]
 }

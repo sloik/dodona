@@ -427,6 +427,90 @@
         "C10"
       ],
       "note": "The model as rewritten after the review of 2026-11-17. Queue job f1e82dbabf9d42e0940ed943d1e3a3ae, 10 cases, every one matched. Run from a development machine through the shared queue, not by CI."
+    },
+    {
+      "id": "run-8-assurance",
+      "date": "2026-11-18",
+      "model": "assurance",
+      "outputs": "run-8/assurance",
+      "files": {
+        "Assurance.tla": "5624f5b7993298edea5b2e21f9fed37ac80b855f8182f0c29b9fc2a2c8a90357",
+        "design.cfg": "17f24d71421810a43345b4f0d7261ae6e86cbad248386e5548feb68bcac71c5d",
+        "mutant_always_nothing.cfg": "0aca816b07e45df1f05a71b72ab183ef6bc3b2eac6fe0955e271fb5407c56457",
+        "mutant_average.cfg": "35911034191d7d04fdfefa4f22206cabf80fdb0e9ddc026061e948c8a2b70239",
+        "mutant_empty_is_shown.cfg": "da2536e928d63a49d48c93a6197d62fd56a99cfcaae2b7dff6c87a170694882a",
+        "mutant_ignore_unreported.cfg": "87d9d1cb0efe45c7291180ef7c32c0a2c8546f1f3a48eaf6512fcced476404e0",
+        "mutant_unknown_defect_counts.cfg": "5ae2e26329f2db4708c22004cca849ecde6ad16af40845b4c7f20ff8f0363c9a",
+        "reach_proven.cfg": "a0b14ed83985722eb94bf44c6e0be81dd1333cdb5d7237f6687993a06747a010",
+        "reach_shown.cfg": "417a5eb4d4246d985f1d5d3752564db1af101eae5d525f88cdc120f0b41779f2"
+      },
+      "claims": [
+        "C19",
+        "C24",
+        "C31"
+      ],
+      "note": "Part of CI run 44201829244 on commit 216076c: every case of every model, described by the model-checker provider and run as one job on the shared queue, which completed. 8 cases of this model, every one matched. The checker that ran was measured: tla2tools.jar sha256 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88, equal to upstream release 1.7.4."
+    },
+    {
+      "id": "run-8-attempts",
+      "date": "2026-11-18",
+      "model": "attempts",
+      "outputs": "run-8/attempts",
+      "files": {
+        "Attempts.tla": "90ea7cb09eb343a9355b909fb921d944a3ac0e077b5d0841f1d97c4e2588c0cb",
+        "design.cfg": "e905d02010197d8e5493004aa35d5a4b64a216b3a102ddf7dd195d08dc02ee5b",
+        "design_claims_self.cfg": "36607f89b5a6fea384e57737f5e94adfd8d37f091cad7a189d7ed9f2d3b8b294",
+        "mutant_cap_raises.cfg": "a9504875274ab8e7f5e6022d6366917ce3ffe15a911815e8d03f5f71c368ae7a",
+        "mutant_change_hides_history.cfg": "fe22331c037dac4c18273aa4040224cfd59006c346c8856ab33573a5a016c8a5",
+        "mutant_flag_does_not_cap.cfg": "5a313d1777cca625b536e731a4687ce86a371b43ba1f36b754bcd97f51faac66",
+        "mutant_flag_missed.cfg": "a20b804d086835e77a0493b313bf7baaabc860519e46b11e118bd5aba4f7cf55",
+        "mutant_latest_only.cfg": "84c66b3db4ebf3d275a050d32c56da0e3519db8657ae6e4269f961da8fea6dc7",
+        "mutant_open_ignored.cfg": "a2ce732aae3dea067f9e2b684bdd4ed53b7ca86e917c9dd5336bd7a342df4325",
+        "reach_agreed.cfg": "823321af444121763fe4f6d84267b684243b35572707125ee35e1d36af5fa626",
+        "reach_retried_across_change.cfg": "f11305352d8ef5b93b8cdeed867aa24724ac58691d13bc7a8bebdf8ffab09a15",
+        "reach_shopped.cfg": "4b05d7afebb7c4ecec85b349ac32b0fbdefd0a80497674176ba97b5634ff7232"
+      },
+      "claims": [
+        "C35"
+      ],
+      "note": "Part of CI run 44201829244 on commit 216076c: every case of every model, described by the model-checker provider and run as one job on the shared queue, which completed. 11 cases of this model, every one matched. The checker that ran was measured: tla2tools.jar sha256 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88, equal to upstream release 1.7.4."
+    },
+    {
+      "id": "run-8-decisions",
+      "date": "2026-11-18",
+      "model": "decisions",
+      "outputs": "run-8/decisions",
+      "files": {
+        "Decisions.tla": "af4ecde66c56aba85f92d24fadb3568002f5dc1b781b8e022e3f1693d6fab2e7",
+        "design.cfg": "07bd256fe2b87f17fd338e1f10714482e8a723f1398f5b27e658c8cec44ccb29",
+        "mutant_first_name_only.cfg": "726d59eef69878041db52e03fd467fc749479306d2b5fe58d03b902634764689",
+        "mutant_gone_is_not_flagged.cfg": "67d426501bc11e640adf40563d5ac12a6bfc2f6087929cd88b248ed0a776f607",
+        "mutant_identities_without_names.cfg": "e617c88cf4f880bb72999fec84957ac1f1d209d35548d9e27bf51759f11e57c2",
+        "mutant_refresh_on_edit.cfg": "6e532a4cf330b81c2cc462b643e6ccece614082ff2ecbfd60487e42dddfc9d2a",
+        "reach_flagged.cfg": "3f4691c209c60b21badd7ab1ebec242bea7f343c1032e5476bc83dfb4e8bf0b4"
+      },
+      "claims": [
+        "C16"
+      ],
+      "note": "Part of CI run 44201829244 on commit 216076c: every case of every model, described by the model-checker provider and run as one job on the shared queue, which completed. 6 cases of this model, every one matched. The checker that ran was measured: tla2tools.jar sha256 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88, equal to upstream release 1.7.4."
+    },
+    {
+      "id": "run-8-liveness",
+      "date": "2026-11-18",
+      "model": "liveness",
+      "outputs": "run-8/liveness",
+      "files": {
+        "Liveness.tla": "91c9d200b5ef5616ba4aae0f9931c9d2e7942359d071548d073625ca4be1f902",
+        "design.cfg": "a59b7bede17f44bc9161eef24942cc9ba26f87726950d7f610c9a558c978c37e",
+        "mutant_no_resubmit_after_error.cfg": "0a941ce96852296cb27c0f9dcef96ef31ff96f2e3bb34c561cba3da7cd869dc6",
+        "mutant_no_resubmit_after_loss.cfg": "43f3832870802a3f3941bfda07c361d0b63d28a6836966b3c007696e8048f13b",
+        "mutant_no_resubmit_after_unavailable.cfg": "97cf6ae9066ba25aaf391a738a9d722484621e1013190a37a7fd900fba88f43d",
+        "mutant_resubmits_unsupported.cfg": "6026859581a2c2f11a4e9a24dacb5b4d24fdb58203c1204cbf993571481032f3"
+      },
+      "claims": [
+        "C22"
+      ],
+      "note": "Part of CI run 44201829244 on commit 216076c: every case of every model, described by the model-checker provider and run as one job on the shared queue, which completed. 5 cases of this model, every one matched. The checker that ran was measured: tla2tools.jar sha256 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88, equal to upstream release 1.7.4."
     }
   ]
 }

@@ -65,9 +65,9 @@ Every combination of three links, each with one of six levels or unreported, and
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C24 | As the rule is written in this model, the shown level of a criterion is the weakest of its evidence links | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink`, `NotUnderstated` | The links are averaged; the level is always the lowest | modelled, unchecked |
-| C31 | As written, a link with nothing reported counts as none and never raises the level | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink` | A link nobody reported is left out | modelled, unchecked |
-| C19 | As written, a check is reported as shown able to fail only when it has planted defects and every one was caught | [data model](../MODEL.md#3-obligations) | `NonVacuitySound` | A planted defect that never ran counts as caught; a check with none planted is reported as shown | modelled, unchecked |
+| C24 | As the rule is written in this model, the shown level of a criterion is the weakest of its evidence links | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink`, `NotUnderstated` | The links are averaged; the level is always the lowest | **checked**, run 8 |
+| C31 | As written, a link with nothing reported counts as none and never raises the level | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink` | A link nobody reported is left out | **checked**, run 8 |
+| C19 | As written, a check is reported as shown able to fail only when it has planted defects and every one was caught | [data model](../MODEL.md#3-obligations) | `NonVacuitySound` | A planted defect that never ran counts as caught; a check with none planted is reported as shown | **checked**, run 8 |
 
 ## Modelled in `tree/IntentTree.tla`
 
@@ -83,7 +83,7 @@ Bounds: at most three attempts and two changes of target. Attempts made without 
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C35 | On the current target the worst result counts and an attempt left open is a failure. An agreement after an attempt that did not agree on the same target is flagged, and the act is then graded helper at most and never above what it claimed. Across changes of target every attempt is still counted, and an agreement after any earlier attempt that did not agree is reported as retried | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `WorstCounts`, `ShoppingIsCapped`, `HistoryIsKept` | Only the latest attempt counts; an open attempt is ignored; shopping is not flagged; the flag does not cap; the cap raises a level; a change of target hides the history | modelled, unchecked |
+| C35 | On the current target the worst result counts and an attempt left open is a failure. An agreement after an attempt that did not agree on the same target is flagged, and the act is then graded helper at most and never above what it claimed. Across changes of target every attempt is still counted, and an agreement after any earlier attempt that did not agree is reported as retried | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `WorstCounts`, `ShoppingIsCapped`, `HistoryIsKept` | Only the latest attempt counts; an open attempt is ignored; shopping is not flagged; the flag does not cap; the cap raises a level; a change of target hides the history | **checked**, run 8 |
 
 ## Modelled in `platforms/Platforms.tla`
 
@@ -103,7 +103,7 @@ The model keeps what the decision was last reviewed against apart from what the 
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C16 | A decision is flagged exactly when some name it governs no longer has the content the decision was last reviewed against, including when the name is gone, and whether or not the old content exists elsewhere | [0001](../decisions/0001-decisions-are-nodes.md) | `FlagIsExact` | The kernel tracks contents without names; a name that disappears is not flagged; the stored content is refreshed on every edit; only the first governed name is watched | modelled, unchecked |
+| C16 | A decision is flagged exactly when some name it governs no longer has the content the decision was last reviewed against, including when the name is gone, and whether or not the old content exists elsewhere | [0001](../decisions/0001-decisions-are-nodes.md) | `FlagIsExact` | The kernel tracks contents without names; a name that disappears is not flagged; the stored content is refreshed on every edit; only the first governed name is watched | **checked**, run 8 |
 
 ## Modelled in `liveness/Liveness.tla`
 
@@ -113,7 +113,7 @@ Bounds: one obligation; at most two edits, two outages and two runs that end wit
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C22 | Under those assumptions, every obligation eventually has a verdict or the stated reason that it cannot be checked, and that then stays | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again | modelled, unchecked |
+| C22 | Under those assumptions, every obligation eventually has a verdict or the stated reason that it cannot be checked, and that then stays | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again | **checked**, run 8 |
 
 ## Checked against the seed kernel
 
@@ -391,7 +391,7 @@ Two earlier attempts at this run stopped partway, at a limit on the space a job 
 
 ### Run 7: three of the rewritten models
 
-2026-11-18. The planner, platforms and tree models as rewritten after the review, run through the shared queue from a development machine: platforms and tree in job `8d41ae3f84254c84b62384ef67d84fbc`, the planner in job `f1e82dbabf9d42e0940ed943d1e3a3ae` after one of its defect cases was found to compare values of two kinds and was corrected. Both jobs completed. Outputs: [runs/run-7/](runs/run-7/). The other four rewritten models (assurance, attempts, decisions, liveness) have no completed run yet.
+2026-11-18. The planner, platforms and tree models as rewritten after the review, run through the shared queue from a development machine: platforms and tree in job `8d41ae3f84254c84b62384ef67d84fbc`, the planner in job `f1e82dbabf9d42e0940ed943d1e3a3ae` after one of its defect cases was found to compare values of two kinds and was corrected. Both jobs completed. Outputs: [runs/run-7/](runs/run-7/). The other four rewritten models ran in run 8.
 
 **`planner`** (10 cases)
 
@@ -439,6 +439,60 @@ Two earlier attempts at this run stopped partway, at a limit on the space a job 
 | `mutant_soft_child_is_delivered` | violation | violation of TreeSound | 2,163 / 1,134 |
 | `mutant_ignores_floor` | violation | violation of TreeGuarded | 51 / 51 |
 | `mutant_floor_counts_root_only` | violation | violation of TreeComplete | 10,531 / 3,482 |
+
+### Run 8: every model, through the provider
+
+2026-11-18. [CI run 44201829244](https://github.com/sloik/dodona/actions/runs/44201829244) on commit `216076c`. The first run in which dodona's own provider described the checks: 94 cases of the nine models as one job on the shared queue, which completed; 94 matched. The executor measured the checker it ran, and it is byte for byte the upstream release 1.7.4. The verdicts were written to a ledger by the seed kernel, which then reported the status of this project: `draft` for every intent and `unknown` for the project, because nothing is confirmed and the tools were not pinned when it ran. The four models below had no completed run before this one. Outputs: [runs/run-8/](runs/run-8/).
+
+**`assurance`** (8 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 24,696 / 12,348 |
+| `reach_proven` | violation | violation of NeverProven |  |
+| `reach_shown` | violation | violation of NeverShown |  |
+| `mutant_average` | violation | violation of WeakestLink |  |
+| `mutant_ignore_unreported` | violation | violation of WeakestLink |  |
+| `mutant_unknown_defect_counts` | violation | violation of NonVacuitySound |  |
+| `mutant_empty_is_shown` | violation | violation of NonVacuitySound |  |
+| `mutant_always_nothing` | violation | violation of NotUnderstated |  |
+
+**`attempts`** (11 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 1,236 / 516 |
+| `design_claims_self` | no-violation | no-violation | 1,236 / 516 |
+| `reach_agreed` | violation | violation of NeverAgreed | 5 / 5 |
+| `reach_shopped` | violation | violation of NeverShopped | 12 / 12 |
+| `reach_retried_across_change` | violation | violation of NeverRetriedAcrossChange | 64 / 47 |
+| `mutant_latest_only` | violation | violation of WorstCounts | 12 / 12 |
+| `mutant_open_ignored` | violation | violation of WorstCounts | 11 / 11 |
+| `mutant_flag_does_not_cap` | violation | violation of ShoppingIsCapped | 12 / 12 |
+| `mutant_flag_missed` | violation | violation of ShoppingIsCapped | 12 / 12 |
+| `mutant_cap_raises` | violation | violation of ShoppingIsCapped | 12 / 12 |
+| `mutant_change_hides_history` | violation | violation of HistoryIsKept | 7 / 7 |
+
+**`decisions`** (6 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 704 / 108 |
+| `reach_flagged` | violation | violation of NeverFlagged | 9 / 9 |
+| `mutant_identities_without_names` | violation | violation of FlagIsExact | 9 / 9 |
+| `mutant_gone_is_not_flagged` | violation | violation of FlagIsExact | 9 / 9 |
+| `mutant_refresh_on_edit` | violation | violation of FlagIsExact | 9 / 9 |
+| `mutant_first_name_only` | violation | violation of FlagIsExact | 10 / 10 |
+
+**`liveness`** (5 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 606 / 260 |
+| `mutant_no_resubmit_after_unavailable` | temporal-violation | temporal violation | 570 / 260 |
+| `mutant_no_resubmit_after_loss` | temporal-violation | temporal violation | 564 / 260 |
+| `mutant_no_resubmit_after_error` | temporal-violation | temporal violation | 576 / 260 |
+| `mutant_resubmits_unsupported` | temporal-violation | temporal violation | 651 / 260 |
 
 ### Not a run: the first attempt at the rewritten models
 
