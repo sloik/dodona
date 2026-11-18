@@ -309,12 +309,17 @@ def gap_an_intent_reads_one_way_only() -> None:
         "the table wrapped in an attribute": body.replace(shown, '<p title="\n' + shown + '\n">'),
         "a table without leading bars": body + "\nNo. | Criterion | Gate | Checked by\n:-|-|-|-\n2 | Runs on Windows | hard | x\n",
         "an entity": body + "\nA &lt;b&gt; tag\n",
+        "a second closer with a trailing space": body + "\n--- \n",
+        "markup in the front matter": None,
         "a hand-edited table": body.replace(shown, shown.replace("| hard |", "| soft |", 1)) if "| hard |" in shown else body + "|",
     }
     with tempfile.TemporaryDirectory() as tmp:
         for name, new_body in tampered.items():
             path = pathlib.Path(tmp) / "0001-probe.md"
-            path.write_text(head + new_body, encoding="utf-8")
+            if new_body is None:
+                path.write_text(sample.replace("\ntitle: ", "\ntitle: <details> ", 1), encoding="utf-8")
+            else:
+                path.write_text(head + new_body, encoding="utf-8")
             try:
                 intents.read(path)
                 problems.append(f"tools/intents.py reads an intent with {name} without refusing it")

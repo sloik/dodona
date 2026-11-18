@@ -44,13 +44,24 @@ def front(text: str) -> tuple[dict, str]:
     if not text.startswith("---\n") or "\n---\n" not in text[4:]:
         raise Unreadable("it does not start with front matter between two lines of ---")
     head, body = text[4:].split("\n---\n", 1)
+    if any(line.rstrip() in ("---", "...") or line.strip().startswith("---") for line in text.splitlines()[1:]
+           if line != "---"):
+        raise Unreadable("a line looks like the end of the front matter but is not exactly ---")
     fields: dict[str, str] = {}
     for line in head.splitlines():
-        if line and not line.startswith(" ") and ":" in line:
-            key, _, value = line.partition(":")
-            if key.strip() in fields:
-                raise Unreadable(f"the front matter names {key.strip()!r} twice")
-            fields[key.strip()] = value.strip()
+        # Every line of the front matter is a plain key and value, or a plain item of a list. Nothing
+        # else may sit there, because nothing else is read and a page could still show it.
+        if re.fullmatch(r"  - [A-Za-z0-9_./-]+", line):
+            continue
+        match = re.fullmatch(r"([a-z_]+): (.*)", line) or re.fullmatch(r"([a-z_]+):", line)
+        if not match:
+            raise Unreadable(f"a front-matter line is not a plain key and value: {line[:40]!r}")
+        key, value = match.group(1), (match.group(2) if match.lastindex == 2 else "")
+        if key in fields:
+            raise Unreadable(f"the front matter names {key!r} twice")
+        if key != "criteria" and not re.fullmatch(r"[A-Za-z0-9 .,;:'\"()/+?%-]*", value):
+            raise Unreadable(f"the front-matter value of {key!r} is not plain text")
+        fields[key] = value
     return fields, body
 
 
