@@ -55,6 +55,14 @@ def run(body: dict) -> dict:
         described["tools"] = described["tools"] + [{"name": "shell", "digest": "sha256:" + "e" * 64}]
     if MODE == "nul-in-argument":
         described["args"][2] = "a.txt\u0000--other"
+    if MODE == "argument-outside":
+        described["args"] = ["/etc/passwd", "a.txt"]
+    if MODE == "argument-climbs-out":
+        described["args"] = ["../../secrets/other.tla"]
+    if MODE == "reads-nothing-it-was-given":
+        described["inputs"], described["args"] = [], ["-version"]
+    if MODE == "another-platform":
+        described["platform"] = {"os": "windows", "arch": "x86_64"}
     if MODE == "output-outside":
         described["outputs"] = [{"path": "/tmp/report.txt"}]
     return described

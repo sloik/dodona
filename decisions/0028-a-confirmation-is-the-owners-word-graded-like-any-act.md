@@ -28,7 +28,9 @@ The owner's view, 2026-11-18: this is a somewhat artificial case, because the us
 
 **Confirmations live in the repository.** They are appended to `records/owner.ledger`, which is committed. Every confirmation is therefore a change someone can see before it reaches the protected branch, and that review is the real safeguard today. Results of checks stay out of the repository; they are produced by runs.
 
-**An agent does not confirm for the owner.** The command refuses to run without a terminal. That stops accidents and nothing else, and it is stated as such.
+**Only the owner's ledger counts.** A confirmation is read only from `records/owner.ledger`. An act found in any other ledger, such as the one CI keeps, is not read at all, so an agent cannot confirm by writing to a ledger it controls. A review showed that the first version counted one from anywhere.
+
+**An agent does not confirm for the owner.** The command refuses to run without a terminal. That stops accidents and nothing else: a program can give it a terminal, and a review did. The safeguard that does work is that the owner's ledger is a reviewed, committed file.
 
 ## Consequences
 

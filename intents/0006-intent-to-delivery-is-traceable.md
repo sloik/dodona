@@ -2,6 +2,7 @@
 id: "0006"
 title: The path from an intent to what was delivered can be traced and scored
 owner: project owner
+worker: the agents building dodona
 parent: "0001"
 touches:
   - MODEL.md

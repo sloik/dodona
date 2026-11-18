@@ -275,6 +275,38 @@
       "runs": 8,
       "distinct_run_keys": 8,
       "why": "A control for the limit: exactly eight runs are allowed."
+    },
+    {
+      "mode": "argument-outside",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "ran": false,
+      "why": "An argument may not name a file outside the run's own files: an absolute path is refused."
+    },
+    {
+      "mode": "argument-climbs-out",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "ran": false,
+      "why": "Nor one that climbs out of them."
+    },
+    {
+      "mode": "reads-nothing-it-was-given",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "missing-input",
+      "ran": false,
+      "why": "A run must be given every file its obligation names; a run that reads nothing it was given cannot check anything."
+    },
+    {
+      "mode": "another-platform",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "platform-mismatch",
+      "ran": false,
+      "why": "A run must target the platform the check was asked for."
     }
   ]
 }

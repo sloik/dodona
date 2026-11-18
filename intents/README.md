@@ -2,7 +2,7 @@
 
 What dodona is meant to do, in plain words. This directory is dodona used on itself before dodona exists: the intents are real, and until a kernel can derive their status it is worked out by hand and stated honestly.
 
-Each intent has an owner, criteria, and for each criterion a gate ([data model](../MODEL.md#5-intent-gates-and-assurance)). Children can be worked on in parallel where they touch different things.
+Each intent has an owner, the worker whose work it judges, criteria, and for each criterion a gate ([data model](../MODEL.md#5-intent-gates-and-assurance)). Children can be worked on in parallel where they touch different things.
 
 | Id | Intent | Parent | Status today (worked out by a seed kernel) |
 |---|---|---|---|

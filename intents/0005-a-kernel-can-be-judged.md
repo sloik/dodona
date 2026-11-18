@@ -2,6 +2,7 @@
 id: "0005"
 title: A kernel can be judged by something that is not a kernel
 owner: project owner
+worker: the agents building dodona
 parent: "0001"
 touches:
   - conformance/

@@ -185,9 +185,20 @@ def rehash(item: dict, root: pathlib.Path) -> None:
         raise Refused("identity-mismatch")
 
 
-def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str], known_tools: dict[str, str]) -> None:
+def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str], known_tools: dict[str, str],
+                          platform: dict | None = None, named_files: set[str] | None = None) -> None:
     """The rules a run description must keep before anything is executed.
-    `known_tools` gives the digest of each tool the check was given: the ones its result is keyed by."""
+    `known_tools` gives the digest of each tool the check was given: the ones its result is keyed by.
+    `platform` is the platform the check was asked for; `named_files` the files its obligation names."""
+    if platform is not None and run.get("platform") != platform:
+        raise Refused("platform-mismatch")  # a run must target the platform the check was asked for
+    for arg in run.get("args", []):
+        text = str(arg)
+        if TOOL_FILE.fullmatch(text):
+            continue  # a file of a pinned tool, checked below
+        parts = text.replace("\\", "/").split("/")
+        if text.startswith(("/", "\\")) or (len(text) > 1 and text[1] == ":") or ".." in parts:
+            raise Refused("bad-path")  # an argument may not point outside the run's own files
     declared = {t["name"] for t in manifest.get("tools", [])}
     program = run.get("program", {})
     named = [program.get("tool")] + [name for a in run.get("args", []) if isinstance(a, str) for name in TOOL_NAME.findall(a)]
@@ -212,6 +223,8 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
             raise Refused("identity-mismatch")
     if not isinstance(run.get("args"), list) or not all(isinstance(a, str) and "\x00" not in a for a in run["args"]):
         raise Refused("bad-arguments")
+    if named_files is not None and not named_files <= {f.get("path") for f in run.get("inputs", [])}:
+        raise Refused("missing-input")  # a run must be given every file its obligation names
 
 
 def check_final(final: dict, manifest: dict, capability: str, runs_done: int, root: pathlib.Path = ROOT) -> None:
@@ -249,7 +262,8 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
             return {"final": body["final"], "runs": runs, "run_keys": keys}
         if runs >= MAX_RUNS:
             raise Refused("too-many-runs")  # refused when the next run is asked for, before it starts
-        check_run_description(body["next"], session.manifest, known, known_tools)
+        check_run_description(body["next"], session.manifest, known, known_tools, PLATFORM,
+                              {p for p in obligation.get("specified_by", []) + obligation.get("targets", []) if p in known})
         keys.append(run_key(check_key, runs + 1, body["next"]))
         report = report_for(runs + 1, body["next"])
         if report is None:

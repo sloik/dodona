@@ -31,7 +31,7 @@ import host  # noqa: E402
 import status  # noqa: E402
 
 ROOT = host.ROOT
-OWNER_LEDGER = ROOT / "records" / "owner.ledger"
+OWNER_LEDGER = status.OWNER_LEDGER
 
 
 def record(intent_id: str, intent: dict, baseline: str) -> dict:
@@ -45,13 +45,17 @@ def record(intent_id: str, intent: dict, baseline: str) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--intent", required=True)
-    ap.add_argument("--ledger", type=pathlib.Path, default=OWNER_LEDGER)
+    ap.add_argument("--ledger", type=pathlib.Path, default=OWNER_LEDGER,
+                    help="only for trying the command out: a confirmation counts only in records/owner.ledger")
     ap.add_argument("--policy-ref", default="origin/main")
     ap.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     args = ap.parse_args()
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         print("refused: a confirmation is the owner's own act and is made at a terminal")
         return 2
+    # The terminal check stops an agent running this by accident. It does not stop one that means to:
+    # a program can give it a terminal. What stops that is that the entry is a committed change to
+    # records/owner.ledger, reviewed before it reaches the protected branch (decision 0028).
     policy, note = status.anchored_policy(args.policy_ref)
     entries = status.read_ledgers([args.ledger], args.kernel)
     if entries is None:
@@ -61,6 +65,9 @@ def main() -> int:
         print(f"there is no intent {args.intent}")
         return 1
     intent = asked["intents"][args.intent]
+    if not asked["steps"]:
+        # Nothing recorded yet: one step that names nothing, so the kernel reports the state as it is.
+        asked["steps"] = [{"do": {"set_gate": {"intent": "", "criterion": "", "to": "hard"}}}]
     report = host.kernel(args.kernel, "scenario", asked)["results"][-1]["intents"][args.intent]
     if not intent["owner"] or not intent["worker"]:
         print("the intent must name its owner and the worker whose work it judges, in its front matter")

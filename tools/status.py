@@ -22,6 +22,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import host  # noqa: E402
 
 ROOT = host.ROOT
+OWNER_LEDGER = ROOT / "records" / "owner.ledger"
 
 
 def read_intents(obligations: list[str]) -> dict:
@@ -82,7 +83,12 @@ def read_ledgers(paths: list[pathlib.Path], kernel: list[str]) -> list[dict] | N
         if "refused" in read:
             print(f"the ledger {path} is damaged at line {read.get('at')}; no status is reported")
             return None
-        entries += read["entries"]
+        if pathlib.Path(path).resolve() == OWNER_LEDGER.resolve():
+            entries += read["entries"]
+        else:
+            # Acts of owners count only from the owner's ledger kept in the repository, where every
+            # one is a reviewed change. An act found anywhere else is not read at all.
+            entries += [e for e in read["entries"] if e.get("kind") != "act"]
     return entries
 
 
@@ -134,7 +140,7 @@ def main() -> int:
     ap.add_argument("--policy-ref", default="origin/main", help="the protected branch the policy is read from")
     ap.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     args = ap.parse_args()
-    owner = ROOT / "records" / "owner.ledger"
+    owner = OWNER_LEDGER
     ledgers = ([owner] if owner.exists() and owner not in args.ledger else []) + args.ledger
     entries = read_ledgers(ledgers, args.kernel)
     if entries is None:

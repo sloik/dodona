@@ -2,6 +2,7 @@
 id: "0001"
 title: An agent can find out whether what was defined was built and delivered, and how sure that is
 owner: project owner
+worker: the agents building dodona
 parent: ""
 touches:
   - everything

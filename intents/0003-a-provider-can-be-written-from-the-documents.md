@@ -2,6 +2,7 @@
 id: "0003"
 title: Someone outside can write a provider from the documents alone
 owner: project owner
+worker: the agents building dodona
 parent: "0001"
 touches:
   - protocol/
