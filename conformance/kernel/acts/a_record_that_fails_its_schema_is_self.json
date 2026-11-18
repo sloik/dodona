@@ -1,0 +1,2205 @@
+{
+  "kind": "acts",
+  "name": "a_record_that_fails_its_schema_is_self",
+  "claim": "C36",
+  "covers": [],
+  "why": "A malformed act record is graded self, whatever it claims and whoever signed it. One step for each way of being malformed that conformance/README.md lists. Every record here is otherwise the fully vouched one, so a kernel that does not look grades it higher.",
+  "policy": {
+    "attestors": {
+      "harness-1": "6b65792d666f722d7468652d6b69742d6f6e6c792d6e6f742d612d736563726574"
+    },
+    "makes": [
+      [
+        "vendor-a/family-x",
+        "vendor-a/family-x-small"
+      ],
+      [
+        "vendor-b/family-y"
+      ]
+    ]
+  },
+  "steps": [
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "8172b9d40b6bff572140deb824e9b9378dac1372d0d88f36875bca99a8dda13f"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "ae5375242eb0b7988e49c1cd1e5e85e9306b9e8dfc98660fc6270ca01e6a4ab7"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": "checker-7",
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "ce245488cc4fb07f1bf08fe7f4df83ea89f9ece60ef54bb3bb9bb46100cff0a8"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": [
+            "worker-1"
+          ],
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "60ba9202c4d181d2ecfd92bb06870a2d21556d221289f24286f5c4c478b4b3a1"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": 1,
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "001d0d8d46545644d2711867f863ab0f8957d176c3ce24f1728cc211d7aa5731"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": 2,
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "84df96dff704f150eef57db2b4f579443edd80c7bf77384d084db9d43bb9c30b"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "2f36ab4ef3afb3956b5fb43d8c54ed899c904d78fbb57ad734b173d4cd48a9d8"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "432ff6b80ade44fc4ec4df748b836f4c48855acaf9a0181b007737a546f13ec9"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": "kernel",
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "be46ff016c9f7a80944f82d377472afebd62d301bf7da9fcde71bb49e28c4621"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": {
+            "role": "work",
+            "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+          },
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "73164c1d8c316b2a4d10f642c84fac57dd0f4f21279eb9fb8568f3e031595dbe"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "29116ead5a843561cafe0030a95590b1d988a793df47163cb8bc156c664b9742"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": 1,
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "f81897a01d215608a52ac1a03961cd6a3f7ce107baf70182e281104e8623639d"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": "true",
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "85eecc68f3a7203c5dd35588b5e642929d00427349f8514ec14e7a62d7ae5fa7"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": null,
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "b98dfa86b78ccc8754690bd6508be605acbc4e1edd31b4eae10095446aa113aa"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": [],
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "6b7e214a60726612fe1136f09c01efa03465f5c221bcb8bf005b0078e7de440d"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "0591a4ed3ecb757e9b42a134e5f5fc83042b5995e3e26044374168de45ce40bb"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": "true",
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "a38e1b7a0ee8ea9ad0cf94cd44139367dc9659cdf226318ac8bd18ee20408732"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": "actor,brief,fresh_context,given,kind,known_bad,lineage,result,target,transcript,worker",
+            "mac": "b7305373a9f2965de99c3bdc2d9ecfb92905972dbb9c90ae6a0f4b1bc2b9695e"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": 1,
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "b7305373a9f2965de99c3bdc2d9ecfb92905972dbb9c90ae6a0f4b1bc2b9695e"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": "harness-1"
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": 7,
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "36b276e9bd8ab64044ff6bbc815786ec702fc4b59a5de474257fcddd838827d4"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": null,
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "bce15bb4839c722144233b0246847e591b8851388a70f0d1604bab5b3f33d160"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": {
+            "intent": "0001",
+            "criterion": "c1",
+            "kind": "match-check"
+          },
+          "result": true,
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "55f6dd6f6810eb6db592c9e8923c63c57846546b610c9be933be87ea2ef3df9e"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    },
+    {
+      "do": {
+        "grade": {
+          "ticket": "t-1",
+          "kind": "match-check",
+          "target": "sha256:44e2b558a28a98d0da1310491bb39903a195c87bcbf1b1bc245d6cf5dce59e4a",
+          "lineage": [
+            "0001",
+            "c1"
+          ],
+          "result": "agreed",
+          "actor": {
+            "id": "checker-7",
+            "session": "s-900",
+            "started_by": "harness-1",
+            "make": {
+              "vendor": "vendor-b",
+              "family": "family-y"
+            }
+          },
+          "worker": {
+            "id": "worker-1",
+            "session": "s-100",
+            "make": {
+              "vendor": "vendor-a",
+              "family": "family-x"
+            }
+          },
+          "brief": {
+            "issued_by": "kernel",
+            "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+          },
+          "given": [
+            {
+              "role": "brief",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            {
+              "role": "criteria",
+              "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+            },
+            {
+              "role": "known-right",
+              "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+            },
+            {
+              "role": "known-wrong",
+              "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+            },
+            {
+              "role": "work",
+              "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+            }
+          ],
+          "fresh_context": true,
+          "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+          "known_bad": {
+            "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+            "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+            "supplied_by": "owner",
+            "criterion": "c1",
+            "rejected_wrong": true,
+            "accepted_right": true
+          },
+          "attestation": {
+            "harness": "harness-1",
+            "key": "harness-1",
+            "covers": [
+              "actor",
+              "brief",
+              "fresh_context",
+              "given",
+              "kind",
+              "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "transcript",
+              "worker"
+            ],
+            "mac": "e5cad9f8799ab814321de520f0d4f577ac4c02c7829729c9b8280df901f9e9d6"
+          }
+        }
+      },
+      "expect": {
+        "level": "self",
+        "claims": "self",
+        "source": "declared"
+      }
+    }
+  ]
+}

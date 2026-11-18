@@ -5,6 +5,8 @@
 // inputs it was given: the content of the definitions its obligation depends on,
 // and the tool. It counts for an obligation only when those match the current ones.
 
+const vocabulary = require('./vocabulary');
+
 function inputsOf(definitions, dependsOn) {
   const inputs = {};
   for (const definition of dependsOn) inputs[definition] = definitions[definition];
@@ -55,11 +57,11 @@ function runScenario(scenario) {
   const results = [];
 
   for (const { do: step } of scenario.steps) {
-    if (step.edit) {
+    if (step.edit && Object.hasOwn(state.definitions, step.edit.definition)) {
       state.definitions[step.edit.definition] = step.edit.to;
     } else if (step.repin) {
       state.tool = step.repin.to;
-    } else if (step.backend) {
+    } else if (step.backend && vocabulary.BACKENDS.includes(step.backend.to)) {
       state.backend = step.backend.to;
     } else if (step.submit && dependsOn(step.submit.obligation) !== undefined
         && !ledger.running.some((run) => run.run === step.submit.as)) {
@@ -71,7 +73,7 @@ function runScenario(scenario) {
       } else {
         ledger.outcomes.push({ ...entry, outcome: 'unavailable' });
       }
-    } else if (step.complete) {
+    } else if (step.complete && vocabulary.VERDICTS.includes(step.complete.verdict)) {
       const at = ledger.running.findIndex((run) => run.run === step.complete.run);
       if (at >= 0) {
         const [run] = ledger.running.splice(at, 1);

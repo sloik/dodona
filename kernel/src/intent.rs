@@ -3,6 +3,10 @@ use crate::{
     json::{self, Value},
 };
 use std::collections::BTreeMap;
+/// The gates a criterion can have.
+pub const GATES: [&str; 3] = ["hard", "soft", "deferred"];
+/// What the check behind a criterion can say.
+pub const CHECKS: [&str; 4] = ["unknown", "passed", "failed", "conflict"];
 /// A criterion as the status rule sees it: its gate, and the status of each check behind it.
 pub struct Criterion {
     pub gate: String,
@@ -42,22 +46,33 @@ pub fn run(input: &Value) -> Vec<Value> {
         if action.opt("confirm").is_some() {
             confirmed = true
         }
+        // A step that names a criterion the intent does not have, or carries a
+        // gate, status or level that does not exist, changes nothing.
         if let Some(a) = action.opt("check") {
-            criteria.get_mut(a.get("criterion").str()).unwrap().checks =
-                vec![a.get("status").str().into()]
+            let status = a.text("status").filter(|s| CHECKS.contains(s));
+            if let (Some(c), Some(status)) = (named(&mut criteria, a), status) {
+                c.checks = vec![status.into()];
+            }
         }
         if let Some(a) = action.opt("edit") {
-            let gate = &mut criteria.get_mut(a.get("criterion").str()).unwrap().gate;
-            if *gate != a.get("to").str() {
-                *gate = a.get("to").str().into();
-                confirmed = false;
+            if let (Some(c), Some(to)) = (named(&mut criteria, a), gate(a)) {
+                if c.gate != to {
+                    c.gate = to.into();
+                    confirmed = false;
+                }
             }
         }
         if let Some(a) = action.opt("amend") {
-            let (effective, level) = grade(a, floor);
-            if effective {
-                criteria.get_mut(a.get("criterion").str()).unwrap().gate = a.get("to").str().into()
-            }
+            let (effective, level) = match (named(&mut criteria, a), gate(a)) {
+                (Some(c), Some(to)) => {
+                    let (effective, level) = judged(a, floor);
+                    if effective {
+                        c.gate = to.into();
+                    }
+                    (effective, level)
+                }
+                _ => (false, "self"),
+            };
             amendment = Some(json::object(vec![
                 ("takes_effect", Value::Bool(effective)),
                 ("level", json::string(level)),
@@ -71,6 +86,36 @@ pub fn run(input: &Value) -> Vec<Value> {
         results.push(json::object(result));
     }
     results
+}
+/// The criterion a step names, if the intent has it.
+fn named<'a>(
+    criteria: &'a mut BTreeMap<String, Criterion>,
+    step: &Value,
+) -> Option<&'a mut Criterion> {
+    criteria.get_mut(step.text("criterion")?)
+}
+/// The gate a step sets, if it is one.
+fn gate(step: &Value) -> Option<&str> {
+    step.text("to").filter(|g| GATES.contains(g))
+}
+/// Whether a request for an exception says who grants it, and claims nothing that does not exist.
+fn well_formed(a: &Value) -> bool {
+    let absent_or = |field: &str, allowed: &dyn Fn(&str) -> bool| match a.opt(field) {
+        None => true,
+        Some(Value::String(s)) => allowed(s),
+        Some(_) => false,
+    };
+    matches!(a.text("by"), Some("owner" | "worker"))
+        && absent_or("claims", &|s| acts::rank(s).is_some())
+        && absent_or("source", &|s| s == "declared" || s == "attested")
+}
+/// Whether an exception takes effect, and the level granted. One that is not well formed has no effect.
+fn judged(a: &Value, floor: usize) -> (bool, &str) {
+    if well_formed(a) {
+        grade(a, floor)
+    } else {
+        (false, "self")
+    }
 }
 fn rank(s: &str) -> usize {
     acts::rank(s).expect("not a separation level")
@@ -136,7 +181,7 @@ pub fn states(input: &Value) -> Vec<Value> {
                 .array()
                 .iter()
                 .map(|a| {
-                    let (effective, level) = grade(a, floor);
+                    let (effective, level) = judged(a, floor);
                     json::object(vec![
                         ("takes_effect", Value::Bool(effective)),
                         ("level", json::string(level)),
@@ -207,6 +252,40 @@ mod tests {
                 r#"{"amendments":[],"status":"delivered"}"#
             ]
         );
+    }
+    #[test]
+    fn steps_that_name_nothing() {
+        let input = json::parse(
+            br#"{"criteria":{"c":{"gate":"hard"}},"policy":{"exception_separation":"self","min_hard_gates":1},"steps":[
+                {"do":{"confirm":{}}},{"do":{"check":{"criterion":"c","status":"passed"}}},
+                {"do":{"check":{"criterion":"gone","status":"failed"}}},{"do":{"check":{"criterion":"c","status":"made-up"}}},
+                {"do":{"edit":{"criterion":"gone","to":"soft"}}},{"do":{"edit":{"criterion":"c","to":"made-up"}}},
+                {"do":{"edit":{"criterion":7,"to":"soft"}}},
+                {"do":{"amend":{"criterion":"gone","to":"soft","by":"owner"}}},
+                {"do":{"amend":{"criterion":"c","to":"made-up","by":"owner"}}},
+                {"do":{"amend":{"criterion":"c","to":"soft","by":"nobody"}}},
+                {"do":{"amend":{"criterion":"c","to":"soft","by":"owner","claims":"made-up"}}},
+                {"do":{"amend":{"criterion":"c","to":"soft","by":"owner","source":"made-up"}}},
+                {"do":{"amend":{"criterion":"c","to":"soft","by":"owner"}}}]}"#,
+        )
+        .unwrap();
+        let got = run(&input);
+        for r in &got[1..12] {
+            assert_eq!(r.get("status").str(), "fulfilled");
+        }
+        for r in &got[7..12] {
+            assert_eq!(
+                json::encode(r.get("amendment")),
+                r#"{"level":"self","takes_effect":false}"#
+            );
+        }
+        assert_eq!(got[12].get("status").str(), "unguarded");
+        assert!(!well_formed(
+            &json::parse(br#"{"by":"owner","claims":7}"#).unwrap()
+        ));
+        assert!(well_formed(
+            &json::parse(br#"{"by":"worker","claims":"apart","source":"attested"}"#).unwrap()
+        ));
     }
     #[test]
     fn exception_grade() {

@@ -1,8 +1,15 @@
 use crate::json::{self, Value};
+/// The assurance scale, weakest first.
+pub const SCALE: [&str; 6] = [
+    "none", "asserted", "observed", "sampled", "bounded", "proven",
+];
+pub fn rank(level: &str) -> Option<usize> {
+    SCALE.iter().position(|l| *l == level)
+}
+fn is(v: &Value, status: &str) -> bool {
+    matches!(v, Value::String(s) if s == status)
+}
 fn judge(links: &Value, defects: &Value) -> (&'static str, &'static str) {
-    let levels = [
-        "none", "asserted", "observed", "sampled", "bounded", "proven",
-    ];
     let shown = ["spec-to-code", "code-to-runs", "runs-to-world"]
         .iter()
         .map(|key| {
@@ -16,18 +23,19 @@ fn judge(links: &Value, defects: &Value) -> (&'static str, &'static str) {
                     }
                 })
                 .unwrap_or("none");
-            levels.iter().position(|l| *l == value).unwrap()
+            // A level that does not exist reports nothing.
+            rank(value).unwrap_or(0)
         })
         .min()
         .unwrap();
     let non_vacuous = if defects.object().is_empty() {
         "none-planted"
-    } else if defects.object().iter().all(|(_, v)| v.str() == "passed") {
+    } else if defects.object().iter().all(|(_, v)| is(v, "passed")) {
         "shown"
     } else {
         "not-shown"
     };
-    (levels[shown], non_vacuous)
+    (SCALE[shown], non_vacuous)
 }
 pub fn run(input: &Value) -> Vec<Value> {
     input
@@ -59,5 +67,13 @@ mod tests {
         assert_eq!(judge(&e, &e), ("none", "none-planted"));
         let u = json::parse(br#"{"a":"unknown"}"#).unwrap();
         assert_eq!(judge(&l, &u).1, "not-shown");
+        assert_eq!(rank("none"), Some(0));
+        assert!(rank("proven") > rank("bounded"));
+        assert_eq!(rank("made-up"), None);
+        let odd = json::parse(br#"{"spec-to-code":"made-up","code-to-runs":7}"#).unwrap();
+        assert_eq!(
+            judge(&odd, &json::parse(br#"{"a":7}"#).unwrap()),
+            ("none", "not-shown")
+        );
     }
 }

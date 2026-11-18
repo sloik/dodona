@@ -12,8 +12,8 @@
       "name": "result filed under the key at completion",
       "model_case": "kernel/mutant_complete_with_current_key",
       "file": "src/evidence.rs",
-      "find": "                attempts[i].outcome = x.get(\"verdict\").str().into();",
-      "replace": "                attempts[i].key = key(&attempts[i].key.obligation.clone(), obligations, &defs, &tool);\n                attempts[i].outcome = x.get(\"verdict\").str().into();"
+      "find": "                    attempts[i].outcome = verdict.into();",
+      "replace": "                    attempts[i].key = key(&attempts[i].key.obligation.clone(), obligations, &defs, &tool);\n                    attempts[i].outcome = verdict.into();"
     },
     {
       "name": "unavailable recorded as passed",
@@ -152,8 +152,8 @@
       "name": "unknown defect counts",
       "model_case": "assurance/mutant_unknown_defect_counts",
       "file": "src/assurance.rs",
-      "find": "v.str() == \"passed\"",
-      "replace": "v.str() != \"failed\""
+      "find": "is(v, \"passed\")",
+      "replace": "!is(v, \"failed\")"
     },
     {
       "name": "empty is shown",
@@ -166,15 +166,15 @@
       "name": "remove keeps confirmation",
       "model_case": "tree/mutant_remove_keeps_confirmation",
       "file": "src/tree.rs",
-      "find": "if children.remove(r.get(\"child\").str()).is_some() {\n                    confirmed = false;",
-      "replace": "if children.remove(r.get(\"child\").str()).is_some() {\n                    let _ = confirmed;"
+      "find": "if r.text(\"child\").and_then(|c| children.remove(c)).is_some() {\n                    confirmed = false;",
+      "replace": "if r.text(\"child\").and_then(|c| children.remove(c)).is_some() {\n                    let _ = confirmed;"
     },
     {
       "name": "add keeps confirmation",
       "model_case": "tree/mutant_add_keeps_confirmation",
       "file": "src/tree.rs",
-      "find": "                    confirmed = false;\n                }\n            }\n            json::object",
-      "replace": "                    let _ = confirmed;\n                }\n            }\n            json::object"
+      "find": "children.insert(child.into(), (gate.into(), \"unknown\".into()));\n                        confirmed = false;",
+      "replace": "children.insert(child.into(), (gate.into(), \"unknown\".into()));\n                        let _ = confirmed;"
     },
     {
       "name": "delivered ignores children",
@@ -306,14 +306,14 @@
       "name": "shown always none",
       "model_case": "assurance/mutant_always_nothing",
       "file": "src/assurance.rs",
-      "find": "(levels[shown], non_vacuous)",
-      "replace": "(levels[0], non_vacuous)"
+      "find": "(SCALE[shown], non_vacuous)",
+      "replace": "(SCALE[0], non_vacuous)"
     },
     {
       "name": "tree checks always pass",
       "model_case": null,
       "file": "src/tree.rs",
-      "find": "node.1 = c.get(\"status\").str().into();",
+      "find": "node.1 = status.into();",
       "replace": "node.1 = \"passed\".into();"
     },
     {
@@ -334,8 +334,8 @@
       "name": "close latest open",
       "model_case": null,
       "file": "src/attempts.rs",
-      "find": ".find(|(t, r)| t == c.get(\"ticket\").str() && r == \"open\")",
-      "replace": ".rev().find(|(_, r)| r == \"open\")"
+      "find": "all.iter_mut().find(|(t, r)| t == ticket && r == \"open\")",
+      "replace": "all.iter_mut().rev().find(|(_, r)| { let _ = ticket; r == \"open\" })"
     },
     {
       "name": "shopping ignores order",
@@ -495,8 +495,8 @@
       "name": "any actor confirms",
       "model_case": null,
       "file": "src/status.rs",
-      "find": "&& r.opt(\"actor\").and_then(|a| text(a, \"id\")) == owner",
-      "replace": "&& true"
+      "find": "                && sub(r, \"actor\", \"id\") == owner\n        })",
+      "replace": "                && true\n        })"
     },
     {
       "name": "different baseline confirms",
@@ -530,15 +530,15 @@
       "name": "flag sticky after edit back",
       "model_case": null,
       "file": "src/decisions.rs",
-      "find": "    let mut recorded = names.clone();\n    input\n        .get(\"steps\")\n        .array()\n        .iter()\n        .map(|step| {\n            let a = step.get(\"do\");\n            if let Some(e) = a.opt(\"edit\") {\n                let name = e.get(\"name\").str();\n                if let Value::String(v) = e.get(\"to\") {\n                    names.insert(name.into(), v.clone());\n                } else {\n                    names.remove(name);\n                }\n            }\n            if a.opt(\"review\").is_some() {\n                if governed.iter().all(|n| names.contains_key(n)) {\n                    recorded = names.clone();\n                }\n            }\n            json::object(vec![(\n                \"flagged\",\n                Value::Bool(\n                    governed\n                        .iter()\n                        .any(|n| flagged(names.get(n).map(String::as_str), &recorded[n])),\n                ),\n            )])\n        })",
-      "replace": "    let mut recorded = names.clone();\n    let mut sticky = false;\n    input\n        .get(\"steps\")\n        .array()\n        .iter()\n        .map(|step| {\n            let a = step.get(\"do\");\n            if let Some(e) = a.opt(\"edit\") {\n                let name = e.get(\"name\").str();\n                if let Value::String(v) = e.get(\"to\") {\n                    names.insert(name.into(), v.clone());\n                } else {\n                    names.remove(name);\n                }\n            }\n            if a.opt(\"review\").is_some() {\n                if governed.iter().all(|n| names.contains_key(n)) {\n                    recorded = names.clone();\n                }\n            }\n            sticky |= governed.iter().any(|n| flagged(names.get(n).map(String::as_str), &recorded[n]));\n            json::object(vec![(\n                \"flagged\",\n                Value::Bool(\n                    sticky,\n                ),\n            )])\n        })"
+      "find": "            json::object(vec![(\n                \"flagged\",\n                Value::Bool(\n                    governed\n                        .iter()\n                        .any(|n| flagged(names.get(n).map(String::as_str), &recorded[n])),\n                ),\n            )])",
+      "replace": "            static STICKY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);\n            if governed\n                        .iter()\n                        .any(|n| flagged(names.get(n).map(String::as_str), &recorded[n]))\n            {\n                STICKY.store(true, std::sync::atomic::Ordering::Relaxed);\n            }\n            json::object(vec![(\n                \"flagged\",\n                Value::Bool(STICKY.load(std::sync::atomic::Ordering::Relaxed)),\n            )])"
     },
     {
       "name": "completing a run that is not in flight records a result",
       "model_case": null,
       "file": "src/evidence.rs",
-      "find": "            if let Some(i) = in_flight(&attempts, x.get(\"run\").str()) {\n                attempts[i].outcome = x.get(\"verdict\")",
-      "replace": "            if let Some(i) = attempts.iter().rposition(|a| a.run == x.get(\"run\").str()) {\n                attempts[i].outcome = x.get(\"verdict\")"
+      "find": "                if let Some(i) = in_flight(&attempts, run) {\n                    attempts[i].outcome = verdict",
+      "replace": "                if let Some(i) = attempts.iter().rposition(|a| a.run == run) {\n                    attempts[i].outcome = verdict"
     },
     {
       "name": "a submit under a name in flight starts a second run",
@@ -560,6 +560,174 @@
       "file": "src/status.rs",
       "find": ".filter(|c| c.gate == \"deferred\" && !c.met())",
       "replace": ".filter(|c| c.gate == \"deferred\" && c.checks.iter().any(|s| s != \"passed\"))"
+    },
+    {
+      "name": "status: a record that states no level counts as proven",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "and_then(assurance::rank).unwrap_or(1)",
+      "replace": "and_then(assurance::rank).unwrap_or(5)"
+    },
+    {
+      "name": "status: an obligation shows the weakest of its records instead of the strongest",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "levels.max().unwrap_or(0)",
+      "replace": "levels.min().unwrap_or(0)"
+    },
+    {
+      "name": "status: a failed or conflicting obligation still shows its level",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "    if status == \"passed\" {\n        levels.max()",
+      "replace": "    if status != \"unknown\" {\n        levels.max()"
+    },
+    {
+      "name": "status: soft criteria are left out of the level shown",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "let level = criteria.iter().map(|(_, _, l)| *l).min().unwrap_or(0);",
+      "replace": "let level = criteria.iter().filter(|(_, c, _)| c.gate != \"soft\").map(|(_, _, l)| *l).min().unwrap_or(0);"
+    },
+    {
+      "name": "status: a record from another platform raises the level shown",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "counting.iter().map(|b| stated_level(b))",
+      "replace": "evidence().map(|(_, b)| b).filter(|b| text(b, \"obligation\") == Some(name.as_str())).map(stated_level)"
+    },
+    {
+      "name": "status: a refused exception is counted",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "for r in agreed(ledger, \"grant-amendment\")",
+      "replace": "for r in ledger.iter().filter(|(k, r)| k == \"act\" && text(r, \"kind\") == Some(\"grant-amendment\")).map(|(_, r)| r)"
+    },
+    {
+      "name": "status: an exception granted by someone who is not the owner is counted",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "if by_owner && level(r, policy, intent) >= floor {",
+      "replace": "if { let _ = by_owner; true } && level(r, policy, intent) >= floor {"
+    },
+    {
+      "name": "status: an exception below the floor is counted",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "if by_owner && level(r, policy, intent) >= floor {",
+      "replace": "if by_owner && { let _ = (level(r, policy, intent), floor); true } {"
+    },
+    {
+      "name": "status: exceptions below the floor are left out of the report",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "below += 1;",
+      "replace": "below += 0;"
+    },
+    {
+      "name": "ledger: the checksum of a line is not verified",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "|| checksum != canonical::sha256(payload.as_bytes())",
+      "replace": "|| { let _ = checksum; false }"
+    },
+    {
+      "name": "ledger: the length field is not verified",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "|| length != payload.len().to_string()",
+      "replace": "|| { let _ = length; false }"
+    },
+    {
+      "name": "ledger: previous is not checked against the entry before",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "(Some(Value::String(p)), Some(want)) => p == want,",
+      "replace": "(Some(Value::String(_)), Some(_)) => true,"
+    },
+    {
+      "name": "ledger: a payload that is not in canonical form is accepted",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "(shaped && json::encode(&entry) == payload).then_some(entry)",
+      "replace": "shaped.then_some(entry)"
+    },
+    {
+      "name": "ledger: a line ending in CR LF is accepted",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "let text = std::str::from_utf8(line).ok()?;",
+      "replace": "let text = std::str::from_utf8(line).ok()?.trim_end_matches('\\r');"
+    },
+    {
+      "name": "ledger: a torn ending is not cut off before appending",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "        f.set_len(contents.end as u64)?;\n",
+      "replace": ""
+    },
+    {
+      "name": "ledger: an append to a corrupt ledger is allowed",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "    let Ok(contents) = parse(&data) else {\n        return Ok(refused(\"corrupt\"));\n    };",
+      "replace": "    let contents = parse(&data).unwrap_or(Contents {\n        entries: Vec::new(),\n        end: data.len(),\n        torn: false,\n    });"
+    },
+    {
+      "name": "ledger: the lock is not taken",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "    let start = Instant::now();\n    loop {",
+      "replace": "    let start = Instant::now();\n    if !name.is_empty() {\n        return Ok(Some(Lock(String::new())));\n    }\n    loop {"
+    },
+    {
+      "name": "ledger: the lock is not released",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "let _ = fs::remove_file(&self.0);",
+      "replace": "let _ = &self.0;"
+    },
+    {
+      "name": "ledger: the lock is taken but the wait is ignored",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "if left.is_zero() {",
+      "replace": "if left.is_zero() || !left.is_zero() {"
+    },
+    {
+      "name": "ledger: an unknown first field is accepted",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "if marker != \"dodona1\"\n",
+      "replace": "if marker.is_empty()\n"
+    },
+    {
+      "name": "core key: an unsorted set in a preimage is accepted",
+      "model_case": null,
+      "file": "src/canonical.rs",
+      "find": "(Value::String(x), Value::String(y)) => x.as_bytes() < y.as_bytes(),",
+      "replace": "(Value::String(x), Value::String(y)) => x.as_bytes() != y.as_bytes(),"
+    },
+    {
+      "name": "acts: a claim nobody vouched for is granted in full",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "let mut level = claims.min(1);",
+      "replace": "let mut level = claims;"
+    },
+    {
+      "name": "acts: a mac in uppercase is accepted",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "as_bytes()) == mac {",
+      "replace": "as_bytes()) == mac.to_ascii_lowercase() {"
+    },
+    {
+      "name": "intent: a step naming a criterion that does not exist is treated as naming the first one",
+      "model_case": null,
+      "file": "src/intent.rs",
+      "find": "    criteria.get_mut(step.text(\"criterion\")?)\n",
+      "replace": "    let name = step.text(\"criterion\")?;\n    if criteria.contains_key(name) {\n        criteria.get_mut(name)\n    } else {\n        criteria.values_mut().next()\n    }\n"
     }
   ]
 }

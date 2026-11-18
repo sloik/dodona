@@ -32,15 +32,18 @@ pub fn run(input: &Value) -> Vec<Value> {
         .iter()
         .map(|step| {
             let a = step.get("do");
-            if let Some(t) = a.opt("take") {
-                all.push((t.get("as").str().into(), "open".into()));
+            if let Some(ticket) = a.opt("take").and_then(|t| t.text("as")) {
+                all.push((ticket.into(), "open".into()));
             }
             if let Some(c) = a.opt("close") {
-                if let Some(a) = all
-                    .iter_mut()
-                    .find(|(t, r)| t == c.get("ticket").str() && r == "open")
-                {
-                    a.1 = c.get("result").str().into();
+                // A result that is neither, or a ticket that is not open, changes nothing.
+                let result = c
+                    .text("result")
+                    .filter(|r| *r == "agreed" || *r == "refused");
+                if let (Some(ticket), Some(result)) = (c.text("ticket"), result) {
+                    if let Some(a) = all.iter_mut().find(|(t, r)| t == ticket && r == "open") {
+                        a.1 = result.into();
+                    }
                 }
             }
             if a.opt("change_target").is_some() {
@@ -92,5 +95,17 @@ mod tests {
             ("refused", true)
         );
         assert_eq!(judge(&[("a".into(), "agreed".into())]), ("agreed", false));
+        let input = json::parse(
+            br#"{"steps":[{"do":{"take":{"as":"t"}}},{"do":{"close":{"ticket":"t","result":"made-up"}}},
+                {"do":{"close":{"ticket":"gone","result":"agreed"}}},{"do":{"close":{"ticket":7,"result":"agreed"}}},
+                {"do":{"take":{"as":7}}},{"do":{"close":{"ticket":"t","result":"agreed"}}}]}"#,
+        )
+        .unwrap();
+        let got: Vec<String> = run(&input)
+            .iter()
+            .map(|r| format!("{} {}", r.get("result").str(), r.get("attempts").number()))
+            .collect();
+        assert_eq!(got[..5], ["refused 1"; 5]);
+        assert_eq!(got[5], "agreed 1");
     }
 }

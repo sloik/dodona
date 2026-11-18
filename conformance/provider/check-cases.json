@@ -1,5 +1,5 @@
 {
-  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. In every case but the first, nothing may be recorded as passed.",
+  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. Nothing may be recorded as passed except in the control and in the cases whose outcome is the verdict `passed`. `ran` false means no run may have started; `runs` is how many must have.",
   "cases": [
     {
       "mode": "well-behaved",
@@ -165,6 +165,116 @@
       "verdict": "passed",
       "distinct_run_keys": 2,
       "why": "A check may ask for the same run twice, to see whether a result repeats. Each is submitted under its own key, which includes its number, so the second is never answered from the first."
+    },
+    {
+      "mode": "declared-tool-not-given",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "tool-not-in-key",
+      "ran": false,
+      "why": "A tool the manifest declares but the check was not given is not in the key of its result, so a run may not start it."
+    },
+    {
+      "mode": "declared-tool-not-given-in-argument",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "tool-not-in-key",
+      "ran": false,
+      "why": "The same holds for such a tool named in an argument."
+    },
+    {
+      "mode": "undeclared-tool-in-argument-no-slash",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "undeclared-tool",
+      "ran": false,
+      "why": "A tool named in an argument is a tool named, with or without a file after it."
+    },
+    {
+      "mode": "second-undeclared-tool-in-one-argument",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "undeclared-tool",
+      "ran": false,
+      "why": "Every tool named in an argument is looked at, not only the first."
+    },
+    {
+      "mode": "another-tool-digest",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "tool-digest-mismatch",
+      "ran": false,
+      "why": "A run uses the tools the check was given, by digest. Another digest is another tool."
+    },
+    {
+      "mode": "tool-list-names-another-tool",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "tool-not-in-key",
+      "ran": false,
+      "why": "The tools a run lists are among those the check was given."
+    },
+    {
+      "mode": "nul-in-argument",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-arguments",
+      "ran": false,
+      "why": "An argument holds no NUL: what follows it would be cut off or read as something else."
+    },
+    {
+      "mode": "another-strength-class",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "strength-class-mismatch",
+      "why": "A result states the class of strength the manifest declares. A test is not a proof, whatever its rank."
+    },
+    {
+      "mode": "failed-without-run",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "verdict-without-run",
+      "ran": false,
+      "why": "A failure rests on a run as much as a pass does."
+    },
+    {
+      "mode": "failed-stronger-than-declared",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "strength-above-ceiling",
+      "why": "The ceiling holds for a failure as for a pass."
+    },
+    {
+      "mode": "answers-another-request",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "wrong-id",
+      "why": "An answer carries the id of its request."
+    },
+    {
+      "mode": "wrong-echo",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-manifest",
+      "ran": false,
+      "why": "The opening echo must come back unchanged, or the two sides do not read text the same way."
+    },
+    {
+      "mode": "runs-without-end",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "too-many-runs",
+      "runs": 8,
+      "why": "A check may ask for eight runs. The ninth is refused before it starts."
+    },
+    {
+      "mode": "eight-runs",
+      "run": "exited",
+      "outcome": "verdict",
+      "verdict": "passed",
+      "runs": 8,
+      "distinct_run_keys": 8,
+      "why": "A control for the limit: exactly eight runs are allowed."
     }
   ]
 }

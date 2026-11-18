@@ -143,7 +143,8 @@ pub fn append(v: &Value) -> Result<Value, String> {
     };
     // From here the lock is held; it is released when `_lock` goes out of
     // scope, after the file has been written, synced and closed.
-    let Ok(contents) = parse(&load(path)?) else {
+    let data = load(path)?;
+    let Ok(contents) = parse(&data) else {
         return Ok(refused("corrupt"));
     };
     let previous = contents.entries.last().map(canonical::identity);
@@ -163,7 +164,7 @@ pub fn append(v: &Value) -> Result<Value, String> {
             .open(path)?;
         // Cut off a torn ending, then write the line after the last whole entry.
         f.set_len(contents.end as u64)?;
-        f.seek(SeekFrom::Start(contents.end as u64))?;
+        f.seek(SeekFrom::End(0))?;
         f.write_all(line(&entry).as_bytes())?;
         f.sync_all()
     };

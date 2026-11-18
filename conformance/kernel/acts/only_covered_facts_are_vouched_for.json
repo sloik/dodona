@@ -91,11 +91,15 @@
               "actor",
               "brief",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],
-            "mac": "800d01a25458e237eac5a480fd082577564b5b5a7dcd37ae90ba3fd3dc9c6780"
+            "mac": "a722e42a04b88c2bb9477cad3ec5b7d8c48a69ff373661b096bafd60531937d5"
           }
         }
       },
@@ -178,10 +182,14 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],
-            "mac": "34cd33de4af80c8f801ef420d1b313d835c55bcac2ca174d32da21d8e2367f15"
+            "mac": "988974c903151716d807e3102c91a069f894b3cafa7b4b3ba23eb3b6618424e4"
           }
         }
       },
@@ -248,11 +256,15 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],
-            "mac": "33b342616ba356816d6c9404e80c55b0a5a93a8b1fc8ea0d7a6a435fab8b69f2"
+            "mac": "fb9fadcf7071d230a340cb807305e7903779f304f71a5da1de7aa120b10daf43"
           }
         }
       },
@@ -332,9 +344,13 @@
             "key": "harness-1",
             "covers": [
               "actor",
+              "kind",
+              "lineage",
+              "result",
+              "target",
               "worker"
             ],
-            "mac": "ae18a3dc0f3e8a1e9e7ae80fe951c9bd7c494a6b40bac4c6e2982d59bfcc0cfb"
+            "mac": "52f4e03bf4e0b7b02c6c733cae1b5315b257965ed18f8e693b1a0d980e89337a"
           }
         }
       },

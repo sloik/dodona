@@ -20,6 +20,14 @@ impl Value {
             None
         }
     }
+    /// The string under a key, if there is one. Steps are read with this, so
+    /// that one carrying a name or value of the wrong sort changes nothing.
+    pub fn text(&self, key: &str) -> Option<&str> {
+        match self.opt(key) {
+            Some(Value::String(s)) => Some(s),
+            _ => None,
+        }
+    }
     pub fn opt_mut(&mut self, key: &str) -> Option<&mut Value> {
         if let Value::Object(v) = self {
             v.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v)
@@ -55,6 +63,10 @@ impl Value {
             panic!("expected number")
         }
     }
+}
+/// The order the canonical encoding puts keys in: by UTF-16 code units.
+pub fn key_order(a: &str, b: &str) -> std::cmp::Ordering {
+    a.encode_utf16().cmp(b.encode_utf16())
 }
 pub fn string(s: &str) -> Value {
     Value::String(s.into())
@@ -102,7 +114,7 @@ pub fn encode(v: &Value) -> String {
             }
             Value::Object(o) => {
                 let mut entries: Vec<_> = o.iter().collect();
-                entries.sort_by(|a, b| a.0.encode_utf16().cmp(b.0.encode_utf16()));
+                entries.sort_by(|a, b| key_order(&a.0, &b.0));
                 out.push('{');
                 for (i, (k, v)) in entries.iter().enumerate() {
                     if i > 0 {
@@ -349,6 +361,9 @@ mod tests {
     fn fields() {
         let mut v = parse(br#"{"a":{"b":1}}"#).unwrap();
         assert!(v.opt("x").is_none());
+        assert_eq!(v.text("a"), None);
+        assert_eq!(parse(br#"{"a":"b"}"#).unwrap().text("a"), Some("b"));
+        assert_eq!(Value::Null.text("a"), None);
         assert!(v.opt_mut("x").is_none());
         *v.opt_mut("a").unwrap().opt_mut("b").unwrap() = Value::Number(2);
         assert_eq!(encode(&v), r#"{"a":{"b":2}}"#);

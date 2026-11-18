@@ -92,11 +92,15 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],
-            "mac": "aea63d37389afd0e912652f3210e2279bfa5dae65a29096efbdcb8be75fb1600"
+            "mac": "b7305373a9f2965de99c3bdc2d9ecfb92905972dbb9c90ae6a0f4b1bc2b9695e"
           }
         }
       },
@@ -163,10 +167,14 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],
-            "mac": "08d4fb9bf119f4a60ed715f5f0f9475cd3a2ef2d1d6fc6158361757a7729337a"
+            "mac": "77e5333d965a353fbe284c2331201b41fbb23b14e3d5b30177d05439c20bb72e"
           }
         }
       },
@@ -249,11 +257,15 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],
-            "mac": "a5804ccbe6bb2b888bc2d58ed964ca3846ad1b9166c3082a698c6a04b682f01e"
+            "mac": "182ab22c0ae0260642b534c194448fc7db94bedba959ba664bb9815912847062"
           }
         }
       },
@@ -336,11 +348,15 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],
-            "mac": "f4fe02e9c7c0c89c6952325e4f5b18e94209178fc3b2958044502b9bf88aa4d4"
+            "mac": "e6803df87a9bfa59617033e0ffd7608224d40f3e0341860cb145305c0b631955"
           }
         }
       },

@@ -1,4 +1,4 @@
-"""Judge a kernel's ledger against conformance/ledger/cases.json. Stage-0 helper (decision 0023).
+"""Judge a kernel's ledger against conformance/ledger/cases.json and more-damage.json. Stage-0 helper (decision 0023).
 
     python tools/run_ledger_cases.py -- <kernel command>
 
@@ -116,6 +116,45 @@ def main() -> int:
             if "refused" in want:
                 refused = ask(command, "ledger-append", {"ledger": str(folder / "damaged.ledger"), "kind": "evidence", "body": {}, "wait_ms": 500})
                 check(case["name"] + ": and nothing can be appended to it", refused == {"refused": "corrupt"}, str(refused))
+
+        # More damage: each case is a whole file with the answer a reader must give.
+        more = json.loads((ROOT / "conformance" / "ledger" / "more-damage.json").read_text(encoding="utf-8"))
+        for case in more["damage"]:
+            data, want = case["file"].encode("utf-8"), case["expect"]
+            path = fresh("more.ledger", data)
+            got = summary(read(path))
+            check(case["name"], got == want, f"expected {want}, got {got}")
+            if "refused" in want:
+                refused = ask(command, "ledger-append", {"ledger": str(path), "kind": "evidence", "body": {}, "wait_ms": 500})
+                check(case["name"] + ": and nothing can be appended to it", refused == {"refused": "corrupt"} and path.read_bytes() == data
+                      and not pathlib.Path(str(path) + ".lock").exists(), f"answered {refused}; file {'unchanged' if path.read_bytes() == data else 'changed'}")
+
+        # An entry of a kind no rule gives a meaning: written, kept, and followed like any other.
+        other = more["unlisted_kind"]
+        path = fresh("other-kind.ledger", good)
+        answer = ask(command, "ledger-append", dict(other["append"], ledger=str(path), wait_ms=2000))
+        check("an entry of an unlisted kind is appended", answer == {"appended": other["identity"]} and path.read_bytes() == other["file"].encode("utf-8"), str(answer))
+        path = fresh("other-kind.ledger", other["file"].encode("utf-8"))
+        answer = read(path)
+        check("an entry of an unlisted kind is kept by the reader", isinstance(answer, dict) and answer.get("torn") is False
+              and [e.get("kind") for e in answer.get("entries", [])][-1:] == [other["append"]["kind"]] and len(answer["entries"]) == 4
+              and answer["entries"][-1].get("body") == other["append"]["body"], str(summary(answer)))
+        answer = ask(command, "ledger-append", dict(other["then"]["append"], ledger=str(path), wait_ms=2000))
+        check("an append after an entry of an unlisted kind works", isinstance(answer, dict) and "appended" in answer
+              and path.read_bytes() == other["then"]["file"].encode("utf-8"), str(answer))
+
+        # Requests that are not requests: refused, and nothing written.
+        for case in more["bad_requests"]:
+            absent = folder / "bad-request.ledger"
+            if absent.exists():
+                absent.unlink()
+            answer = ask(command, "ledger-append", dict(case["request"], ledger=str(absent), wait_ms=500))
+            check(f"a request to append with {case['name']} is refused, new ledger", answer == {"refused": "bad-request"} and not absent.exists()
+                  and not pathlib.Path(str(absent) + ".lock").exists(), f"answered {answer}; file {'written' if absent.exists() else 'not written'}")
+            existing = fresh("bad-request-existing.ledger", good)
+            answer = ask(command, "ledger-append", dict(case["request"], ledger=str(existing), wait_ms=500))
+            check(f"a request to append with {case['name']} is refused, existing ledger", answer == {"refused": "bad-request"} and existing.read_bytes() == good
+                  and not pathlib.Path(str(existing) + ".lock").exists(), f"answered {answer}; file {'unchanged' if existing.read_bytes() == good else 'changed'}")
 
         # A held lock.
         held = fresh("held.ledger", good)

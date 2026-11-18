@@ -488,7 +488,7 @@
       "name": "status: a confirmation by someone other than the owner counts",
       "model_case": "(round 2 kit)",
       "file": "status.js",
-      "find": "act.target === baseline && act.actor.id === intent.owner)",
+      "find": "act.target === baseline && (act.actor || {}).id === intent.owner)",
       "replace": "act.target === baseline)"
     },
     {
@@ -546,6 +546,153 @@
       "file": "evidence.js",
       "find": "\n        && !ledger.running.some((run) => run.run === step.submit.as)) {",
       "replace": ") {"
+    },
+    {
+      "name": "a record that states no level counts as proven",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "return SCALE.includes(body.level) ? body.level : 'asserted';",
+      "replace": "return SCALE.includes(body.level) ? body.level : 'proven';"
+    },
+    {
+      "name": "an obligation shows the weakest of its records instead of the strongest",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "strongestOf(records.map(statedLevel))",
+      "replace": "weakestOf(records.map(statedLevel))"
+    },
+    {
+      "name": "a failed or conflicting obligation still shows its level",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "return status === 'passed' ? strongestOf(records.map(statedLevel)) : 'none';",
+      "replace": "return records.length > 0 ? strongestOf(records.map(statedLevel)) : 'none';"
+    },
+    {
+      "name": "soft criteria are left out of the level shown",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "Object.keys(intent.criteria).sort().map((name) => {",
+      "replace": "Object.keys(intent.criteria).sort().filter((name) => intent.criteria[name].gate !== 'soft').map((name) => {"
+    },
+    {
+      "name": "a record from another platform raises the level shown",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "levels[name] = obligationLevel(obligations[name].status, records);",
+      "replace": "levels[name] = obligationLevel(obligations[name].status, records.concat(ledger.filter((e) => e.kind === 'evidence' && e.body.obligation === name && e.body.core_key === identityOf(details.preimage)).map((e) => e.body)));"
+    },
+    {
+      "name": "a refused exception is counted",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "const grants = acts.filter((act) => act.kind === 'grant-amendment');",
+      "replace": "const grants = ledger.filter((entry) => entry.kind === 'act' && entry.body.kind === 'grant-amendment' && entry.body.lineage && entry.body.lineage.intent === id).map((entry) => entry.body);"
+    },
+    {
+      "name": "an exception granted by someone who is not the owner is counted",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "(act.actor || {}).id === intent.owner && rank(levelFor(act, intent, policy)) >= rank(grantFloor)",
+      "replace": "rank(levelFor(act, intent, policy)) >= rank(grantFloor)"
+    },
+    {
+      "name": "an exception below the floor is counted",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "(act.actor || {}).id === intent.owner && rank(levelFor(act, intent, policy)) >= rank(grantFloor)",
+      "replace": "(act.actor || {}).id === intent.owner"
+    },
+    {
+      "name": "exceptions below the floor are left out of the report",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "below_floor: grants.length - counted.length",
+      "replace": "below_floor: 0"
+    },
+    {
+      "name": "ledger: the checksum of a line is not verified",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": " || sha256Hex(payload) !== match[2]",
+      "replace": ""
+    },
+    {
+      "name": "ledger: the length field is not verified",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": "payload.length !== Number(match[1]) ||",
+      "replace": ""
+    },
+    {
+      "name": "ledger: previous is not checked against the entry before",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": " || decoded.entry.previous !== previous",
+      "replace": ""
+    },
+    {
+      "name": "ledger: a payload not in canonical form is accepted",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": "  if (again.canonical !== payloadText) return null;\n",
+      "replace": ""
+    },
+    {
+      "name": "ledger: a line ending in CR LF is accepted",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": "decodeLine(bytes.subarray(start, end))",
+      "replace": "decodeLine(bytes.subarray(start, end > start && bytes[end - 1] === 0x0d ? end - 1 : end))"
+    },
+    {
+      "name": "ledger: a torn ending is not cut off before appending",
+      "model_case": "(round 3)",
+      "file": "ledger-file.js",
+      "find": "    if (read.torn) syncedWrite(path, 'r+', null, read.keep);\n",
+      "replace": ""
+    },
+    {
+      "name": "ledger: an append to a corrupt ledger is allowed",
+      "model_case": "(round 3)",
+      "file": "ledger-file.js",
+      "find": "if (read.refused) return { refused: 'corrupt' };",
+      "replace": "if (read.refused) read.last = null;"
+    },
+    {
+      "name": "ledger: the lock is not taken",
+      "model_case": "(round 3)",
+      "file": "ledger-file.js",
+      "find": "return fs.openSync(lockPath, 'wx');",
+      "replace": "return fs.openSync(lockPath, 'a');"
+    },
+    {
+      "name": "ledger: the lock is not released",
+      "model_case": "(round 3)",
+      "file": "ledger-file.js",
+      "find": "      fs.unlinkSync(lockPath);\n      return;",
+      "replace": "      return;"
+    },
+    {
+      "name": "ledger: the wait for the lock is ignored",
+      "model_case": "(round 3)",
+      "file": "ledger-file.js",
+      "find": "const deadline = Date.now() + waitMs;",
+      "replace": "const deadline = 0;"
+    },
+    {
+      "name": "ledger: an unknown first field is accepted",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": "/^dodona1 (0|[1-9][0-9]*) ([0-9a-f]{64}) /",
+      "replace": "/^[a-z0-9]+ (0|[1-9][0-9]*) ([0-9a-f]{64}) /"
+    },
+    {
+      "name": "core key: an unsorted set in a preimage is accepted",
+      "model_case": "(round 3)",
+      "file": "identity.js",
+      "find": "      if (Array.isArray(list) && !isStrictlyIncreasing(list)) return { refused: 'unsorted-set' };\n",
+      "replace": ""
     }
   ]
 }

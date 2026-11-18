@@ -267,3 +267,27 @@ test('states: one rule for scenarios and states', () => {
   });
   assert.deepEqual(intentAnswer, { results: [{ status: 'delivered', amendments: [{ takes_effect: false, level: 'self' }] }] });
 });
+
+test('status: the level shown is the weakest criterion, an exception counts only from the owner at the floor', () => {
+  const pre = (target) => ({ obligation: 'sha256:a', kind: 'check', inputs: { targets: [target] }, provider: { name: 'p', version: '1', protocol: '0.2' } });
+  const self = { writer: 'k', platform: 'p1' };
+  const evidenceBody = (name, preimage, extra) => ({
+    obligation: name, preimage, core_key: identity.identityOf(preimage), platform: 'p1', verdict: 'passed', writer: 'k', ...extra,
+  });
+  const scenario = {
+    self,
+    policy: { min_hard_gates: 1, required: [], trusted_writers: [], floors: { 'grant-amendment': 'helper' }, attestors: {}, makes: [] },
+    obligations: { a: { preimage: pre('sha256:1') }, b: { preimage: pre('sha256:2') } },
+    intents: { i: { owner: 'o', worker: 'w', children: [], criteria: { c1: { gate: 'hard', checked_by: ['a'] }, c2: { gate: 'soft', checked_by: ['b'] } } } },
+    steps: [
+      { do: { append: { kind: 'evidence', body: evidenceBody('a', pre('sha256:1'), { level: 'proven' }) } } },
+      { do: { append: { kind: 'evidence', body: evidenceBody('b', pre('sha256:2'), { level: 'bounded' }) } } },
+      { do: { append: { kind: 'evidence', body: evidenceBody('b', pre('sha256:2'), {}) } } },
+    ],
+  };
+  const results = status.runScenario(scenario);
+  assert.deepEqual(results[0].intents.i.shown, { level: 'none', criterion: 'c2' });
+  assert.deepEqual(results[1].intents.i.shown, { level: 'bounded', criterion: 'c2' });
+  assert.deepEqual(results[2].intents.i.shown, { level: 'bounded', criterion: 'c2' }); // the strongest record counts
+  assert.deepEqual(results[2].intents.i.exceptions, { counted: 0, below_floor: 0 });
+});

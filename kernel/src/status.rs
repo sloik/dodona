@@ -1,6 +1,6 @@
 use crate::{
     acts::{self, text},
-    canonical, evidence,
+    assurance, canonical, evidence,
     intent::{self, Criterion},
     json::{self, Value},
 };
@@ -14,7 +14,7 @@ fn list(v: Option<&Value>) -> &[Value] {
 }
 fn sorted(v: &Value) -> Value {
     let mut a = v.array().to_vec();
-    a.sort_by(|x, y| x.str().encode_utf16().cmp(y.str().encode_utf16()));
+    a.sort_by(|x, y| json::key_order(x.str(), y.str()));
     Value::Array(a)
 }
 fn baseline(i: &Value) -> String {
@@ -59,9 +59,65 @@ fn counts(body: &Value, name: &str, key: Option<&str>, own: &Value, policy: &Val
         && text(body, "platform") == text(own, "platform")
         && accepted
 }
+/// A string inside an object inside the record, such as `actor.id`.
+fn sub<'a>(r: &'a Value, field: &str, name: &str) -> Option<&'a str> {
+    r.opt(field).and_then(|f| text(f, name))
+}
+/// The least separation at which an act of this kind counts: `self` if policy gives none.
+fn floor(policy: &Value, kind: &str) -> usize {
+    match policy.opt("floors").and_then(|f| f.opt(kind)) {
+        None => 0,
+        Some(Value::String(s)) => acts::rank(s).expect("a floor is not a separation level"),
+        Some(_) => panic!("a floor is not a separation level"),
+    }
+}
+/// The level an evidence record states, on the assurance scale. One that states
+/// none, or something not on the scale, is `asserted`.
+fn stated_level(body: &Value) -> usize {
+    text(body, "level").and_then(assurance::rank).unwrap_or(1)
+}
+/// The level shown for an obligation from its status and the levels of the records that count for it.
+fn obligation_level(status: &str, levels: impl Iterator<Item = usize>) -> usize {
+    if status == "passed" {
+        levels.max().unwrap_or(0)
+    } else {
+        0
+    }
+}
+/// The level shown for a criterion: the weakest among its obligations, `none` if it has none.
+fn criterion_level(levels: impl Iterator<Item = usize>) -> usize {
+    levels.min().unwrap_or(0)
+}
+/// The level shown for an intent, and the criterion it rests on: the weakest among
+/// all criteria, soft ones included, and the first criterion in sorted order at that level.
+fn headline<'a>(criteria: &[(&'a str, &Criterion, usize)]) -> (usize, Option<&'a str>) {
+    let level = criteria.iter().map(|(_, _, l)| *l).min().unwrap_or(0);
+    let criterion = criteria
+        .iter()
+        .filter(|(_, _, l)| *l == level)
+        .map(|(name, _, _)| *name)
+        .min_by(|a, b| json::key_order(a, b));
+    (level, criterion)
+}
+/// Agreed exceptions for the intent: how many count, and how many are below the floor.
+fn exceptions(ledger: &Ledger, name: &str, intent: &Value, policy: &Value) -> (usize, usize) {
+    let owner = text(intent, "owner");
+    let floor = floor(policy, "grant-amendment");
+    let (mut counted, mut below) = (0, 0);
+    for r in agreed(ledger, "grant-amendment").filter(|r| sub(r, "lineage", "intent") == Some(name))
+    {
+        let by_owner = owner.is_some() && sub(r, "actor", "id") == owner;
+        if by_owner && level(r, policy, intent) >= floor {
+            counted += 1;
+        } else {
+            below += 1;
+        }
+    }
+    (counted, below)
+}
 /// The level of an act record for an intent: graded as any act, but `self` when it is not about the intent's worker.
 fn level(r: &Value, policy: &Value, intent: &Value) -> usize {
-    let worker = r.opt("worker").and_then(|w| text(w, "id"));
+    let worker = sub(r, "worker", "id");
     if worker.is_none() || worker != text(intent, "worker") {
         0
     } else {
@@ -82,10 +138,10 @@ fn confirmations(ledger: &Ledger, name: &str, intent: &Value, policy: &Value) ->
     let owner = text(intent, "owner");
     agreed(ledger, "confirm-baseline")
         .filter(|r| {
-            r.opt("lineage").and_then(|l| text(l, "intent")) == Some(name)
+            sub(r, "lineage", "intent") == Some(name)
                 && text(r, "target") == Some(base.as_str())
                 && owner.is_some()
-                && r.opt("actor").and_then(|a| text(a, "id")) == owner
+                && sub(r, "actor", "id") == owner
         })
         .map(|r| level(r, policy, intent))
         .collect()
@@ -150,6 +206,14 @@ fn project(required: &[Option<(&str, bool)>]) -> &'static str {
         "unknown"
     }
 }
+/// The gate a `set_gate` step names, if the project has that intent and criterion.
+fn gate_of<'a>(intents: &'a mut Value, step: &Value) -> Option<&'a mut Value> {
+    intents
+        .opt_mut(step.text("intent")?)?
+        .opt_mut("criteria")?
+        .opt_mut(step.text("criterion")?)?
+        .opt_mut("gate")
+}
 fn count(n: usize) -> Value {
     Value::Number(n as i64)
 }
@@ -158,45 +222,48 @@ pub fn run(v: &Value) -> Vec<Value> {
     let mut intents = v.get("intents").clone();
     let policy = v.get("policy");
     let own = v.get("self");
-    let floor = acts::rank(policy.get("floors").get("confirm-baseline").str())
-        .expect("the confirm-baseline floor is not a separation level");
+    let floor = floor(policy, "confirm-baseline");
     let min = policy.get("min_hard_gates").number();
     let mut ledger: Vec<(String, Value)> = Vec::new();
     let mut out = Vec::new();
     for step in v.get("steps").array() {
         let a = step.get("do");
+        // A record with a verdict that does not exist is not a record: appending it changes nothing.
         if let Some(x) = a.opt("append") {
-            ledger.push((x.get("kind").str().into(), x.get("body").clone()));
+            if let (Some(kind), Some(body)) = (x.text("kind"), x.opt("body")) {
+                let verdict = body.text("verdict");
+                if kind != "evidence" || verdict.is_some_and(|v| evidence::VERDICTS.contains(&v)) {
+                    ledger.push((kind.into(), body.clone()));
+                }
+            }
         }
         // A change to an obligation, or a gate, that is not there has nothing to act on.
         if let Some(x) = a.opt("change") {
-            let o = obligations.opt_mut(x.get("obligation").str());
-            if let Some(p) = o.and_then(|o| o.opt_mut("preimage")) {
-                *p = x.get("preimage").clone();
+            let o = x.text("obligation").and_then(|o| obligations.opt_mut(o));
+            let preimage = o.and_then(|o| o.opt_mut("preimage"));
+            if let (Some(p), Some(to)) = (preimage, x.opt("preimage")) {
+                *p = to.clone();
             }
         }
         if let Some(x) = a.opt("set_gate") {
-            let gate = intents
-                .opt_mut(x.get("intent").str())
-                .and_then(|i| i.opt_mut("criteria"))
-                .and_then(|c| c.opt_mut(x.get("criterion").str()))
-                .and_then(|c| c.opt_mut("gate"));
-            if let Some(g) = gate {
-                *g = x.get("to").clone();
+            let to = x.text("to").filter(|g| intent::GATES.contains(g));
+            if let (Some(g), Some(to)) = (gate_of(&mut intents, x), to) {
+                *g = json::string(to);
             }
         }
         let evidence = || ledger.iter().filter(|(k, _)| k == "evidence");
         let rejected = evidence().filter(|(_, b)| stated_key(b).is_none()).count();
-        let mut statuses: BTreeMap<&str, &'static str> = BTreeMap::new();
+        let mut statuses: BTreeMap<&str, (&'static str, usize)> = BTreeMap::new();
         let mut obligations_out = Vec::new();
         for (name, o) in obligations.object() {
             let key = o.opt("preimage").and_then(|p| canonical::core_key(p).ok());
-            let status = evidence::status(
-                evidence()
-                    .filter(|(_, b)| counts(b, name, key.as_deref(), own, policy))
-                    .filter_map(|(_, b)| text(b, "verdict")),
-            );
-            statuses.insert(name, status);
+            let counting: Vec<&Value> = evidence()
+                .map(|(_, b)| b)
+                .filter(|b| counts(b, name, key.as_deref(), own, policy))
+                .collect();
+            let status = evidence::status(counting.iter().filter_map(|b| text(b, "verdict")));
+            let level = obligation_level(status, counting.iter().map(|b| stated_level(b)));
+            statuses.insert(name, (status, level));
             let mut f = vec![("status", json::string(status))];
             if status == "unknown" {
                 f.push(("reason", json::string("never-run")));
@@ -213,21 +280,31 @@ pub fn run(v: &Value) -> Vec<Value> {
                 confirmations.into_iter().max().unwrap_or(0),
             )];
             let mut criteria = Vec::new();
+            let mut shown = Vec::new();
             for (cn, c) in i.get("criteria").object() {
                 let checked_by = c.get("checked_by").array();
                 for o in checked_by {
                     let best = match_check(&ledger, name, cn, o, i, policy);
                     levels.push(("match-check", best));
                 }
-                // An obligation the project does not have is never passed.
+                // An obligation the project does not have is never passed, and shows nothing.
+                let of = |o: &Value| *statuses.get(o.str()).unwrap_or(&("unknown", 0));
                 criteria.push(Criterion {
                     gate: c.get("gate").str().into(),
-                    checks: checked_by
-                        .iter()
-                        .map(|o| (*statuses.get(o.str()).unwrap_or(&"unknown")).to_owned())
-                        .collect(),
+                    checks: checked_by.iter().map(|o| of(o).0.to_owned()).collect(),
                 });
+                shown.push((
+                    cn.as_str(),
+                    criterion_level(checked_by.iter().map(|o| of(o).1)),
+                ));
             }
+            let shown: Vec<_> = shown
+                .iter()
+                .zip(&criteria)
+                .map(|((name, level), c)| (*name, c, *level))
+                .collect();
+            let (shown_level, shown_criterion) = headline(&shown);
+            let (counted, below_floor) = exceptions(&ledger, name, i, policy);
             let gates = |gate: &str| criteria.iter().filter(|c| c.gate == gate).count();
             let deferred_open = criteria
                 .iter()
@@ -252,6 +329,23 @@ pub fn run(v: &Value) -> Vec<Value> {
                     (
                         "score",
                         json::object(vec![("met", count(met)), ("of", count(criteria.len()))]),
+                    ),
+                    (
+                        "shown",
+                        json::object(vec![
+                            ("level", json::string(assurance::SCALE[shown_level])),
+                            (
+                                "criterion",
+                                shown_criterion.map_or(Value::Null, json::string),
+                            ),
+                        ]),
+                    ),
+                    (
+                        "exceptions",
+                        json::object(vec![
+                            ("counted", count(counted)),
+                            ("below_floor", count(below_floor)),
+                        ]),
                     ),
                     ("separation", separation(&levels)),
                 ]),
@@ -407,6 +501,72 @@ mod tests {
         );
     }
     #[test]
+    fn levels_shown() {
+        assert_eq!(stated_level(&value(r#"{"level":"bounded"}"#)), 4);
+        assert_eq!(stated_level(&value(r#"{"level":"none"}"#)), 0);
+        assert_eq!(stated_level(&value(r#"{"level":"made-up"}"#)), 1);
+        assert_eq!(stated_level(&value(r#"{"level":5}"#)), 1);
+        assert_eq!(stated_level(&value("{}")), 1);
+        assert_eq!(obligation_level("passed", [2, 4, 1].into_iter()), 4);
+        assert_eq!(obligation_level("passed", [].into_iter()), 0);
+        for other in ["failed", "conflict", "unknown"] {
+            assert_eq!(obligation_level(other, [5].into_iter()), 0);
+        }
+        assert_eq!(criterion_level([3, 2, 5].into_iter()), 2);
+        assert_eq!(criterion_level([].into_iter()), 0);
+        let c = |gate: &str| Criterion {
+            gate: gate.into(),
+            checks: Vec::new(),
+        };
+        let (hard, soft) = (c("hard"), c("soft"));
+        assert_eq!(
+            headline(&[("b", &hard, 3), ("a", &hard, 4)]),
+            (3, Some("b"))
+        );
+        assert_eq!(
+            headline(&[("b", &hard, 3), ("a", &soft, 3)]),
+            (3, Some("a"))
+        );
+        assert_eq!(
+            headline(&[("b", &hard, 5), ("a", &soft, 1)]),
+            (1, Some("a"))
+        );
+        assert_eq!(headline(&[]), (0, None));
+    }
+    #[test]
+    fn floors() {
+        let policy = value(r#"{"floors":{"confirm-baseline":"apart"}}"#);
+        assert_eq!(floor(&policy, "confirm-baseline"), 2);
+        assert_eq!(floor(&policy, "grant-amendment"), 0);
+        assert_eq!(floor(&value("{}"), "confirm-baseline"), 0);
+    }
+    #[test]
+    fn exceptions_counted_and_not() {
+        let intent = value(r#"{"owner":"o","worker":"w","children":[],"criteria":{}}"#);
+        let policy = |floor: &str| {
+            value(&format!(
+                r#"{{"floors":{{"grant-amendment":"{floor}"}},"attestors":{{}},"makes":[]}}"#
+            ))
+        };
+        let ledger = vec![
+            act("grant-amendment", "agreed", "t", "o", "w"),
+            act("grant-amendment", "refused", "t", "o", "w"),
+            act("grant-amendment", "agreed", "t", "w", "w"),
+            act("grant-amendment", "agreed", "t", "someone", "w"),
+            act("grant-amendment", "agreed", "t", "o", "x"),
+            act("confirm-baseline", "agreed", "t", "o", "w"),
+            ("evidence".into(), value("{}")),
+        ];
+        assert_eq!(exceptions(&ledger, "i", &intent, &policy("helper")), (1, 3));
+        assert_eq!(exceptions(&ledger, "i", &intent, &policy("self")), (2, 2));
+        assert_eq!(exceptions(&ledger, "i", &intent, &policy("apart")), (0, 4));
+        assert_eq!(exceptions(&ledger, "j", &intent, &policy("self")), (0, 0));
+        assert_eq!(
+            exceptions(&ledger[1..2], "i", &intent, &policy("self")),
+            (0, 0)
+        );
+    }
+    #[test]
     fn separation_report() {
         let text = |levels: &[(&str, usize)]| json::encode(&separation(levels));
         assert_eq!(
@@ -462,10 +622,18 @@ mod tests {
                          {"do":{"set_gate":{"intent":"gone","criterion":"c","to":"hard"}}},
                          {"do":{"set_gate":{"intent":"i","criterion":"gone","to":"hard"}}},
                          {"do":{"append":{"kind":"other","body":{}}}},
-                         {"do":{"append":{"kind":"evidence","body":{}}}}]}"#,
+                         {"do":{"set_gate":{"intent":"i","criterion":"c","to":"made-up"}}},
+                         {"do":{"append":{"kind":"evidence","body":{"verdict":"made-up"}}}},
+                         {"do":{"append":{"kind":7,"body":{}}}},
+                         {"do":{"change":{"obligation":7,"preimage":{}}}},
+                         {"do":{"append":{"kind":"evidence","body":{"verdict":"passed"}}}}]}"#,
         );
         let results = run(&scenario);
-        assert_eq!(results.len(), 5);
+        assert_eq!(results.len(), 9);
+        for r in &results[1..8] {
+            assert_eq!(json::encode(r), json::encode(&results[0]));
+        }
+        let results = &results[4..];
         let last = json::encode(&results[4]);
         assert_eq!(
             json::encode(&results[0]).replace(r#""rejected":0"#, ""),

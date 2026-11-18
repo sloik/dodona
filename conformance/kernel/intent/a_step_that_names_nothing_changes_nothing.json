@@ -1,0 +1,115 @@
+{
+  "kind": "intent",
+  "name": "a_step_that_names_nothing_changes_nothing",
+  "claim": "C23",
+  "covers": [],
+  "why": "A step that names a criterion the intent does not have, or gives a status or a gate that does not exist, changes nothing. An exception asked for on a criterion that does not exist does not take effect and its level is self, even where the floor is self and the owner asks.",
+  "policy": {
+    "exception_separation": "self",
+    "min_hard_gates": 1
+  },
+  "criteria": {
+    "c1": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "fulfilled"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "nope",
+          "status": "failed"
+        }
+      },
+      "expect": {
+        "status": "fulfilled"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "criterion": "nope",
+          "to": "soft"
+        }
+      },
+      "expect": {
+        "status": "fulfilled"
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "nope",
+          "to": "soft",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "fulfilled",
+        "amendment": {
+          "takes_effect": false,
+          "level": "self"
+        }
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "nope",
+          "to": "soft",
+          "by": "owner",
+          "claims": "helper",
+          "source": "declared"
+        }
+      },
+      "expect": {
+        "status": "fulfilled",
+        "amendment": {
+          "takes_effect": false,
+          "level": "self"
+        }
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "criterion": "c1",
+          "status": "maybe"
+        }
+      },
+      "expect": {
+        "status": "fulfilled"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "criterion": "c1",
+          "to": "optional"
+        }
+      },
+      "expect": {
+        "status": "fulfilled"
+      }
+    }
+  ]
+}

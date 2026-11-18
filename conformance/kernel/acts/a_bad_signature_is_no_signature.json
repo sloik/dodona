@@ -92,11 +92,15 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],
-            "mac": "1afb9ad743879c509175e2206e28a232fb7bca7f177b71b147ca00914db269ab"
+            "mac": "c8437d18d38746d1ea1cce27709dc40253c5bf96c650079de348f81d57fee9ef"
           }
         }
       },
@@ -179,11 +183,15 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],
-            "mac": "aea63d37389afd0e912652f3210e2279bfa5dae65a29096efbdcb8be75fb1600"
+            "mac": "b7305373a9f2965de99c3bdc2d9ecfb92905972dbb9c90ae6a0f4b1bc2b9695e"
           }
         }
       },
@@ -266,11 +274,15 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],
-            "mac": "60a5674a698c529480aebec89c14c659c505807b63c02c87796b99f7919d6267"
+            "mac": "929cc5d64f89253d65176477bfe13ccf809c54297f3a3300046dd1e557e1a7e1"
           }
         }
       },
@@ -353,7 +365,11 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
               "transcript",
               "worker"
             ],

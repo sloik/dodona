@@ -1,4 +1,7 @@
-use crate::json::{self, Value};
+use crate::{
+    intent,
+    json::{self, Value},
+};
 use std::collections::BTreeMap;
 fn status(
     confirmed: bool,
@@ -22,6 +25,10 @@ fn status(
     } else {
         "delivered"
     }
+}
+/// The gate a step gives under `field`, if it is one a tree node can have.
+fn gate<'a>(step: &'a Value, field: &str) -> Option<&'a str> {
+    step.text(field).filter(|g| *g == "hard" || *g == "soft")
 }
 /// The gate and check of the root or of a child, if that node is there.
 fn node<'a>(
@@ -59,30 +66,36 @@ pub fn run(input: &Value) -> Vec<Value> {
             }
             if let Some(c) = a.opt("check") {
                 // A check of a child that is not there has nothing to act on.
-                if let Some(node) = node(&mut root, &mut children, c.get("node").str()) {
-                    node.1 = c.get("status").str().into();
+                let status = c.text("status").filter(|s| intent::CHECKS.contains(s));
+                let node = c
+                    .text("node")
+                    .and_then(|n| node(&mut root, &mut children, n));
+                if let (Some(node), Some(status)) = (node, status) {
+                    node.1 = status.into();
                 }
             }
             if let Some(e) = a.opt("edit") {
-                if let Some(node) = node(&mut root, &mut children, e.get("node").str()) {
-                    if node.0 != e.get("to").str() {
-                        node.0 = e.get("to").str().into();
+                let node = e
+                    .text("node")
+                    .and_then(|n| node(&mut root, &mut children, n));
+                if let (Some(node), Some(to)) = (node, gate(e, "to")) {
+                    if node.0 != to {
+                        node.0 = to.into();
                         confirmed = false;
                     }
                 }
             }
             if let Some(r) = a.opt("remove") {
-                if children.remove(r.get("child").str()).is_some() {
+                if r.text("child").and_then(|c| children.remove(c)).is_some() {
                     confirmed = false;
                 }
             }
             if let Some(add) = a.opt("add") {
-                if !children.contains_key(add.get("child").str()) {
-                    children.insert(
-                        add.get("child").str().into(),
-                        (add.get("gate").str().into(), "unknown".into()),
-                    );
-                    confirmed = false;
+                if let (Some(child), Some(gate)) = (add.text("child"), gate(add, "gate")) {
+                    if child != "root" && !children.contains_key(child) {
+                        children.insert(child.into(), (gate.into(), "unknown".into()));
+                        confirmed = false;
+                    }
                 }
             }
             json::object(vec![(
@@ -109,5 +122,22 @@ mod tests {
         assert!(node(&mut root, &mut c, "root").is_some());
         assert!(node(&mut root, &mut c, "a").is_some());
         assert!(node(&mut root, &mut c, "gone").is_none());
+        let input = json::parse(
+            br#"{"root":{"gate":"hard"},"children":{"a":{"gate":"hard"}},"policy":{"min_hard_gates":1},"steps":[
+                {"do":{"check":{"node":"root","status":"passed"}}},{"do":{"check":{"node":"a","status":"passed"}}},
+                {"do":{"confirm":{}}},
+                {"do":{"check":{"node":"gone","status":"failed"}}},{"do":{"check":{"node":"a","status":"made-up"}}},
+                {"do":{"edit":{"node":"gone","to":"soft"}}},{"do":{"edit":{"node":"a","to":"deferred"}}},
+                {"do":{"remove":{"child":"gone"}}},{"do":{"add":{"child":"b","gate":"made-up"}}},
+                {"do":{"add":{"child":"root","gate":"hard"}}},{"do":{"add":{"child":7,"gate":"hard"}}},
+                {"do":{"add":{"child":"b","gate":"soft"}}}]}"#,
+        )
+        .unwrap();
+        let got: Vec<String> = run(&input)
+            .iter()
+            .map(|r| r.get("status").str().to_owned())
+            .collect();
+        assert_eq!(got[2..11], ["delivered"; 9]);
+        assert_eq!(got[11], "draft");
     }
 }

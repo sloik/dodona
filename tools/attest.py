@@ -15,6 +15,10 @@ the checker itself, and sign only what it observed. None exists yet.
 The check value is HMAC-SHA256 under the key, over the canonical encoding of
 {"covers": C, "fields": F}: C is the sorted list of covered field names and F
 holds each of those fields that the record has, under its name.
+
+`sign` always covers `kind`, `target`, `result` and `lineage` as well as the
+fields it is asked to cover, so that the value binds what was judged: no level
+above helper is granted without them (conformance/README.md, Acts scenarios).
 """
 from __future__ import annotations
 
@@ -28,6 +32,8 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import canonical  # noqa: E402
 
+BINDS = ["kind", "target", "result", "lineage"]
+
 
 def check_value(record: dict, covers: list[str], key: bytes) -> str:
     covered = {"covers": covers, "fields": {name: record[name] for name in covers if name in record}}
@@ -35,7 +41,7 @@ def check_value(record: dict, covers: list[str], key: bytes) -> str:
 
 
 def sign(record: dict, covers: list[str], key: bytes, key_name: str) -> dict:
-    covers = canonical.sort_set(covers)
+    covers = canonical.sort_set(list(covers) + BINDS)
     signed = {k: v for k, v in record.items() if k != "attestation"}
     signed["attestation"] = {"harness": key_name, "key": key_name, "covers": covers, "mac": check_value(signed, covers, key)}
     return signed

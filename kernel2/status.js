@@ -1,7 +1,9 @@
 'use strict';
 // The whole-project report (conformance/README.md, status scenarios).
 
-const { identityOf } = require('./identity');
+const { identityOf, coreKey } = require('./identity');
+const vocabulary = require('./vocabulary');
+const { SCALE } = require('./assurance');
 const { gradeAct } = require('./acts');
 const { LEVELS, rank, intentStatus } = require('./intent');
 
@@ -29,34 +31,69 @@ function pairingTarget(intentId, criterion, obligation) {
 // The level an act record is graded at for an intent: as in acts scenarios,
 // but `self` if its worker is not the intent's worker.
 function levelFor(record, intent, policy) {
-  if (!record.worker || record.worker.id !== intent.worker) return 'self';
-  return gradeAct(record, policy).level;
+  try {
+    if (!record.worker || record.worker.id !== intent.worker) return 'self';
+    return gradeAct(record, policy).level;
+  } catch (error) {
+    return 'self'; // a record that cannot be understood earns nothing
+  }
 }
 
-// A record is rejected if its core key is not the identity of its own preimage.
+// A record is rejected if its core key is not the identity of its own preimage,
+// or its preimage is one that must be refused (an unsorted set, a platform in the key).
 function isRejected(body) {
-  return body.core_key !== identityOf(body.preimage);
+  try {
+    return rejectedOrThrow(body);
+  } catch (error) {
+    return true; // a preimage that cannot be keyed
+  }
 }
 
-// Status of one obligation from the evidence records that count for it.
-function obligationStatus(name, preimage, ledger, state) {
+function rejectedOrThrow(body) {
+  return body.core_key !== identityOf(body.preimage) || coreKey(JSON.stringify(body.preimage)).refused !== undefined;
+}
+
+// The level an evidence record states; `asserted` if it states none or one off the scale.
+function statedLevel(body) {
+  return SCALE.includes(body.level) ? body.level : 'asserted';
+}
+
+// The weakest and the strongest of some levels on the assurance scale.
+function weakestOf(levels) {
+  return levels.reduce((a, b) => (SCALE.indexOf(b) < SCALE.indexOf(a) ? b : a));
+}
+function strongestOf(levels) {
+  return levels.reduce((a, b) => (SCALE.indexOf(b) > SCALE.indexOf(a) ? b : a));
+}
+
+// The evidence records that count for one obligation.
+function countingRecords(name, preimage, ledger, state) {
   const current = identityOf(preimage);
   const writers = [state.self.writer, ...state.policy.trusted_writers];
-  const verdicts = ledger
+  return ledger
     .filter((entry) => entry.kind === 'evidence' && !isRejected(entry.body))
     .map((entry) => entry.body)
     .filter((body) => body.obligation === name
       && writers.includes(body.writer)
       && body.platform === state.self.platform
-      && body.core_key === current)
-    .map((body) => body.verdict);
+      && body.core_key === current);
+}
+
+// Status of one obligation from the records that count for it.
+function obligationStatus(records) {
+  const verdicts = records.map((body) => body.verdict);
   if (verdicts.length === 0) return { status: 'unknown', reason: 'never-run' };
   if (verdicts.every((verdict) => verdict === 'passed')) return { status: 'passed' };
   if (verdicts.every((verdict) => verdict === 'failed')) return { status: 'failed' };
   return { status: 'conflict' };
 }
 
-function judgeIntent(id, intent, obligations, ledger, state) {
+// The level an obligation shows: the strongest of its counting records if it passed, otherwise none.
+function obligationLevel(status, records) {
+  return status === 'passed' ? strongestOf(records.map(statedLevel)) : 'none';
+}
+
+function judgeIntent(id, intent, obligations, levels, ledger, state) {
   const policy = state.policy;
   const baseline = baselineOf(intent);
   const acts = ledger.filter((entry) => entry.kind === 'act' && entry.body.result === 'agreed'
@@ -64,7 +101,7 @@ function judgeIntent(id, intent, obligations, ledger, state) {
 
   // The acts that would confirm the intent but for the floor, at their levels.
   const confirmLevels = acts
-    .filter((act) => act.kind === CONFIRM && act.target === baseline && act.actor.id === intent.owner)
+    .filter((act) => act.kind === CONFIRM && act.target === baseline && (act.actor || {}).id === intent.owner)
     .map((act) => levelFor(act, intent, policy));
   const floor = (policy.floors || {})[CONFIRM] || 'self';
   const confirmed = confirmLevels.some((level) => rank(level) >= rank(floor));
@@ -84,6 +121,23 @@ function judgeIntent(id, intent, obligations, ledger, state) {
   if (!confirmed) status = 'draft';
   else if (uncovered) status = 'uncovered';
   else status = intentStatus(policy, true, criteria);
+
+  // The level shown: the weakest criterion, each the weakest of its obligations.
+  const criterionLevels = Object.keys(intent.criteria).sort().map((name) => {
+    const own = intent.criteria[name].checked_by.map((obligation) => levels[obligation]);
+    return { name, level: own.length === 0 ? 'none' : weakestOf(own) };
+  });
+  const shownLevel = criterionLevels.length === 0 ? 'none' : weakestOf(criterionLevels.map((item) => item.level));
+  const shown = {
+    level: shownLevel,
+    criterion: (criterionLevels.find((item) => item.level === shownLevel) || { name: null }).name,
+  };
+
+  // Exceptions: agreed grants of an amendment, counted if the owner gave them at or above the floor.
+  const grantFloor = (policy.floors || {})['grant-amendment'] || 'self';
+  const grants = acts.filter((act) => act.kind === 'grant-amendment');
+  const counted = grants.filter((act) => (act.actor || {}).id === intent.owner && rank(levelFor(act, intent, policy)) >= rank(grantFloor));
+  const exceptions = { counted: counted.length, below_floor: grants.length - counted.length };
 
   const all = Object.values(criteria);
   const gates = {
@@ -112,7 +166,7 @@ function judgeIntent(id, intent, obligations, ledger, state) {
     apart_or_better: everyLevel.filter((level) => rank(level) >= rank('apart')).length,
     of: everyLevel.length,
   };
-  return { status, gates, score, separation, criteria, uncovered };
+  return { status, gates, score, shown, exceptions, separation, criteria, uncovered };
 }
 
 // The highest of some levels; `self` if there are none.
@@ -132,15 +186,20 @@ function projectStatus(policy, intents, reports, obligations) {
 
 function report(state, ledger) {
   const obligations = {};
+  const levels = {};
   for (const [name, details] of Object.entries(state.obligations)) {
-    obligations[name] = obligationStatus(name, details.preimage, ledger, state);
+    const records = countingRecords(name, details.preimage, ledger, state);
+    obligations[name] = obligationStatus(records);
+    levels[name] = obligationLevel(obligations[name].status, records);
   }
   const reports = {};
   const shown = {};
   for (const [id, intent] of Object.entries(state.intents)) {
-    const judged = judgeIntent(id, intent, obligations, ledger, state);
+    const judged = judgeIntent(id, intent, obligations, levels, ledger, state);
     reports[id] = judged;
-    shown[id] = { status: judged.status, gates: judged.gates, score: judged.score, separation: judged.separation };
+    shown[id] = {
+      status: judged.status, gates: judged.gates, score: judged.score, shown: judged.shown, exceptions: judged.exceptions, separation: judged.separation,
+    };
   }
   const rejected = ledger.filter((entry) => entry.kind === 'evidence' && isRejected(entry.body)).length;
   return {
@@ -149,6 +208,10 @@ function report(state, ledger) {
     project: { status: projectStatus(state.policy, state.intents, reports, obligations) },
     rejected,
   };
+}
+
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function runScenario(scenario) {
@@ -160,9 +223,9 @@ function runScenario(scenario) {
   };
   const ledger = [];
   return scenario.steps.map(({ do: step }) => {
-    if (step.append && step.append.body && typeof step.append.body === 'object') ledger.push({ kind: step.append.kind, body: step.append.body });
-    else if (step.change && state.obligations[step.change.obligation]) state.obligations[step.change.obligation].preimage = step.change.preimage;
-    else if (step.set_gate && state.intents[step.set_gate.intent] && state.intents[step.set_gate.intent].criteria[step.set_gate.criterion]) state.intents[step.set_gate.intent].criteria[step.set_gate.criterion].gate = step.set_gate.to;
+    if (step.append && isObject(step.append.body)) ledger.push({ kind: step.append.kind, body: step.append.body });
+    else if (step.change && state.obligations[step.change.obligation] && isObject(step.change.preimage)) state.obligations[step.change.obligation].preimage = step.change.preimage;
+    else if (step.set_gate && vocabulary.GATES.includes(step.set_gate.to) && state.intents[step.set_gate.intent] && state.intents[step.set_gate.intent].criteria[step.set_gate.criterion]) state.intents[step.set_gate.intent].criteria[step.set_gate.criterion].gate = step.set_gate.to;
     return report(state, ledger);
   });
 }

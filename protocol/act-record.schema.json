@@ -247,7 +247,7 @@
           "description": "HMAC-SHA256, in lowercase hexadecimal, under the named key, of the canonical encoding of {\"covers\": C, \"fields\": F}, where C is `covers` and F holds each covered field of this record under its name."
         }
       },
-      "description": "A harness's keyed check value over the listed fields. Fields it does not cover fall back to declared. It is a shared-key value, not a signature: whoever can check it could also have made it, so the key must be out of the worker's reach."
+      "description": "A harness's keyed check value over the listed fields. `covers` is sorted as the canonical encoding sorts keys, with no name repeated, and is used in that order. Fields it does not cover fall back to declared, and no level above helper is granted unless it covers `kind`, `target`, `result` and `lineage` as well as the fields the facts read. It is a shared-key value, not a signature: whoever can check it could also have made it, so the key must be out of the worker's reach."
     },
     "lineage": {
       "type": "object",

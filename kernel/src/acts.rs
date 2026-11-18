@@ -34,10 +34,7 @@ fn hmac(key: &[u8], msg: &[u8]) -> String {
     canonical::sha256(&outer)
 }
 pub fn text<'a>(v: &'a Value, k: &str) -> Option<&'a str> {
-    match v.opt(k) {
-        Some(Value::String(s)) => Some(s),
-        _ => None,
-    }
+    v.text(k)
 }
 fn list(v: Option<&Value>) -> &[Value] {
     match v {

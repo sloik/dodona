@@ -126,7 +126,14 @@ function gradeAct(record, policy) {
 }
 
 function runScenario(scenario) {
-  return scenario.steps.map(({ do: step }) => gradeAct(step.grade, scenario.policy));
+  const nothing = { claims: 'self', level: 'self', source: 'declared' };
+  return scenario.steps.map(({ do: step }) => {
+    try {
+      return gradeAct(step.grade, scenario.policy);
+    } catch (error) {
+      return nothing; // a record that cannot be understood earns nothing
+    }
+  });
 }
 
 module.exports = { factsOf, claimedLevel, attestationHolds, vouchedFacts, gradeAct, runScenario };

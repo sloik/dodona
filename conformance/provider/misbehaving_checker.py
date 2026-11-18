@@ -41,6 +41,20 @@ def run(body: dict) -> dict:
         described["inputs"] = [{"path": "secrets.txt", "identity": "sha256:" + "0" * 64}]
     if MODE == "lies-about-an-input":
         described["inputs"] = [dict(body["inputs"][0], identity="sha256:" + "f" * 64)]
+    if MODE == "declared-tool-not-given":
+        described["program"] = {"tool": "shell", "path": "bin/sh"}
+    if MODE == "declared-tool-not-given-in-argument":
+        described["args"][1] = "${tool:shell}/bin/sh"
+    if MODE == "undeclared-tool-in-argument-no-slash":
+        described["args"][1] = "${tool:shell}"
+    if MODE == "second-undeclared-tool-in-one-argument":
+        described["args"][1] = "${tool:checker}/lib/rules.jar:${tool:shell}/bin/sh"
+    if MODE == "another-tool-digest":
+        described["tools"] = [{"name": "checker", "digest": "sha256:" + "e" * 64}]
+    if MODE == "tool-list-names-another-tool":
+        described["tools"] = described["tools"] + [{"name": "shell", "digest": "sha256:" + "e" * 64}]
+    if MODE == "nul-in-argument":
+        described["args"][2] = "a.txt\u0000--other"
     if MODE == "output-outside":
         described["outputs"] = [{"path": "/tmp/report.txt"}]
     return described
@@ -48,10 +62,13 @@ def run(body: dict) -> dict:
 
 def main() -> None:
     hello = read()
-    send({"type": "manifest", "echo": hello["echo"], "manifest": {
+    tools = [{"name": "checker", "constraint": "=1"}]
+    if MODE.startswith("declared-tool-not-given"):
+        tools.append({"name": "shell", "constraint": "*"})  # declared, and the host hands this check no such tool
+    send({"type": "manifest", "echo": hello["echo"] + (" changed" if MODE == "wrong-echo" else ""), "manifest": {
         "protocol": "0.2", "name": "misbehaving.checker", "version": "0",
         "capabilities": [{"capability": "obligation.check", "determinism": "deterministic", "strength": {"class": "test", "rank": RANK}}],
-        "tools": [{"name": "checker", "constraint": "=1"}], "trusted_base": []}})
+        "tools": tools, "trusted_base": []}})
     while True:
         request = read()
         if request is None or request.get("type") == "shutdown":
@@ -66,10 +83,20 @@ def main() -> None:
                 answer = {"next": run(body), **passed}
             if MODE == "neither":
                 answer = {}
+            if MODE == "failed-without-run":
+                answer = {"final": {"verdict": "failed", "strength": {"class": "test", "rank": RANK}}}
         else:
             answer = passed
             if MODE == "stronger-than-declared":
                 answer = {"final": {"verdict": "passed", "strength": {"class": "test", "rank": "exhaustive"}}}
+            if MODE == "failed-stronger-than-declared":
+                answer = {"final": {"verdict": "failed", "strength": {"class": "test", "rank": "exhaustive"}}}
+            if MODE == "another-strength-class":
+                answer = {"final": {"verdict": "passed", "strength": {"class": "proof", "rank": RANK}}}
+            if MODE == "runs-without-end":
+                answer = {"next": run(body_of_start)}
+            if MODE == "eight-runs":
+                answer = {"next": run(body_of_start)} if body["run"] < 8 else passed
             if MODE == "no-strength":
                 answer = {"final": {"verdict": "passed"}}
             if MODE == "lies-about-an-attachment":
@@ -87,6 +114,8 @@ def main() -> None:
         message = {"type": "result", "id": request["id"], "capability": request["capability"], "body": answer}
         if MODE == "answers-another-capability":
             message["capability"] = "obligation.enumerate"
+        if MODE == "answers-another-request":
+            message["id"] = request["id"] + "0"
         send(message)
 
 

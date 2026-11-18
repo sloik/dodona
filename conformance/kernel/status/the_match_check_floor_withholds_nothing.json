@@ -1,0 +1,337 @@
+{
+  "kind": "status",
+  "name": "the_match_check_floor_withholds_nothing",
+  "claim": "C36",
+  "covers": [],
+  "why": "The floor for match-check is read by no rule: a pairing below it is still reported at its level.",
+  "self": {
+    "writer": "kernel-a",
+    "platform": "p1"
+  },
+  "policy": {
+    "min_hard_gates": 1,
+    "required": [
+      "i1"
+    ],
+    "trusted_writers": [],
+    "floors": {
+      "confirm-baseline": "helper",
+      "match-check": "apart"
+    },
+    "attestors": {
+      "harness-1": "6b65792d666f722d7468652d6b69742d6f6e6c792d6e6f742d612d736563726574"
+    },
+    "makes": [
+      [
+        "vendor-a/family-x",
+        "vendor-a/family-x-small"
+      ],
+      [
+        "vendor-b/family-y"
+      ]
+    ]
+  },
+  "obligations": {
+    "ob-a": {
+      "preimage": {
+        "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+            "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+          "expect": "holds"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      }
+    },
+    "ob-b": {
+      "preimage": {
+        "obligation": "sha256:042a022299a9ace7de8d960a2ec8533d627b4b2c375629cf05de0df8894cd907",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+          ],
+          "targets": [
+            "sha256:5cdc5e62e9ab46c230bc591c0e9c56de6e2c40300fee21b5b9d352380e7ed4e1"
+          ],
+          "closure": [
+            "sha256:5cdc5e62e9ab46c230bc591c0e9c56de6e2c40300fee21b5b9d352380e7ed4e1",
+            "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:6ba9234898ef38b8d53f1e76040290e0b81415879a366495adfdc8f3653dd8f8",
+          "expect": "holds"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        }
+      }
+    }
+  },
+  "intents": {
+    "i1": {
+      "owner": "owner-1",
+      "worker": "worker-1",
+      "children": [],
+      "criteria": {
+        "c1": {
+          "gate": "hard",
+          "checked_by": [
+            "ob-a"
+          ]
+        },
+        "c2": {
+          "gate": "deferred",
+          "checked_by": [
+            "ob-b"
+          ]
+        }
+      }
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "append": {
+          "kind": "act",
+          "body": {
+            "ticket": "t-1",
+            "kind": "confirm-baseline",
+            "target": "sha256:637fc444c533686b82544fcc7581cdf52def8f2f7bc508b647c70a1f2ca6864c",
+            "lineage": {
+              "intent": "i1",
+              "kind": "confirm-baseline"
+            },
+            "result": "agreed",
+            "actor": {
+              "id": "owner-1",
+              "session": "s-owner",
+              "started_by": "harness-1"
+            },
+            "worker": {
+              "id": "worker-1",
+              "session": "s-100"
+            },
+            "brief": {
+              "issued_by": "kernel",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            "given": [
+              {
+                "role": "criteria",
+                "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+              }
+            ],
+            "fresh_context": true,
+            "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6"
+          }
+        }
+      },
+      "expect": {
+        "intents": {
+          "i1": {
+            "separation": {
+              "weakest": "self",
+              "act": "match-check",
+              "apart_or_better": 0,
+              "of": 3
+            }
+          }
+        }
+      }
+    },
+    {
+      "do": {
+        "append": {
+          "kind": "act",
+          "body": {
+            "ticket": "t-1",
+            "kind": "match-check",
+            "target": "sha256:f95e49649bebd8004eadac408c2b695e7cd6955efb5050ae401b0af0c80c94e1",
+            "lineage": {
+              "intent": "i1",
+              "criterion": "c1",
+              "kind": "match-check"
+            },
+            "result": "agreed",
+            "actor": {
+              "id": "checker-7",
+              "session": "s-900",
+              "started_by": "harness-1",
+              "make": {
+                "vendor": "vendor-b",
+                "family": "family-y"
+              }
+            },
+            "worker": {
+              "id": "worker-1",
+              "session": "s-100",
+              "make": {
+                "vendor": "vendor-a",
+                "family": "family-x"
+              }
+            },
+            "brief": {
+              "issued_by": "kernel",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            "given": [
+              {
+                "role": "brief",
+                "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+              },
+              {
+                "role": "criteria",
+                "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+              },
+              {
+                "role": "known-right",
+                "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+              },
+              {
+                "role": "known-wrong",
+                "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+              },
+              {
+                "role": "work",
+                "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+              }
+            ],
+            "fresh_context": true,
+            "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+            "known_bad": {
+              "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+              "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+              "supplied_by": "owner",
+              "criterion": "c1",
+              "rejected_wrong": true,
+              "accepted_right": true
+            }
+          }
+        }
+      },
+      "expect": {
+        "intents": {
+          "i1": {
+            "separation": {
+              "weakest": "self",
+              "act": "match-check",
+              "apart_or_better": 0,
+              "of": 3
+            }
+          }
+        }
+      }
+    },
+    {
+      "do": {
+        "append": {
+          "kind": "act",
+          "body": {
+            "ticket": "t-1",
+            "kind": "match-check",
+            "target": "sha256:6bb99e19dca2ea1ca7c3382d665cd24eebdadc05b80f4452b74a56b2fcd15e9a",
+            "lineage": {
+              "intent": "i1",
+              "criterion": "c2",
+              "kind": "match-check"
+            },
+            "result": "agreed",
+            "actor": {
+              "id": "checker-7",
+              "session": "s-900",
+              "started_by": "harness-1",
+              "make": {
+                "vendor": "vendor-b",
+                "family": "family-y"
+              }
+            },
+            "worker": {
+              "id": "worker-1",
+              "session": "s-100",
+              "make": {
+                "vendor": "vendor-a",
+                "family": "family-x"
+              }
+            },
+            "brief": {
+              "issued_by": "kernel",
+              "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+            },
+            "given": [
+              {
+                "role": "brief",
+                "content": "sha256:ec3f4a4cd18a80ef0278399034b7262590a4c80ed67cadddb91c6e8769e387b9"
+              },
+              {
+                "role": "criteria",
+                "content": "sha256:262d517bffd06484e2341b4a379c7f4fa4be9284a9a82631c03420953d60bd67"
+              },
+              {
+                "role": "known-right",
+                "content": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03"
+              },
+              {
+                "role": "known-wrong",
+                "content": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623"
+              },
+              {
+                "role": "work",
+                "content": "sha256:22ac10dee62faec17dca47ff15c4387a0ba49d03382c8d541e2d512a81a82759"
+              }
+            ],
+            "fresh_context": true,
+            "transcript": "sha256:54e6289e14c7b0e7ad9acc2dfc4c1e3d027d0eef7f5c4c3fe7c292761d0e06a6",
+            "known_bad": {
+              "wrong": "sha256:ed93fe9e00c053cad2a33ac06ff9f393b9697861fdb06e79d644503c1a7e9623",
+              "right": "sha256:0a908abdca8f972ea76a68a8bfe789283dc968a94f3cf49e03bd8718ee6acf03",
+              "supplied_by": "owner",
+              "criterion": "c1",
+              "rejected_wrong": true,
+              "accepted_right": true
+            }
+          }
+        }
+      },
+      "expect": {
+        "intents": {
+          "i1": {
+            "separation": {
+              "weakest": "helper",
+              "act": "confirm-baseline",
+              "apart_or_better": 0,
+              "of": 3
+            }
+          }
+        }
+      }
+    }
+  ]
+}

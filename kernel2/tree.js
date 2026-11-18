@@ -3,6 +3,8 @@
 
 // Tree status. `nodes` is the root and every child as { gate, check };
 // `children` is the children only.
+const vocabulary = require('./vocabulary');
+
 function treeStatus(policy, confirmed, root, children) {
   const nodes = [root, ...children];
   const hard = nodes.filter((node) => node.gate === 'hard');
@@ -26,17 +28,17 @@ function runScenario(scenario) {
       confirmed = true;
     } else if (step.check) {
       const node = nodeNamed(step.check.node);
-      if (node) node.check = step.check.status;
+      if (node && vocabulary.CHECKS.includes(step.check.status)) node.check = step.check.status;
     } else if (step.edit) {
       const node = nodeNamed(step.edit.node);
-      if (node && node.gate !== step.edit.to) {
+      if (node && vocabulary.GATES.includes(step.edit.to) && node.gate !== step.edit.to) {
         node.gate = step.edit.to;
         confirmed = false;
       }
     } else if (step.remove) {
       if (children.delete(step.remove.child)) confirmed = false;
     } else if (step.add) {
-      if (!children.has(step.add.child)) {
+      if (!children.has(step.add.child) && vocabulary.GATES.includes(step.add.gate)) {
         children.set(step.add.child, { gate: step.add.gate, check: 'unknown' });
         confirmed = false;
       }

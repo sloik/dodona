@@ -31,6 +31,8 @@ def main() -> int:
 
         def report_for(number, description, case=case, seen=seen):
             seen["runs"] += 1
+            if seen["runs"] > 50:
+                raise host.Refused("the-judge-stopped-a-check-that-never-ends")
             if case["run"] != "exited":
                 return {"end": case["run"]}
             return {"handle": "h", "end": "exited", "exit_status": 0, "platform": host.PLATFORM, "isolation": "best-effort", "outputs": [],
@@ -38,8 +40,9 @@ def main() -> int:
                     "captured_output": {"path": captured.relative_to(ROOT).as_posix(), "identity": "sha256:" + "0" * 64}}
 
         transcript: list = []
-        session = host.Session([sys.executable, str(ROOT / "conformance" / "provider" / "misbehaving_checker.py"), case["mode"]], ROOT, transcript, deadline_s=20)
+        session = None
         try:
+            session = host.Session([sys.executable, str(ROOT / "conformance" / "provider" / "misbehaving_checker.py"), case["mode"]], ROOT, transcript, deadline_s=20)
             got = host.drive_check(session, OBLIGATION, INPUTS, TOOLS, report_for)
             final = got["final"]
             verdict = "unavailable" if final.get("reason") == "run-unavailable" else final["verdict"]
@@ -48,7 +51,8 @@ def main() -> int:
         except host.Refused as err:
             result = {"outcome": "refused", "reason": str(err)}
         finally:
-            session.close()
+            if session is not None:
+                session.close()
         interpreted = any(m["to"] == "provider" and m["message"].get("body", {}).get("op") == "run.result" for m in transcript)
         want = {k: case[k] for k in ("outcome", "verdict", "reason") if k in case}
         problems = []
@@ -56,6 +60,8 @@ def main() -> int:
             problems.append(f"expected {want}, got {result}")
         if case.get("ran") is False and seen["runs"]:
             problems.append("the run was started")
+        if "runs" in case and seen["runs"] != case["runs"]:
+            problems.append(f"expected {case['runs']} runs to be started, {seen['runs']} were")
         if case.get("asked_to_interpret") is False and interpreted:
             problems.append("the provider was asked to interpret a run that did not exit")
         if "distinct_run_keys" in case and len(set(seen.get("keys", []))) != case["distinct_run_keys"]:

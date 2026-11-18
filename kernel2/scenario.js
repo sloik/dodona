@@ -14,11 +14,38 @@ const runners = {
   status: require('./status'),
 };
 
+// A step the runner could not take. It changes nothing and is answered with the
+// result as things stand. This is a safety net: the runners already turn aside
+// every step they understand to be out of turn or carrying a value not allowed.
+const NO_STEP = { do: {} };
+
+function runSafely(runner, scenario) {
+  try {
+    return runner.runScenario(scenario);
+  } catch (error) {
+    // Take the steps one at a time; a step that throws is dropped and answered
+    // with the result of the steps kept before it.
+    const kept = [];
+    const results = [];
+    for (const step of scenario.steps) {
+      try {
+        const answers = runner.runScenario({ ...scenario, steps: [...kept, step] });
+        results.push(answers[answers.length - 1]);
+        kept.push(step);
+      } catch (stepError) {
+        const current = runner.runScenario({ ...scenario, steps: [...kept, NO_STEP] });
+        results.push(current[current.length - 1]);
+      }
+    }
+    return results;
+  }
+}
+
 // Returns { results: [...] }, or throws if the kind is not known.
 function runScenario(scenario) {
   const runner = runners[scenario.kind];
   if (runner === undefined) throw new Error(`unknown scenario kind: ${scenario.kind}`);
-  return { results: runner.runScenario(scenario) };
+  return { results: runSafely(runner, scenario) };
 }
 
 module.exports = { runScenario };

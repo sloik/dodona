@@ -25,9 +25,10 @@ From the repository root:
     python3 tools/run_path_vectors.py -- node kernel2/dodona-kernel2.js path path-set
     node --test kernel2/test.js
     node kernel2/test-normalization.js .ucd
+    python3 tools/run_attest_check.py -- node kernel2/dodona-kernel2.js scenario
     node kernel2/plant.js
 
-`plant.js` copies the kernel, plants each defect listed in `defects.json` one at a time, and reports whether the kit caught it.
+`plant.js` copies the kernel, plants each defect listed in `defects.json` one at a time, and runs every judge (kit, ledger cases, key vectors, attestation check, encoding and path vectors) on the damaged copy. A defect is caught if any judge rejects it; a copy that does not load is reported as BROKEN, not caught.
 
 ## Unicode
 

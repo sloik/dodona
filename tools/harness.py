@@ -40,7 +40,8 @@ import tempfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import attest  # noqa: E402
 
-COVERS = ["actor", "brief", "fresh_context", "given", "known_bad", "transcript", "worker"]
+# The fields the facts read, and the four that bind the value to what was judged.
+COVERS = ["actor", "brief", "fresh_context", "given", "known_bad", "transcript", "worker", "kind", "target", "result", "lineage"]
 
 
 def identity(data: bytes) -> str:

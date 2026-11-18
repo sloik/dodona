@@ -2,6 +2,8 @@
 // Intent status and exceptions (MODEL.md section 5, decision 0024), shared by
 // the `scenario` and `states` commands.
 
+const vocabulary = require('./vocabulary');
+
 const LEVELS = ['self', 'helper', 'apart', 'tested', 'cross-make', 'credentialed'];
 
 // The highest level each source of facts can earn.
@@ -45,6 +47,13 @@ function intentStatus(policy, confirmed, criteria) {
   return 'delivered';
 }
 
+// True if an amend step names a criterion that exists and carries only allowed values.
+function validAmend(step, known) {
+  const claimsOk = step.claims === undefined || step.claims === null || LEVELS.includes(step.claims);
+  const sourceOk = step.source === undefined || vocabulary.SOURCES.includes(step.source);
+  return known(step.criterion) && vocabulary.GATES.includes(step.to) && ['owner', 'worker'].includes(step.by) && claimsOk && sourceOk;
+}
+
 // Runs an intent scenario. Returns the list of results, one per step.
 function runScenario(scenario) {
   const criteria = {};
@@ -57,16 +66,16 @@ function runScenario(scenario) {
     const known = (name) => Object.hasOwn(criteria, name);
     if (step.confirm) {
       confirmed = true;
-    } else if (step.check && known(step.check.criterion)) {
+    } else if (step.check && known(step.check.criterion) && vocabulary.CHECKS.includes(step.check.status)) {
       criteria[step.check.criterion].check = step.check.status;
-    } else if (step.edit && known(step.edit.criterion)) {
+    } else if (step.edit && known(step.edit.criterion) && vocabulary.GATES.includes(step.edit.to)) {
       if (criteria[step.edit.criterion].gate !== step.edit.to) {
         criteria[step.edit.criterion].gate = step.edit.to;
         confirmed = false;
       }
-    } else if (step.amend) {
+    } else if (step.amend && validAmend(step.amend, known)) {
       const judged = judgeAmendment(scenario.policy, step.amend);
-      if (judged.takes_effect && known(step.amend.criterion)) criteria[step.amend.criterion].gate = step.amend.to;
+      if (judged.takes_effect) criteria[step.amend.criterion].gate = step.amend.to;
       amendment = { takes_effect: judged.takes_effect, level: judged.level };
     }
     const result = { status: intentStatus(scenario.policy, confirmed, criteria) };

@@ -18,7 +18,9 @@ express, and records the verdicts.
 
 The host enforces: an answer matches its request; every file a provider names is hashed again; each run of a check has its own key; a verdict rests on a run; a
 result does not claim more strength than the manifest declares; a program lies
-inside a tool the provider declared; every path passes the path check; a run
+inside a tool the provider declared and the check was given, with the digest
+it was given; a result states the class of strength the manifest declares; a
+check asks for at most eight runs; every path passes the path check; a run
 that did not exit ends the check in error. Every message of a session is kept
 in a transcript, so it can be validated against the schemas afterwards.
 """
@@ -46,6 +48,8 @@ RANKS = ["documented", "sampled", "bounded", "exhaustive"]
 LEVEL_OF_RANK = {"documented": "asserted", "sampled": "sampled", "bounded": "bounded", "exhaustive": "proven"}
 PLATFORM = {"os": "linux", "arch": "aarch64", "libc": "gnu"}
 TOOL_FILE = re.compile(r"\$\{tool:([^}]*)\}/(.*)")
+TOOL_NAME = re.compile(r"\$\{tool:([^}]*)\}")  # every mention of a tool in an argument, with or without a file after it
+MAX_RUNS = 8  # a check may ask for this many runs and no more
 
 
 class Refused(Exception):
@@ -69,11 +73,15 @@ class Session:
         threading.Thread(target=provider_host.read_lines, args=(self.tree.proc.stdout, 1048576, self.lines), daemon=True).start()
         threading.Thread(target=provider_host.drain, args=(self.tree.proc.stderr, 65536, log), daemon=True).start()
         echo = "héllo ☃ \u0001\u001f end"
-        self.send({"type": "hello", "protocol": ["0.2"], "limits": {"max_line_bytes": 1048576, "deadline_ms": int(deadline_s * 1000)}, "echo": echo})
-        answer = self.receive()
-        if answer.get("type") != "manifest" or answer.get("echo") != echo:
-            raise Refused("bad-manifest")
-        self.manifest = answer["manifest"]
+        try:
+            self.send({"type": "hello", "protocol": ["0.2"], "limits": {"max_line_bytes": 1048576, "deadline_ms": int(deadline_s * 1000)}, "echo": echo})
+            answer = self.receive()
+            if answer.get("type") != "manifest" or answer.get("echo") != echo:
+                raise Refused("bad-manifest")
+            self.manifest = answer["manifest"]
+        except Refused:
+            self.tree.end()  # a session that never opened leaves no provider behind
+            raise
 
     @staticmethod
     def _start(argv, cwd):
@@ -152,11 +160,16 @@ def no_fractions(text):
     raise ValueError("not-an-integer")
 
 
-def ceiling(manifest: dict, capability: str) -> str | None:
+def declared_strength(manifest: dict, capability: str) -> dict | None:
     for item in manifest["capabilities"]:
         if item["capability"] == capability and "strength" in item:
-            return item["strength"]["rank"]
+            return item["strength"]
     return None
+
+
+def ceiling(manifest: dict, capability: str) -> str | None:
+    strength = declared_strength(manifest, capability)
+    return strength["rank"] if strength else None
 
 
 def run_key(check_key: str, number: int, description: dict) -> str:
@@ -172,15 +185,22 @@ def rehash(item: dict, root: pathlib.Path) -> None:
         raise Refused("identity-mismatch")
 
 
-def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str]) -> None:
-    """The rules a run description must keep before anything is executed."""
+def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str], known_tools: dict[str, str]) -> None:
+    """The rules a run description must keep before anything is executed.
+    `known_tools` gives the digest of each tool the check was given: the ones its result is keyed by."""
     declared = {t["name"] for t in manifest.get("tools", [])}
     program = run.get("program", {})
-    if program.get("tool") not in declared:
+    named = [program.get("tool")] + [name for a in run.get("args", []) if isinstance(a, str) for name in TOOL_NAME.findall(a)]
+    if any(tool not in declared for tool in named):
         raise Refused("undeclared-tool")
+    if any(tool not in known_tools for tool in named):
+        raise Refused("tool-not-in-key")  # declared, but not among the tools this check was given
+    for item in run.get("tools", []):
+        if not isinstance(item, dict) or item.get("name") not in known_tools:
+            raise Refused("tool-not-in-key")
+        if item.get("digest") != known_tools.get(item["name"]):
+            raise Refused("tool-digest-mismatch")  # the run would use another tool than the one the result is keyed by
     placed = [m for a in run.get("args", []) if isinstance(a, str) for m in TOOL_FILE.findall(a)]
-    if any(tool not in declared for tool, _ in placed):
-        raise Refused("undeclared-tool")
     for path in ([program.get("path", "")] + [f.get("path", "") for f in run.get("inputs", []) + run.get("outputs", [])]
                  + [path for _, path in placed] + ([run["cwd"]] if "cwd" in run else [])):
         if pathcheck.check(str(path).encode("utf-8", errors="surrogatepass")) is not None:
@@ -208,12 +228,15 @@ def check_final(final: dict, manifest: dict, capability: str, runs_done: int, ro
         top, got = ceiling(manifest, capability), final.get("strength", {}).get("rank")
         if got not in RANKS or top is None or RANKS.index(got) > RANKS.index(top):
             raise Refused("strength-above-ceiling")
+        if final["strength"].get("class") != declared_strength(manifest, capability).get("class"):
+            raise Refused("strength-class-mismatch")  # a test is not a proof, whatever its rank
 
 
 def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], report_for) -> dict:
     """Take one obligation through start, runs and final. `report_for(run_number, description)` returns
     the executor's report for a run, or None if there is none yet, in which case the description is returned."""
     known = {f["path"]: f["identity"] for f in inputs}
+    known_tools = {t["name"]: t["digest"] for t in tools}
     check_key = canonical.identity({"obligation": obligation, "inputs": inputs})
     keys: list[str] = []
     body = session.ask("obligation.check", {"op": "start", "obligation": obligation, "inputs": inputs, "tools": tools, "platform": PLATFORM})
@@ -224,7 +247,9 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
         if "final" in body:
             check_final(body["final"], session.manifest, "obligation.check", runs)
             return {"final": body["final"], "runs": runs, "run_keys": keys}
-        check_run_description(body["next"], session.manifest, known)
+        if runs >= MAX_RUNS:
+            raise Refused("too-many-runs")  # refused when the next run is asked for, before it starts
+        check_run_description(body["next"], session.manifest, known, known_tools)
         keys.append(run_key(check_key, runs + 1, body["next"]))
         report = report_for(runs + 1, body["next"])
         if report is None:

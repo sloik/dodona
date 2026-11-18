@@ -20,13 +20,14 @@ The kernel reads one JSON value on standard input, takes the command as its one 
 
 A refusal the contract names is an answer, with exit status 0. Anything else the kernel cannot handle (an unknown command or kind, input of the wrong shape, a file it cannot read or write) prints nothing on standard output and ends with a status that is not 0.
 
-A step that has nothing to act on changes nothing: finishing a run that is not in flight, closing a ticket that is not open, a check or edit of a tree node, obligation or gate that is not there.
+The kernel answers every step. A step that has nothing to act on changes nothing: finishing a run that is not in flight, closing a ticket that is not open, naming a criterion, obligation, definition, child, key, platform or intent the scenario does not have, or carrying a gate, verdict, status or level that does not exist. An exception asked for in such a step is reported as not taking effect, at `self`.
 
 ## One copy of each rule
 
 - Grading an act is `acts::grade`. Acts scenarios report it; status scenarios count with it.
 - The status of an obligation from the verdicts that count is `evidence::status`, for evidence scenarios, `states` and status scenarios.
 - The status of an intent, and whether a criterion is met, are in `intent.rs`, for intent scenarios, `states` and status scenarios. A criterion that nothing checks is never met.
+- The separation levels are `acts::LEVELS`; the assurance scale is `assurance::SCALE`. The level a status report shows for an intent is on that scale, and an exception in it is graded by `acts::grade` like every other act.
 - Identity, core keys and hexadecimal are in `canonical.rs`. In status scenarios an evidence record whose preimage cannot be keyed is rejected.
 
 ## The ledger

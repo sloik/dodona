@@ -23,10 +23,10 @@ function nonVacuous(defects) {
 }
 
 function runScenario(scenario) {
-  return scenario.steps.map(({ do: step }) => ({
-    shown: shownLevel(step.judge.links),
-    non_vacuous: nonVacuous(step.judge.defects),
-  }));
+  return scenario.steps.map(({ do: step }) => {
+    const judge = step.judge || {};
+    return { shown: shownLevel(judge.links || {}), non_vacuous: nonVacuous(judge.defects || {}) };
+  });
 }
 
 module.exports = { SCALE, shownLevel, nonVacuous, runScenario };

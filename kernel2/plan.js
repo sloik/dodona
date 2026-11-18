@@ -65,9 +65,9 @@ function runScenario(scenario) {
 
   for (const { do: step } of scenario.steps) {
     let ran = null;
-    if (step.edit) {
+    if (step.edit && Object.hasOwn(state.content, step.edit.definition)) {
       state.content[step.edit.definition] = step.edit.to;
-    } else if (step.repin) {
+    } else if (step.repin && Object.hasOwn(state.tools, step.repin.tool)) {
       state.tools[step.repin.tool] = step.repin.to;
     } else if (step.run && scenario.obligations[step.run.obligation]) {
       const obligation = step.run.obligation;
