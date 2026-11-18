@@ -56,3 +56,4 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0026](0026-the-first-host-and-status-are-stage-0-helpers.md) | The first host and status command are stage-0 helpers, and a result is keyed by what was measured to have run | proposed |
 | [0027](0027-vouching-is-a-keyed-check-value-and-nothing-vouches-yet.md) | Vouching for an act is a keyed check value under a key policy lists, policy is read from the protected branch, and nothing vouches yet | proposed |
 | [0028](0028-a-confirmation-is-the-owners-word-graded-like-any-act.md) | A confirmation is the owner's word, graded like any other act, and kept in the repository | proposed, owner direction |
+| [0029](0029-a-check-with-a-current-result-is-not-run-again.md) | A check with a current result is not run again, and the ledger is kept from one run to the next | proposed |

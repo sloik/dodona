@@ -96,9 +96,23 @@ def main() -> int:
     site = json.loads(args.site.read_text(encoding="utf-8")) if args.site else None
     if args.site and not args.batch:
         ap.error("--site needs --batch: cases are sent to the executor as one job, never one at a time")
+    sent: set[str] | None = None
     if args.runs:
         import host
-        fault = host.job_fault(json.loads((args.runs / "runs.json").read_text(encoding="utf-8")))
+        collected = json.loads((args.runs / "runs.json").read_text(encoding="utf-8"))
+        sent = {item["obligation"]["name"] for item in collected.get("pending", [])}
+        if collected.get("sent"):
+            fault = host.job_fault(collected)
+            if fault:
+                print(f"nothing is judged: {fault}")
+                print(json.dumps({"cases": 0, "matched": 0, "all_matched": False}))
+                return 1
+        if not sent:
+            reused = len((collected.get("plan") or {}).get("reuse", []))
+            print(f"nothing was run: {reused} checks kept their results from earlier runs, and the ledger says what they are")
+            print(json.dumps({"cases": 0, "reused": reused, "all_matched": True}))
+            return 0
+        fault = host.job_fault(collected)
         if fault:
             print(f"nothing is judged: {fault}")
             print(json.dumps({"cases": 0, "matched": 0, "all_matched": False}))
@@ -120,6 +134,8 @@ def main() -> int:
         spec = json.loads(expected.read_text(encoding="utf-8"))
         for case in spec["cases"]:
             name = case["config"].removesuffix(".cfg")
+            if sent is not None and f"{model_dir.name}/{name}" not in sent:
+                continue  # not run this time: its result from an earlier run still counts
             exit_code: int | None
             if args.replay:
                 out_file = args.replay / model_dir.name / f"{name}.out"
