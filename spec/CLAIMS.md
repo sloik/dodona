@@ -133,7 +133,7 @@ Bounds: one obligation, which can or cannot be checked, fixed from the start; at
 
 **The claim holds only under five assumptions, and they carry most of its weight**: the kernel keeps submitting whatever has no answer; the backend comes back after an outage; a run in flight ends, and once the allowed number of errors and losses is used up every run that is started completes with its answer; edits, outages, errors and losses each happen only a bounded number of times; and the kernel can tell that a run was lost. The third is stronger than "a run ends one way or another", and the model's header now says so. A run that hangs silently for ever is outside the model. No scenario in the conformance kit covers this, because the seed kernel has no loop that submits work.
 
-**Repair (issue 27, 2026-11-18).** `EventuallyAnswered` says an answer comes; it accepted a kernel that gives up early by calling a retryable failure "unsupported", since that is an answer too. `AnswerIsRight` checks the other direction: "unsupported" is given only for an obligation that cannot be checked, with a planted defect that gives up on an error. **What still restates the rule:** the only thing of the kernel's that `EventuallyAnswered` tests is which outcomes it tries again after; fairness and the bounds do the rest.
+**Repair (issue 27, 2026-11-18).** `EventuallyAnswered` says an answer comes; it accepted a kernel that gives up early by calling a retryable failure "unsupported", since that is an answer too. `AnswerIsRight` checks the other direction: "unsupported" is given only for an obligation that cannot be checked, with a planted defect that gives up on an error. **What still restates the rule:** the only thing of the kernel's that `EventuallyAnswered` tests is which outcomes it tries again after; fairness and the bounds do the rest. `AnswerIsRight` restates how the model's `Complete` decides an answer; its content is the planted defect. That `EventuallyAnswered` accepts the give-up defect is argued from the model (a run that errs has no fairness, so it may give up), not run as a case.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -143,7 +143,7 @@ Bounds: one obligation, which can or cannot be checked, fixed from the start; at
 
 | # | Claim | Decision | Check | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C37 | The seed kernel gives the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states, in CI | Each of five defects planted in the kernel made between 1,515 and 34,020 states disagree | **checked**, run 9 |
+| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 9 |
 
 This ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
 
@@ -685,6 +685,8 @@ Two earlier attempts at this run stopped partway, at a limit on the space a job 
 | `mutant_floor_counts_root_only` | violation | violation of DeliveryMatches | 17,853 / 4,830 |
 | `mutant_count_kept_on_remove` | violation | violation of DeliveryMatches | 4,347 / 1,794 |
 | `mutant_count_misses_child_edit` | violation | violation of DeliveryMatches | 24,887 / 7,017 |
+
+**Every state, both kernels.** The same day, on a development machine, `tools/check_states.py` compared both kernels as merged for issue 27 with the model on every state the two dump models of this job wrote out: 71,744 of the evidence model and 78,894 of the intent model, no differences for either kernel. The record, `run-9-kernel-on-every-state` in [runs/index.json](runs/index.json), hashes the comparisons' output and every source file of both kernels, so it stops counting when either kernel changes. Outputs: [runs/run-9/every-state/](runs/run-9/every-state/).
 
 ### Run 10: the repaired liveness model
 

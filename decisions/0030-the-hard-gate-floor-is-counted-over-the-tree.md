@@ -34,6 +34,10 @@ So, in addition:
 - What is reported shows where the gates are thin: the status report names, for each tree, the intent with the fewest hard gates of its own, and marks every child whose own count, with what is below it, is under the floor, saying the floor was met only over its tree. The owner's confirmation shows the same before the owner agrees.
 - A per-child floor is not a policy setting yet. It becomes one when a project shows it needs it.
 
+## A gate nobody can read in a tree
+
+Trees, as the kernel conformance kit describes them, know two gates, `hard` and `soft`. A gate written as anything else (`Hard`, `Soft`, `deferred`, a stray character), at the start or in a change, counts as `hard`. A mistake in writing a gate can then only make delivery harder, as the status rules already say of an intent's criteria. Found when the two kernels read such a gate differently.
+
 ## Consequences
 
 - The tree model checks this rule, and has a planted defect for the reading it rejects (each child held to the policy's number).
