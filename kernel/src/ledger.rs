@@ -89,7 +89,14 @@ fn lock(path: &str, wait: Duration) -> Result<Option<Lock>, String> {
     loop {
         match OpenOptions::new().write(true).create_new(true).open(&name) {
             Ok(_) => return Ok(Some(Lock(name))),
-            Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+            // While another kernel is removing the lock, some systems refuse to create it
+            // with a permission error instead of saying it exists. Both mean: held, try again.
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    ErrorKind::AlreadyExists | ErrorKind::PermissionDenied
+                ) =>
+            {
                 let left = wait.saturating_sub(start.elapsed());
                 if left.is_zero() {
                     return Ok(None);

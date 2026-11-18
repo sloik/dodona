@@ -38,7 +38,7 @@ A torn ending is the mark of a crash and is safe to drop. Anything else wrong is
 
 ## Appending
 
-1. Take the lock: create the file `<ledger>.lock` in a way that fails if it already exists. If it exists, wait and try again, up to the time the caller allows, then refuse with `locked`.
+1. Take the lock: create the file `<ledger>.lock` in a way that fails if it already exists. If it exists, wait and try again, up to the time the caller allows, then refuse with `locked`. On some systems, creating the lock file while another kernel is removing it fails with a permission error instead of "already exists"; a kernel treats both as the lock being held and tries again until its wait runs out. Found on Windows, where one of two kernels writing at once gave up.
 2. Read the ledger. If it is corrupt, release the lock and refuse with `corrupt`.
 3. If it was torn, cut the torn bytes off first.
 4. Build the entry with `previous` set to the identity of the last entry, write its line, and make sure it has reached the disk.
