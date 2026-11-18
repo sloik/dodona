@@ -51,7 +51,7 @@ Bounds: five definitions, two of them in one file; the depends-on relation one o
 
 **How the properties get their content (repair, 2026-11-18).** The specification finds what a result depends on by following the relation until nothing new turns up, and the truth of a test is the artifact it actually ran on. The kernel builds its key from an index that follows the relation in a fixed number of passes, and looks artifacts up by key. The relation varies between behaviours, so a key that follows it wrongly shows. The properties compare the two in both directions: nothing wrongly reused, nothing current rerun, and everything without a right result planned. Their content is the index and the store.
 
-**What still restates the rule.** For a check and a build, the key and the truth are equal by construction once the index finds the right closure; a test's truth is still taken from the store, looked up by the build key. With the design's plan, `PlanComplete` follows from `NoWrongReuse`; it has content against a planner that plans too little.
+**What still restates the rule.** For a check and a build, the key and the truth are equal by construction once the index finds the right closure; a test's truth is still taken from the store, looked up by the build key ([issue 33](https://github.com/sloik/dodona/issues/33)). With the design's plan, `PlanComplete` follows from `NoWrongReuse`; it has content against a planner that plans too little.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -137,7 +137,7 @@ Bounds: one obligation, which can or cannot be checked, fixed from the start; at
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C22 | Under those assumptions, the one obligation in the model eventually has a verdict or the stated reason that it cannot be checked, that then stays, and the stated reason is given only when it is true | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered`, `AnswerIsRight` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again; an error is reported as unsupported | modelled, unchecked |
+| C22 | Under those assumptions, the one obligation in the model eventually has a verdict or the stated reason that it cannot be checked, that then stays, and the stated reason is given only when it is true | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered`, `AnswerIsRight` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again; an error is reported as unsupported | **checked**, run 10 |
 
 ## Checked against the seed kernel
 
@@ -685,6 +685,20 @@ Two earlier attempts at this run stopped partway, at a limit on the space a job 
 | `mutant_floor_counts_root_only` | violation | violation of DeliveryMatches | 17,853 / 4,830 |
 | `mutant_count_kept_on_remove` | violation | violation of DeliveryMatches | 4,347 / 1,794 |
 | `mutant_count_misses_child_edit` | violation | violation of DeliveryMatches | 24,887 / 7,017 |
+
+### Run 10: the repaired liveness model
+
+2026-11-18. Job `acb93c9df63b43d7b29da7f4908c8d4e` on the shared Oracle queue, sent from branch `model-repairs` by `tools/check_models.py --batch --only liveness`: 7 cases in one job, which completed and listed every case sent; every one matched. The checker was measured as tla2tools 1.7.4. It replaces run 9 for this model, which ran before liveness gained `AnswerIsRight`. Outputs: [runs/run-10/](runs/run-10/).
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 1,026 / 430 |
+| `reach_unsupported` | violation | violation of NeverUnsupported | 17 / 15 |
+| `mutant_no_resubmit_after_unavailable` | temporal-violation | temporal violation | 954 / 430 |
+| `mutant_no_resubmit_after_loss` | temporal-violation | temporal violation | 942 / 430 |
+| `mutant_no_resubmit_after_error` | temporal-violation | temporal violation | 966 / 430 |
+| `mutant_resubmits_unsupported` | temporal-violation | temporal violation | 1,071 / 430 |
+| `mutant_gives_up_on_error` | violation | violation of AnswerIsRight | 32 / 28 |
 
 ### Not a run: the first attempt at the rewritten models
 

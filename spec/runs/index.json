@@ -910,7 +910,8 @@
    "claims": [
     "C22"
    ],
-   "note": "Every case of every model in one job on the shared Oracle queue (job e679b77f658b468f8f87a0e424144f5a, from commit 6ec2b62 on branch model-repairs), which completed and listed every case sent. 5 cases of this model, every one matched. The checker that ran was measured: tla2tools.jar sha256 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88, equal to upstream release 1.7.4."
+   "note": "Every case of every model in one job on the shared Oracle queue (job e679b77f658b468f8f87a0e424144f5a, from commit 6ec2b62 on branch model-repairs), which completed and listed every case sent. 5 cases of this model, every one matched. The checker that ran was measured: tla2tools.jar sha256 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88, equal to upstream release 1.7.4.",
+   "superseded_by": "run-10-liveness"
   },
   {
    "id": "run-9-planner",
@@ -1093,6 +1094,43 @@
     "C34"
    ],
    "note": "Every case of every model in one job on the shared Oracle queue (job e679b77f658b468f8f87a0e424144f5a, from commit 6ec2b62 on branch model-repairs), which completed and listed every case sent. 15 cases of this model, every one matched. The checker that ran was measured: tla2tools.jar sha256 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88, equal to upstream release 1.7.4."
+  },
+  {
+   "id": "run-10-liveness",
+   "date": "2026-11-18",
+   "model": "liveness",
+   "outputs": "run-10/liveness",
+   "files": {
+    "Liveness.tla": "60ebd6a65ef2d1318143b0288705c8020ece3e3fb300b9a3a912a2d2b29d50eb",
+    "design.cfg": "121b590ad316ad776e687fdcf22f4a82f8710c853fb7951a814dfd361a5a2af5",
+    "expected.json": "72504da4818cffc5327f1a42937461cb50835289c0306f5c7ee4f7fc114f06cc",
+    "mutant_gives_up_on_error.cfg": "c5e04b69e7de7130a9034da143933266c2a1641fde0f6abf31871006296241fa",
+    "mutant_no_resubmit_after_error.cfg": "0a941ce96852296cb27c0f9dcef96ef31ff96f2e3bb34c561cba3da7cd869dc6",
+    "mutant_no_resubmit_after_loss.cfg": "43f3832870802a3f3941bfda07c361d0b63d28a6836966b3c007696e8048f13b",
+    "mutant_no_resubmit_after_unavailable.cfg": "97cf6ae9066ba25aaf391a738a9d722484621e1013190a37a7fd900fba88f43d",
+    "mutant_resubmits_unsupported.cfg": "6026859581a2c2f11a4e9a24dacb5b4d24fdb58203c1204cbf993571481032f3",
+    "reach_unsupported.cfg": "7a5b7a95c41e330acd95aed41255473ba6e0d926e5343b9320bedc9042f85057"
+   },
+   "outputs_sha256": {
+    "design.exit": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "design.txt": "400d6bb48abd4ba470b0d4c140f9b62b806ab65499ab7dcc4c977bff3ffacc85",
+    "mutant_gives_up_on_error.exit": "6b51d431df5d7f141cbececcf79edf3dd861c3b4069f0b11661a3eefacbba918",
+    "mutant_gives_up_on_error.txt": "57e54742a2b2a4f7cee95d7d3023c906818e0824af2dce8d5589666752f57eec",
+    "mutant_no_resubmit_after_error.exit": "3fdba35f04dc8c462986c992bcf875546257113072a909c162f7e470e581e278",
+    "mutant_no_resubmit_after_error.txt": "b019769a92771436c183334bb16e68a5600b2143815ea99f1422907a0eb58c7e",
+    "mutant_no_resubmit_after_loss.exit": "3fdba35f04dc8c462986c992bcf875546257113072a909c162f7e470e581e278",
+    "mutant_no_resubmit_after_loss.txt": "39ba471cfa788eb1df279d50e197e5e42ee4a7ff0574f00e8742dd7dba222387",
+    "mutant_no_resubmit_after_unavailable.exit": "3fdba35f04dc8c462986c992bcf875546257113072a909c162f7e470e581e278",
+    "mutant_no_resubmit_after_unavailable.txt": "a69f09081a9c954cb5fd546340c89b81857e34238735e25d3a77a161ffb06936",
+    "mutant_resubmits_unsupported.exit": "3fdba35f04dc8c462986c992bcf875546257113072a909c162f7e470e581e278",
+    "mutant_resubmits_unsupported.txt": "e7cd12be22ab70ddcc477650a881594c5861604738895b912b5ad3d1869ec2c5",
+    "reach_unsupported.exit": "6b51d431df5d7f141cbececcf79edf3dd861c3b4069f0b11661a3eefacbba918",
+    "reach_unsupported.txt": "17f50f5d3a35548389088e38757f474561eacbc5883a0b4e1254852e3608e64f"
+   },
+   "claims": [
+    "C22"
+   ],
+   "note": "The repaired liveness model on the shared Oracle queue (job acb93c9df63b43d7b29da7f4908c8d4e, from commit e994a49 on branch model-repairs), which completed and listed every case sent. 7 cases, every one matched. The checker that ran was measured: tla2tools.jar sha256 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88, equal to upstream release 1.7.4."
   }
  ]
 }

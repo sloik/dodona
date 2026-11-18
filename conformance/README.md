@@ -103,7 +103,7 @@ The result has `"shown"`: the weakest of the three links, on the scale `none`, `
 
 ### Tree scenarios
 
-A scenario gives a `root` and `children`, each with the gate of its one criterion, `hard` or `soft`, and a policy with `min_hard_gates`. There may be no children. Adding a child that is already there, setting a gate to what it already is, a gate other than `hard` or `soft` in an `edit` or an `add`, or a step that names a child that is not there, changes nothing.
+A scenario gives a `root` and `children`, each with the gate of its one criterion, `hard` or `soft`, and a policy with `min_hard_gates`. There may be no children. A gate in an `edit` or an `add` that is a string other than exactly `hard` or `soft` (`Hard`, `deferred`, any other text) counts as `hard`, as an unreadable gate does in status scenarios: a mistake in writing a gate can only make delivery harder. A gate that is not a string is a value of the wrong type, and the step changes nothing. Adding a child that is already there, setting a gate to what it already counts as, or a step that names a child that is not there, changes nothing.
 
 | Step | Meaning |
 |---|---|

@@ -3,7 +3,7 @@
   "name": "the_latest_attempt_asked_for_gives_the_reason",
   "claim": "C1",
   "covers": [],
-  "why": "When two attempts on the same inputs both leave no result, the reason is the one asked for last, whatever order they end in: a run lost after a later attempt found the backend down does not replace that later outcome.",
+  "why": "When two attempts on the same inputs both leave no result, the reason is the one asked for last, whatever order they end in: a run lost after a later attempt found the backend down does not replace that later outcome. The contract's reason: an attempt is the request for a check, so attempts are ordered by when they were asked for; ordering by when they ended would make the answer depend on how long a lost run took to be noticed.",
   "obligations": {
     "o1": {
       "depends_on": [
