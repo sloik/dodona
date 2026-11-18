@@ -25,7 +25,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 def ask(command: list[str], sub: str, payload: dict, timeout: int = 60):
     try:
         done = subprocess.run(command + [sub], input=json.dumps(payload).encode("utf-8"), capture_output=True, timeout=timeout)
-        return json.loads(done.stdout.decode("utf-8")) if done.returncode == 0 else {"exit": done.returncode}
+        if done.returncode != 0:
+            return {"exit": done.returncode, "said": done.stderr.decode("utf-8", "replace")[-300:]}
+        return json.loads(done.stdout.decode("utf-8"))
     except (OSError, subprocess.TimeoutExpired, ValueError) as err:
         return {"error": type(err).__name__}
 
@@ -160,6 +162,7 @@ def writer() -> int:
     for n in range(count):
         answer = ask(command, "ledger-append", {"ledger": path, "kind": "evidence", "body": {"writer": who, "n": n}, "wait_ms": 60000})
         if not isinstance(answer, dict) or "appended" not in answer:
+            print(f"writer {who} gave up at entry {n}: the kernel answered {answer}", file=sys.stderr)
             return 1
     return 0
 
