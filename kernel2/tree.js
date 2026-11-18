@@ -16,6 +16,15 @@ function gateCountsAs(gate) {
   return gate === 'soft' ? 'soft' : 'hard';
 }
 
+// A starting gate that is not a string makes the scenario invalid: it is refused
+// whole, before any step (conformance/README.md, tree scenarios).
+class InvalidScenario extends Error {}
+
+function validate(scenario) {
+  const starting = [(scenario.root || {}).gate, ...Object.values(scenario.children || {}).map((child) => (child || {}).gate)];
+  if (starting.some((gate) => gateCountsAs(gate) === null)) throw new InvalidScenario('a starting gate in a tree is not a string');
+}
+
 function treeStatus(policy, confirmed, root, children) {
   const nodes = [root, ...children];
   const hard = nodes.filter((node) => node.gate === 'hard');
@@ -28,9 +37,9 @@ function treeStatus(policy, confirmed, root, children) {
 }
 
 function runScenario(scenario) {
-  const root = { gate: scenario.root.gate, check: 'unknown' };
+  const root = { gate: gateCountsAs(scenario.root.gate), check: 'unknown' };
   const children = new Map();
-  for (const [name, details] of Object.entries(scenario.children)) children.set(name, { gate: details.gate, check: 'unknown' });
+  for (const [name, details] of Object.entries(scenario.children)) children.set(name, { gate: gateCountsAs(details.gate), check: 'unknown' });
   let confirmed = false;
   const nodeNamed = (name) => (name === 'root' ? root : children.get(name));
   const { isString } = vocabulary;
@@ -63,4 +72,4 @@ function runScenario(scenario) {
   return results;
 }
 
-module.exports = { gateCountsAs, treeStatus, runScenario };
+module.exports = { InvalidScenario, validate, gateCountsAs, treeStatus, runScenario };

@@ -1092,6 +1092,13 @@
       "file": "tree.js",
       "find": "return gate === 'soft' ? 'soft' : 'hard';",
       "replace": "return gate === 'soft' || gate === 'hard' ? gate : null;"
+    },
+    {
+      "name": "a tree's starting gates read as written",
+      "model_case": "(tree gates kit)",
+      "file": "tree.js",
+      "find": "children.set(name, { gate: gateCountsAs(details.gate), check: 'unknown' });",
+      "replace": "children.set(name, { gate: details.gate, check: 'unknown' });"
     }
   ]
 }

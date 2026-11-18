@@ -156,6 +156,13 @@ test('tree status', () => {
   assert.deepEqual(run({ edit: { node: 'root', to: 'Soft' } }).map((r) => r.status), ['open', 'open']);
   assert.deepEqual(run({ add: { child: 'k', gate: 'deferred' } }, { confirm: {} }).map((r) => r.status), ['open', 'draft', 'open']);
   assert.deepEqual(run({ add: { child: 'k', gate: null } }, { edit: { node: 'root', to: ['soft'] } }).map((r) => r.status), ['open', 'open', 'open']);
+  // Starting gates follow the same rule; one that is not a string makes the scenario invalid.
+  const start = (rootGate, childGate) => ({ kind: 'tree', policy, root: { gate: rootGate }, children: { k: { gate: childGate } }, steps: [{ do: { confirm: {} } }] });
+  const { runScenario } = require('./scenario');
+  assert.deepEqual(runScenario(start('Soft', 'deferred')).results, [{ status: 'open' }]);
+  assert.deepEqual(runScenario(start('hard', 'soft')).results, [{ status: 'unguarded' }]);
+  assert.throws(() => runScenario(start('hard', 1)), tree.InvalidScenario);
+  assert.throws(() => runScenario(start(null, 'hard')), tree.InvalidScenario);
 });
 
 test('attempts: refusal then agreement is shopping', () => {
