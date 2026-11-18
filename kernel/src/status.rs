@@ -37,6 +37,8 @@ fn baseline(i: &Value) -> String {
     );
     canonical::identity(&json::object(vec![
         ("owner", i.get("owner").clone()),
+        // The intent as written; the empty string when the scenario gives none.
+        ("words", json::string(text(i, "words").unwrap_or(""))),
         ("children", sorted(i.get("children"))),
         ("criteria", criteria),
     ]))
@@ -420,7 +422,17 @@ mod tests {
                 r#"{"owner":"o","children":[],"criteria":{"c":{"gate":"hard","checked_by":[]}}}"#
             )),
             canonical::identity(&value(
-                r#"{"owner":"o","children":[],"criteria":{"c":{"words":"","gate":"hard","checked_by":[]}}}"#
+                r#"{"owner":"o","words":"","children":[],"criteria":{"c":{"words":"","gate":"hard","checked_by":[]}}}"#
+            ))
+        );
+        let reworded = value(
+            r#"{"owner":"o","words":"do it","children":["a","z"],"criteria":{"c":{"gate":"hard","checked_by":["a","b"]}}}"#,
+        );
+        assert_ne!(baseline(&a), baseline(&reworded));
+        assert_eq!(
+            baseline(&value(r#"{"owner":"o","children":[],"criteria":{}}"#)),
+            canonical::identity(&value(
+                r#"{"owner":"o","words":"","children":[],"criteria":{}}"#
             ))
         );
         // The worker is not part of what the owner confirms.

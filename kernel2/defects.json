@@ -887,8 +887,8 @@
       "name": "status: the baseline reported leaves out the children",
       "model_case": "(round 5)",
       "file": "status.js",
-      "find": "  return identityOf({ owner: intent.owner, children: sortedCopy(intent.children), criteria });",
-      "replace": "  return identityOf({ owner: intent.owner, children: [], criteria });"
+      "find": "children: sortedCopy(intent.children), criteria });",
+      "replace": "children: [], criteria });"
     },
     {
       "name": "acts: a top-level field present but not covered is still vouched",
@@ -917,6 +917,20 @@
       "file": "status.js",
       "find": "criteria[name] = { words: typeof criterion.words === 'string' ? criterion.words : '', gate: criterion.gate,",
       "replace": "criteria[name] = { gate: criterion.gate,"
+    },
+    {
+      "name": "the scenario input is read leniently",
+      "model_case": "(round 7)",
+      "file": "dodona-kernel2.js",
+      "find": "scenario: (bytes) => runScenario(readInput(bytes)),",
+      "replace": "scenario: (bytes) => runScenario(JSON.parse(bytes.toString('utf8'))),"
+    },
+    {
+      "name": "the baseline leaves out the intent's own words",
+      "model_case": "(round 7)",
+      "file": "status.js",
+      "find": "owner: intent.owner, words: typeof intent.words === 'string' ? intent.words : '', children:",
+      "replace": "owner: intent.owner, children:"
     }
   ]
 }

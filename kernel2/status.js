@@ -20,7 +20,7 @@ function baselineOf(intent) {
   for (const [name, criterion] of Object.entries(intent.criteria)) {
     criteria[name] = { words: typeof criterion.words === 'string' ? criterion.words : '', gate: criterion.gate, checked_by: sortedCopy(criterion.checked_by) };
   }
-  return identityOf({ owner: intent.owner, children: sortedCopy(intent.children), criteria });
+  return identityOf({ owner: intent.owner, words: typeof intent.words === 'string' ? intent.words : '', children: sortedCopy(intent.children), criteria });
 }
 
 // The target of an act that says a check tests a criterion.

@@ -910,6 +910,13 @@
       "file": "src/acts.rs",
       "find": "if !vouched(BOUND) || !whole {",
       "replace": "if !whole {"
+    },
+    {
+      "name": "status: the baseline leaves out the intent's own words",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "text(i, \"words\").unwrap_or(\"\")",
+      "replace": "text(i, \"words\").map_or(\"\", |_| \"\")"
     }
   ]
 }
