@@ -1,7 +1,7 @@
 ---
 id: "0031"
 title: An agreement after a change keeps its grade, up to a limit on refusals along the line
-status: proposed, owner direction
+status: proposed
 date: 2026-11-18
 governs:
   - spec/attempts/Attempts.tla
@@ -30,3 +30,9 @@ Capping every agreement after any refusal, whatever changed, removes shopping bu
 - An honest fix that is approved after one refusal keeps its full grade, and is visibly marked retried.
 - Repeated cosmetic changes stop paying off once the limit is reached; the limit is policy, so a project can make it stricter.
 - The attempts model and the kernel conformance kit check this rule, with planted defects for the two rules rejected (capping every retry, and ignoring the limit).
+
+## What would show this wrong
+
+- An agent that reaches a full grade by making trivial changes until a checker agrees, more often than the limit allows, would show the count of refusals not kept along the line.
+- An honest fix approved after a single refusal and graded `helper` would show the rule applied more strictly than decided.
+- If in practice most lines reach the limit through honest work, the default of two is too strict.

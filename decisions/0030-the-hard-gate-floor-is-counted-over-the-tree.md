@@ -29,3 +29,9 @@ Read literally, the two sentences disagree once a child is an intent too. If eac
 - The tree model checks this rule, and has a planted defect for the reading it rejects (each child held to the policy's number).
 - The kernel conformance kit states it in its tree section and has a scenario in which a floor of two is met by a root and a child with one hard gate each.
 - An intent that is not part of a tree is its own root, so nothing changes for it.
+
+## What would show this wrong
+
+- An owner who splits an intent into children and finds the tree reported delivered with a child whose criteria are all soft would show the second rule missing.
+- A tree that loses its delivery when a hard criterion is moved, unchanged, from the root into a child would show the first rule broken.
+- A project that needs each child held to the policy's number on its own would show the rule too weak for it; that would need a policy setting, not a change to this rule.
