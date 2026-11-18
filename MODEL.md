@@ -72,7 +72,7 @@ A **check** is one attempt to decide an obligation; it consists of one or more t
 
 A submission with no closing entry is `pending`. Only evidence records are reusable. Outcome entries are what give `unknown` its reason.
 
-**Status is per platform.** Policy names the platforms on which each obligation is required; the default is the platform of the executor bound to it. In the rules below, "the current key" means the core key computed now together with the platform being asked about. A record from a different platform counts only as a *stand-in*: when the provider claims platform independence, the same core key has been checked on at least two platforms with agreeing results, and policy accepts that. A status resting on a stand-in says so.
+**Status is per platform.** Policy names the platforms on which each obligation is required; the default is the platform of the executor bound to it. In the rules below, "the current key" means the core key computed now together with the platform being asked about. A record from a different platform counts only as a *stand-in*: when the provider claims platform independence, the same core key has been checked on at least two platforms with agreeing results and no platform has the other verdict for it, and policy accepts that ([decision 0032](decisions/0032-a-stand-in-is-verified-for-its-own-key-and-any-disagreement-withdraws-it.md)). A status resting on a stand-in says so.
 
 **Obligation status**
 

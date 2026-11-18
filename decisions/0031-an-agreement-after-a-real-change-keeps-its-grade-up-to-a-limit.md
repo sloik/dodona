@@ -7,6 +7,8 @@ governs:
   - spec/attempts/Attempts.tla
   - conformance/README.md
 supersedes: []
+amends:
+  - "0024"
 ---
 
 # 0031. An agreement after a change keeps its grade, up to a limit on refusals along the line

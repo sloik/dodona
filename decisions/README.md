@@ -59,3 +59,4 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0029](0029-a-check-with-a-current-result-is-not-run-again.md) | A check with a current result is not run again, and the ledger is kept from one run to the next | proposed |
 | [0030](0030-the-hard-gate-floor-is-counted-over-the-tree.md) | The hard-gate floor is counted over the whole tree, and every intent in it needs a hard gate | proposed, owner direction |
 | [0031](0031-an-agreement-after-a-real-change-keeps-its-grade-up-to-a-limit.md) | An agreement after a change keeps its grade, up to a limit on refusals along the line | proposed, owner direction |
+| [0032](0032-a-stand-in-is-verified-for-its-own-key-and-any-disagreement-withdraws-it.md) | A stand-in is verified for its own key, and any disagreement about that key withdraws it | proposed |

@@ -109,7 +109,7 @@ Bounds: two sets of inputs and three platforms; each platform may record each ve
 
 **How the properties get their content.** The specification is stated over every record ever made. The kernel works from what it has filed for each key and platform, updated one record at a time. The properties say every status, every report of a stand-in and every reproducibility answer is the one the records call for.
 
-**What still restates the rule.** Unless a record is filed wrongly, the kernel's store equals what the records say, and status, verification and reproducibility are the same expressions on both sides. Their content is in the filing (one planted defect) and in each planted defect of the rule being caught. Any disagreement about the key, a platform's with itself included, cancels verification, even where two other platforms agree; that is stricter than the design text, which asks only for two agreeing platforms.
+**What still restates the rule.** Unless a record is filed wrongly, the kernel's store equals what the records say, and status, verification and reproducibility are the same expressions on both sides. Their content is in the filing (one planted defect) and in each planted defect of the rule being caught. Any disagreement about the key, a platform's with itself included, cancels verification, even where two other platforms agree. That is stricter than "two agreeing platforms" read alone, and is now written down as [decision 0032](../decisions/0032-a-stand-in-is-verified-for-its-own-key-and-any-disagreement-withdraws-it.md).
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -129,15 +129,15 @@ The model keeps what the decision was last reviewed against apart from what the 
 
 ## Modelled in `liveness/Liveness.tla`
 
-Bounds: one obligation; at most two edits, two outages and two runs that end without finishing.
+Bounds: one obligation, which can or cannot be checked, fixed from the start; at most two edits, two outages and two runs that end without finishing.
 
-**The claim holds only under five assumptions, and they carry most of its weight**: the kernel keeps submitting whatever has no answer; the backend comes back after an outage; a run in flight ends one way or another; edits, outages, errors and losses each happen only a bounded number of times; and the kernel can tell that a run was lost. A run that hangs silently for ever is outside the model. No scenario in the conformance kit covers this, because the seed kernel has no loop that submits work.
+**The claim holds only under five assumptions, and they carry most of its weight**: the kernel keeps submitting whatever has no answer; the backend comes back after an outage; a run in flight ends, and once the allowed number of errors and losses is used up every run that is started completes with its answer; edits, outages, errors and losses each happen only a bounded number of times; and the kernel can tell that a run was lost. The third is stronger than "a run ends one way or another", and the model's header now says so. A run that hangs silently for ever is outside the model. No scenario in the conformance kit covers this, because the seed kernel has no loop that submits work.
 
-**What this property is worth (second review, 2026-11-18).** The only thing of the kernel's that `EventuallyAnswered` tests is which outcomes it tries again after; fairness and the bounds do the rest. **The fairness actually assumed** is stronger than assumption three reads: once the allowed number of failures has been used up, every run that is started completes. That is stated here rather than changed in the model.
+**Repair (issue 27, 2026-11-18).** `EventuallyAnswered` says an answer comes; it accepted a kernel that gives up early by calling a retryable failure "unsupported", since that is an answer too. `AnswerIsRight` checks the other direction: "unsupported" is given only for an obligation that cannot be checked, with a planted defect that gives up on an error. **What still restates the rule:** the only thing of the kernel's that `EventuallyAnswered` tests is which outcomes it tries again after; fairness and the bounds do the rest.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C22 | Under those assumptions, the one obligation in the model eventually has a verdict or the stated reason that it cannot be checked, and that then stays | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again | **checked**, run 9 |
+| C22 | Under those assumptions, the one obligation in the model eventually has a verdict or the stated reason that it cannot be checked, that then stays, and the stated reason is given only when it is true | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered`, `AnswerIsRight` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again; an error is reported as unsupported | modelled, unchecked |
 
 ## Checked against the seed kernel
 

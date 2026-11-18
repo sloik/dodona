@@ -1,61 +1,75 @@
 {
-  "model": "Liveness.tla",
-  "tool": {
-    "name": "tla2tools",
-    "version": "1.7.4",
-    "requires": [
-      "a Java runtime"
-    ],
-    "digest": "not yet pinned; no lock exists"
-  },
-  "arguments": [
-    "-workers",
-    "1",
-    "-config",
-    "<config>",
-    "Liveness.tla"
+ "model": "Liveness.tla",
+ "tool": {
+  "name": "tla2tools",
+  "version": "1.7.4",
+  "requires": [
+   "a Java runtime"
   ],
-  "exit_codes": {
-    "0": "completed, no violation",
-    "12": "safety violation found",
-    "13": "temporal property violated",
-    "other": "did not complete; counts as neither outcome"
+  "digest": "not yet pinned; no lock exists"
+ },
+ "arguments": [
+  "-workers",
+  "1",
+  "-config",
+  "<config>",
+  "Liveness.tla"
+ ],
+ "exit_codes": {
+  "0": "completed, no violation",
+  "12": "safety violation found",
+  "13": "temporal property violated",
+  "other": "did not complete; counts as neither outcome"
+ },
+ "bounds": "one obligation; at most two edits, two outages and two failed runs",
+ "cases": [
+  {
+   "config": "design.cfg",
+   "expect": "no-violation",
+   "expect_exit": 0,
+   "purpose": "Under the stated assumptions the obligation eventually has a verdict or a stated reason, for good, and the stated reason is given only when it is true."
   },
-  "bounds": "one obligation; at most two edits, two outages and two failed runs",
-  "cases": [
-    {
-      "config": "design.cfg",
-      "expect": "no-violation",
-      "expect_exit": 0,
-      "purpose": "Under the stated assumptions the obligation eventually has a verdict or a stated reason, for good."
-    },
-    {
-      "config": "mutant_no_resubmit_after_unavailable.cfg",
-      "expect": "temporal-violation",
-      "expect_exit": 13,
-      "purpose": "Planted defect: after finding the backend down, the kernel never tries again.",
-      "of": "EventuallyAnswered"
-    },
-    {
-      "config": "mutant_no_resubmit_after_loss.cfg",
-      "expect": "temporal-violation",
-      "expect_exit": 13,
-      "purpose": "Planted defect: after a run is lost, the kernel never tries again.",
-      "of": "EventuallyAnswered"
-    },
-    {
-      "config": "mutant_no_resubmit_after_error.cfg",
-      "expect": "temporal-violation",
-      "expect_exit": 13,
-      "purpose": "Planted defect: after a run ends in an error, the kernel never tries again.",
-      "of": "EventuallyAnswered"
-    },
-    {
-      "config": "mutant_resubmits_unsupported.cfg",
-      "expect": "temporal-violation",
-      "expect_exit": 13,
-      "purpose": "Planted defect: an obligation that cannot be checked is submitted again and again, so it never settles.",
-      "of": "EventuallyAnswered"
-    }
-  ]
+  {
+   "config": "reach_unsupported.cfg",
+   "expect": "violation",
+   "expect_exit": 12,
+   "purpose": "An obligation that cannot be checked does end as unsupported, so the answer is reachable.",
+   "of": "NeverUnsupported"
+  },
+  {
+   "config": "mutant_no_resubmit_after_unavailable.cfg",
+   "expect": "temporal-violation",
+   "expect_exit": 13,
+   "purpose": "Planted defect: after finding the backend down, the kernel never tries again.",
+   "of": "EventuallyAnswered"
+  },
+  {
+   "config": "mutant_no_resubmit_after_loss.cfg",
+   "expect": "temporal-violation",
+   "expect_exit": 13,
+   "purpose": "Planted defect: after a run is lost, the kernel never tries again.",
+   "of": "EventuallyAnswered"
+  },
+  {
+   "config": "mutant_no_resubmit_after_error.cfg",
+   "expect": "temporal-violation",
+   "expect_exit": 13,
+   "purpose": "Planted defect: after a run ends in an error, the kernel never tries again.",
+   "of": "EventuallyAnswered"
+  },
+  {
+   "config": "mutant_resubmits_unsupported.cfg",
+   "expect": "temporal-violation",
+   "expect_exit": 13,
+   "purpose": "Planted defect: an obligation that cannot be checked is submitted again and again, so it never settles.",
+   "of": "EventuallyAnswered"
+  },
+  {
+   "config": "mutant_gives_up_on_error.cfg",
+   "expect": "violation",
+   "expect_exit": 12,
+   "purpose": "Planted defect: a run that ends in an error is reported as unsupported, giving up early. EventuallyAnswered accepts it; AnswerIsRight does not.",
+   "of": "AnswerIsRight"
+  }
+ ]
 }
