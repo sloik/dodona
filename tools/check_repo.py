@@ -353,6 +353,24 @@ def gap_an_intent_reads_one_way_only() -> None:
         problems.append("tools/status.py must read only acts from the owner's ledger, and compare ledger paths after resolving them")
 
 
+def gap_runner_versions_agree() -> None:
+    """A version bump that touches one runner line and not the others leaves steps that run only on a named
+    system matching nothing, and those steps then skip without a word. Every workflow uses one Ubuntu
+    version, and every condition on a named system names one its file's matrix actually has."""
+    versions: dict[str, list[str]] = {}
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        text = path.read_text(encoding="utf-8")
+        for found in re.findall(r"ubuntu-\d+\.\d+", text):
+            versions.setdefault(found, []).append(path.name)
+        offered = set(re.findall(r"(?m)^\s*-?\s*os:\s*([\w.-]+)", text))
+        for named in re.findall(r"matrix\.os\s*==\s*'([^']+)'", text):
+            if named not in offered:
+                problems.append(f".github/workflows/{path.name}: a step runs only on {named!r}, which no job there offers, so it never runs")
+    if len(versions) > 1:
+        problems.append("the workflows use more than one Ubuntu version (" + "; ".join(f"{v} in {', '.join(sorted(set(f)))}" for v, f in sorted(versions.items()))
+                        + "): change them all together, as an update to one is easy to miss")
+
+
 def gap_one_reader_of_checker_output() -> None:
     """The provider and the older model tool each had their own reading of the checker's output and could have disagreed."""
     provider = (ROOT / "providers" / "tlc" / "provider.py").read_text(encoding="utf-8")
@@ -626,7 +644,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
-              gap_every_tool_compiles, gap_an_intent_reads_one_way_only]
+              gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree]
 
 
 class JudgeTests(unittest.TestCase):

@@ -21,7 +21,7 @@ jobs:
         include:
           - os: macos-15
             python: python3
-          - os: ubuntu-24.04
+          - os: ubuntu-26.04
             python: python3
           - os: windows-2025
             python: python
@@ -36,7 +36,7 @@ jobs:
       - name: Run repository checks
         run: ${{ matrix.python }} tools/check_repo.py
       - name: Validate schemas, guide examples and policy with a JSON Schema validator
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         run: |
           python3 -m venv .venv-examples
           .venv-examples/bin/python -m pip install --quiet jsonschema==4.26.0
@@ -62,7 +62,7 @@ jobs:
       - name: Check the kernel against values the reference signer makes now
         run: ${{ matrix.python }} tools/run_attest_check.py -- kernel/target/release/dodona-kernel scenario
       - name: Status of this project from an empty ledger, and the confirmation command refusing without a terminal
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         run: |
           git fetch --quiet --depth 1 origin main
           python3 tools/status.py --ledger out/empty.ledger --writer ci --kernel kernel/target/release/dodona-kernel
@@ -109,7 +109,7 @@ jobs:
           - kernel: second
             run: node kernel2/plant.js
     name: planted defects (${{ matrix.kernel }} kernel)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
