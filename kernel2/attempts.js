@@ -6,6 +6,8 @@
 const { rank } = require('./intent');
 const vocabulary = require('./vocabulary');
 
+class InvalidScenario extends Error {}
+
 // `none`, `agreed` or `refused`. An open attempt counts as a failure.
 function overallResult(attempts) {
   if (attempts.length === 0) return 'none';
@@ -30,14 +32,18 @@ function notAgreed(attempts) {
 }
 
 // The limit on refusals along the line before every retried agreement is capped
-// (decision 0031). A whole number of at least one, 2 when absent. The contract
-// says nothing of any other value; one below 1, or not a whole number, is taken
-// as 1, the strictest limit, so that a mistake in writing it can only cap more.
+// (decision 0031): a whole number of at least one, 2 when absent. Any other value
+// makes the scenario invalid, and it is refused as a whole (conformance/README.md).
 function refusalLimit(scenario) {
   const limit = scenario.refusals_before_cap;
   if (limit === undefined) return 2;
-  if (!Number.isInteger(limit) || limit < 1) return 1;
+  if (!Number.isInteger(limit) || limit < 1) throw new InvalidScenario('refusals_before_cap must be a whole number of at least one');
   return limit;
+}
+
+// Checked before any step is taken, so that the refusal is not mistaken for a step that threw.
+function validate(scenario) {
+  refusalLimit(scenario);
 }
 
 // `all` is every attempt ever taken; the current target's are those with `target` equal to `current`.
@@ -77,4 +83,4 @@ function runScenario(scenario) {
   return results;
 }
 
-module.exports = { overallResult, isShopped, notAgreed, refusalLimit, grantedLevel, judge, runScenario };
+module.exports = { InvalidScenario, validate, overallResult, isShopped, notAgreed, refusalLimit, grantedLevel, judge, runScenario };

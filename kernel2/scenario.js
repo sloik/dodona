@@ -47,6 +47,8 @@ function runSafely(runner, scenario) {
 function runScenario(scenario) {
   const runner = runners[scenario.kind];
   if (runner === undefined) throw new Error(`unknown scenario kind: ${scenario.kind}`);
+  // A scenario the contract calls invalid is refused whole, before any step.
+  if (runner.validate) runner.validate(scenario);
   return { results: runSafely(runner, scenario) };
 }
 

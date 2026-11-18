@@ -208,6 +208,13 @@
       "name": "shopping flagged but not capping",
       "model_case": "attempts/mutant_flag_does_not_cap",
       "file": "attempts.js",
+      "find": "cap: capped ? 'helper' : null",
+      "replace": "cap: null"
+    },
+    {
+      "name": "shopping does not cap, only the limit does",
+      "model_case": "(decision 0031 kit)",
+      "file": "attempts.js",
       "find": "const capped = shopped || (retried && notAgreed(all) >= limit);",
       "replace": "const capped = retried && notAgreed(all) >= limit;"
     },
@@ -310,11 +317,18 @@
       "replace": "const hard = [root].filter((node) => node.gate === 'hard');"
     },
     {
-      "name": "tree ignores the floor",
-      "model_case": "tree/mutant_ignores_floor",
+      "name": "tree ignores the policy's number",
+      "model_case": "(decision 0030 kit)",
       "file": "tree.js",
       "find": "hard.length < floor",
       "replace": "hard.length < 1"
+    },
+    {
+      "name": "tree unguarded only with no hard gate at all",
+      "model_case": "tree/mutant_ignores_floor",
+      "file": "tree.js",
+      "find": "  if (hard.length < floor) return 'unguarded';\n  if (children.some((child) => child.gate !== 'hard')) return 'unguarded';\n",
+      "replace": "  if (hard.length < 1) return 'unguarded';\n"
     },
     {
       "name": "attempts close ignores the ticket and closes the latest open attempt",
@@ -1039,7 +1053,7 @@
     },
     {
       "name": "a platform's own conflicting records do not void the claim",
-      "model_case": "platforms/mutant_self_disagreement_ignored",
+      "model_case": "(per-key verification kit)",
       "file": "platforms.js",
       "find": "const otherVerdict = keyDiffers(recorded, key);",
       "replace": "const otherVerdict = [...platformMap(recorded, key).values()].every((verdicts) => verdicts.size === 1) && keyDiffers(recorded, key);"

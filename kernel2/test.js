@@ -176,6 +176,11 @@ test('attempts: a retry after a change keeps its grade up to the limit on refusa
   assert.equal(attempts.judge(taken(['open', 0], ['agreed', 1]), 1, 'apart', 1).cap, 'helper');
   assert.equal(attempts.refusalLimit({}), 2);
   assert.equal(attempts.refusalLimit({ refusals_before_cap: 3 }), 3);
+  // Any other value makes the scenario invalid, refused whole and not stepped through.
+  const { runScenario } = require('./scenario');
+  for (const wrong of [0, -1, 1.5, '2', null, true, [2]]) {
+    assert.throws(() => runScenario({ kind: 'attempts', refusals_before_cap: wrong, steps: [{ do: { take: { as: 't' } } }] }), attempts.InvalidScenario);
+  }
 });
 
 test('platforms: verified claim, reproducibility', () => {
