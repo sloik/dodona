@@ -73,6 +73,8 @@ Validating a message against its schema is a first filter. The kernel also holds
 - **Wire parsing is as strict as the canonical encoding.** A message with a repeated key, a number that is not an integer, a lone surrogate, or nesting deeper than the limit in `hello` is refused.
 - **Every path passes the [path check](path-check.md)**, not only the pattern in the schema. A program path must lie inside the tool tree it names. The same holds for the starting directory of a run and for the path part of a `${tool:NAME}/PATH` argument.
 - **A tool is one the provider declared.** A run description that names a tool missing from the provider's manifest, in its program or in an argument, is refused.
+- **A run reads what its check is about, and nothing outside.** A run description must list as inputs every file its obligation names, and must target the platform the check was asked for. An argument that contains a character that can start or join a path (`/`, `\`, `~`, `@`, `$`, `%`, or `..`) must be, exactly and as a whole, one of the run's input files or one file of a declared tool. A word that is not a file may hold printable ASCII characters only, so a look-alike of `/` or `..` is refused too. The stage-0 host allows no environment variables, and no output may have the name of an input. So a path hidden inside an option, such as `-config=/etc/passwd` or `-I..`, is refused because of its characters, whatever the option is. A plain word that happens to be the name of some other file cannot be told apart from an option, and whether a run actually reads the files it was given cannot be seen from its description at all; confining the run to its own files is the executor's job.
+- **The verdict is the provider's reading.** The host checks that a verdict rests on a run that exited, within the strength declared. Whether exit status 1 means a failure or a violation found as expected is the provider's to say, and a provider that reads it wrongly is wrong in a way no host can see. That is why a provider is part of the trusted base of every result it gives.
 - **A run's inputs are in the key.** A run description that lists an input the check was not given is refused.
 - **Every file is re-hashed.** The identity a provider gives for a file is recomputed from its bytes.
 - **An answer matches its request**: same `id`, same capability, and an `id` that was asked.
@@ -82,6 +84,10 @@ Validating a message against its schema is a first filter. The kernel also holds
 - **Later runs use only what is in the key or what an earlier run of the same check produced.**
 - **A provider cannot confirm an intent or grant an exception.** Those come only from act records with tickets the kernel issued.
 - **Each run of a check is submitted under its own key**, which includes its number, so a repeated run is never answered from an earlier one.
+
+## Tool trees
+
+A tool is pinned as a whole tree. How the digest of a tree is computed, and which trees have none, is in [tool-tree-digest.md](tool-tree-digest.md), with vectors. A check request may carry the listing of a tool tree, and a run may declare a directory as an output. The stage-0 host passes neither yet.
 
 ## The ledger
 

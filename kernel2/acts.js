@@ -4,7 +4,7 @@
 
 const crypto = require('node:crypto');
 const { rank } = require('./intent');
-const { canonicalText } = require('./identity');
+const { canonicalText, isStrictlyIncreasing } = require('./identity');
 
 const GIVEN_ROLES = ['work', 'criteria', 'brief', 'known-wrong', 'known-right'];
 
@@ -28,6 +28,58 @@ const LEVEL_FACTS = {
   'cross-make': ['otherMake'],
 };
 const GRADED_LEVELS = ['helper', 'apart', 'tested', 'cross-make'];
+
+const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];
+
+const ATTESTATION_FIELDS = ['harness', 'key', 'covers', 'mac'];
+
+// The fields an act record may have at the top level.
+const RECORD_FIELDS = [...BOUND_FIELDS, 'actor', 'worker', 'brief', 'given', 'fresh_context', 'known_bad', 'attempt', 'transcript', 'attestation'];
+
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isString(value) {
+  return typeof value === 'string';
+}
+
+function absentOr(value, test) {
+  return value === undefined || test(value);
+}
+
+// `actor.started_by`, when present, must be a string.
+function actor_started_by_wrong(record) {
+  return record.actor.started_by !== undefined && !isString(record.actor.started_by);
+}
+
+// A record is malformed when a required part is missing or a present field has the wrong type.
+function isMalformed(record) {
+  if (!isObject(record) || !isObject(record.actor) || !isObject(record.worker)) return true;
+  // A field nobody signs cannot ride along on a signed record.
+  if (Object.keys(record).some((name) => !RECORD_FIELDS.includes(name))) return true;
+  if (!isString(record.actor.id) || !isString(record.actor.session) || !isString(record.worker.id) || !isString(record.worker.session)) return true;
+  if (actor_started_by_wrong(record)) return true;
+  const knownBad = record.known_bad;
+  const attestation = record.attestation;
+  const checks = [
+    absentOr(record.brief, isObject),
+    absentOr(record.given, (given) => Array.isArray(given) && given.every((item) => isObject(item) && isString(item.role) && isString(item.content))),
+    absentOr(record.fresh_context, (value) => typeof value === 'boolean'),
+    absentOr(record.transcript, isString),
+    absentOr(knownBad, (value) => isObject(value) && isString(value.wrong) && isString(value.right) && isString(value.supplied_by)
+      && typeof value.rejected_wrong === 'boolean' && typeof value.accepted_right === 'boolean'),
+    absentOr(attestation, (value) => isObject(value) && isString(value.key) && isString(value.mac)
+      && Array.isArray(value.covers) && value.covers.every(isString)),
+    absentOr(record.attempt, (value) => isObject(value) && Number.isInteger(value.number) && Number.isInteger(value.prior)),
+    absentOr(record.ticket, isString),
+    absentOr(record.kind, isString),
+    absentOr(record.target, isString),
+    absentOr(record.result, isString),
+    absentOr(record.lineage, isObject),
+  ];
+  return checks.some((ok) => !ok);
+}
 
 function present(value) {
   return value !== undefined && value !== null;
@@ -54,7 +106,8 @@ function factsOf(record, policy) {
   const knownBad = record.known_bad;
   const actorMake = makeName(actor.make);
   const workerMake = makeName(worker.make);
-  const makes = policy.makes || [];
+  // A group that is not a list of strings is ignored.
+  const makes = (policy.makes || []).filter((group) => Array.isArray(group) && group.every(isString));
   return {
     distinct: actor.id !== worker.id && actor.session !== worker.session,
     started: present(actor.started_by) && actor.started_by !== worker.id,
@@ -89,7 +142,15 @@ function attestationHolds(record, policy) {
   const attestation = record.attestation;
   if (!attestation || !Array.isArray(attestation.covers)) return false;
   const attestors = policy.attestors || {};
+  // An attestation has harness, key, covers and mac, and nothing else.
+  if (Object.keys(attestation).some((name) => !ATTESTATION_FIELDS.includes(name))) return false;
+  // The harness named must be the one whose key made the check value.
+  if (attestation.harness !== attestation.key) return false;
   if (!Object.hasOwn(attestors, attestation.key)) return false;
+  // A key is a non-empty string of lowercase hexadecimal digits of even length.
+  if (!/^([0-9a-f]{2})+$/.test(attestors[attestation.key])) return false;
+  // `covers` is used as given: it must already be sorted and have no repeats.
+  if (!isStrictlyIncreasing(attestation.covers)) return false;
   if (typeof attestation.mac !== 'string' || !/^[0-9a-f]{64}$/.test(attestation.mac)) return false;
   const fields = {};
   for (const name of attestation.covers) {
@@ -104,14 +165,19 @@ function attestationHolds(record, policy) {
 function vouchedFacts(record, policy) {
   const vouched = {};
   const holds = attestationHolds(record, policy);
+  // The check value must also bind what was judged: its kind, target, result and lineage.
+  const covers = holds ? record.attestation.covers : [];
+  const everyFieldCovered = Object.keys(record).filter((name) => name !== 'attestation').every((name) => covers.includes(name));
+  const binds = holds && BOUND_FIELDS.every((field) => covers.includes(field)) && everyFieldCovered;
   for (const [fact, reads] of Object.entries(FACT_READS)) {
-    vouched[fact] = holds && reads.every((field) => record.attestation.covers.includes(field));
+    vouched[fact] = holds && binds && reads.every((field) => record.attestation.covers.includes(field));
   }
   return vouched;
 }
 
 // Grades a record. Returns { claims, level, source }.
 function gradeAct(record, policy) {
+  if (isMalformed(record)) return { claims: 'self', level: 'self', source: 'declared' };
   const facts = factsOf(record, policy);
   const claims = claimedLevel(facts);
   const vouched = vouchedFacts(record, policy);
@@ -126,7 +192,14 @@ function gradeAct(record, policy) {
 }
 
 function runScenario(scenario) {
-  return scenario.steps.map(({ do: step }) => gradeAct(step.grade, scenario.policy));
+  const nothing = { claims: 'self', level: 'self', source: 'declared' };
+  return scenario.steps.map(({ do: step }) => {
+    try {
+      return gradeAct(step.grade, scenario.policy);
+    } catch (error) {
+      return nothing; // a record that cannot be understood earns nothing
+    }
+  });
 }
 
-module.exports = { factsOf, claimedLevel, attestationHolds, vouchedFacts, gradeAct, runScenario };
+module.exports = { isMalformed, factsOf, claimedLevel, attestationHolds, vouchedFacts, gradeAct, runScenario };

@@ -1,4 +1,5 @@
 use crate::json::{self, Value};
+use std::cmp::Ordering;
 
 pub fn answer(input: &[u8]) -> Value {
     match json::parse(input) {
@@ -16,9 +17,11 @@ pub fn answer(input: &[u8]) -> Value {
 pub fn identity(v: &Value) -> String {
     format!("sha256:{}", sha256(json::encode(v).as_bytes()))
 }
-/// Bytes from hexadecimal digits, two per byte. Signs and odd lengths are refused.
+/// Bytes from lowercase hexadecimal digits, two per byte. Anything else is refused:
+/// a sign, an uppercase digit, an odd number of digits.
 pub fn unhex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
+    let digit = |b: u8| b.is_ascii_digit() || (b'a'..=b'f').contains(&b);
+    if s.len() % 2 != 0 || !s.bytes().all(digit) {
         return None;
     }
     (0..s.len())
@@ -112,17 +115,28 @@ mod tests {
     }
 }
 
+/// The fields a core-key preimage has. Any other is refused.
+const PREIMAGE: [&str; 4] = ["obligation", "kind", "inputs", "provider"];
+/// The arrays in a preimage's inputs that are sets.
+const SETS: [&str; 5] = ["specified_by", "targets", "closure", "declared", "mapping"];
 /// The core key of an evidence record from its preimage, or why it has none.
-/// The named arrays are sets: sorted by their UTF-8 bytes, with no repeats.
+/// Every set must be sorted as the canonical encoding sorts keys, with no repeats.
 pub fn core_key(v: &Value) -> Result<String, &'static str> {
     let inputs = v.opt("inputs");
     if v.opt("platform").is_some() || inputs.is_some_and(|i| i.opt("platform").is_some()) {
         return Err("platform-in-core-key");
     }
-    for name in ["specified_by", "targets", "closure", "declared", "mapping"] {
+    let unknown = match v {
+        Value::Object(fields) => fields.iter().any(|(k, _)| !PREIMAGE.contains(&k.as_str())),
+        _ => false,
+    };
+    if unknown {
+        return Err("unknown-field");
+    }
+    for name in SETS {
         if let Some(Value::Array(a)) = inputs.and_then(|i| i.opt(name)) {
             let sorted = a.windows(2).all(|w| match (&w[0], &w[1]) {
-                (Value::String(x), Value::String(y)) => x.as_bytes() < y.as_bytes(),
+                (Value::String(x), Value::String(y)) => json::key_order(x, y) == Ordering::Less,
                 _ => false,
             });
             if !sorted {
@@ -160,14 +174,28 @@ mod key_tests {
             identity(&json::parse(b"{}").unwrap()),
             "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
         );
-        // Sets are ordered by UTF-8 bytes, not UTF-16 units.
-        let v = json::parse("{\"inputs\":{\"closure\":[\"\u{ff5e}\",\"\u{1f600}\"]}}".as_bytes())
+        // Sets are ordered by UTF-16 code units, as the canonical encoding orders keys.
+        let v = json::parse("{\"inputs\":{\"closure\":[\"\u{1f600}\",\"\u{ff5e}\"]}}".as_bytes())
             .unwrap();
         assert!(core_key(&v).is_ok());
+        for set in SETS {
+            for members in [r#"["b","a"]"#, r#"["a","a"]"#, r#"["a",1]"#] {
+                let text = format!(r#"{{"inputs":{{"{set}":{members}}}}}"#);
+                let v = json::parse(text.as_bytes()).unwrap();
+                assert_eq!(core_key(&v), Err("unsorted-set"), "{text}");
+            }
+        }
+        let v = json::parse(br#"{"inputs":{},"extra":1}"#).unwrap();
+        assert_eq!(core_key(&v), Err("unknown-field"));
+        let v = json::parse(br#"{"inputs":{"platform":null}}"#).unwrap();
+        assert_eq!(core_key(&v), Err("platform-in-core-key"));
+        let v = json::parse(br#"{"platform":null}"#).unwrap();
+        assert_eq!(core_key(&v), Err("platform-in-core-key"));
     }
     #[test]
     fn hexadecimal() {
-        assert_eq!(unhex("00ff1A"), Some(vec![0, 255, 26]));
+        assert_eq!(unhex("00ff1a"), Some(vec![0, 255, 26]));
+        assert_eq!(unhex("00FF"), None);
         assert_eq!(unhex(""), Some(vec![]));
         assert_eq!(unhex("abc"), None);
         assert_eq!(unhex("+a"), None);

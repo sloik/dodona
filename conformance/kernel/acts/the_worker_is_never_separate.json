@@ -92,11 +92,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "47a595cfd0aa3c69b1f80a4078771cf323fffc27e8d55fbd133ce3f0753dced3"
+            "mac": "ccef0c95cb58134f437419cc4760770fdc1f1ccdbdedb176e8935f55470ea8dd"
           }
         }
       },
@@ -179,11 +184,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "bc2a5b1de0714d12006e020d9f0dfaa789380a0ae61c2775ec12f6070e172d0e"
+            "mac": "ea6f5d7b00ea408f3bfba62d1f16f80cc6f3e92ce367cfa188a33506a93581bf"
           }
         }
       },
@@ -266,11 +276,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "c0aa7865ffdd050ed3a8acdfd459e19a555c62f06dc5ae49257b2e6154a51049"
+            "mac": "5570b5726b353616959f84097e526728f0ecbb9fc449316904699a4382837cf3"
           }
         }
       },
@@ -352,11 +367,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "b1c72e83909c5a92152391a642b8050e4e0e1caa6191a4771f7d56cd45322a53"
+            "mac": "250b721cab0ba84c5e881053fefb676bee99e73e3316d047c4296c1d24580c4c"
           }
         }
       },
@@ -439,11 +459,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "19c8d4422a3764546d65d2632de33b3719e3d161f33d0776585571bae00abaec"
+            "mac": "f63d38f3763b0931763e59a6707354466119598817d98fb7238e007b718971ee"
           }
         }
       },
@@ -530,11 +555,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "f9e4204004a842b39170451fcc404319d23676f81be3c20c1bef1506ba3b37d5"
+            "mac": "c99debe97a6581bd815214fd143442bae9f28fb73ac061348024dc4a13289531"
           }
         }
       },
@@ -617,11 +647,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "60a5674a698c529480aebec89c14c659c505807b63c02c87796b99f7919d6267"
+            "mac": "636e26da48cef5954a2096506820642705f40c78b664798f24d8ca6a84ae3336"
           }
         }
       },
@@ -703,10 +738,15 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "worker"
             ],
-            "mac": "d82d6335de0b918976dd703afd07459e8b405c91768d971c048f87a48171e9f3"
+            "mac": "2138354accb77fd55104025e3d132436fb29a0b722f3427206eba98f076feaaa"
           }
         }
       },

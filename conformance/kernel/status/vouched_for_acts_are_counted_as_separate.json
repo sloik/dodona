@@ -124,7 +124,7 @@
           "body": {
             "ticket": "t-1",
             "kind": "confirm-baseline",
-            "target": "sha256:637fc444c533686b82544fcc7581cdf52def8f2f7bc508b647c70a1f2ca6864c",
+            "target": "sha256:f32ebdfc7703066be9c596f441d11aa1a9e5d94a9abeac410cdd511c0b2bd24a",
             "lineage": {
               "intent": "i1",
               "kind": "confirm-baseline"
@@ -325,11 +325,16 @@
                 "brief",
                 "fresh_context",
                 "given",
+                "kind",
                 "known_bad",
+                "lineage",
+                "result",
+                "target",
+                "ticket",
                 "transcript",
                 "worker"
               ],
-              "mac": "aea63d37389afd0e912652f3210e2279bfa5dae65a29096efbdcb8be75fb1600"
+              "mac": "63af5e5bf2cfde203c1b45a8e27aa38835cd179584aeae7b385f4a7151489630"
             }
           }
         }
@@ -422,11 +427,16 @@
                 "brief",
                 "fresh_context",
                 "given",
+                "kind",
                 "known_bad",
+                "lineage",
+                "result",
+                "target",
+                "ticket",
                 "transcript",
                 "worker"
               ],
-              "mac": "aea63d37389afd0e912652f3210e2279bfa5dae65a29096efbdcb8be75fb1600"
+              "mac": "fcfdfa6ead342fbb270f28248699d57cb2b9c885f0dc9894c3ca3bbf0a493850"
             }
           }
         }
@@ -519,11 +529,16 @@
                 "brief",
                 "fresh_context",
                 "given",
+                "kind",
                 "known_bad",
+                "lineage",
+                "result",
+                "target",
+                "ticket",
                 "transcript",
                 "worker"
               ],
-              "mac": "aea63d37389afd0e912652f3210e2279bfa5dae65a29096efbdcb8be75fb1600"
+              "mac": "b58c66bdfaf4eb79abf837e6797ff4d5e84d5c8fd9b2b1d56cb0d4f10d304e1d"
             }
           }
         }

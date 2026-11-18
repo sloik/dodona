@@ -1,4 +1,7 @@
-use crate::json::{self, Value};
+use crate::{
+    evidence,
+    json::{self, Value},
+};
 use std::collections::BTreeMap;
 fn reproducibility(records: &BTreeMap<(String, String), String>, key: &str) -> &'static str {
     let values: Vec<_> = records
@@ -25,12 +28,27 @@ pub fn run(input: &Value) -> Vec<Value> {
         .array()
         .iter()
         .map(|step| {
-            let r = step.get("do").get("record");
-            let entry = records
-                .entry((r.get("key").str().into(), r.get("platform").str().into()))
-                .or_insert_with(|| r.get("verdict").str().into());
-            if entry != r.get("verdict").str() {
-                *entry = "conflict".into();
+            // A record for a key or platform the scenario does not have, or with a
+            // verdict that does not exist, changes nothing.
+            let record = step.get("do").opt("record");
+            let listed = |list: &[Value], field: &str| {
+                let name = record?.text(field)?;
+                list.iter()
+                    .any(|x| matches!(x, Value::String(s) if s == name))
+                    .then_some(name)
+            };
+            let verdict = record
+                .and_then(|r| r.text("verdict"))
+                .filter(|v| evidence::VERDICTS.contains(v));
+            if let (Some(key), Some(platform), Some(verdict)) =
+                (listed(keys, "key"), listed(platforms, "platform"), verdict)
+            {
+                let entry = records
+                    .entry((key.into(), platform.into()))
+                    .or_insert_with(|| verdict.into());
+                if entry != verdict {
+                    *entry = "conflict".into();
+                }
             }
             let verified = keys
                 .iter()
@@ -97,5 +115,20 @@ mod tests {
         assert_eq!(reproducibility(&r, "k"), "agrees");
         r.insert(("k".into(), "b".into()), "failed".into());
         assert_eq!(reproducibility(&r, "k"), "differs");
+        let input = json::parse(
+            br#"{"keys":["k"],"platforms":["a","b"],"stand_in_allowed":true,"steps":[
+                {"do":{"record":{"key":"k","platform":"a","verdict":"passed"}}},
+                {"do":{"record":{"key":"gone","platform":"a","verdict":"passed"}}},
+                {"do":{"record":{"key":"k","platform":"gone","verdict":"passed"}}},
+                {"do":{"record":{"key":"k","platform":"b","verdict":"made-up"}}},
+                {"do":{"record":{"key":"k","platform":"a","verdict":"made-up"}}},
+                {"do":{"record":{"key":7,"platform":"a","verdict":"failed"}}}]}"#,
+        )
+        .unwrap();
+        let got: Vec<String> = run(&input).iter().map(json::encode).collect();
+        for later in &got[1..] {
+            assert_eq!(later, &got[0]);
+        }
+        assert!(got[0].contains(r#""reproducibility":{"k":"unknown"}"#));
     }
 }

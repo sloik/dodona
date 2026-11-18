@@ -1,0 +1,240 @@
+{
+  "kind": "evidence",
+  "claim": "C1",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    },
+    "o2": {
+      "depends_on": [
+        "d1",
+        "d2"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a",
+      "d2": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "name": "failure_then_fix_with_values_of_the_wrong_type",
+  "covers": [],
+  "why": "The scenario failure_then_fix, with after each step the same step again, once for each value it holds, with that value of the wrong type. Such a step changes nothing, so what was expected after the step it copies is expected after it too.",
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {}
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "failed"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": null,
+          "verdict": "failed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "failed"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j1",
+          "verdict": []
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "failed"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": {},
+          "to": "b"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": 7
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "never-run"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j2"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": 0,
+          "as": "j2"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": false
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": null,
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "complete": {
+          "run": "j2",
+          "verdict": []
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "passed"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "failed"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": {},
+          "to": "a"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "failed"
+        }
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d1",
+          "to": 7
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "failed"
+        }
+      }
+    }
+  ]
+}

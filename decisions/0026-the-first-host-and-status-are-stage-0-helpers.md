@@ -42,6 +42,8 @@ A kernel could work out status from a scenario, and a model checker ran in CI, b
 - The host's rules are tested by a provider that breaks them one at a time. The host itself is not a kernel and passing these cases says nothing about a future kernel's host.
 - Two stage-0 programs now sit between the provider and the kernel. Anything they get wrong is not caught by the conformance kit, which judges kernels.
 
+- Ledger entries are not signed. A ledger file counts as the record of the writer it names, so whoever can write a ledger file can write results into it, and `tools/status.py --ledger FILE` will count them. The CI ledger is trusted because only a run on `main` writes it, not because of anything in its entries. Signing entries needs a key out of the worker's reach, the same as for acts ([issue 26](https://github.com/sloik/dodona/issues/26)).
+
 ## What would show this wrong
 
 - A result recorded with one tool counting as evidence after the lock pins another.

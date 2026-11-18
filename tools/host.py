@@ -16,9 +16,11 @@ and saves what came back. `conclude` needs a kernel. It gives the provider the
 saved results, checks what the provider says against the rules a schema cannot
 express, and records the verdicts.
 
-The host enforces: an answer matches its request; a verdict rests on a run; a
+The host enforces: an answer matches its request; every file a provider names is hashed again; each run of a check has its own key; a verdict rests on a run; a
 result does not claim more strength than the manifest declares; a program lies
-inside a tool the provider declared; every path passes the path check; a run
+inside a tool the provider declared and the check was given, with the digest
+it was given; a result states the class of strength the manifest declares; a
+check asks for at most eight runs; every path passes the path check; a run
 that did not exit ends the check in error. Every message of a session is kept
 in a transcript, so it can be validated against the schemas afterwards.
 """
@@ -42,8 +44,15 @@ import provider_host  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 RANKS = ["documented", "sampled", "bounded", "exhaustive"]
+# A provider states how strong its check is by rank; the status report speaks in levels of the assurance scale.
+LEVEL_OF_RANK = {"documented": "asserted", "sampled": "sampled", "bounded": "bounded", "exhaustive": "proven"}
 PLATFORM = {"os": "linux", "arch": "aarch64", "libc": "gnu"}
-TOOL_FILE = re.compile(r"\$\{tool:([^}]*)\}/(.*)")
+# Characters that can start or join a path, or make a program read one: a separator, the parent
+# directory, a home directory, an argument file, a variable.
+PATHLIKE = re.compile(r"[/\\~@$%]|\.\.|[^\x20-\x7e]")  # look-alikes of / and .. are outside printable ASCII
+TOOL_FILE = re.compile(r"\$\{tool:([A-Za-z0-9._-]+)\}/([A-Za-z0-9._/-]+)")
+TOOL_NAME = re.compile(r"\$\{tool:([^}]*)\}")  # every mention of a tool in an argument, with or without a file after it
+MAX_RUNS = 8  # a check may ask for this many runs and no more
 
 
 class Refused(Exception):
@@ -67,11 +76,15 @@ class Session:
         threading.Thread(target=provider_host.read_lines, args=(self.tree.proc.stdout, 1048576, self.lines), daemon=True).start()
         threading.Thread(target=provider_host.drain, args=(self.tree.proc.stderr, 65536, log), daemon=True).start()
         echo = "héllo ☃ \u0001\u001f end"
-        self.send({"type": "hello", "protocol": ["0.2"], "limits": {"max_line_bytes": 1048576, "deadline_ms": int(deadline_s * 1000)}, "echo": echo})
-        answer = self.receive()
-        if answer.get("type") != "manifest" or answer.get("echo") != echo:
-            raise Refused("bad-manifest")
-        self.manifest = answer["manifest"]
+        try:
+            self.send({"type": "hello", "protocol": ["0.2"], "limits": {"max_line_bytes": 1048576, "deadline_ms": int(deadline_s * 1000)}, "echo": echo})
+            answer = self.receive()
+            if answer.get("type") != "manifest" or answer.get("echo") != echo:
+                raise Refused("bad-manifest")
+            self.manifest = answer["manifest"]
+        except Refused:
+            self.tree.end()  # a session that never opened leaves no provider behind
+            raise
 
     @staticmethod
     def _start(argv, cwd):
@@ -86,7 +99,11 @@ class Session:
     def send(self, message: dict) -> None:
         self.transcript.append({"to": "provider", "message": message})
         try:
-            self.tree.proc.stdin.write(json.dumps(message, ensure_ascii=False).encode("utf-8") + b"\n")
+            data = json.dumps(message, ensure_ascii=False).encode("utf-8") + b"\n"
+        except UnicodeEncodeError:
+            raise Refused("encoding") from None  # a lone surrogate the provider sent cannot be passed on
+        try:
+            self.tree.proc.stdin.write(data)
             self.tree.proc.stdin.flush()
         except OSError:
             raise Refused("closed") from None
@@ -107,6 +124,8 @@ class Session:
             raise Refused("encoding") from None
         except ValueError as err:
             raise Refused(str(err) if str(err) in ("duplicate-key", "not-an-integer") else "malformed") from None
+        if depth(message) > 64:
+            raise Refused("too-deep")
         if not isinstance(message, dict) or not isinstance(message.get("type"), str):
             raise Refused("malformed")
         self.transcript.append({"to": "kernel", "message": message})
@@ -137,6 +156,14 @@ class Session:
         self.tree.end()
 
 
+def depth(value) -> int:
+    if isinstance(value, dict):
+        return 1 + max((depth(v) for v in value.values()), default=0)
+    if isinstance(value, list):
+        return 1 + max((depth(v) for v in value), default=0)
+    return 0
+
+
 def no_repeats(pairs):
     out = {}
     for key, value in pairs:
@@ -150,35 +177,86 @@ def no_fractions(text):
     raise ValueError("not-an-integer")
 
 
-def ceiling(manifest: dict, capability: str) -> str | None:
+def declared_strength(manifest: dict, capability: str) -> dict | None:
     for item in manifest["capabilities"]:
         if item["capability"] == capability and "strength" in item:
-            return item["strength"]["rank"]
+            return item["strength"]
     return None
 
 
-def check_run_description(run: dict, manifest: dict, known_inputs: set[str]) -> None:
-    """The rules a run description must keep before anything is executed."""
+def ceiling(manifest: dict, capability: str) -> str | None:
+    strength = declared_strength(manifest, capability)
+    return strength["rank"] if strength else None
+
+
+def run_key(check_key: str, number: int, description: dict) -> str:
+    """The key one run of a check is submitted under. It includes the run's number,
+    so a second run with the same description is never answered from the first."""
+    return canonical.identity({"check": check_key, "run": number, "description": canonical.identity(description)})
+
+
+def rehash(item: dict, root: pathlib.Path) -> None:
+    """A provider's word for what a file contains is never taken: the bytes are hashed again."""
+    path = root / item["path"]
+    if not path.is_file() or "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest() != item.get("identity"):
+        raise Refused("identity-mismatch")
+
+
+def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str], known_tools: dict[str, str],
+                          platform: dict | None = None, named_files: set[str] | None = None) -> None:
+    """The rules a run description must keep before anything is executed.
+    `known_tools` gives the digest of each tool the check was given: the ones its result is keyed by.
+    `platform` is the platform the check was asked for; `named_files` the files its obligation names."""
+    if platform is not None and run.get("platform") != platform:
+        raise Refused("platform-mismatch")  # a run must target the platform the check was asked for
     declared = {t["name"] for t in manifest.get("tools", [])}
     program = run.get("program", {})
-    if program.get("tool") not in declared:
+    named = [program.get("tool")] + [name for a in run.get("args", []) if isinstance(a, str) for name in TOOL_NAME.findall(a)]
+    if any(tool not in declared for tool in named):
         raise Refused("undeclared-tool")
+    if any(tool not in known_tools for tool in named):
+        raise Refused("tool-not-in-key")  # declared, but not among the tools this check was given
+    for item in run.get("tools", []):
+        if not isinstance(item, dict) or item.get("name") not in known_tools:
+            raise Refused("tool-not-in-key")
+        if item.get("digest") != known_tools.get(item["name"]):
+            raise Refused("tool-digest-mismatch")  # the run would use another tool than the one the result is keyed by
     placed = [m for a in run.get("args", []) if isinstance(a, str) for m in TOOL_FILE.findall(a)]
-    if any(tool not in declared for tool, _ in placed):
-        raise Refused("undeclared-tool")
     for path in ([program.get("path", "")] + [f.get("path", "") for f in run.get("inputs", []) + run.get("outputs", [])]
                  + [path for _, path in placed] + ([run["cwd"]] if "cwd" in run else [])):
         if pathcheck.check(str(path).encode("utf-8", errors="surrogatepass")) is not None:
             raise Refused("bad-path")
+    # Arguments by allowlist, not by looking for what is forbidden: that can never be complete.
+    # An argument with any character that can start or join a path must be, exactly, one of the
+    # run's input files or one file of a declared tool. Anything else is a word: an option, a number.
+    inputs = {f.get("path") for f in run.get("inputs", [])}
+    for arg in run.get("args", []):
+        text = str(arg)
+        if text in inputs or TOOL_FILE.fullmatch(text) or "\x00" in text:
+            continue  # a NUL byte is refused below, under its own reason
+        if PATHLIKE.search(text):
+            raise Refused("bad-path")  # an argument may name only the run's own files, and only as a whole argument
+    if run.get("env"):
+        raise Refused("env-not-allowed")  # a variable can change what a program loads; the stage-0 host allows none
+    if {f.get("path") for f in run.get("outputs", [])} & inputs:
+        raise Refused("output-overwrites-input")
     for item in run.get("inputs", []):
         if item["path"] not in known_inputs:
             raise Refused("input-not-in-key")
+        if known_inputs[item["path"]] is not None and item.get("identity") != known_inputs[item["path"]]:
+            raise Refused("identity-mismatch")
     if not isinstance(run.get("args"), list) or not all(isinstance(a, str) and "\x00" not in a for a in run["args"]):
         raise Refused("bad-arguments")
+    if named_files is not None and not named_files <= {f.get("path") for f in run.get("inputs", [])}:
+        raise Refused("missing-input")  # a run must be given every file its obligation names
 
 
-def check_final(final: dict, manifest: dict, capability: str, runs_done: int) -> None:
+def check_final(final: dict, manifest: dict, capability: str, runs_done: int, root: pathlib.Path = ROOT) -> None:
     """The rules a final answer must keep."""
+    for item in final.get("attachments", []):
+        if pathcheck.check(str(item.get("path", "")).encode("utf-8", errors="surrogatepass")) is not None:
+            raise Refused("bad-path")
+        rehash(item, root)
     if final.get("verdict") not in ("passed", "failed", "error", "unsupported"):
         raise Refused("bad-verdict")
     if final["verdict"] in ("passed", "failed"):
@@ -187,12 +265,19 @@ def check_final(final: dict, manifest: dict, capability: str, runs_done: int) ->
         top, got = ceiling(manifest, capability), final.get("strength", {}).get("rank")
         if got not in RANKS or top is None or RANKS.index(got) > RANKS.index(top):
             raise Refused("strength-above-ceiling")
+        if final["strength"].get("class") != declared_strength(manifest, capability).get("class"):
+            raise Refused("strength-class-mismatch")  # a test is not a proof, whatever its rank
 
 
 def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], report_for) -> dict:
     """Take one obligation through start, runs and final. `report_for(run_number, description)` returns
     the executor's report for a run, or None if there is none yet, in which case the description is returned."""
-    known = {f["path"] for f in inputs}
+    known = {f["path"]: f["identity"] for f in inputs}
+    if not set(obligation.get("specified_by", []) + obligation.get("targets", [])) <= set(known):
+        raise Refused("unknown-file")  # an obligation names a file the check was not given
+    known_tools = {t["name"]: t["digest"] for t in tools}
+    check_key = canonical.identity({"obligation": obligation, "inputs": inputs})
+    keys: list[str] = []
     body = session.ask("obligation.check", {"op": "start", "obligation": obligation, "inputs": inputs, "tools": tools, "platform": PLATFORM})
     check_id, runs = session.last_request, 0
     while True:
@@ -200,11 +285,15 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
             raise Refused("neither-or-both")
         if "final" in body:
             check_final(body["final"], session.manifest, "obligation.check", runs)
-            return {"final": body["final"], "runs": runs}
-        check_run_description(body["next"], session.manifest, known)
+            return {"final": body["final"], "runs": runs, "run_keys": keys}
+        if runs >= MAX_RUNS:
+            raise Refused("too-many-runs")  # refused when the next run is asked for, before it starts
+        check_run_description(body["next"], session.manifest, known, known_tools, PLATFORM,
+                              set(obligation.get("specified_by", []) + obligation.get("targets", [])))
+        keys.append(run_key(check_key, runs + 1, body["next"]))
         report = report_for(runs + 1, body["next"])
         if report is None:
-            return {"pending": body["next"]}
+            return {"pending": body["next"], "run_key": keys[-1]}
         runs += 1
         if report.get("end") != "exited":
             return {"final": {"verdict": "error", "reason": "run-" + str(report.get("end"))}, "runs": runs}
@@ -260,7 +349,7 @@ def collect(args) -> int:
             got = drive_check(session, obligation, inputs_of(obligation, files), tools, lambda n, d: None)
             if "pending" not in got:
                 raise Refused("verdict-without-run")
-            pending.append({"obligation": obligation, "run": got["pending"]})
+            pending.append({"obligation": obligation, "run": got["pending"], "run_key": got["run_key"]})
     finally:
         session.close()
     bundle = pathlib.Path(tempfile.mkdtemp(prefix="dodona-collect-")) / "bundle"
@@ -385,6 +474,9 @@ def conclude(args) -> int:
                     return {"end": nothing}
                 if name not in stored or stored[name]["run"] != description:
                     raise Refused("run-changed")
+                expected = run_key(canonical.identity({"obligation": obligation, "inputs": inputs}), number, description)
+                if stored[name].get("run_key") != expected:
+                    raise Refused("run-key-mismatch")  # what was executed was not submitted for this run of this check
                 captured = args.runs / "outputs" / f"{name}.txt"
                 status = args.runs / "outputs" / f"{name}.exit"
                 if not captured.exists() or not status.exists() or status.read_text().strip() == "did-not-start":
@@ -406,7 +498,7 @@ def conclude(args) -> int:
             if verdict in ("passed", "failed"):
                 key = kernel(args.kernel, "key", made_with)["core_key"]
                 body = {"obligation": name, "preimage": made_with, "core_key": key, "platform": "linux/aarch64", "verdict": verdict,
-                        "writer": args.writer, "strength": final["strength"], "summary": final.get("summary", {}),
+                        "writer": args.writer, "level": LEVEL_OF_RANK.get(final["strength"]["rank"], "asserted"), "strength": final["strength"], "summary": final.get("summary", {}),
                         "executor": runs["executor"], "unpinned_tools": unpinned}
                 kernel(args.kernel, "ledger-append", {"ledger": str(args.ledger), "kind": "evidence", "body": body, "wait_ms": 5000})
             else:

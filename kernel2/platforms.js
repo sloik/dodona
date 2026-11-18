@@ -3,6 +3,8 @@
 // `recorded` maps a key to a map from platform to the set of verdicts recorded
 // there (one verdict, or both if the platform has conflicting records).
 
+const vocabulary = require('./vocabulary');
+
 function platformMap(recorded, key) {
   return recorded.get(key) || new Map();
 }
@@ -77,7 +79,9 @@ function runScenario(scenario) {
   const recorded = new Map();
   const results = [];
   for (const { do: step } of scenario.steps) {
-    if (step.record) {
+    const valid = step.record && scenario.keys.includes(step.record.key) && scenario.platforms.includes(step.record.platform)
+      && vocabulary.VERDICTS.includes(step.record.verdict);
+    if (valid) {
       const { key, platform, verdict } = step.record;
       if (!recorded.has(key)) recorded.set(key, new Map());
       if (!recorded.get(key).has(platform)) recorded.get(key).set(platform, new Set());

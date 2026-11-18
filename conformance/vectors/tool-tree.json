@@ -1,0 +1,243 @@
+{
+  "about": "The digest of a tool tree (protocol/tool-tree-digest.md). `accept` gives listings with their digest; `reject` gives listings that have none, with the reason. The identities stand for file contents. Worked out by the reference, tools/tooltree.py, and fixed here; the first two must be equal and the third must differ from them.",
+  "accept": [
+    {
+      "name": "two files",
+      "items": [
+        {
+          "path": "bin/tool",
+          "kind": "program",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        },
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        }
+      ],
+      "digest": "sha256:2eea4729913aa2781c67ee4f6c6af400b7933cf0fdb3e64f388a3307d7c0edf7"
+    },
+    {
+      "name": "the same listed in another order",
+      "items": [
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        },
+        {
+          "path": "bin/tool",
+          "kind": "program",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        }
+      ],
+      "digest": "sha256:2eea4729913aa2781c67ee4f6c6af400b7933cf0fdb3e64f388a3307d7c0edf7"
+    },
+    {
+      "name": "the same with the program not executable",
+      "items": [
+        {
+          "path": "bin/tool",
+          "kind": "file",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        },
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        }
+      ],
+      "digest": "sha256:06d517d513b56d1a5ef61d591dd5f0602e3d3ae45178fa3c0d083ce536fa3734"
+    },
+    {
+      "name": "with a link inside the tree",
+      "items": [
+        {
+          "path": "bin/tool",
+          "kind": "program",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        },
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        },
+        {
+          "path": "bin/t",
+          "kind": "link",
+          "target": "tool"
+        }
+      ],
+      "digest": "sha256:9db377359af6fad4941c1ada13308b2247f7c0102cdcf017eb1a41d87d5bd937"
+    },
+    {
+      "name": "with a link up and back down",
+      "items": [
+        {
+          "path": "bin/tool",
+          "kind": "program",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        },
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        },
+        {
+          "path": "bin/r",
+          "kind": "link",
+          "target": "../lib/rules.jar"
+        }
+      ],
+      "digest": "sha256:6bdfd295a04ceeb7901181b494ac43344de53d0884c3fe0c3abb17286c216b17"
+    },
+    {
+      "name": "a name beyond ASCII",
+      "items": [
+        {
+          "path": "bin/tool",
+          "kind": "program",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        },
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        },
+        {
+          "path": "doc/caf\u00e9.txt",
+          "kind": "file",
+          "identity": "sha256:139d544b821b13ebea14f1b0fe18577222e415c2966e3a3511c4196055232202"
+        }
+      ],
+      "digest": "sha256:99986046131daca220b494e152303102882815e7830208af7dc63ad4c4a597bd"
+    },
+    {
+      "name": "names that sort differently by code unit and by code point",
+      "items": [
+        {
+          "path": "\ud83d\ude00",
+          "kind": "file",
+          "identity": "sha256:ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+        },
+        {
+          "path": "\uff5e",
+          "kind": "file",
+          "identity": "sha256:3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d"
+        }
+      ],
+      "digest": "sha256:f9fb98afc62b471991d6c08216b3f84e3b44d76f1f330a08bbdb4cc6433d02cc"
+    }
+  ],
+  "reject": [
+    {
+      "name": "an empty tree",
+      "items": [],
+      "reason": "empty"
+    },
+    {
+      "name": "a path that climbs out",
+      "items": [
+        {
+          "path": "bin/tool",
+          "kind": "program",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        },
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        },
+        {
+          "path": "../x",
+          "kind": "file",
+          "identity": "sha256:2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+        }
+      ],
+      "reason": "bad-path"
+    },
+    {
+      "name": "two names that differ only in case",
+      "items": [
+        {
+          "path": "bin/tool",
+          "kind": "program",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        },
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        },
+        {
+          "path": "BIN/tool",
+          "kind": "file",
+          "identity": "sha256:2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+        }
+      ],
+      "reason": "colliding-paths"
+    },
+    {
+      "name": "a link to an absolute path",
+      "items": [
+        {
+          "path": "bin/tool",
+          "kind": "program",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        },
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        },
+        {
+          "path": "bin/sh",
+          "kind": "link",
+          "target": "/bin/sh"
+        }
+      ],
+      "reason": "link-leaves-the-tree"
+    },
+    {
+      "name": "a link that climbs out",
+      "items": [
+        {
+          "path": "bin/tool",
+          "kind": "program",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        },
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        },
+        {
+          "path": "bin/up",
+          "kind": "link",
+          "target": "../../etc/passwd"
+        }
+      ],
+      "reason": "link-leaves-the-tree"
+    },
+    {
+      "name": "a device",
+      "items": [
+        {
+          "path": "bin/tool",
+          "kind": "program",
+          "identity": "sha256:7c9bbe5ec9b3fb774e8fa0f54247e93c34ddf8e5d16fe3073420de0ae81a262d"
+        },
+        {
+          "path": "lib/rules.jar",
+          "kind": "file",
+          "identity": "sha256:6c621d1a05138a7888d37d9269a9da8e2e11e4aced2f6cfd24b05ab1b9e61bb0"
+        },
+        {
+          "path": "dev/null",
+          "kind": "other"
+        }
+      ],
+      "reason": "not-a-file-or-link"
+    }
+  ]
+}

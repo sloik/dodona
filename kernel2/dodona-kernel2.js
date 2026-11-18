@@ -13,6 +13,7 @@ const { canonicalize } = require('./canonical');
 const { checkPath, findCollisions } = require('./paths');
 const { coreKey } = require('./identity');
 const ledgerFile = require('./ledger-file');
+const strictJson = require('./strict-json');
 
 function decodeText(bytes) {
   try {
@@ -20,6 +21,29 @@ function decodeText(bytes) {
   } catch (error) {
     return null;
   }
+}
+
+// Turns what the strict reader returns (Map, BigInt) into plain JavaScript values.
+function plain(value) {
+  if (value instanceof Map) {
+    const object = {};
+    for (const [key, member] of value) Object.defineProperty(object, key, { value: plain(member), enumerable: true, writable: true, configurable: true });
+    return object;
+  }
+  if (Array.isArray(value)) return value.map(plain);
+  if (typeof value === 'bigint') return Number(value);
+  return value;
+}
+
+// Reads an input as strictly as the canonical encoding writes: bytes that are not
+// UTF-8, a repeated key, or a number that is not an integer make the whole input
+// refused, and the command stops with a status other than 0.
+function readInput(bytes) {
+  const text = decodeText(bytes);
+  if (text === null) throw new Error('input is not UTF-8');
+  const read = strictJson.read(text);
+  if (read.refused !== undefined) throw new Error(`input refused: ${read.refused}`);
+  return plain(read.value);
 }
 
 function parseHex(text) {
@@ -30,20 +54,20 @@ function parseHex(text) {
 }
 
 const commands = {
-  scenario: (bytes) => runScenario(JSON.parse(bytes.toString('utf8'))),
-  states: (bytes) => judgeStates(JSON.parse(bytes.toString('utf8'))),
+  scenario: (bytes) => runScenario(readInput(bytes)),
+  states: (bytes) => judgeStates(readInput(bytes)),
   canonical: (bytes) => {
     const text = decodeText(bytes);
     return text === null ? { refused: 'not-json' } : canonicalize(text);
   },
-  path: (bytes) => checkPath(parseHex(JSON.parse(bytes.toString('utf8')).hex)),
+  path: (bytes) => checkPath(parseHex(readInput(bytes).hex)),
   key: (bytes) => {
     const text = decodeText(bytes);
     return text === null ? { refused: 'not-json' } : coreKey(text);
   },
-  'ledger-append': (bytes) => ledgerFile.append(JSON.parse(bytes.toString('utf8'))),
-  'ledger-read': (bytes) => ledgerFile.read(JSON.parse(bytes.toString('utf8'))),
-  'path-set': (bytes) => ({ collisions: findCollisions(JSON.parse(bytes.toString('utf8')).paths) }),
+  'ledger-append': (bytes) => ledgerFile.append(readInput(bytes)),
+  'ledger-read': (bytes) => ledgerFile.read(readInput(bytes)),
+  'path-set': (bytes) => ({ collisions: findCollisions(readInput(bytes).paths) }),
 };
 
 function main() {

@@ -92,11 +92,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "1afb9ad743879c509175e2206e28a232fb7bca7f177b71b147ca00914db269ab"
+            "mac": "fd5785fb240e21abaf9640b43468f781659bb755351c8c463fa4102b250f80bc"
           }
         }
       },
@@ -172,18 +177,23 @@
             "accepted_right": true
           },
           "attestation": {
-            "harness": "harness-1",
+            "harness": "harness-9",
             "key": "harness-9",
             "covers": [
               "actor",
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "aea63d37389afd0e912652f3210e2279bfa5dae65a29096efbdcb8be75fb1600"
+            "mac": "2b3a5d9332f1347df9307c5e1bccbc8e37e62496f1b983b6129952835bd9d666"
           }
         }
       },
@@ -266,11 +276,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "60a5674a698c529480aebec89c14c659c505807b63c02c87796b99f7919d6267"
+            "mac": "636e26da48cef5954a2096506820642705f40c78b664798f24d8ca6a84ae3336"
           }
         }
       },
@@ -353,7 +368,12 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],

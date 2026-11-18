@@ -443,11 +443,11 @@
       "replace": "return true;"
     },
     {
-      "name": "acts: uncovered fields count as vouched for",
+      "name": "acts: a field some fact reads is left out of the whole-record check",
       "model_case": "(round 2 kit)",
       "file": "acts.js",
-      "find": "vouched[fact] = holds && reads.every((field) => record.attestation.covers.includes(field));",
-      "replace": "vouched[fact] = holds;"
+      "find": "filter((name) => name !== 'attestation')",
+      "replace": "filter((name) => name !== 'attestation' && !Object.values(FACT_READS).flat().includes(name))"
     },
     {
       "name": "acts: a missing started_by counts as started by someone else",
@@ -467,8 +467,8 @@
       "name": "status: a record whose key does not match its preimage counts",
       "model_case": "(round 2 kit)",
       "file": "status.js",
-      "find": "entry.kind === 'evidence' && !isRejected(entry.body))\n    .map",
-      "replace": "entry.kind === 'evidence')\n    .map"
+      "find": "isRecord(entry) && !isRejected(entry.body))\n    .map",
+      "replace": "isRecord(entry))\n    .map"
     },
     {
       "name": "status: any writer's records count",
@@ -488,7 +488,7 @@
       "name": "status: a confirmation by someone other than the owner counts",
       "model_case": "(round 2 kit)",
       "file": "status.js",
-      "find": "act.target === baseline && act.actor.id === intent.owner)",
+      "find": "act.target === baseline && (act.actor || {}).id === intent.owner)",
       "replace": "act.target === baseline)"
     },
     {
@@ -546,6 +546,426 @@
       "file": "evidence.js",
       "find": "\n        && !ledger.running.some((run) => run.run === step.submit.as)) {",
       "replace": ") {"
+    },
+    {
+      "name": "a record that states no level counts as proven",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "return SCALE.includes(body.level) ? body.level : 'asserted';",
+      "replace": "return SCALE.includes(body.level) ? body.level : 'proven';"
+    },
+    {
+      "name": "an obligation shows the weakest of its records instead of the strongest",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "strongestOf(records.map(statedLevel))",
+      "replace": "weakestOf(records.map(statedLevel))"
+    },
+    {
+      "name": "a failed or conflicting obligation still shows its level",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "return status === 'passed' ? strongestOf(records.map(statedLevel)) : 'none';",
+      "replace": "return records.length > 0 ? strongestOf(records.map(statedLevel)) : 'none';"
+    },
+    {
+      "name": "soft criteria are left out of the level shown",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "Object.keys(intent.criteria).sort().map((name) => {",
+      "replace": "Object.keys(intent.criteria).sort().filter((name) => intent.criteria[name].gate !== 'soft').map((name) => {"
+    },
+    {
+      "name": "a record from another platform raises the level shown",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "levels[name] = obligationLevel(obligations[name].status, records);",
+      "replace": "levels[name] = obligationLevel(obligations[name].status, records.concat(ledger.filter((e) => e.kind === 'evidence' && e.body.obligation === name && e.body.core_key === identityOf(details.preimage)).map((e) => e.body)));"
+    },
+    {
+      "name": "a refused exception is counted",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "const grants = acts.filter((act) => act.kind === 'grant-amendment');",
+      "replace": "const grants = ledger.filter((entry) => entry.kind === 'act' && entry.body.kind === 'grant-amendment' && entry.body.lineage && entry.body.lineage.intent === id).map((entry) => entry.body);"
+    },
+    {
+      "name": "an exception granted by someone who is not the owner is counted",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "(act.actor || {}).id === intent.owner && rank(levelFor(act, intent, policy)) >= rank(grantFloor)",
+      "replace": "rank(levelFor(act, intent, policy)) >= rank(grantFloor)"
+    },
+    {
+      "name": "an exception below the floor is counted",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "(act.actor || {}).id === intent.owner && rank(levelFor(act, intent, policy)) >= rank(grantFloor)",
+      "replace": "(act.actor || {}).id === intent.owner"
+    },
+    {
+      "name": "exceptions below the floor are left out of the report",
+      "model_case": "(round 3)",
+      "file": "status.js",
+      "find": "below_floor: grants.length - counted.length",
+      "replace": "below_floor: 0"
+    },
+    {
+      "name": "ledger: the checksum of a line is not verified",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": " || sha256Hex(payload) !== match[2]",
+      "replace": ""
+    },
+    {
+      "name": "ledger: the length field is not verified",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": "payload.length !== Number(match[1]) ||",
+      "replace": ""
+    },
+    {
+      "name": "ledger: previous is not checked against the entry before",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": " || decoded.entry.previous !== previous",
+      "replace": ""
+    },
+    {
+      "name": "ledger: a payload not in canonical form is accepted",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": "  if (canonical.canonicalize(payloadText).canonical !== payloadText) return null;\n",
+      "replace": ""
+    },
+    {
+      "name": "ledger: a line ending in CR LF is accepted",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": "decodeLine(bytes.subarray(start, end))",
+      "replace": "decodeLine(bytes.subarray(start, end > start && bytes[end - 1] === 0x0d ? end - 1 : end))"
+    },
+    {
+      "name": "ledger: a torn ending is not cut off before appending",
+      "model_case": "(round 3)",
+      "file": "ledger-file.js",
+      "find": "    if (read.torn) syncedWrite(path, 'r+', null, read.keep);\n",
+      "replace": ""
+    },
+    {
+      "name": "ledger: an append to a corrupt ledger is allowed",
+      "model_case": "(round 3)",
+      "file": "ledger-file.js",
+      "find": "if (read.refused) return { refused: 'corrupt' };",
+      "replace": "if (read.refused) read.last = null;"
+    },
+    {
+      "name": "ledger: the lock is not taken",
+      "model_case": "(round 3)",
+      "file": "ledger-file.js",
+      "find": "return fs.openSync(lockPath, 'wx');",
+      "replace": "return fs.openSync(lockPath, 'a');"
+    },
+    {
+      "name": "ledger: the lock is not released",
+      "model_case": "(round 3)",
+      "file": "ledger-file.js",
+      "find": "      fs.unlinkSync(lockPath);\n      return;",
+      "replace": "      return;"
+    },
+    {
+      "name": "ledger: the wait for the lock is ignored",
+      "model_case": "(round 3)",
+      "file": "ledger-file.js",
+      "find": "const deadline = Date.now() + waitMs;",
+      "replace": "const deadline = 0;"
+    },
+    {
+      "name": "ledger: an unknown first field is accepted",
+      "model_case": "(round 3)",
+      "file": "ledger.js",
+      "find": "/^dodona1 (0|[1-9][0-9]*) ([0-9a-f]{64}) /",
+      "replace": "/^[a-z0-9]+ (0|[1-9][0-9]*) ([0-9a-f]{64}) /"
+    },
+    {
+      "name": "core key: an unsorted set in a preimage is accepted",
+      "model_case": "(round 3)",
+      "file": "identity.js",
+      "find": "      if (Array.isArray(list) && !isStrictlyIncreasing(list)) return { refused: 'unsorted-set' };\n",
+      "replace": ""
+    },
+    {
+      "name": "acts: a level above helper is granted without `kind` covered",
+      "model_case": "(round 4)",
+      "file": "acts.js",
+      "find": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];",
+      "replace": "const BOUND_FIELDS = ['ticket', 'target', 'result', 'lineage'];"
+    },
+    {
+      "name": "acts: a level above helper is granted without `target` covered",
+      "model_case": "(round 4)",
+      "file": "acts.js",
+      "find": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];",
+      "replace": "const BOUND_FIELDS = ['ticket', 'kind', 'result', 'lineage'];"
+    },
+    {
+      "name": "acts: a level above helper is granted without `result` covered",
+      "model_case": "(round 4)",
+      "file": "acts.js",
+      "find": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];",
+      "replace": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'lineage'];"
+    },
+    {
+      "name": "acts: a level above helper is granted without `lineage` covered",
+      "model_case": "(round 4)",
+      "file": "acts.js",
+      "find": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];",
+      "replace": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result'];"
+    },
+    {
+      "name": "acts: an empty or non-hex attestor key is accepted",
+      "model_case": "(round 4)",
+      "file": "acts.js",
+      "find": "  if (!/^([0-9a-f]{2})+$/.test(attestors[attestation.key])) return false;\n",
+      "replace": ""
+    },
+    {
+      "name": "acts: a malformed record is graded by its facts instead of self",
+      "model_case": "(round 4)",
+      "file": "acts.js",
+      "find": "  if (isMalformed(record)) return { claims: 'self', level: 'self', source: 'declared' };\n",
+      "replace": ""
+    },
+    {
+      "name": "acts: unsorted or repeated covers accepted",
+      "model_case": "(round 4)",
+      "file": "acts.js",
+      "find": "  if (!isStrictlyIncreasing(attestation.covers)) return false;\n",
+      "replace": ""
+    },
+    {
+      "name": "acts: an uppercase mac accepted",
+      "model_case": "(round 4)",
+      "file": "acts.js",
+      "find": "/^[0-9a-f]{64}$/.test(attestation.mac)",
+      "replace": "/^[0-9a-fA-F]{64}$/.test(attestation.mac)"
+    },
+    {
+      "name": "status: an evidence record with a verdict other than passed or failed counts",
+      "model_case": "(round 4)",
+      "file": "status.js",
+      "find": "isObject(body) && vocabulary.VERDICTS.includes(body.verdict)",
+      "replace": "isObject(body)"
+    },
+    {
+      "name": "status: a record lacking writer or platform counts",
+      "model_case": "(round 4)",
+      "file": "status.js",
+      "find": "const RECORD_FIELDS = ['obligation', 'platform', 'writer', 'core_key', 'preimage'];",
+      "replace": "const RECORD_FIELDS = ['obligation', 'core_key', 'preimage'];"
+    },
+    {
+      "name": "status: an undefined obligation in checked_by counts as passed",
+      "model_case": "(round 4)",
+      "file": "status.js",
+      "find": "return Object.hasOwn(obligations, name) ? obligations[name].status : 'unknown';",
+      "replace": "return Object.hasOwn(obligations, name) ? obligations[name].status : 'passed';"
+    },
+    {
+      "name": "status: an undefined required intent is ignored",
+      "model_case": "(round 4)",
+      "file": "status.js",
+      "find": "Object.hasOwn(reports, id) && ['delivered', 'fulfilled'].includes(reports[id].status)",
+      "replace": "!Object.hasOwn(reports, id) || ['delivered', 'fulfilled'].includes(reports[id].status)"
+    },
+    {
+      "name": "status: a match-check is matched by lineage instead of target",
+      "model_case": "(round 4)",
+      "file": "status.js",
+      "find": "agreed.filter((act) => act.kind === MATCH && act.target === target)",
+      "replace": "acts.filter((act) => act.kind === MATCH && act.lineage && act.lineage.criterion === name)"
+    },
+    {
+      "name": "ledger: a leading zero in the length is accepted",
+      "model_case": "(round 4)",
+      "file": "ledger.js",
+      "find": "/^dodona1 (0|[1-9][0-9]*) ([0-9a-f]{64}) /",
+      "replace": "/^dodona1 ([0-9]+) ([0-9a-f]{64}) /"
+    },
+    {
+      "name": "ledger: two spaces between fields are accepted",
+      "model_case": "(round 4)",
+      "file": "ledger.js",
+      "find": "/^dodona1 (0|[1-9][0-9]*) ([0-9a-f]{64}) /",
+      "replace": "/^dodona1 +(0|[1-9][0-9]*) +([0-9a-f]{64}) +/"
+    },
+    {
+      "name": "ledger: a blank line is skipped",
+      "model_case": "(round 4)",
+      "file": "ledger.js",
+      "find": "    const decoded = decodeLine(bytes.subarray(start, end));",
+      "replace": "    if (end === start) {\n      start = end + 1;\n      continue;\n    }\n    const decoded = decodeLine(bytes.subarray(start, end));"
+    },
+    {
+      "name": "ledger: previous may skip an entry",
+      "model_case": "(round 4)",
+      "file": "ledger.js",
+      "find": "decoded.entry.previous !== previous",
+      "replace": "(decoded.entry.previous !== previous && !entries.some((earlier) => encodeEntry(earlier).identity === decoded.entry.previous))"
+    },
+    {
+      "name": "ledger: a payload with an extra field is accepted",
+      "model_case": "(round 4)",
+      "file": "ledger.js",
+      "find": "Object.keys(entry).sort().join(',') === 'body,kind,previous'",
+      "replace": "['body', 'kind', 'previous'].every((key) => key in entry)"
+    },
+    {
+      "name": "ledger: an unlisted kind is refused",
+      "model_case": "(round 4)",
+      "file": "ledger.js",
+      "find": "typeof entry.kind === 'string' && entry.kind !== ''",
+      "replace": "['evidence', 'act', 'submission', 'outcome'].includes(entry.kind)"
+    },
+    {
+      "name": "ledger: a bad append request writes an entry",
+      "model_case": "(round 4)",
+      "file": "ledger-file.js",
+      "find": "  if (typeof request.kind !== 'string' || request.kind === '' || request.body === undefined || typeof request.ledger !== 'string') {\n    return { refused: 'bad-request' };\n  }\n",
+      "replace": ""
+    },
+    {
+      "name": "core key: only closure is checked for order",
+      "model_case": "(round 4)",
+      "file": "identity.js",
+      "find": "const SET_FIELDS = ['specified_by', 'targets', 'closure', 'declared', 'mapping'];",
+      "replace": "const SET_FIELDS = ['closure'];"
+    },
+    {
+      "name": "core key: a repeat in a set is accepted",
+      "model_case": "(round 4)",
+      "file": "identity.js",
+      "find": "canonical.compareUnits(list[position - 1], item) < 0",
+      "replace": "canonical.compareUnits(list[position - 1], item) <= 0"
+    },
+    {
+      "name": "core key: an unknown field in a preimage is accepted",
+      "model_case": "(round 4)",
+      "file": "identity.js",
+      "find": "  if (hasUnknownField(preimage, TOP_FIELDS)\n    || (inputs instanceof Map && hasUnknownField(inputs, INPUT_FIELDS))\n    || (provider instanceof Map && hasUnknownField(provider, PROVIDER_FIELDS))) return { refused: 'unknown-field' };\n",
+      "replace": ""
+    },
+    {
+      "name": "an amend with a value outside the table gets no answer",
+      "model_case": "(round 4)",
+      "file": "intent.js",
+      "find": "      // changes nothing and earns nothing.\n      amendment = { takes_effect: false, level: 'self' };",
+      "replace": "      // changes nothing and earns nothing.\n      if (!known(step.amend.criterion)) amendment = { takes_effect: false, level: 'self' };"
+    },
+    {
+      "name": "acts: the ticket is not required among the binding fields",
+      "model_case": "(round 5)",
+      "file": "acts.js",
+      "find": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];",
+      "replace": "const BOUND_FIELDS = ['kind', 'target', 'result', 'lineage'];"
+    },
+    {
+      "name": "acts: an unknown top-level field is ignored",
+      "model_case": "(round 5)",
+      "file": "acts.js",
+      "find": "  if (Object.keys(record).some((name) => !RECORD_FIELDS.includes(name))) return true;\n",
+      "replace": ""
+    },
+    {
+      "name": "acts: the harness name is not compared with the key",
+      "model_case": "(round 5)",
+      "file": "acts.js",
+      "find": "  if (attestation.harness !== attestation.key) return false;\n",
+      "replace": ""
+    },
+    {
+      "name": "status: the baseline reported leaves out the children",
+      "model_case": "(round 5)",
+      "file": "status.js",
+      "find": "children: sortedCopy(intent.children), criteria });",
+      "replace": "children: [], criteria });"
+    },
+    {
+      "name": "acts: a top-level field present but not covered is still vouched",
+      "model_case": "(round 6)",
+      "file": "acts.js",
+      "find": " && everyFieldCovered;",
+      "replace": ";"
+    },
+    {
+      "name": "acts: an extra field inside the attestation is ignored",
+      "model_case": "(round 6)",
+      "file": "acts.js",
+      "find": "  if (Object.keys(attestation).some((name) => !ATTESTATION_FIELDS.includes(name))) return false;\n",
+      "replace": ""
+    },
+    {
+      "name": "acts: an attempt of the wrong type is not malformed",
+      "model_case": "(round 6)",
+      "file": "acts.js",
+      "find": "    absentOr(record.attempt, (value) => isObject(value) && Number.isInteger(value.number) && Number.isInteger(value.prior)),\n",
+      "replace": ""
+    },
+    {
+      "name": "status: the baseline leaves out the words",
+      "model_case": "(round 6)",
+      "file": "status.js",
+      "find": "criteria[name] = { words: typeof criterion.words === 'string' ? criterion.words : '', gate: criterion.gate,",
+      "replace": "criteria[name] = { gate: criterion.gate,"
+    },
+    {
+      "name": "the scenario input is read leniently",
+      "model_case": "(round 7)",
+      "file": "dodona-kernel2.js",
+      "find": "scenario: (bytes) => runScenario(readInput(bytes)),",
+      "replace": "scenario: (bytes) => runScenario(JSON.parse(bytes.toString('utf8'))),"
+    },
+    {
+      "name": "the baseline leaves out the intent's own words",
+      "model_case": "(round 7)",
+      "file": "status.js",
+      "find": "owner: intent.owner, words: typeof intent.words === 'string' ? intent.words : '', children:",
+      "replace": "owner: intent.owner, children:"
+    },
+    {
+      "name": "an unknown gate is not counted as hard",
+      "model_case": "(round 8)",
+      "file": "status.js",
+      "find": "  return vocabulary.GATES.includes(gate) ? gate : 'hard';",
+      "replace": "  return vocabulary.GATES.includes(gate) ? gate : 'soft';"
+    },
+    {
+      "name": "a non-string started_by is not malformed",
+      "model_case": "(round 8)",
+      "file": "acts.js",
+      "find": "  if (actor_started_by_wrong(record)) return true;\n",
+      "replace": ""
+    },
+    {
+      "name": "a make group written as a string is matched by substring",
+      "model_case": "(round 8)",
+      "file": "acts.js",
+      "find": "(policy.makes || []).filter((group) => Array.isArray(group) && group.every(isString));",
+      "replace": "(policy.makes || []).filter((group) => typeof group === 'string' || (Array.isArray(group) && group.every(isString)));"
+    },
+    {
+      "name": "a wrongly typed evidence field is counted as rejected",
+      "model_case": "(round 9)",
+      "file": "status.js",
+      "find": "(field === 'preimage' ? isObject(body[field]) : typeof body[field] === 'string')",
+      "replace": "body[field] !== undefined"
+    },
+    {
+      "name": "a step with a wrongly typed name acts",
+      "model_case": "(round 9)",
+      "file": "plan.js",
+      "find": "if (step.edit && isString(step.edit.definition) && isString(step.edit.to) && Object.hasOwn(state.content, step.edit.definition)) {",
+      "replace": "if (step.edit && Object.hasOwn(state.content, step.edit.definition)) {"
     }
   ]
 }

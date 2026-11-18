@@ -2,6 +2,7 @@ use crate::{
     canonical,
     json::{self, Value},
 };
+use std::cmp::Ordering;
 /// The separation levels, least first.
 pub const LEVELS: [&str; 6] = [
     "self",
@@ -34,10 +35,7 @@ fn hmac(key: &[u8], msg: &[u8]) -> String {
     canonical::sha256(&outer)
 }
 pub fn text<'a>(v: &'a Value, k: &str) -> Option<&'a str> {
-    match v.opt(k) {
-        Some(Value::String(s)) => Some(s),
-        _ => None,
-    }
+    v.text(k)
 }
 fn list(v: Option<&Value>) -> &[Value] {
     match v {
@@ -89,10 +87,15 @@ fn claims(r: &Value, p: &Value) -> usize {
     let group = |person: &Value| -> Option<usize> {
         let m = person.opt("make")?;
         let name = format!("{}/{}", text(m, "vendor")?, text(m, "family")?);
+        // A group that is not a list of strings is ignored; a name matches only an equal name.
         list(p.opt("makes")).iter().position(|g| {
-            list(Some(g))
-                .iter()
-                .any(|x| matches!(x, Value::String(s) if *s == name))
+            let group = list(Some(g));
+            let strings =
+                matches!(g, Value::Array(_)) && group.iter().all(|x| matches!(x, Value::String(_)));
+            strings
+                && group
+                    .iter()
+                    .any(|x| matches!(x, Value::String(s) if *s == name))
         })
     };
     let cross = tested && matches!((group(a), group(w)), (Some(x), Some(y)) if x != y);
@@ -118,10 +121,29 @@ fn covered<'a>(r: &'a Value, p: &Value) -> Vec<&'a str> {
     else {
         return Vec::new();
     };
+    // An attestation is these four fields and nothing more.
+    let known = ["harness", "key", "covers", "mac"];
+    if !matches!(att, Value::Object(fields) if fields.iter().all(|(k, _)| known.contains(&k.as_str())))
+    {
+        return Vec::new();
+    }
+    // A value that names one harness and was made with another's key vouches for nothing.
+    if text(att, "harness") != Some(keyname) {
+        return Vec::new();
+    }
+    // A key is a non-empty, even number of lowercase hexadecimal digits. Anything else names no key.
     let key = p.opt("attestors").and_then(|a| text(a, keyname));
     let Some(key) = key.and_then(canonical::unhex).filter(|k| !k.is_empty()) else {
         return Vec::new();
     };
+    // The list must already be in canonical order, with no name repeated.
+    let in_order = covers.windows(2).all(|w| match (&w[0], &w[1]) {
+        (Value::String(a), Value::String(b)) => json::key_order(a, b) == Ordering::Less,
+        _ => false,
+    });
+    if !in_order {
+        return Vec::new();
+    }
     let mut names = Vec::new();
     let mut fields: Vec<(String, Value)> = Vec::new();
     for c in covers {
@@ -129,10 +151,9 @@ fn covered<'a>(r: &'a Value, p: &Value) -> Vec<&'a str> {
             return Vec::new();
         };
         names.push(name.as_str());
+        // A covered field the record does not have is left out.
         if let Some(v) = r.opt(name) {
-            if !fields.iter().any(|(k, _)| k == name) {
-                fields.push((name.clone(), v.clone()));
-            }
+            fields.push((name.clone(), v.clone()));
         }
     }
     let payload = json::object(vec![
@@ -145,9 +166,90 @@ fn covered<'a>(r: &'a Value, p: &Value) -> Vec<&'a str> {
         Vec::new()
     }
 }
+/// What a check value must also cover before any level above `helper` is
+/// granted, so that it binds what was judged.
+const BOUND: &[&str] = &["ticket", "kind", "target", "result", "lineage"];
+/// The fields an act record has at the top level.
+const FIELDS: [&str; 14] = [
+    "ticket",
+    "kind",
+    "target",
+    "result",
+    "lineage",
+    "actor",
+    "worker",
+    "brief",
+    "given",
+    "fresh_context",
+    "known_bad",
+    "attempt",
+    "transcript",
+    "attestation",
+];
+/// Whether a record is malformed: it has a field an act record does not define,
+/// `actor` or `worker` is not an object with a string `id` and `session`, or a
+/// field that is present has the wrong type.
+fn malformed(r: &Value) -> bool {
+    let undefined = match r {
+        Value::Object(fields) => fields.iter().any(|(k, _)| !FIELDS.contains(&k.as_str())),
+        _ => false,
+    };
+    if undefined {
+        return true;
+    }
+    let object = |v: &Value| matches!(v, Value::Object(_));
+    let string = |v: &Value| matches!(v, Value::String(_));
+    let has = |v: &Value, k: &str| v.text(k).is_some();
+    let flag = |v: &Value, k: &str| matches!(v.opt(k), Some(Value::Bool(_)));
+    let party = |name: &str| {
+        r.opt(name)
+            .is_some_and(|p| object(p) && has(p, "id") && has(p, "session"))
+    };
+    // Whether a field is present and does not satisfy `good`.
+    let wrong = |name: &str, good: &dyn Fn(&Value) -> bool| r.opt(name).is_some_and(|v| !good(v));
+    !party("actor")
+        || !party("worker")
+        || wrong("brief", &object)
+        || wrong("given", &|g| match g {
+            Value::Array(items) => items
+                .iter()
+                .all(|x| object(x) && has(x, "role") && has(x, "content")),
+            _ => false,
+        })
+        || wrong("fresh_context", &|v| matches!(v, Value::Bool(_)))
+        || wrong("transcript", &string)
+        || wrong("known_bad", &|b| {
+            object(b)
+                && ["wrong", "right", "supplied_by"].iter().all(|k| has(b, k))
+                && ["rejected_wrong", "accepted_right"]
+                    .iter()
+                    .all(|k| flag(b, k))
+        })
+        || wrong("attestation", &|a| {
+            let covers = matches!(a.opt("covers"), Some(Value::Array(c)) if c.iter().all(string));
+            object(a) && has(a, "key") && has(a, "mac") && covers
+        })
+        || ["ticket", "kind", "target", "result"]
+            .iter()
+            .any(|k| wrong(k, &string))
+        || r.opt("actor")
+            .and_then(|a| a.opt("started_by"))
+            .is_some_and(|s| !string(s))
+        || wrong("lineage", &object)
+        || wrong("attempt", &|a| {
+            let integer = |k: &str| matches!(a.opt(k), Some(Value::Number(_)));
+            object(a) && integer("number") && integer("prior")
+        })
+}
 /// Grade an act record under a policy. This is the one grading rule: acts
 /// scenarios report it and status scenarios count with it.
 pub fn grade(r: &Value, p: &Value) -> Grade {
+    if malformed(r) {
+        return Grade {
+            claims: 0,
+            level: 0,
+        };
+    }
     let claims = claims(r, p);
     let covered = covered(r, p);
     let vouched = |names: &[&str]| names.iter().all(|n| covered.iter().any(|x| x == n));
@@ -165,6 +267,16 @@ pub fn grade(r: &Value, p: &Value) -> Grade {
         &["actor", "worker"],
     ];
     let mut level = claims.min(1);
+    // The check value must bind the whole record: every field it has, and at least what was judged.
+    let whole = match r {
+        Value::Object(fields) => fields
+            .iter()
+            .all(|(k, _)| k == "attestation" || vouched(&[k.as_str()])),
+        _ => false,
+    };
+    if !vouched(BOUND) || !whole {
+        return Grade { claims, level };
+    }
     for (i, fields) in reads.iter().enumerate() {
         if level == i + 1 && claims >= i + 2 && vouched(fields) {
             level = i + 2;
@@ -218,8 +330,7 @@ mod tests {
         assert_eq!(rank("credentialed"), Some(5));
         assert_eq!(rank("nobody"), None);
     }
-    const POLICY: &str =
-        r#"{"attestors":{"h":"6b6579","empty":""},"makes":[["v/a","v/a2"],["w/b"]]}"#;
+    const POLICY: &str = r#"{"attestors":{"h":"6b6579","empty":"","upper":"6B","odd":"6b6"},"makes":[["v/a","v/a2"],["w/b"]]}"#;
     const KEY: &[u8] = b"key";
     const FULL: &str = r#"{
         "actor":{"id":"judge","session":"s2","started_by":"kernel","make":{"vendor":"w","family":"b"}},
@@ -228,7 +339,8 @@ mod tests {
         "given":[{"role":"work","content":"w"},{"role":"known-wrong","content":"bad"},{"role":"known-right","content":"good"}],
         "fresh_context":true,
         "transcript":"t",
-        "known_bad":{"supplied_by":"owner","wrong":"bad","right":"good","rejected_wrong":true,"accepted_right":true}
+        "known_bad":{"supplied_by":"owner","wrong":"bad","right":"good","rejected_wrong":true,"accepted_right":true},
+        "ticket":"t-1","kind":"match-check","target":"sha256:00","result":"agreed","lineage":{"intent":"i"}
     }"#;
     fn record(change: impl Fn(&mut Vec<(String, Value)>)) -> Value {
         let mut v = json::parse(FULL.as_bytes()).unwrap();
@@ -249,9 +361,8 @@ mod tests {
         let mut fields: Vec<(String, Value)> = Vec::new();
         for c in covers.array() {
             if let Some(v) = r.opt(c.str()) {
-                if !fields.iter().any(|(k, _)| k == c.str()) {
-                    fields.push((c.str().into(), v.clone()));
-                }
+                fields.retain(|(k, _)| k != c.str());
+                fields.push((c.str().into(), v.clone()));
             }
         }
         let payload = json::object(vec![
@@ -264,6 +375,7 @@ mod tests {
                 "attestation".into(),
                 json::object(vec![
                     ("key", json::string(keyname)),
+                    ("harness", json::string(keyname)),
                     ("covers", covers),
                     ("mac", json::string(&mac)),
                 ]),
@@ -275,27 +387,40 @@ mod tests {
         let g = grade(r, &json::parse(POLICY.as_bytes()).unwrap());
         (LEVELS[g.claims], LEVELS[g.level])
     }
-    const APART: [&str; 6] = [
+    /// In canonical order, as a check value must list them.
+    const APART: [&str; 11] = [
         "actor",
-        "worker",
         "brief",
-        "given",
         "fresh_context",
+        "given",
+        "kind",
+        "lineage",
+        "result",
+        "target",
+        "ticket",
         "transcript",
+        "worker",
     ];
-    const ALL: [&str; 7] = [
+    const ALL: [&str; 12] = [
         "actor",
-        "worker",
         "brief",
-        "given",
         "fresh_context",
-        "transcript",
+        "given",
+        "kind",
         "known_bad",
+        "lineage",
+        "result",
+        "target",
+        "ticket",
+        "transcript",
+        "worker",
     ];
+    fn without(names: &[&'static str], gone: &str) -> Vec<&'static str> {
+        names.iter().copied().filter(|n| *n != gone).collect()
+    }
     #[test]
     fn claims_follow_the_facts() {
         assert_eq!(graded(&record(|_| ())), ("cross-make", "helper"));
-        assert_eq!(graded(&json::parse(b"{}").unwrap()), ("self", "self"));
         let same_session = record(|f| set(f, "worker", r#"{"id":"worker","session":"s2"}"#));
         assert_eq!(graded(&same_session), ("self", "self"));
         let same_id = record(|f| set(f, "worker", r#"{"id":"judge","session":"s1"}"#));
@@ -316,7 +441,6 @@ mod tests {
             ("given", "[]"),
             ("given", ""),
             ("given", r#"[{"role":"other","content":"x"}]"#),
-            ("given", r#""not a list""#),
             ("fresh_context", "false"),
             ("fresh_context", ""),
             ("transcript", ""),
@@ -328,10 +452,8 @@ mod tests {
             "",
             r#"{"supplied_by":"worker","wrong":"bad","right":"good","rejected_wrong":true,"accepted_right":true}"#,
             r#"{"supplied_by":"owner","wrong":"bad","right":"good","rejected_wrong":false,"accepted_right":true}"#,
-            r#"{"supplied_by":"owner","wrong":"bad","right":"good","rejected_wrong":true}"#,
             r#"{"supplied_by":"owner","wrong":"other","right":"good","rejected_wrong":true,"accepted_right":true}"#,
             r#"{"supplied_by":"owner","wrong":"good","right":"bad","rejected_wrong":true,"accepted_right":true}"#,
-            r#"{"supplied_by":"owner","rejected_wrong":true,"accepted_right":true}"#,
         ] {
             let r = record(|f| set(f, "known_bad", to));
             assert_eq!(graded(&r), ("apart", "helper"), "{to}");
@@ -347,24 +469,158 @@ mod tests {
         }
     }
     #[test]
+    fn groups_of_makes() {
+        let graded = |makes: &str| {
+            let policy = format!(r#"{{"attestors":{{}},"makes":{makes}}}"#);
+            LEVELS[grade(&record(|_| ()), &json::parse(policy.as_bytes()).unwrap()).claims]
+        };
+        assert_eq!(graded(r#"[["v/a"],["w/b"]]"#), "cross-make");
+        assert_eq!(graded(r#"[["v/a","w/b"]]"#), "tested");
+        // A group that is not a list of strings is ignored.
+        assert_eq!(graded(r#"[["v/a"],["w/b",7]]"#), "tested");
+        assert_eq!(graded(r#"[["v/a"],"w/b"]"#), "tested");
+        assert_eq!(graded(r#"[7,["v/a"],null,["w/b"]]"#), "cross-make");
+        // A name matches only an equal name, never part of one.
+        assert_eq!(graded(r#"[["v/a"],["w/bb"]]"#), "tested");
+        assert_eq!(graded(r#"[["v/a"],["xw/b"]]"#), "tested");
+        assert_eq!(graded("7"), "tested");
+    }
+    #[test]
+    fn a_malformed_record_is_self() {
+        assert!(!malformed(&record(|_| ())));
+        assert!(!malformed(&attested(record(|_| ()), &ALL, "h", KEY)));
+        // Absent fields are not malformed, except the two parties.
+        for field in ALL {
+            let r = record(|f| set(f, field, ""));
+            assert_eq!(
+                malformed(&r),
+                field == "actor" || field == "worker",
+                "{field}"
+            );
+        }
+        for (field, to) in [
+            ("actor", r#""judge""#),
+            ("actor", r#"{"id":"judge"}"#),
+            ("actor", r#"{"id":7,"session":"s2"}"#),
+            ("worker", r#"{"session":"s1"}"#),
+            ("worker", r#"{"id":"worker","session":null}"#),
+            ("brief", r#""kernel""#),
+            ("given", r#""not a list""#),
+            ("given", r#"["work"]"#),
+            ("given", r#"[{"role":"work"}]"#),
+            ("given", r#"[{"role":7,"content":"w"}]"#),
+            ("fresh_context", r#""yes""#),
+            ("transcript", "null"),
+            ("transcript", "7"),
+            ("known_bad", "[]"),
+            (
+                "known_bad",
+                r#"{"supplied_by":"owner","wrong":"bad","right":"good","rejected_wrong":true}"#,
+            ),
+            (
+                "known_bad",
+                r#"{"supplied_by":"owner","rejected_wrong":true,"accepted_right":true}"#,
+            ),
+            (
+                "known_bad",
+                r#"{"wrong":"bad","right":"good","rejected_wrong":true,"accepted_right":true}"#,
+            ),
+            ("attestation", "null"),
+            ("attestation", r#"{"key":"h","mac":"00"}"#),
+            ("attestation", r#"{"key":"h","mac":"00","covers":"actor"}"#),
+            ("attestation", r#"{"key":"h","mac":"00","covers":[1]}"#),
+            ("attestation", r#"{"key":7,"mac":"00","covers":[]}"#),
+            ("attestation", r#"{"key":"h","covers":[]}"#),
+            ("kind", "7"),
+            ("ticket", "5"),
+            ("actor", r#"{"id":"judge","session":"s2","started_by":7}"#),
+            (
+                "actor",
+                r#"{"id":"judge","session":"s2","started_by":null}"#,
+            ),
+            ("target", "null"),
+            ("result", "true"),
+            ("lineage", r#""i""#),
+        ] {
+            let r = record(|f| set(f, field, to));
+            assert!(malformed(&r), "{field} {to}");
+            assert_eq!(graded(&r), ("self", "self"), "{field} {to}");
+        }
+        assert_eq!(graded(&json::parse(b"{}").unwrap()), ("self", "self"));
+        assert_eq!(graded(&Value::Null), ("self", "self"));
+        // Whoever signed it.
+        let mut signed = attested(record(|_| ()), &ALL, "h", KEY);
+        if let Value::Object(f) = &mut signed {
+            set(f, "brief", r#""kernel""#);
+        }
+        assert_eq!(graded(&signed), ("self", "self"));
+        // A field the act record does not define cannot ride along, signed or not.
+        for extra in ["x-extra", "level", "claims"] {
+            let mut signed = attested(record(|_| ()), &ALL, "h", KEY);
+            assert_eq!(graded(&signed), ("cross-make", "cross-make"));
+            if let Value::Object(f) = &mut signed {
+                set(f, extra, "1");
+            }
+            assert_eq!(graded(&signed), ("self", "self"), "{extra}");
+        }
+        let attempt = record(|f| set(f, "attempt", r#"{"number":2,"prior":1}"#));
+        assert!(!malformed(&attempt));
+        for bad in [
+            "2",
+            r#"{"number":2}"#,
+            r#"{"number":"2","prior":1}"#,
+            "null",
+        ] {
+            assert!(malformed(&record(|f| set(f, "attempt", bad))), "{bad}");
+        }
+        // The harness named must be the one whose key was used.
+        for harness in [r#""stranger""#, "7", ""] {
+            let mut r = attested(record(|_| ()), &ALL, "h", KEY);
+            if let Some(Value::Object(att)) = r.opt_mut("attestation") {
+                set(att, "harness", harness);
+            }
+            assert_eq!(graded(&r), ("cross-make", "helper"), "{harness}");
+        }
+    }
+    #[test]
     fn levels_above_helper_need_a_voucher() {
         let full = || record(|_| ());
         assert_eq!(
             graded(&attested(full(), &ALL, "h", KEY)),
             ("cross-make", "cross-make")
         );
+        // A field the record has and the check value does not cover: nothing above helper.
         assert_eq!(
             graded(&attested(full(), &APART, "h", KEY)),
-            ("cross-make", "apart")
-        );
-        // Without the facts below it vouched for, a higher level is not reached.
-        assert_eq!(
-            graded(&attested(full(), &["known_bad", "given"], "h", KEY)),
             ("cross-make", "helper")
         );
+        let mut tried = ALL.to_vec();
+        tried.insert(1, "attempt");
+        let again = || record(|f| set(f, "attempt", r#"{"number":2,"prior":1}"#));
         assert_eq!(
-            graded(&attested(full(), &APART[1..], "h", KEY)),
+            graded(&attested(again(), &tried, "h", KEY)),
+            ("cross-make", "cross-make")
+        );
+        assert_eq!(
+            graded(&attested(again(), &ALL, "h", KEY)),
             ("cross-make", "helper")
+        );
+        // An attestation holds four fields and no more.
+        let mut extra = attested(full(), &ALL, "h", KEY);
+        if let Some(Value::Object(att)) = extra.opt_mut("attestation") {
+            set(att, "note", r#""x""#);
+        }
+        assert_eq!(graded(&extra), ("cross-make", "helper"));
+        // Each field a fact reads must be covered, and so must what was judged.
+        for field in APART {
+            let r = attested(full(), &without(&ALL, field), "h", KEY);
+            assert_eq!(graded(&r), ("cross-make", "helper"), "{field}");
+        }
+        // A bound field the record does not have is still to be listed, and is left out of what is signed.
+        let no_lineage = record(|f| set(f, "lineage", ""));
+        assert_eq!(
+            graded(&attested(no_lineage, &ALL, "h", KEY)),
+            ("cross-make", "cross-make")
         );
         // The grant is never above the claim.
         let helper = record(|f| set(f, "transcript", ""));
@@ -374,7 +630,7 @@ mod tests {
         );
         let apart = record(|f| set(f, "known_bad", ""));
         assert_eq!(graded(&attested(apart, &ALL, "h", KEY)), ("apart", "apart"));
-        // A wrong key, a key the policy does not name, an empty key, a changed record.
+        // A wrong key, a key the policy does not name, keys that are not keys, a changed record.
         assert_eq!(
             graded(&attested(full(), &ALL, "h", b"other")),
             ("cross-make", "helper")
@@ -387,21 +643,80 @@ mod tests {
             graded(&attested(full(), &ALL, "empty", b"")),
             ("cross-make", "helper")
         );
-        let mut changed = attested(full(), &ALL, "h", KEY);
-        if let Value::Object(f) = &mut changed {
-            set(f, "transcript", r#""another""#);
-        }
-        assert_eq!(graded(&changed), ("cross-make", "helper"));
-        // Malformed attestations vouch for nothing and do not stop the kernel.
-        for att in [
-            r#"{"key":"h","mac":"00"}"#,
-            r#"{"key":"h","mac":"00","covers":"actor"}"#,
-            r#"{"key":"h","mac":"00","covers":[1]}"#,
-            r#"{"key":7,"mac":"00","covers":[]}"#,
-            "null",
+        assert_eq!(
+            graded(&attested(full(), &ALL, "upper", b"k")),
+            ("cross-make", "helper")
+        );
+        assert_eq!(
+            graded(&attested(full(), &ALL, "odd", b"k")),
+            ("cross-make", "helper")
+        );
+        for (field, to) in [
+            ("transcript", r#""another""#),
+            ("kind", r#""confirm-baseline""#),
+            ("target", r#""sha256:11""#),
+            ("result", r#""refused""#),
+            ("lineage", r#"{"intent":"j"}"#),
+            ("ticket", r#""t-2""#),
         ] {
-            let r = record(|f| set(f, "attestation", att));
-            assert_eq!(graded(&r), ("cross-make", "helper"), "{att}");
+            let mut changed = attested(full(), &ALL, "h", KEY);
+            if let Value::Object(f) = &mut changed {
+                set(f, field, to);
+            }
+            assert_eq!(graded(&changed), ("cross-make", "helper"), "{field}");
         }
+        // The check value is exact: uppercase, a part of it, or a list out of order or with a repeat.
+        let exact = |change: &dyn Fn(&str, &mut Vec<Value>) -> String| {
+            let mut r = attested(full(), &ALL, "h", KEY);
+            let att = r.opt_mut("attestation").unwrap();
+            let mac = att.text("mac").unwrap().to_owned();
+            let mut covers = att.opt("covers").unwrap().array().to_vec();
+            let mac = change(&mac, &mut covers);
+            *att.opt_mut("mac").unwrap() = json::string(&mac);
+            *att.opt_mut("covers").unwrap() = Value::Array(covers);
+            graded(&r)
+        };
+        let sign = |covers: &[Value]| {
+            let r = full();
+            let fields = covers
+                .iter()
+                .filter_map(|c| Some((c.str().to_owned(), r.opt(c.str())?.clone())))
+                .fold(Vec::new(), |mut all: Vec<(String, Value)>, f| {
+                    all.retain(|(k, _)| *k != f.0);
+                    all.push(f);
+                    all
+                });
+            let payload = json::object(vec![
+                ("covers", Value::Array(covers.to_vec())),
+                ("fields", Value::Object(fields)),
+            ]);
+            hmac(KEY, json::encode(&payload).as_bytes())
+        };
+        assert_eq!(
+            exact(&|mac, _| mac.to_owned()),
+            ("cross-make", "cross-make")
+        );
+        assert_eq!(
+            exact(&|mac, _| mac.to_uppercase()),
+            ("cross-make", "helper")
+        );
+        assert_eq!(
+            exact(&|mac, _| mac[..62].to_owned()),
+            ("cross-make", "helper")
+        );
+        assert_eq!(
+            exact(&|_, covers| {
+                covers.swap(0, 1);
+                sign(covers)
+            }),
+            ("cross-make", "helper")
+        );
+        assert_eq!(
+            exact(&|_, covers| {
+                covers.insert(0, covers[0].clone());
+                sign(covers)
+            }),
+            ("cross-make", "helper")
+        );
     }
 }

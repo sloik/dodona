@@ -4,9 +4,16 @@
 
 The kit checks the fields its scenarios name, on the step orders its authors
 thought of. Two kernels written apart can both pass it and still differ. Here
-every scenario of the kit is replayed with its steps drawn again at random,
-repeated, dropped and reordered, and the two kernels must give the same
+inputs are made at random in two ways, and the two kernels must give the same
 answer in full: every field of every result, not only the ones the kit names.
+
+First, every scenario is replayed with its steps drawn again at random,
+repeated, dropped and reordered. Second, values are changed as well: each
+value in a step may be replaced by another value
+that some scenario of the same kind uses under the same name, so a verdict, a
+gate, a level, a name or a key turns up where no scenario put it. Now and then a
+value of the wrong type is put in its place: true, a number, an empty list, null. Only steps
+are changed, never a scenario's settings.
 
 Each step of a scenario is valid in any order by the contract, so both
 kernels must answer. One that fails where the other answers is a difference.
@@ -38,12 +45,50 @@ def ask(command: list[str], scenario: dict):
         return {"did-not-answer": "not-json"}
 
 
-def variants(scenario: dict, rounds: int, rng: random.Random):
+ODD = [True, False, 0, 7, -1, "", "x", [], {}, ["a"], {"a": 1}, None]
+
+
+def leaves(value, name, pool):
+    """Collect every plain value in `value` under the name of the field that holds it."""
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            leaves(inner, key, pool)
+    elif isinstance(value, list):
+        for inner in value:
+            leaves(inner, name, pool)
+    elif isinstance(value, (str, bool, int)) and name is not None:
+        pool.setdefault(name, [])
+        if value not in pool[name]:
+            pool[name].append(value)
+
+
+def changed(value, name, pool, rng, rate):
+    """A copy of `value` in which some plain values are replaced by others seen under the same name."""
+    if isinstance(value, dict):
+        return {key: changed(inner, key, pool, rng, rate) for key, inner in value.items()}
+    if isinstance(value, list):
+        return [changed(inner, name, pool, rng, rate) for inner in value]
+    if isinstance(value, (str, bool, int)) and name in pool and rng.random() < rate:
+        return rng.choice(pool[name])
+    if isinstance(value, (str, bool, int)) and rng.random() < rate / 5:
+        # A value of the wrong type where the scenario had a plain one: the kernels must agree on
+        # what that means, and a review found three places where they did not.
+        return rng.choice(ODD)
+    return value
+
+
+def variants(scenario: dict, rounds: int, rng: random.Random, pool: dict):
     steps = [{"do": step["do"]} for step in scenario["steps"]]
     base = {k: v for k, v in scenario.items() if k not in ("claim", "covers", "why", "steps")}
-    for _ in range(rounds):
+    for number in range(rounds):
         length = rng.randint(1, max(2, 2 * len(steps)))
-        yield dict(base, steps=[rng.choice(steps) for _ in range(length)])
+        drawn = [rng.choice(steps) for _ in range(length)]
+        if number % 2 == 0:
+            yield dict(base, steps=drawn)  # the kit's own values, in an order the kit does not have
+        else:
+            # Only steps are changed. A scenario's settings must agree with each other, and the
+            # contract says what a step does when it names something the scenario does not have.
+            yield dict(base, steps=[changed(step, None, pool, rng, 0.15) for step in drawn])
 
 
 def main() -> int:
@@ -55,13 +100,24 @@ def main() -> int:
     args = ap.parse_args()
     rng = random.Random(args.seed)
     compared = differed = unanswered = 0
+    pools: dict[str, dict] = {}
     for path in sorted(ROOT.glob("conformance/kernel/*/*.json")):
         scenario = json.loads(path.read_text(encoding="utf-8"))
-        for number, variant in enumerate(variants(scenario, args.rounds, rng), start=1):
+        pool = pools.setdefault(scenario["kind"], {})
+        for key, value in scenario.items():
+            if key not in ("kind", "name", "claim", "covers", "why", "steps"):
+                leaves(value, key, pool)
+        for step in scenario["steps"]:
+            leaves(step["do"], None, pool)
+    for path in sorted(ROOT.glob("conformance/kernel/*/*.json")):
+        scenario = json.loads(path.read_text(encoding="utf-8"))
+        for number, variant in enumerate(variants(scenario, args.rounds, rng, pools[scenario["kind"]]), start=1):
             one, two = ask(args.a, variant), ask(args.b, variant)
             compared += 1
             if "did-not-answer" in one and "did-not-answer" in two:
-                unanswered += 1  # the kit's steps are valid in any order, so this is counted and reported
+                unanswered += 1  # every input made here is built from valid parts, so this is counted and reported
+                if unanswered <= 3:
+                    print(f"NEITHER ANSWERED {path.parent.name}/{path.stem}, variant {number} (seed {args.seed}):", json.dumps(variant)[:900])
             if one != two:
                 differed += 1
                 if differed <= 5:

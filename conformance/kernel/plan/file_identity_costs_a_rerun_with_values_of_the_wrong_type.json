@@ -1,0 +1,205 @@
+{
+  "kind": "plan",
+  "claim": "C8",
+  "granularity": "file",
+  "definitions": {
+    "d1": {
+      "depends_on": [
+        "d2"
+      ],
+      "file": "f1"
+    },
+    "d2": {
+      "depends_on": [],
+      "file": "f2"
+    },
+    "d3": {
+      "depends_on": [],
+      "file": "f2"
+    }
+  },
+  "obligations": {
+    "check": {
+      "targets": [
+        "d1"
+      ]
+    },
+    "build": {
+      "targets": [
+        "d1"
+      ],
+      "tool": "compiler"
+    },
+    "test": {
+      "artifact_of": "build",
+      "tool": "runner"
+    }
+  },
+  "start": {
+    "content": {
+      "d1": "a",
+      "d2": "a",
+      "d3": "a"
+    },
+    "tools": {
+      "compiler": "c1",
+      "runner": "r1"
+    }
+  },
+  "name": "file_identity_costs_a_rerun_with_values_of_the_wrong_type",
+  "covers": [],
+  "why": "The scenario file_identity_costs_a_rerun, with after each step the same step again, once for each value it holds, with that value of the wrong type. Such a step changes nothing, so what was expected after the step it copies is expected after it too.",
+  "steps": [
+    {
+      "do": {
+        "run": {
+          "obligation": "check"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": [
+          "build",
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": 0
+        }
+      },
+      "expect": {
+        "plan": [
+          "build",
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": "build"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": [
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": false
+        }
+      },
+      "expect": {
+        "plan": [
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": "test"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": null
+        }
+      },
+      "expect": {
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d3",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "plan": [
+          "build",
+          "check",
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": [],
+          "to": "b"
+        }
+      },
+      "expect": {
+        "plan": [
+          "build",
+          "check",
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d3",
+          "to": {}
+        }
+      },
+      "expect": {
+        "plan": [
+          "build",
+          "check",
+          "test"
+        ]
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d3",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": 7,
+          "to": "a"
+        }
+      },
+      "expect": {
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d3",
+          "to": 0
+        }
+      },
+      "expect": {
+        "plan": []
+      }
+    }
+  ]
+}

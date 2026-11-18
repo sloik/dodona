@@ -20,13 +20,17 @@ supersedes: []
 
 **The mechanism.** A harness vouches for named fields of an act record with HMAC-SHA256, under a key, over the canonical encoding of the list of covered fields and their values. Policy lists the keys that count, by name. A kernel recomputes the value. A fact is vouched for only if every field it reads is covered, the key is one policy lists and the value matches; a level is granted only if every fact of that level and of the levels below is vouched for. It is a shared-key value and not a signature: whoever can check it could have made it.
 
+**The value binds what was judged.** A review found that the first version vouched for who checked and how, and not for what: a signed refusal could be copied as an agreement, or onto another target, and still count. So nothing above `helper` is granted unless the covered fields also include the kind of act, its target, its result and what it belongs to. A key in policy that is not a real key vouches for nothing, and a record that is not well formed is graded `self`.
+
 **Why a shared key.** The seed kernels use only their language's standard library, and neither has public-key signatures in it. A keyed hash can be written in a page and tested against published vectors. The price is that the kernel must hold the key, so the kernel must also be out of the working agent's reach wherever a higher grade is to mean anything. `credentialed`, which needs a real signature, stays unavailable.
 
 **The policy anchor.** The keys that count, and the floors acts must meet, are in the policy. If the working agent can edit the policy it can list its own key. So status reads the policy from the protected reference branch, says so, and says loudly when it could not and fell back to the working copy.
 
 **What exists.** `tools/attest.py` computes and checks the value. Both kernels verify it, against values written into the kit and against values made fresh at test time. That is the mechanism, tested with a key that is published in the kit and worth nothing.
 
-**What does not exist.** A harness. Something has to hold a key the working agent cannot read, start the checker itself, hand it the brief and the material, keep the transcript, and sign only what it saw. `tools/attest.py` does none of that: it signs whatever record it is given. Used by the working agent on its own records it would turn every claim into an attested one, so it is not used on dodona's own records, and dodona's policy lists no key.
+**A reference harness.** `tools/harness.py` does what a harness must: it makes an empty directory with only the named material, starts the checker itself there with an almost empty environment, runs it first on a known-wrong and a known-right case, keeps everything the checker printed, and signs the record of what it did. `tools/run_harness_check.py` runs it on a real small checker and on one that agrees with everything; both kernels grade the first `tested` or `cross-make` and see through the second.
+
+**What does not exist.** A harness out of the working agent's reach. The reference reads its key from a file, so whoever can read the file can sign anything; and it takes on the caller's word who the worker is, who wrote the brief, who supplied the known cases and which make of model each side is. Run by the working agent on its own work it would turn every claim into an attested one. So it is not used on dodona's own records, and dodona's policy lists no key.
 
 ## Consequences
 

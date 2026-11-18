@@ -26,32 +26,46 @@ pub fn run(input: &Value) -> Vec<Value> {
     let mut results = Vec::new();
     for step in input.get("steps").array() {
         let a = step.get("do");
+        // A step that names something the scenario does not have, or carries a
+        // value the contract does not allow, changes nothing.
         if let Some(x) = a.opt("edit") {
-            defs.insert(x.get("definition").str().into(), x.get("to").str().into());
+            let definition = x.text("definition").and_then(|d| defs.get_mut(d));
+            if let (Some(content), Some(to)) = (definition, x.text("to")) {
+                *content = to.into();
+            }
         }
-        if let Some(x) = a.opt("repin") {
-            tool = x.get("to").str().into()
+        if let Some(to) = a.opt("repin").and_then(|x| x.text("to")) {
+            tool = to.into();
         }
-        if let Some(x) = a.opt("backend") {
-            up = x.get("to").str() == "up"
+        match a.opt("backend").and_then(|x| x.text("to")) {
+            Some("up") => up = true,
+            Some("down") => up = false,
+            _ => (),
         }
         if let Some(x) = a.opt("submit") {
-            let run = x.get("as").str();
-            if in_flight(&attempts, run).is_none() {
-                attempts.push(Attempt {
-                    key: key(x.get("obligation").str(), obligations, &defs, &tool),
-                    run: run.into(),
-                    outcome: if up { "pending" } else { "unavailable" }.into(),
-                });
+            let obligation = x
+                .text("obligation")
+                .filter(|o| obligations.opt(o).is_some());
+            if let (Some(o), Some(run)) = (obligation, x.text("as")) {
+                if in_flight(&attempts, run).is_none() {
+                    attempts.push(Attempt {
+                        key: key(o, obligations, &defs, &tool),
+                        run: run.into(),
+                        outcome: if up { "pending" } else { "unavailable" }.into(),
+                    });
+                }
             }
         }
         if let Some(x) = a.opt("complete") {
-            if let Some(i) = in_flight(&attempts, x.get("run").str()) {
-                attempts[i].outcome = x.get("verdict").str().into();
+            let verdict = x.text("verdict").filter(|v| VERDICTS.contains(v));
+            if let (Some(run), Some(verdict)) = (x.text("run"), verdict) {
+                if let Some(i) = in_flight(&attempts, run) {
+                    attempts[i].outcome = verdict.into();
+                }
             }
         }
-        if let Some(x) = a.opt("lose") {
-            if let Some(i) = in_flight(&attempts, x.get("run").str()) {
+        if let Some(run) = a.opt("lose").and_then(|x| x.text("run")) {
+            if let Some(i) = in_flight(&attempts, run) {
                 attempts[i].outcome = "error".into();
             }
         }
@@ -92,6 +106,8 @@ fn key(name: &str, obligations: &Value, defs: &BTreeMap<String, String>, tool: &
     }
 }
 
+/// The verdicts a run or a record can give.
+pub const VERDICTS: [&str; 2] = ["passed", "failed"];
 /// The run of that name that has started and not yet ended, if there is one.
 fn in_flight(attempts: &[Attempt], run: &str) -> Option<usize> {
     attempts
@@ -220,6 +236,21 @@ mod tests {
                 r#"{"o":{"pending":false,"status":"conflict"},"q":{"pending":false,"status":"unknown"}}"#
             ]
         );
+    }
+    #[test]
+    fn steps_that_name_nothing() {
+        // Names the scenario does not have, and values the contract does not allow.
+        let got = statuses_after(
+            r#"{"do":{"submit":{"obligation":"nothing","as":"j"}}},{"do":{"edit":{"definition":"nothing","to":"2"}}},
+               {"do":{"backend":{"to":"sideways"}}},{"do":{"submit":{"obligation":"o","as":"j"}}},
+               {"do":{"complete":{"run":"j","verdict":"maybe"}}},{"do":{"complete":{"run":7,"verdict":"passed"}}},
+               {"do":{"edit":{"definition":"d","to":null}}},{"do":{"repin":{"to":1}}},{"do":{"lose":{"run":null}}},
+               {"do":{"complete":{"run":"j","verdict":"failed"}}}"#,
+        );
+        let mut want = vec!["never-run"; 3];
+        want.extend(["pending"; 6]);
+        want.push("failed");
+        assert_eq!(got, want);
     }
     #[test]
     fn steps_out_of_turn() {

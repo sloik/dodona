@@ -92,11 +92,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "7ae0b48ab63e35e11db82c7d7e5cf620d7ff4be9ec1c99a6d1f5cdd0d014f286"
+            "mac": "1d4e8ea3185ca301c2dae97fa0348eb15f7a289cde474348f0a6a9ad69d47fa4"
           }
         }
       },
@@ -179,11 +184,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "74583e1007585cf3976c86f7e7be712343598588ce38f714052847cfd683831d"
+            "mac": "21d80fd6fff4592504f03da636e4fbc94078957d4317e9ff3dcda9188ba9dbfa"
           }
         }
       },
@@ -266,11 +276,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "6efa2ef2017ac5fcd7f37f30f101d57cdb0ec29460b6c2a049ccea89061ec608"
+            "mac": "3717540737a2f4766e2cb2486e82830a15db601f8ab5f2f634fede807b8b144e"
           }
         }
       },
@@ -353,11 +368,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "ab7348471aea3bb75229e694c01cb07dd4927e3c98eca30b27041f30bc2d1a5d"
+            "mac": "94824411e7f422f8694d529fcc48bdcf8d11c158dd2202d9d93f6f8b8c327a26"
           }
         }
       },

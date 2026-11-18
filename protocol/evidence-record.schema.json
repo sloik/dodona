@@ -81,7 +81,7 @@
           "items": {
             "$ref": "common.schema.json#/$defs/identity"
           },
-          "description": "Everything reachable over depends-on, sorted by UTF-8 bytes."
+          "description": "Everything reachable over depends-on. A set, sorted as the canonical encoding sorts keys: by UTF-16 code units."
         },
         "artifacts": {
           "type": "array",
@@ -309,7 +309,7 @@
   "$defs": {
     "core_key_preimage": {
       "type": "object",
-      "description": "The exact object whose identity is the core key. Every array in it is a set, sorted as the canonical encoding says, except where order is stated to matter.",
+      "description": "The exact object whose identity is the core key. Every array in it is a set, sorted as the canonical encoding sorts keys, that is by UTF-16 code units, with no member repeated, except where order is stated to matter. A field this definition does not have, such as `platform`, is refused.",
       "required": [
         "obligation",
         "kind",

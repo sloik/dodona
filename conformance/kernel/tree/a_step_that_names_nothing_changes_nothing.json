@@ -1,0 +1,104 @@
+{
+  "kind": "tree",
+  "name": "a_step_that_names_nothing_changes_nothing",
+  "claim": "C34",
+  "covers": [],
+  "why": "A step that names a node or a child the tree does not have, or gives a status or a gate that does not exist, changes nothing: the tree stays confirmed and delivered.",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "nope",
+          "status": "failed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "node": "nope",
+          "to": "soft"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "remove": {
+          "child": "nope"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "maybe"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "node": "root",
+          "to": "optional"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}

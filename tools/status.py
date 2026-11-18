@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import re
 import pathlib
 import subprocess
 import sys
@@ -20,34 +21,44 @@ import tomllib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import host  # noqa: E402
+import intents as intents_tool  # noqa: E402
 
 ROOT = host.ROOT
+OWNER_LEDGER = ROOT / "records" / "owner.ledger"
+
+
+def unclear(text: str) -> str | None:
+    """Why an intent's text could be read two ways, or None. The rules are in tools/intents.py."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        path = pathlib.Path(tmp) / "0000-probe.md"
+        path.write_text(text, encoding="utf-8")
+        try:
+            intents_tool.read(path)
+        except intents_tool.Unreadable as err:
+            return str(err)
+    return None
 
 
 def read_intents(obligations: list[str]) -> dict:
-    """Intents from intents/*.md: the front matter, and the criteria table.
+    """Intents from intents/*.md, read by tools/intents.py: criteria come from the front matter only.
 
-    `checks` in the front matter ties a criterion to obligations by name
-    pattern. A criterion with none is not covered, whatever its table says.
+    `checks` in each criterion ties it to obligations by name pattern. A
+    criterion with none is not covered, whatever its words say.
     """
     intents, parents = {}, {}
     for path in sorted((ROOT / "intents").glob("[0-9]*.md")):
-        text = path.read_text(encoding="utf-8")
-        front = text.split("---")[1]
-        fields = {}
-        for line in front.splitlines():
-            if line and not line.startswith(" ") and ":" in line:
-                key, _, value = line.partition(":")
-                fields[key.strip()] = value.strip()
+        try:
+            fields, items, text = intents_tool.read(path)
+        except intents_tool.Unreadable as err:
+            raise SystemExit(f"{path.relative_to(ROOT)} cannot be read one way only: {err}") from None
         ident = fields["id"].strip('"')
-        checks = json.loads(fields["checks"]) if fields.get("checks") else {}
         criteria = {}
-        for line in text.splitlines():
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            if line.startswith("|") and len(cells) >= 3 and cells[0].isdigit():
-                names = sorted(n for pattern in checks.get(cells[0], []) for n in obligations if fnmatch.fnmatchcase(n, pattern))
-                criteria[cells[0]] = {"gate": cells[2], "checked_by": sorted(set(names))}
-        intents[ident] = {"owner": fields.get("owner", ""), "worker": fields.get("worker", ""), "children": [], "criteria": criteria}
+        for item in items:
+            names = sorted({n for pattern in item.get("checks", []) for n in obligations if fnmatch.fnmatchcase(n, pattern)})
+            criteria[item["id"]] = {"words": item["words"], "gate": item["gate"], "checked_by": names}
+        intents[ident] = {"owner": fields.get("owner", ""), "worker": fields.get("worker", ""), "children": [],
+                          "words": text, "criteria": criteria}
         parents[ident] = fields.get("parent", "").strip('"')
     for ident, parent in parents.items():
         if parent in intents:
@@ -72,6 +83,28 @@ def anchored_policy(ref: str) -> tuple[dict, str]:
         return tomllib.loads(here), f"policy: the working copy. Not anchored: {ref} could not be read, so whoever can edit this copy can lower the bar"
     note = f"policy: as on {ref}" + ("" if there == here else ". The working copy differs and is not used")
     return tomllib.loads(there), note
+
+
+def read_ledgers(paths: list[pathlib.Path], kernel: list[str]) -> list[dict] | None:
+    """The entries of each ledger in turn, read by the kernel; None if one is damaged."""
+    entries: list[dict] = []
+    for path in paths:
+        read = host.kernel(kernel, "ledger-read", {"ledger": str(path)})
+        if "refused" in read:
+            print(f"the ledger {path} is damaged at line {read.get('at')}; no status is reported")
+            return None
+        if OWNER_LEDGER.exists() and OWNER_LEDGER.resolve() != OWNER_LEDGER.absolute():
+            print("records/owner.ledger is a link to somewhere else; no status is reported")
+            return None
+        if pathlib.Path(path).resolve() == OWNER_LEDGER.resolve():
+            # The owner's ledger holds owners' acts and nothing else. A result found there was not
+            # produced by a run, so it is not read.
+            entries += [e for e in read["entries"] if e.get("kind") == "act"]
+        else:
+            # Acts of owners count only from the owner's ledger kept in the repository, where every
+            # one is a reviewed change. An act found anywhere else is not read at all.
+            entries += [e for e in read["entries"] if e.get("kind") != "act"]
+    return entries
 
 
 def scenario(ledger_entries: list[dict], writer: str, policy: dict) -> dict:
@@ -103,29 +136,35 @@ def render(report: dict, torn: bool, entries: int, note: str) -> str:
     lines.append("obligations: " + ", ".join(f"{count} {status}" for status, count in sorted(tally.items())))
     for ident, item in sorted(report["intents"].items()):
         gates, score, apart = item["gates"], item["score"], item["separation"]
+        shown, asked = item.get("shown", {}), item.get("exceptions", {})
+        below = f" and {asked['below_floor']} below the floor" if asked.get("below_floor") else ""
         lines.append(f"{ident}  {item['status']} · gates: {gates['hard']} hard, {gates['soft']} soft, {gates['deferred']} deferred"
                      f" ({gates['deferred_open']} open) · met: {score['met']} of {score['of']}"
+                     f" · shown: {shown.get('level', '?')} (weakest: criterion {shown.get('criterion', '?')})"
+                     f" · exceptions: {asked.get('counted', '?')}{below}"
                      f" · separation: {apart['weakest']} ({apart['act']}), {apart['apart_or_better']} of {apart['of']} acts apart or better")
     return "\n".join(lines)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--ledger", type=pathlib.Path, required=True)
+    ap.add_argument("--ledger", type=pathlib.Path, action="append", default=[],
+                    help="a ledger to read; may be repeated. The owner's ledger in the repository is always read too")
     ap.add_argument("--writer", required=True)
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--policy-ref", default="origin/main", help="the protected branch the policy is read from")
     ap.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     args = ap.parse_args()
-    read = host.kernel(args.kernel, "ledger-read", {"ledger": str(args.ledger)})
-    if "refused" in read:
-        print(f"the ledger is damaged at line {read.get('at')}; no status is reported")
+    owner = OWNER_LEDGER
+    ledgers = ([owner] if owner.exists() and all(p.resolve() != owner.resolve() for p in args.ledger) else []) + args.ledger
+    entries = read_ledgers(ledgers, args.kernel)
+    if entries is None:
         return 1
     policy, note = anchored_policy(args.policy_ref)
-    answer = host.kernel(args.kernel, "scenario", scenario(read["entries"], args.writer, policy))
+    answer = host.kernel(args.kernel, "scenario", scenario(entries, args.writer, policy))
     report = answer["results"][-1]
     report["policy_source"] = note
-    print(json.dumps(report, indent=1, sort_keys=True) if args.json else render(report, read["torn"], len(read["entries"]), note))
+    print(json.dumps(report, indent=1, sort_keys=True) if args.json else render(report, False, len(entries), note))
     return 0
 
 

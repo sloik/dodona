@@ -2,21 +2,21 @@
 
 Stage-0 helper (decision 0023): disposable, to be replaced by dodona itself.
 
-This script never starts a model checker on its own. It hands each case to the
-site's executor, described in a JSON file, and judges what comes back
-(decision 0007). A case matches only if the exit code AND the checker's own
-output agree with what was expected. Anything else, including a run that did
-not finish, is a mismatch. Exit status is 0 only if every case matched.
+This script never starts a model checker, or anything else, on its own. Jobs
+are sent only through tools/host.py, and a case matches only if the exit code
+AND the checker's own output agree with what was expected. Anything else,
+including a run that did not finish, is a mismatch. Exit status is 0 only if
+every case matched.
 
-    python tools/check_models.py --site .github/site/executor.json
-    python tools/check_models.py --site .github/site/executor.json --batch
-    python tools/check_models.py --replay DIR     # judge recorded outputs
+    python tools/check_models.py --runs DIR                       # judge what tools/host.py collected
+    python tools/check_models.py --site SITE.json --batch         # send every case as one job, then judge
+    python tools/check_models.py --replay DIR                     # read saved outputs again; not proof
 
-With --batch every case goes to the executor as one job instead of one job
-each, which is kinder to a shared queue. The cases run one after another
-inside the executor and the outputs come back together.
+--runs and --batch judge nothing unless the job ended well, its tools were
+measured, and they are the pinned ones. --replay cannot know any of that: it
+says what the files show, and its report is marked as not proof.
 
-Replay directory layout: <model-dir-name>/<case>.out and <case>.exit
+Replay directory layout: <model-dir-name>/<case>.txt and <case>.exit
 """
 from __future__ import annotations
 
@@ -144,11 +144,11 @@ def main() -> int:
 
     matched = sum(1 for r in report if r["match"])
     summary = {"cases": len(report), "matched": matched, "all_matched": matched == len(report) and bool(report)}
-    if args.report:
-        args.report.write_text(json.dumps({"summary": summary, "cases": report}, indent=2) + "\n", encoding="utf-8")
     if args.replay and not (args.runs or args.batch):
         summary["proof"] = False
         print("read from saved outputs: this says what the files show, not that a job completed")
+    if args.report:
+        args.report.write_text(json.dumps({"summary": summary, "cases": report}, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary))
     return 0 if summary["all_matched"] else 1
 

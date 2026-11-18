@@ -21,7 +21,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import attest  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-FACTS = ["actor", "brief", "fresh_context", "given", "known_bad", "transcript", "worker"]
+FACTS = ["actor", "brief", "fresh_context", "given", "known_bad", "transcript", "worker", "kind", "target", "result", "lineage", "ticket"]
 
 
 def main() -> int:
@@ -39,8 +39,16 @@ def main() -> int:
     changed["actor"]["session"] = "s-changed-afterwards"
     other_key = attest.sign(base, FACTS, bytes.fromhex("00" * 32), "harness-1")
     partly = attest.sign(base, [f for f in FACTS if f != "transcript"], key, "harness-1")  # its check value is good, and still it earns nothing
+    flipped = dict(copy.deepcopy(good), result="refused")
+    moved = dict(copy.deepcopy(good), target="sha256:" + "0" * 64)
+    unbound = copy.deepcopy(base)  # signed by hand without the four fields that bind it: the value is good, and it earns nothing
+    facts_only = sorted(f for f in FACTS if f not in attest.BINDS)
+    unbound["attestation"] = {"harness": "harness-1", "key": "harness-1", "covers": facts_only, "mac": attest.check_value(base, facts_only, key)}
     cases = [("signed now by the reference signer", good, "cross-make", "attested", True),
              ("changed after signing", changed, "helper", "declared", False),
+             ("the result changed after signing", flipped, "helper", "declared", False),
+             ("the target changed after signing", moved, "helper", "declared", False),
+             ("signed without what was judged", unbound, "helper", "declared", True),
              ("signed with a key policy does not list", other_key, "helper", "declared", False),
              ("one fact left uncovered", partly, "helper", "declared", True)]
     scenario = {"kind": "acts", "name": "made-now", "policy": policy, "steps": [{"do": {"grade": record}} for _, record, _, _, _ in cases]}

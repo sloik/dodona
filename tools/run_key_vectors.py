@@ -19,9 +19,11 @@ def main() -> int:
         print(__doc__)
         return 2
     command = sys.argv[sys.argv.index("--") + 1:]
-    vectors = json.loads((ROOT / "conformance" / "vectors" / "core-key.json").read_text(encoding="utf-8"))
-    cases = [(v["name"], v["preimage"], {"core_key": v["core_key"]}) for v in vectors["accept"]]
-    cases += [(v["name"], v["preimage"], {"refused": v["reason"]}) for v in vectors["reject"]]
+    cases = []
+    for name in ("core-key.json", "core-key-more.json"):
+        vectors = json.loads((ROOT / "conformance" / "vectors" / name).read_text(encoding="utf-8"))
+        cases += [(v["name"], v["preimage"], {"core_key": v["core_key"]}) for v in vectors.get("accept", [])]
+        cases += [(v["name"], v["preimage"], {"refused": v["reason"]}) for v in vectors.get("reject", [])]
     failed = 0
     for name, preimage, want in cases:
         try:

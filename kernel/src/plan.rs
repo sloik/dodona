@@ -100,16 +100,24 @@ pub fn run(input: &Value) -> Vec<Value> {
         .iter()
         .map(|step| {
             let a = step.get("do");
+            // An edit or repin of something the scenario does not have changes nothing.
             if let Some(e) = a.opt("edit") {
-                content.insert(e.get("definition").str().into(), e.get("to").str().into());
+                let definition = e.text("definition").and_then(|d| content.get_mut(d));
+                if let (Some(content), Some(to)) = (definition, e.text("to")) {
+                    *content = to.into();
+                }
             }
             if let Some(r) = a.opt("repin") {
-                tools.insert(r.get("tool").str().into(), r.get("to").str().into());
+                let tool = r.text("tool").and_then(|t| tools.get_mut(t));
+                if let (Some(tool), Some(to)) = (tool, r.text("to")) {
+                    *tool = to.into();
+                }
             }
-            let mut ran = None;
-            if let Some(r) = a.opt("run") {
-                let n = r.get("obligation").str();
-                let o = input.get("obligations").get(n);
+            // Running an obligation the scenario does not have runs nothing.
+            let mut ran = a.opt("run").map(|_| false);
+            let named = a.opt("run").and_then(|r| r.text("obligation"));
+            let known = named.and_then(|n| Some((n, input.get("obligations").opt(n)?)));
+            if let Some((n, o)) = known {
                 let ready = o
                     .opt("artifact_of")
                     .map(|p| {

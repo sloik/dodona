@@ -76,6 +76,8 @@ A fact that is missing counts against the level. An absent "started by" is not e
 
 **A sensible default** for a project that has not thought about it: exceptions and policy changes need `apart`; confirming criteria needs `helper`; matching checks to criteria is shown and capped; an observation by the worker does not close a deferred gate. With nothing able to attest yet, a floor of `apart` cannot be met, which means that for now no exception can take effect at all. That is the strict reading of refusing by default, and it is intended.
 
+**Owner direction, 2026-11-18.** Independence means a fresh context: a checker or a second author that has not seen what it judges, so that its judgement is not biased by it. A different make of model is not a must. It stays on the scale as a level a project may ask for, and whether to use one is the user's decision, taken where it gives a higher chance of success. Nothing in dodona treats work by the same make as deficient for that reason alone.
+
 ## Consequences
 
 - An honest weak agent that checks its own work gets an honest `self`, and loses nothing by saying so except credit it did not earn.

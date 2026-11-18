@@ -145,6 +145,16 @@ def gap_readme_counts() -> None:
     m = re.search(r"(\d+) proposed decisions", readme)
     if not m or int(m.group(1)) != decisions:
         problems.append(f"README.md decision count does not match the {decisions} records in decisions/")
+    counts = []
+    for name in ("kernel/defects.json", "kernel2/defects.json"):
+        data = json.loads((ROOT / name).read_text(encoding="utf-8"))
+        counts.append(len(data["defects"] if isinstance(data, dict) else data))
+    m = re.search(r"(\d+) planted defects, (\d+) in one kernel and (\d+) in the other", readme)
+    if not m or [int(m.group(2)), int(m.group(3))] != counts or int(m.group(1)) != sum(counts):
+        problems.append(f"README.md: the planted-defect counts must say {sum(counts)}, {counts[0]} in one kernel and {counts[1]} in the other")
+    claims = (ROOT / "spec" / "CLAIMS.md").read_text(encoding="utf-8")
+    if f"{counts[0]} in the first kernel and {counts[1]} in the second" not in claims:
+        problems.append(f"spec/CLAIMS.md C20: the counts must say {counts[0]} in the first kernel and {counts[1]} in the second")
     ids = [cid for cid, _ in rows]
     if len(ids) != len(set(ids)):
         problems.append("spec/CLAIMS.md lists a claim id twice")
@@ -182,6 +192,9 @@ def gap_kit_judge_hides_the_answers() -> None:
 
 def gap_generated_kit_files_are_current() -> None:
     """Kit files with hashes and keyed check values are generated; an edit by hand, or to the generator alone, would leave them wrong."""
+    other = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_wrong_types.py"), "--check"], capture_output=True, text=True)
+    if other.returncode != 0:
+        problems.append("the wrong-type scenarios differ from what tools/gen_wrong_types.py writes: " + (other.stdout + other.stderr).strip()[-200:])
     done = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_kit_vectors.py"), "--check"], capture_output=True, text=True)
     if done.returncode != 0:
         problems.append("the generated kit files differ from what tools/gen_kit_vectors.py writes: " + (done.stdout + done.stderr).strip()[-200:])
@@ -240,6 +253,104 @@ def gap_an_unfinished_job_proves_nothing() -> None:
     driver = (ROOT / ".github" / "site" / "batch_driver.py").read_text(encoding="utf-8")
     if not (driver.find("measured.json") < driver.find("subprocess.run(case") < driver.find("complete.json")):
         problems.append(".github/site/batch_driver.py must measure its tools before the first case and write its marker after the last")
+
+
+def gap_tool_tree_digest_matches_its_vectors() -> None:
+    """How a tool tree's digest is computed was unwritten, so a lock could not have been checked by anyone else."""
+    import tooltree
+    vectors = json.loads((ROOT / "conformance" / "vectors" / "tool-tree.json").read_text(encoding="utf-8"))
+    for item in vectors["accept"]:
+        try:
+            got = tooltree.digest(item["items"])
+        except tooltree.Unusable as err:
+            got = f"refused: {err}"
+        if got != item["digest"]:
+            problems.append(f"tool-tree vectors: '{item['name']}' must have digest {item['digest']}, the reference gives {got}")
+    for item in vectors["reject"]:
+        try:
+            problems.append(f"tool-tree vectors: '{item['name']}' must be refused, the reference gives {tooltree.digest(item['items'])}")
+        except tooltree.Unusable as err:
+            if str(err) != item["reason"]:
+                problems.append(f"tool-tree vectors: '{item['name']}' must be refused as {item['reason']}, not {err}")
+    if len(vectors["accept"]) < 5 or len(vectors["reject"]) < 5:
+        problems.append("tool-tree vectors: too few to mean anything")
+
+
+def gap_every_tool_compiles() -> None:
+    """A syntax error in the status command reached the branch because nothing ran that file."""
+    for path in sorted(list((ROOT / "tools").glob("*.py")) + list((ROOT / "providers").rglob("*.py"))
+                       + list((ROOT / "conformance").rglob("*.py")) + list((ROOT / ".github").rglob("*.py"))):
+        try:
+            compile(path.read_text(encoding="utf-8"), str(path), "exec")  # checks syntax, writes nothing
+        except SyntaxError as err:
+            problems.append(f"{path.relative_to(ROOT)} does not compile: line {err.lineno}: {err.msg}")
+
+
+def gap_an_intent_reads_one_way_only() -> None:
+    """Free-form criteria tables could always be written so that a person and the reader saw different things,
+    and results written by hand into the owner's ledger counted as passed."""
+    import intents
+    problems_before = len(problems)
+    try:
+        for path in sorted((ROOT / "intents").glob("[0-9]*.md")):
+            intents.read(path)
+    except intents.Unreadable as err:
+        problems.append(f"intents: {err}")
+    sample = sorted((ROOT / "intents").glob("[0-9]*.md"))[0].read_text(encoding="utf-8")
+    fields, body = intents.front(sample)
+    head = sample[: len(sample) - len(body)]
+    shown = body[body.index(intents.BEGIN): body.index(intents.END) + len(intents.END)]
+    tampered = {
+        "an extra row outside the table": body + "\n|  | Every release is signed | hard | nobody |\n",
+        "a table in a blockquote": body + "\n> | 9 | x | hard | y |\n",
+        "an HTML table": body + "\n<table><tr><td>9</td><td>hard</td></tr></table>\n",
+        "a code block": body + "\n```\n| 9 | x | hard | y |\n```\n",
+        "a hidden comment": body + "\n<!-- x -->\n",
+        "the table wrapped in an attribute": body.replace(shown, '<p title="\n' + shown + '\n">'),
+        "a table without leading bars": body + "\nNo. | Criterion | Gate | Checked by\n:-|-|-|-\n2 | Runs on Windows | hard | x\n",
+        "an entity": body + "\nA &lt;b&gt; tag\n",
+        "a second closer with a trailing space": body + "\n--- \n",
+        "markup in the front matter": None,
+        "a hand-edited table": body.replace(shown, shown.replace("| hard |", "| soft |", 1)) if "| hard |" in shown else body + "|",
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, new_body in tampered.items():
+            path = pathlib.Path(tmp) / "0001-probe.md"
+            if new_body is None:
+                path.write_text(sample.replace("\ntitle: ", "\ntitle: <details> ", 1), encoding="utf-8")
+            else:
+                path.write_text(head + new_body, encoding="utf-8")
+            try:
+                intents.read(path)
+                problems.append(f"tools/intents.py reads an intent with {name} without refusing it")
+            except intents.Unreadable:
+                pass
+        for field, bad in (("words", "Runs</td><td>hard</td></tr><tr><td colspan=4>"), ("checks", ["a|b"]), ("checked_by", "*emphasis*")):
+            items = json.loads(fields["criteria"])
+            items[0][field] = bad
+            changed = sample.replace(fields["criteria"], json.dumps(items))
+            old_table = changed[changed.index(intents.BEGIN): changed.index(intents.END) + len(intents.END)]
+            path = pathlib.Path(tmp) / "0001-probe.md"
+            try:
+                path.write_text(changed.replace(old_table, intents.table(items)), encoding="utf-8")
+                intents.read(path)
+                problems.append(f"tools/intents.py accepts a criterion whose {field} is {bad!r}")
+            except intents.Unreadable:
+                pass
+        for bad in ('"Hard"', '"hard\\u200b"'):
+            path = pathlib.Path(tmp) / "0001-probe.md"
+            changed = sample.replace('"gate": "hard"', f'"gate": {bad}', 1)
+            items = json.loads(intents.front(changed)[0]["criteria"])
+            old_table = changed[changed.index(intents.BEGIN): changed.index(intents.END) + len(intents.END)]
+            path.write_text(changed.replace(old_table, intents.table(items)), encoding="utf-8")  # only the gate rule can refuse it
+            try:
+                intents.read(path)
+                problems.append(f"tools/intents.py accepts a gate written {bad}")
+            except intents.Unreadable:
+                pass
+    source = (ROOT / "tools" / "status.py").read_text(encoding="utf-8")
+    if 'e.get("kind") == "act"' not in source or "OWNER_LEDGER.resolve()" not in source:
+        problems.append("tools/status.py must read only acts from the owner's ledger, and compare ledger paths after resolving them")
 
 
 def gap_one_reader_of_checker_output() -> None:
@@ -514,7 +625,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_provider_cases_match_the_provider, gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
-              gap_an_unfinished_job_proves_nothing]
+              gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
+              gap_every_tool_compiles, gap_an_intent_reads_one_way_only]
 
 
 class JudgeTests(unittest.TestCase):

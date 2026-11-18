@@ -2,7 +2,7 @@
 
 What dodona is meant to do, in plain words. This directory is dodona used on itself before dodona exists: the intents are real, and until a kernel can derive their status it is worked out by hand and stated honestly.
 
-Each intent has an owner, criteria, and for each criterion a gate ([data model](../MODEL.md#5-intent-gates-and-assurance)). Children can be worked on in parallel where they touch different things.
+Each intent has an owner, the worker whose work it judges, criteria, and for each criterion a gate ([data model](../MODEL.md#5-intent-gates-and-assurance)). Children can be worked on in parallel where they touch different things.
 
 | Id | Intent | Parent | Status today (worked out by a seed kernel) |
 |---|---|---|---|
@@ -15,6 +15,6 @@ Each intent has an owner, criteria, and for each criterion a gate ([data model](
 
 `draft` means the owner has not confirmed the criteria and gates in a way a kernel can read. Nothing can be delivered before that. The status is no longer worked out by hand: on every change to `main` a seed kernel derives it from a ledger of real results, and the run's summary shows it ([how](../decisions/0026-the-first-host-and-status-are-stage-0-helpers.md)).
 
-Behind `draft`, most criteria are also uncovered in the kernel's eyes. Many are checked by something that runs in CI, as their tables say, but only checks a provider offers as obligations reach the ledger, and so far that is the model checks. A `checks` line in an intent's front matter ties a criterion to obligations by name.
+Behind `draft`, most criteria are also uncovered in the kernel's eyes. Many are checked by something that runs in CI, as their tables say, but only checks a provider offers as obligations reach the ledger, and so far that is the model checks. Each intent's criteria are kept as one line of JSON in its front matter, with the gate and the name patterns of the checks behind each; the table in the file is written from that line by `tools/intents.py --write`, and the repository checks refuse a file whose table differs or that holds anything else a reader might take for criteria.
 
 Each intent has an issue where work on it is discussed: [0001](https://github.com/sloik/dodona/issues/3), [0002](https://github.com/sloik/dodona/issues/4), [0003](https://github.com/sloik/dodona/issues/5), [0004](https://github.com/sloik/dodona/issues/6), [0005](https://github.com/sloik/dodona/issues/7), [0006](https://github.com/sloik/dodona/issues/8). Current pieces of work carry the [`step` label](https://github.com/sloik/dodona/issues?q=is%3Aissue+label%3Astep).

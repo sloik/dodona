@@ -51,6 +51,6 @@ The rewritten models were read again the next day by a separate agent. Most of t
 
 ## What the reviews did not cover
 
-- The scenarios added in response, and the new ones for acts, status and the ledger, have not been read by a reviewer looking for holes. They have been through two kernel authors working apart, which found the points above.
+- The scenarios added in response, and the new ones for acts, status and the ledger, were reviewed the next day: [review of the newer scenarios](2026-11-18-newer-scenarios.md). It found a hole in the design of vouching and 72 wrong kernels the kit accepted.
 - The planted defects are still chosen by the people who wrote the kit. The reviewer's fourteen were not on the list before.
 - The first two models (evidence reuse and intent delivery) were reviewed earlier and not again.

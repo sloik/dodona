@@ -2,6 +2,8 @@
 // Intent status and exceptions (MODEL.md section 5, decision 0024), shared by
 // the `scenario` and `states` commands.
 
+const vocabulary = require('./vocabulary');
+
 const LEVELS = ['self', 'helper', 'apart', 'tested', 'cross-make', 'credentialed'];
 
 // The highest level each source of facts can earn.
@@ -45,6 +47,13 @@ function intentStatus(policy, confirmed, criteria) {
   return 'delivered';
 }
 
+// True if an amend step names a criterion that exists and carries only allowed values.
+function validAmend(step, known) {
+  const claimsOk = step.claims === undefined || LEVELS.includes(step.claims);
+  const sourceOk = step.source === undefined || vocabulary.SOURCES.includes(step.source);
+  return known(step.criterion) && vocabulary.GATES.includes(step.to) && ['owner', 'worker'].includes(step.by) && claimsOk && sourceOk;
+}
+
 // Runs an intent scenario. Returns the list of results, one per step.
 function runScenario(scenario) {
   const criteria = {};
@@ -54,19 +63,23 @@ function runScenario(scenario) {
 
   for (const { do: step } of scenario.steps) {
     let amendment = null;
-    const known = (name) => Object.hasOwn(criteria, name);
+    const known = (name) => vocabulary.isString(name) && Object.hasOwn(criteria, name);
     if (step.confirm) {
       confirmed = true;
-    } else if (step.check && known(step.check.criterion)) {
+    } else if (step.check && known(step.check.criterion) && vocabulary.CHECKS.includes(step.check.status)) {
       criteria[step.check.criterion].check = step.check.status;
-    } else if (step.edit && known(step.edit.criterion)) {
+    } else if (step.edit && known(step.edit.criterion) && vocabulary.GATES.includes(step.edit.to)) {
       if (criteria[step.edit.criterion].gate !== step.edit.to) {
         criteria[step.edit.criterion].gate = step.edit.to;
         confirmed = false;
       }
+    } else if (step.amend && !validAmend(step.amend, known)) {
+      // An exception on a criterion that does not exist, or with a value outside the table,
+      // changes nothing and earns nothing.
+      amendment = { takes_effect: false, level: 'self' };
     } else if (step.amend) {
       const judged = judgeAmendment(scenario.policy, step.amend);
-      if (judged.takes_effect && known(step.amend.criterion)) criteria[step.amend.criterion].gate = step.amend.to;
+      if (judged.takes_effect) criteria[step.amend.criterion].gate = step.amend.to;
       amendment = { takes_effect: judged.takes_effect, level: judged.level };
     }
     const result = { status: intentStatus(scenario.policy, confirmed, criteria) };

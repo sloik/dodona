@@ -1,4 +1,6 @@
 'use strict';
+const { isString } = require('./vocabulary');
+
 // What is planned to run (conformance/README.md, plan scenarios).
 //
 // An obligation's inputs are the content of its targets and of everything they
@@ -65,11 +67,13 @@ function runScenario(scenario) {
 
   for (const { do: step } of scenario.steps) {
     let ran = null;
-    if (step.edit) {
+    if (step.edit && isString(step.edit.definition) && isString(step.edit.to) && Object.hasOwn(state.content, step.edit.definition)) {
       state.content[step.edit.definition] = step.edit.to;
-    } else if (step.repin) {
+    } else if (step.repin && isString(step.repin.tool) && isString(step.repin.to) && Object.hasOwn(state.tools, step.repin.tool)) {
       state.tools[step.repin.tool] = step.repin.to;
-    } else if (step.run && scenario.obligations[step.run.obligation]) {
+    } else if (step.run && !(isString(step.run.obligation) && Object.hasOwn(scenario.obligations, step.run.obligation))) {
+      ran = false; // running something that does not exist runs nothing
+    } else if (step.run) {
       const obligation = step.run.obligation;
       const source = scenario.obligations[obligation].artifact_of;
       const planned = !hasResult(scenario, state, results, obligation);

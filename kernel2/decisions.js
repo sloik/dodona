@@ -17,7 +17,7 @@ function runScenario(scenario) {
   for (const name of scenario.governs) recorded.set(name, names.has(name) ? names.get(name) : null);
   const results = [];
   for (const { do: step } of scenario.steps) {
-    if (step.edit) {
+    if (step.edit && typeof step.edit.name === 'string' && (typeof step.edit.to === 'string' || step.edit.to === null) && Object.hasOwn(scenario.names, step.edit.name)) {
       if (step.edit.to === null) names.delete(step.edit.name);
       else names.set(step.edit.name, step.edit.to);
     } else if (step.review) {

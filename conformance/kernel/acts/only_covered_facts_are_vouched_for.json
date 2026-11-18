@@ -3,7 +3,7 @@
   "name": "only_covered_facts_are_vouched_for",
   "claim": "C36",
   "covers": [],
-  "why": "A harness vouches only for the fields it signed. A level needs every fact below it vouched for, so one uncovered fact holds the grade down.",
+  "why": "A harness vouches only for the fields it signed, and a record with any field it did not sign earns nothing above helper: one uncovered field holds the grade down, whichever fact reads it.",
   "policy": {
     "attestors": {
       "harness-1": "6b65792d666f722d7468652d6b69742d6f6e6c792d6e6f742d612d736563726574"
@@ -91,11 +91,16 @@
               "actor",
               "brief",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "800d01a25458e237eac5a480fd082577564b5b5a7dcd37ae90ba3fd3dc9c6780"
+            "mac": "8aa62e45d1db64c37d723ec5017ed27f2f6f5ed433d5e13e0a265c0b51995c17"
           }
         }
       },
@@ -178,17 +183,22 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "34cd33de4af80c8f801ef420d1b313d835c55bcac2ca174d32da21d8e2367f15"
+            "mac": "947cc4089108c55e19333957f2364a7a0aa61f4bc564fbcef3542050f7c490ba"
           }
         }
       },
       "expect": {
-        "level": "apart",
+        "level": "helper",
         "claims": "cross-make",
-        "source": "attested"
+        "source": "declared"
       }
     },
     {
@@ -248,11 +258,16 @@
               "brief",
               "fresh_context",
               "given",
+              "kind",
               "known_bad",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "33b342616ba356816d6c9404e80c55b0a5a93a8b1fc8ea0d7a6a435fab8b69f2"
+            "mac": "0da6dfa91c857b40f74cd614a4bc475de16319910067e45f6e183d7ea1feb206"
           }
         }
       },
@@ -332,9 +347,14 @@
             "key": "harness-1",
             "covers": [
               "actor",
+              "kind",
+              "lineage",
+              "result",
+              "target",
+              "ticket",
               "worker"
             ],
-            "mac": "ae18a3dc0f3e8a1e9e7ae80fe951c9bd7c494a6b40bac4c6e2982d59bfcc0cfb"
+            "mac": "6846b47fae5c4d529f64442fa36dd8d524a32313104b78ca3862f30fd0b34b1a"
           }
         }
       },
