@@ -987,6 +987,20 @@
       "file": "src/platforms.rs",
       "find": "let verified = verified(&records, key);",
       "replace": "let verified = keys.iter().any(|j| verified(&records, j.str())) && !keys.iter().any(|j| reproducibility(&records, j.str()) == \"differs\");"
+    },
+    {
+      "name": "unreadable tree gate read as soft",
+      "model_case": null,
+      "file": "src/tree.rs",
+      "find": "    if g == \"soft\" {",
+      "replace": "    if g != \"hard\" {"
+    },
+    {
+      "name": "unreadable tree gate changes nothing",
+      "model_case": null,
+      "file": "src/tree.rs",
+      "find": "step.text(field).map(counts_as)",
+      "replace": "step.text(field).filter(|g| *g == \"hard\" || *g == \"soft\").map(counts_as)"
     }
   ]
 }
