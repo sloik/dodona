@@ -16,7 +16,7 @@ The check value is HMAC-SHA256 under the key, over the canonical encoding of
 {"covers": C, "fields": F}: C is the sorted list of covered field names and F
 holds each of those fields that the record has, under its name.
 
-`sign` always covers `kind`, `target`, `result` and `lineage` as well as the
+`sign` always covers `ticket`, `kind`, `target`, `result` and `lineage` as well as the
 fields it is asked to cover, so that the value binds what was judged: no level
 above helper is granted without them (conformance/README.md, Acts scenarios).
 """
@@ -32,7 +32,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import canonical  # noqa: E402
 
-BINDS = ["kind", "target", "result", "lineage"]
+BINDS = ["kind", "target", "result", "lineage", "ticket"]
 
 
 def check_value(record: dict, covers: list[str], key: bytes) -> str:

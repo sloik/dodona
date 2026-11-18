@@ -16,6 +16,16 @@ What it does, and so what its check value means:
 3. It keeps everything the checker printed as the transcript.
 4. It writes the act record from what it did and saw, and signs it.
 
+What it does not do: confine the checker. The directory is new and holds
+only the named material, and the environment is nearly empty, but the
+checker runs as the same user and can read any file that user can read. A
+checker told where the worker's notes are, or where the key is, can read
+them. "fresh_context" in the record means the checker was started anew with
+only that material handed to it, not that it could see nothing else. A
+harness worth trusting runs the checker where the worker's files and the key
+are not reachable at all: another machine, or a container with nothing
+mounted.
+
 What it takes on the caller's word, and cannot know: who the worker is, who
 wrote the brief, who supplied the known cases, and which make of model the
 checker and the worker are. A harness worth trusting gets those from
@@ -41,7 +51,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import attest  # noqa: E402
 
 # The fields the facts read, and the four that bind the value to what was judged.
-COVERS = ["actor", "brief", "fresh_context", "given", "known_bad", "transcript", "worker", "kind", "target", "result", "lineage"]
+COVERS = ["actor", "brief", "fresh_context", "given", "known_bad", "transcript", "worker", "kind", "target", "result", "lineage", "ticket"]
 
 
 def identity(data: bytes) -> str:

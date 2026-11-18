@@ -214,10 +214,11 @@
                 "lineage",
                 "result",
                 "target",
+                "ticket",
                 "transcript",
                 "worker"
               ],
-              "mac": "0b437754a228d265b8fa3911604bc81dbf46e9289efe54543ed992377dd9443f"
+              "mac": "5b3db8f23df9e83adf7fec9b8190300868c522563410f98c1fb76c2b89b5972d"
             }
           }
         }

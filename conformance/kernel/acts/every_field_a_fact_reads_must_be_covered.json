@@ -97,9 +97,10 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript"
             ],
-            "mac": "7a5e7e3f1c9cee208e3b3bf135a5ae0fe101803b73d409fb8c3b50d6a4c89703"
+            "mac": "75a1e662e1414984bf4733ab9718c8718e181104d1a19caf19d86db499f6fed7"
           }
         }
       },
@@ -186,10 +187,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "0f8c4f6c1e9dd9fbd6397430cd42f25c6f1638738d7794f4d88d6c68721bdb71"
+            "mac": "b4d585c91b821155ce380232ccaed987ca21de77c2bcc12aa6a801014a8fc8d0"
           }
         }
       },
@@ -276,10 +278,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "6add189ddb6974dd4856e2c4a0a2f158d78a9125c8453fea6363b951fca45ee9"
+            "mac": "082accdd74261f25fcec42a80e9e6cc5738839c1327d67867dd650724758c9b1"
           }
         }
       },
@@ -366,10 +369,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "d087bc2598e1cbaee0e5c8edcac28848abf62b207206ebb258edc1ed3a4b1ae8"
+            "mac": "6f66bf8523f844d2e8c2f4a74220f851c080ac48e506a81da287e53cd5003def"
           }
         }
       },
@@ -457,9 +461,10 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "worker"
             ],
-            "mac": "b04598a4f102fe49514f87528938dbb24d99a50190c6ecb02a391625659fa97a"
+            "mac": "2138354accb77fd55104025e3d132436fb29a0b722f3427206eba98f076feaaa"
           }
         }
       },

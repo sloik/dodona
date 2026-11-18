@@ -197,10 +197,11 @@
                 "lineage",
                 "result",
                 "target",
+                "ticket",
                 "transcript",
                 "worker"
               ],
-              "mac": "fdf6b23436aba5839abce12e25166ad42497d15feebc5d4a5126940bee779bc0"
+              "mac": "f881e412cb645abc62274b6f5370d085f93a131e28cc683b58cdde20b29d2b28"
             }
           }
         }
@@ -265,10 +266,11 @@
                 "lineage",
                 "result",
                 "target",
+                "ticket",
                 "transcript",
                 "worker"
               ],
-              "mac": "887434d40539b308091788a2442b270ee11d6ae92acffb07e0c384edc064f291"
+              "mac": "02b2477a488ffbbadbc673d3fab8fe08671d3f8c331c6bc42a14148dc298c2e0"
             }
           }
         }

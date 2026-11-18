@@ -248,10 +248,11 @@
                 "lineage",
                 "result",
                 "target",
+                "ticket",
                 "transcript",
                 "worker"
               ],
-              "mac": "29754dd3712dfada0ab41b95103e76361440ea58d1582c1b6a6243a5019e4e20"
+              "mac": "cf8c9c8449d080856c76da121afd023527840a1a9614aa092e5b89472e457c1d"
             }
           }
         }
@@ -349,10 +350,11 @@
                 "lineage",
                 "result",
                 "target",
+                "ticket",
                 "transcript",
                 "worker"
               ],
-              "mac": "a021f14cb9887320ab002d4e064c24a507569ce2834370807a854644d32f4f2a"
+              "mac": "617b92f80cf0287c7e3200ebc7d7af658627a90af928730ab4f5b65376cf6425"
             }
           }
         }
@@ -450,10 +452,11 @@
                 "lineage",
                 "result",
                 "target",
+                "ticket",
                 "transcript",
                 "worker"
               ],
-              "mac": "60b45a60269daf85854b44399cd0bf175821e57695558e82ddb5d868d0d8d7e8"
+              "mac": "6f88e8a27f9aa935aa8e299e3440dbfe05cc5e872ca86edaee1353930c2ab49f"
             }
           }
         }

@@ -247,10 +247,11 @@
                 "lineage",
                 "result",
                 "target",
+                "ticket",
                 "transcript",
                 "worker"
               ],
-              "mac": "5dcbf133427257a9845b59a3e56683502c17319661c03c499849bd7b61991523"
+              "mac": "d9cf6fd46a96f9cab0de1075ca375fd129c4e6ef219d074b0762100db64feb2f"
             }
           }
         }

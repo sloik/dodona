@@ -178,11 +178,13 @@ The check value is exact:
 
 - `mac` is 64 lowercase hexadecimal digits and is compared in full. The same value in uppercase, or one that matches only in part, vouches for nothing.
 - `covers` is used in the order the record gives it. It must already be sorted as the canonical encoding sorts keys, with no name repeated. A list in any other order, or with a repeat, vouches for nothing, even if the mac was made over that very list.
-- A key in `attestors` is a non-empty string of lowercase hexadecimal digits, of even length. Anything else (an empty string, an odd number of digits, an uppercase digit, a character that is not a digit) names no key: nothing is vouched for under it.
+- A key in `attestors` is a non-empty string of lowercase hexadecimal digits, of even length. Anything else (an empty string, an odd number of digits, an uppercase digit, a character that is not a digit) names no key: nothing is vouched for under it. The attestation's `harness` must be the same as its `key`: a value that names one harness and was made with another's key vouches for nothing.
 
-**A check value binds what was judged.** No level above `helper` is granted unless `covers` also lists `kind`, `target`, `result` and `lineage`, in addition to the fields the facts read. Without this a vouched refusal could be copied as an agreement, or onto another target, and keep its level. With it, changing any of the four after signing breaks the mac. A record signed without them keeps its `claims` and is graded `helper`, `declared`.
+**A check value binds what was judged.** No level above `helper` is granted unless `covers` also lists `ticket`, `kind`, `target`, `result` and `lineage`, in addition to the fields the facts read. Without this a vouched refusal could be copied as an agreement, or onto another target or ticket, and keep its level. With it, changing any of the five after signing breaks the mac. A record signed without them keeps its `claims` and is graded `helper`, `declared`.
 
 **A malformed record is `self`.** Its `claims` is `self`, its `level` is `self` and its `source` is `declared`, whatever it says and whoever signed it. A record is malformed when any of these is true, and in no other case:
+
+- It has a field at the top level that the act record does not define: anything other than `ticket`, `kind`, `target`, `result`, `lineage`, `actor`, `worker`, `brief`, `given`, `fresh_context`, `known_bad`, `attempt`, `transcript` and `attestation`. A field nobody signs cannot ride along on a signed record.
 
 - `actor` or `worker` is missing or is not an object, or the `id` or the `session` of either is not a string. A missing `id` or `session` is not a string.
 - A field that is present has the wrong type:
@@ -227,6 +229,7 @@ The result has `obligations` and `intents`, each an object with one entry per na
 
 Each intent also reports:
 
+- `baseline`: the baseline of the intent as things stand, the identity defined above. It is what a confirmation must name.
 - `gates`: how many criteria are `hard`, `soft` and `deferred`, and `deferred_open`, how many deferred criteria are not met.
 - `score`: `met`, how many criteria are met, `of` how many criteria. A criterion is met when it has at least one obligation and every one is `passed`. A criterion that nothing checks is never met.
 - `shown`: `level` and `criterion`. An evidence record may state a `level`, one of the scale in the assurance scenarios; one that states no level, or something not on the scale, is `asserted`. A record that states the level `none` is taken at `none`: it is on the scale. An obligation that is `passed` has the strongest level among the records that count for it; any other obligation has `none`. A criterion has the weakest level among its obligations, and `none` if it has no obligation. `level` is the weakest among all the intent's criteria, soft ones included, and `criterion` is the first criterion at that level, in the order in which the canonical encoding sorts keys. An intent with no criteria shows `"level": "none"` and `"criterion": null`.

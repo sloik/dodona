@@ -95,7 +95,7 @@ POLICY = {"attestors": {"harness-1": KEY_GOOD},
           "makes": [["vendor-a/family-x", "vendor-a/family-x-small"], ["vendor-b/family-y"]]}
 FIELDS = ["actor", "worker", "brief", "given", "fresh_context", "transcript", "known_bad"]
 # What a check value must also cover before any level above helper is granted: what was judged, and how.
-BIND = ["kind", "target", "result", "lineage"]
+BIND = ["kind", "lineage", "result", "target", "ticket"]
 
 
 def act(**changes) -> dict:
@@ -122,14 +122,14 @@ def act(**changes) -> dict:
 
 
 def attest(record: dict, key_hex: str = KEY_GOOD, key_id: str = "harness-1", covers=None, bind: bool = True, key: bytes | None = None) -> dict:
-    """Sign with the reference signer's check value. `covers` is the fields the facts read; the four
+    """Sign with the reference signer's check value. `covers` is the fields the facts read; the five
     fields that bind what was judged are added unless `bind` is false. `key` gives the key as bytes,
     for keys that are not hexadecimal."""
     names = list(covers) if covers is not None else [f for f in FIELDS if f in record]
     covers = canonical.sort_set(names + (BIND if bind else []))
     mac = signer.check_value(record, covers, bytes.fromhex(key_hex) if key is None else key)
     out = dict(record)
-    out["attestation"] = {"harness": "harness-1", "key": key_id, "covers": covers, "mac": mac}
+    out["attestation"] = {"harness": key_id, "key": key_id, "covers": covers, "mac": mac}
     return out
 
 
@@ -189,13 +189,17 @@ def acts() -> None:
     TOP, HELP = want("cross-make", "cross-make", "attested"), want("helper", "cross-make", "declared")
     LOW, SELF = want("helper", "helper", "declared"), want("self", "self", "declared")
     bound = attest(full)
-    scenario("a_vouched_act_is_bound_to_what_it_judged", "A check value must cover what was judged: the kind, the target, the result and the lineage. Signed without them the act is helper. Signed with them it earns its level, and changing any of the four afterwards breaks the value. Otherwise a vouched refusal could be copied as an agreement, or onto another target.", [],
+    scenario("a_vouched_act_is_bound_to_what_it_judged", "A check value must cover what was judged: the ticket, the kind, the target, the result and the lineage. A field nobody signed makes the record malformed, and a value that names one harness while made with another's key vouches for nothing. Signed without them the act is helper. Signed with them it earns its level, and changing any of the four afterwards breaks the value. Otherwise a vouched refusal could be copied as an agreement, or onto another target.", [],
              [(attest(full, bind=False), HELP),
               (bound, TOP),
               (dict(bound, result="refused"), HELP),
               (dict(bound, target=ident("another link")), HELP),
               (dict(bound, lineage=dict(full["lineage"], criterion="c2")), HELP),
-              (dict(bound, kind="confirm-baseline"), HELP)]
+              (dict(bound, kind="confirm-baseline"), HELP),
+              (dict(bound, ticket="t-copied"), HELP),
+              (dict(bound, note="added after signing"), SELF),
+              (dict(bound, exceptions=["granted"]), SELF),
+              (dict(bound, attestation=dict(bound["attestation"], harness="harness-2")), HELP)]
              + [(attest(full, covers=FIELDS + [b for b in BIND if b != left_out], bind=False), HELP) for left_out in BIND])
     scenario("every_field_a_fact_reads_must_be_covered", "A fact is vouched for only if every field it reads is covered. Leaving out any one of worker, actor, brief, given or transcript holds the grade at helper, whatever else is signed.", [],
              [(attest(full, covers=[f for f in FIELDS if f != left_out]), HELP) for left_out in ["worker", "actor", "brief", "given", "transcript"]])
@@ -423,7 +427,7 @@ def status() -> None:
     sep0 = {"weakest": "self", "act": "confirm-baseline", "apart_or_better": 0, "of": 3}
     sep1 = {"weakest": "self", "act": "match-check", "apart_or_better": 0, "of": 3}
     scenario("nothing_confirmed_is_a_draft", "C29", "Checks can pass and the intent is still a draft until its owner confirms it. Nothing is reported as passing.",
-             [(evidence("ob-a", A), {"obligations": {"ob-a": P, "ob-b": U}, "intents": {"i1": {"status": "draft", "gates": {"hard": 1, "soft": 0, "deferred": 1, "deferred_open": 1}, "score": {"met": 1, "of": 2}, "separation": sep0}}, "project": {"status": "unknown"}, "rejected": 0}),
+             [(evidence("ob-a", A), {"obligations": {"ob-a": P, "ob-b": U}, "intents": {"i1": {"status": "draft", "gates": {"hard": 1, "soft": 0, "deferred": 1, "deferred_open": 1}, "score": {"met": 1, "of": 2}, "separation": sep0, "baseline": baseline(intent)}}, "project": {"status": "unknown"}, "rejected": 0}),
               (evidence("ob-b", B), {"intents": {"i1": {"status": "draft", "score": {"met": 2, "of": 2}}}, "project": {"status": "unknown"}})])
     scenario("confirmed_and_shown_is_delivered_then_fulfilled", "C32", "Confirmed by its owner, with the hard gate passing, the intent is delivered; when the deferred gate closes it is fulfilled. The count of separate acts is out of the acts there must be, and the missing ones count as self.",
              [(act_c, {"intents": {"i1": {"status": "open", "separation": sep1}}, "project": {"status": "unknown"}}),

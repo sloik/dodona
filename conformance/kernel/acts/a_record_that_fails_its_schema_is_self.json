@@ -89,10 +89,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "8172b9d40b6bff572140deb824e9b9378dac1372d0d88f36875bca99a8dda13f"
+            "mac": "920a7e8f2880a27fc1efe018e1360cd9b0af5786ebaf073edec52959a5c6fd9f"
           }
         }
       },
@@ -171,10 +172,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "ae5375242eb0b7988e49c1cd1e5e85e9306b9e8dfc98660fc6270ca01e6a4ab7"
+            "mac": "c5c24c5455c0f2bcd021f092794b971e72f40aaf4c33514fb4b74ff73d478960"
           }
         }
       },
@@ -254,10 +256,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "ce245488cc4fb07f1bf08fe7f4df83ea89f9ece60ef54bb3bb9bb46100cff0a8"
+            "mac": "8401122badbbf5bd05ba21cc413a80a2c835e5b13fbd4ac3bc6d489c5af11579"
           }
         }
       },
@@ -340,10 +343,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "60ba9202c4d181d2ecfd92bb06870a2d21556d221289f24286f5c4c478b4b3a1"
+            "mac": "c3a334d3908a6a9f0702bb5eec9975b1362f352df080bfd77b912c628d84f395"
           }
         }
       },
@@ -431,10 +435,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "001d0d8d46545644d2711867f863ab0f8957d176c3ce24f1728cc211d7aa5731"
+            "mac": "5e0b40bf60ade125c2d07c90458c76d26e36a25885d6117a8b46e9aa834cc4c0"
           }
         }
       },
@@ -522,10 +527,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "84df96dff704f150eef57db2b4f579443edd80c7bf77384d084db9d43bb9c30b"
+            "mac": "f456cf98cdef72fa9f29cc1b0acf11b2631c2ac4aad541d8c745da11be97bf8e"
           }
         }
       },
@@ -612,10 +618,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "2f36ab4ef3afb3956b5fb43d8c54ed899c904d78fbb57ad734b173d4cd48a9d8"
+            "mac": "e5c4af0d5937e02aea3d62410e3f84464caba803bc5a71731c070ac106fc3538"
           }
         }
       },
@@ -702,10 +709,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "432ff6b80ade44fc4ec4df748b836f4c48855acaf9a0181b007737a546f13ec9"
+            "mac": "dac89a3c0ba21c4a17aad65d3d4da5ed1ebb242910ee2b75097800533ca33721"
           }
         }
       },
@@ -790,10 +798,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "be46ff016c9f7a80944f82d377472afebd62d301bf7da9fcde71bb49e28c4621"
+            "mac": "f3a64dd855fd2171b5a0ed49bace38ed7438a8cd0f932d61c2ffe68426aa5906"
           }
         }
       },
@@ -863,10 +872,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "73164c1d8c316b2a4d10f642c84fac57dd0f4f21279eb9fb8568f3e031595dbe"
+            "mac": "eb493881a50fb2ec9b9c3fbbf481e5cc139316840bb8ceed163d6fe5994414ee"
           }
         }
       },
@@ -953,10 +963,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "29116ead5a843561cafe0030a95590b1d988a793df47163cb8bc156c664b9742"
+            "mac": "cf4198c687fbd25b2eb708335d1f85d1c1388d7526c71de742154c1ba88d24bd"
           }
         }
       },
@@ -1044,10 +1055,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "f81897a01d215608a52ac1a03961cd6a3f7ce107baf70182e281104e8623639d"
+            "mac": "2bde3ab887ef8a789ddfa1c98200b3cf132eecd6ed115e6b022ab94758c328e8"
           }
         }
       },
@@ -1135,10 +1147,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "85eecc68f3a7203c5dd35588b5e642929d00427349f8514ec14e7a62d7ae5fa7"
+            "mac": "b847588d0da21cbeb645ddc7e462e88515725d77706e77dc458b2f1128d91983"
           }
         }
       },
@@ -1226,10 +1239,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "b98dfa86b78ccc8754690bd6508be605acbc4e1edd31b4eae10095446aa113aa"
+            "mac": "18c7946461bdf1fb31c6258b0d51febaabd9019de59af3015a6641a384b2fddd"
           }
         }
       },
@@ -1310,10 +1324,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "6b7e214a60726612fe1136f09c01efa03465f5c221bcb8bf005b0078e7de440d"
+            "mac": "44cec45b235639eb37590b291f375bc2dcfbc06c9c1b4e9d4464c988cffe16c2"
           }
         }
       },
@@ -1400,10 +1415,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "0591a4ed3ecb757e9b42a134e5f5fc83042b5995e3e26044374168de45ce40bb"
+            "mac": "13451c8b4bb281d600e40d5e18bc768a7bb34768b59b577f770a27b2a61011f0"
           }
         }
       },
@@ -1491,10 +1507,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "a38e1b7a0ee8ea9ad0cf94cd44139367dc9659cdf226318ac8bd18ee20408732"
+            "mac": "41f8acbf1d0708d66b2c8e6b73d43a011cb0dab2e82911f1fd893748f9eaba0f"
           }
         }
       },
@@ -1572,8 +1589,8 @@
           "attestation": {
             "harness": "harness-1",
             "key": "harness-1",
-            "covers": "actor,brief,fresh_context,given,kind,known_bad,lineage,result,target,transcript,worker",
-            "mac": "b7305373a9f2965de99c3bdc2d9ecfb92905972dbb9c90ae6a0f4b1bc2b9695e"
+            "covers": "actor,brief,fresh_context,given,kind,known_bad,lineage,result,target,ticket,transcript,worker",
+            "mac": "2b3a5d9332f1347df9307c5e1bccbc8e37e62496f1b983b6129952835bd9d666"
           }
         }
       },
@@ -1661,6 +1678,7 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ]
@@ -1751,10 +1769,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "b7305373a9f2965de99c3bdc2d9ecfb92905972dbb9c90ae6a0f4b1bc2b9695e"
+            "mac": "2b3a5d9332f1347df9307c5e1bccbc8e37e62496f1b983b6129952835bd9d666"
           }
         }
       },
@@ -1916,10 +1935,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "36b276e9bd8ab64044ff6bbc815786ec702fc4b59a5de474257fcddd838827d4"
+            "mac": "4bd808188c455c736847142daecba08dd472d0459aee90b7b4d5bb1e1e7dfa79"
           }
         }
       },
@@ -2007,10 +2027,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "bce15bb4839c722144233b0246847e591b8851388a70f0d1604bab5b3f33d160"
+            "mac": "9090ec78d134fa3e35472bf9657107bda51ddbae10cec752f779a7814f35ed6e"
           }
         }
       },
@@ -2098,10 +2119,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "55f6dd6f6810eb6db592c9e8923c63c57846546b610c9be933be87ea2ef3df9e"
+            "mac": "5b8bc8305634ba4db27f20340832be5132ac238c78ba8a05c3e6650c09e14d66"
           }
         }
       },
@@ -2188,10 +2210,11 @@
               "lineage",
               "result",
               "target",
+              "ticket",
               "transcript",
               "worker"
             ],
-            "mac": "e5cad9f8799ab814321de520f0d4f577ac4c02c7829729c9b8280df901f9e9d6"
+            "mac": "f2dce0fc1e05df88a5f6ef2d43b99e3e434dc9a3511c51cfa506221f1b7b1ec3"
           }
         }
       },
