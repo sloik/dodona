@@ -5,7 +5,7 @@
   "covers": [
     "platforms/mutant_always_stand_in"
   ],
-  "why": "Where policy does not allow stand-ins, a platform with no record of its own is unknown, verified claim or not.",
+  "why": "Policy can forbid any record from standing in for another platform: a key two platforms agree on still has no status on the third.",
   "stand_in_allowed": false,
   "keys": [
     "k1",
@@ -13,7 +13,8 @@
   ],
   "platforms": [
     "p1",
-    "p2"
+    "p2",
+    "p3"
   ],
   "steps": [
     {
@@ -27,7 +28,8 @@
       "expect": {
         "status": {
           "k2": {
-            "p2": "unknown"
+            "p2": "unknown",
+            "p3": "unknown"
           }
         },
         "stood_in": []
@@ -55,9 +57,15 @@
       },
       "expect": {
         "status": {
+          "k1": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "unknown"
+          },
           "k2": {
             "p1": "passed",
-            "p2": "unknown"
+            "p2": "unknown",
+            "p3": "unknown"
           }
         },
         "stood_in": [],

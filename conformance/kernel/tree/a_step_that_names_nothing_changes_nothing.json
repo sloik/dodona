@@ -99,6 +99,28 @@
       "expect": {
         "status": "delivered"
       }
+    },
+    {
+      "do": {
+        "edit": {
+          "node": "root",
+          "to": "deferred"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "add": {
+          "child": "k2",
+          "gate": "deferred"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
     }
   ]
 }

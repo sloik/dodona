@@ -103,7 +103,7 @@ The result has `"shown"`: the weakest of the three links, on the scale `none`, `
 
 ### Tree scenarios
 
-A scenario gives a `root` and `children`, each with the gate of its one criterion, `hard` or `soft`, and a policy with `min_hard_gates`. There may be no children. Adding a child that is already there, setting a gate to what it already is, or a step that names a child that is not there, changes nothing.
+A scenario gives a `root` and `children`, each with the gate of its one criterion, `hard` or `soft`, and a policy with `min_hard_gates`. There may be no children. Adding a child that is already there, setting a gate to what it already is, a gate other than `hard` or `soft` in an `edit` or an `add`, or a step that names a child that is not there, changes nothing.
 
 | Step | Meaning |
 |---|---|
