@@ -24,6 +24,13 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GATES = ("hard", "soft", "deferred")
+# What a criterion's words and note may hold: plain text that Markdown and HTML render as itself.
+PLAIN = re.compile(r"^[A-Za-z0-9 .,;:'()/+?%-]+$")
+# What a pattern naming checks may hold.
+PATTERN = re.compile(r"^[A-Za-z0-9_*?/.-]+$")
+# Characters that make Markdown or HTML render something other than the text: tags, entities,
+# tables, emphasis, code, links, escapes. None may appear outside the written table.
+MARKUP = set("<>&|*_`[]\\")
 BEGIN = "<!-- criteria: written by tools/intents.py from the front matter; do not edit -->"
 END = "<!-- end of criteria -->"
 
@@ -64,20 +71,27 @@ def criteria_of(fields: dict) -> list[dict]:
         seen.add(ident)
         if gate not in GATES:
             raise Unreadable(f"criterion {ident} has gate {gate!r}; it must be exactly hard, soft or deferred")
-        if not isinstance(words, str) or not words.strip() or not words.isprintable() or "|" in words:
-            raise Unreadable(f"criterion {ident} must have words: printable, without a bar")
+        if not isinstance(words, str) or not PLAIN.match(words):
+            raise Unreadable(f"criterion {ident}: its words must be plain text (letters, digits, spaces, . , ; : ' ( ) / + ? % -)")
         checks = item.get("checks", [])
-        if not isinstance(checks, list) or not all(isinstance(c, str) for c in checks):
+        if not isinstance(checks, list) or not all(isinstance(c, str) and PATTERN.match(c) for c in checks):
             raise Unreadable(f"criterion {ident}: checks must be a list of name patterns")
         note = item.get("checked_by", "")
-        if not isinstance(note, str) or not note.isprintable() or "|" in note:
-            raise Unreadable(f"criterion {ident}: checked_by must be printable, without a bar")
+        if not isinstance(note, str) or (note and not PLAIN.match(note)):
+            raise Unreadable(f"criterion {ident}: checked_by must be plain text")
     return items
+
+
+def shown_checks(item: dict) -> str:
+    """The Checked by cell: exactly the patterns that are read, then the note, which is only a note."""
+    patterns = item.get("checks", [])
+    cell = ("checks named " + ", ".join(f"`{p}`" for p in patterns)) if patterns else "nothing a kernel reads yet"
+    return cell + (f". {item['checked_by']}" if item.get("checked_by") else "")
 
 
 def table(items: list[dict]) -> str:
     rows = ["| # | Criterion | Gate | Checked by |", "|---|---|---|---|"]
-    rows += [f"| {c['id']} | {c['words']} | {c['gate']} | {c.get('checked_by', '') or 'Not yet covered'} |" for c in items]
+    rows += [f"| {c['id']} | {c['words']} | {c['gate']} | {shown_checks(c)} |" for c in items]
     return "\n".join([BEGIN] + rows + [END])
 
 
@@ -92,10 +106,15 @@ def read(path: pathlib.Path) -> tuple[dict, list[dict], str]:
     if shown != table(items):
         raise Unreadable("the criteria table is not the one the front matter gives; run tools/intents.py --write")
     rest = body.replace(shown, "")
-    for pattern, what in ((r"(?m)^\s*\|", "a table outside the written one"), (r"<\s*table", "an HTML table"),
-                          (r"(?m)^\s*(```|~~~)", "a code block"), (r"(?m)^\s*>", "a blockquote"), (r"<!--", "a hidden comment")):
-        if re.search(pattern, rest, flags=re.I):
-            raise Unreadable(f"it has {what}, which a reader might take for criteria")
+    # Outside the written table the body is plain prose: no character that Markdown or HTML would
+    # turn into anything else. An allowlist, because two reviews kept finding new markup that did.
+    found = sorted(MARKUP & set(rest))
+    if found:
+        raise Unreadable(f"outside the written table it uses {''.join(found)!r}, which could make a page show something other than what is read")
+    if any(not (line.isprintable() or line == "") for line in rest.splitlines()):
+        raise Unreadable("outside the written table it has a character that does not print")
+    if re.search(r"(?m)^ {4,}\S|^\t", rest) or re.search(r"(?m)^\s*(```|~~~)", rest):
+        raise Unreadable("it has a code block")
     return fields, items, text
 
 

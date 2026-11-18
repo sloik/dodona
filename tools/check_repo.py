@@ -306,6 +306,9 @@ def gap_an_intent_reads_one_way_only() -> None:
         "an HTML table": body + "\n<table><tr><td>9</td><td>hard</td></tr></table>\n",
         "a code block": body + "\n```\n| 9 | x | hard | y |\n```\n",
         "a hidden comment": body + "\n<!-- x -->\n",
+        "the table wrapped in an attribute": body.replace(shown, '<p title="\n' + shown + '\n">'),
+        "a table without leading bars": body + "\nNo. | Criterion | Gate | Checked by\n:-|-|-|-\n2 | Runs on Windows | hard | x\n",
+        "an entity": body + "\nA &lt;b&gt; tag\n",
         "a hand-edited table": body.replace(shown, shown.replace("| hard |", "| soft |", 1)) if "| hard |" in shown else body + "|",
     }
     with tempfile.TemporaryDirectory() as tmp:
@@ -315,6 +318,18 @@ def gap_an_intent_reads_one_way_only() -> None:
             try:
                 intents.read(path)
                 problems.append(f"tools/intents.py reads an intent with {name} without refusing it")
+            except intents.Unreadable:
+                pass
+        for field, bad in (("words", "Runs</td><td>hard</td></tr><tr><td colspan=4>"), ("checks", ["a|b"]), ("checked_by", "*emphasis*")):
+            items = json.loads(fields["criteria"])
+            items[0][field] = bad
+            changed = sample.replace(fields["criteria"], json.dumps(items))
+            old_table = changed[changed.index(intents.BEGIN): changed.index(intents.END) + len(intents.END)]
+            path = pathlib.Path(tmp) / "0001-probe.md"
+            try:
+                path.write_text(changed.replace(old_table, intents.table(items)), encoding="utf-8")
+                intents.read(path)
+                problems.append(f"tools/intents.py accepts a criterion whose {field} is {bad!r}")
             except intents.Unreadable:
                 pass
         for bad in ('"Hard"', '"hard\\u200b"'):

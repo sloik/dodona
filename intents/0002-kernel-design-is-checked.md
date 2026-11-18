@@ -18,7 +18,7 @@ The rules that decide what counts as shown must themselves be shown to be sound,
 <!-- criteria: written by tools/intents.py from the front matter; do not edit -->
 | # | Criterion | Gate | Checked by |
 |---|---|---|---|
-| 1 | Every claim in spec/CLAIMS.md has a model or scenario | hard | 24 of 37 checked by a model, 6 more sampled by the kit, 7 not yet modelled; see spec/CLAIMS.md. Not an obligation a kernel can read yet |
-| 2 | Every modelled claim has a planted defect that is caught | hard | Every planted-defect case of every model, as obligations of the model-checker provider |
-| 3 | Every modelled claim has a completed, recorded run | hard | Every design case of every model, as obligations of the model-checker provider |
+| 1 | Every claim in spec/CLAIMS.md has a model or scenario | hard | nothing a kernel reads yet. 24 of 37 checked by a model, 6 more sampled by the kit, 7 not yet modelled; see spec/CLAIMS.md. Not an obligation a kernel can read yet |
+| 2 | Every modelled claim has a planted defect that is caught | hard | checks named `*/mutant_*`, `*/assumption_*`. Every planted-defect case of every model, as obligations of the model-checker provider |
+| 3 | Every modelled claim has a completed, recorded run | hard | checks named `*/design*`. Every design case of every model, as obligations of the model-checker provider |
 <!-- end of criteria -->
