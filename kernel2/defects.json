@@ -178,16 +178,16 @@
     },
     {
       "name": "root delivered whatever its children",
-      "model_case": "tree/mutant_delivered_ignores_children",
+      "model_case": "tree/mutant_delivered_ignores_child",
       "file": "tree.js",
       "find": "if (hard.some((node) => node.check !== 'passed')) return 'open';",
       "replace": "if (root.check !== 'passed') return 'open';"
     },
     {
-      "name": "soft child counts as delivered",
+      "name": "a child with no hard gate is accepted",
       "model_case": "tree/mutant_soft_child_is_delivered",
       "file": "tree.js",
-      "find": "  if (children.some((child) => child.gate !== 'hard')) return 'open';\n",
+      "find": "  if (children.some((child) => child.gate !== 'hard')) return 'unguarded';\n",
       "replace": ""
     },
     {
@@ -208,8 +208,8 @@
       "name": "shopping flagged but not capping",
       "model_case": "attempts/mutant_flag_does_not_cap",
       "file": "attempts.js",
-      "find": "cap: shopped ? 'helper' : null",
-      "replace": "cap: null"
+      "find": "const capped = shopped || (retried && notAgreed(all) >= limit);",
+      "replace": "const capped = retried && notAgreed(all) >= limit;"
     },
     {
       "name": "shopping never flagged",
@@ -222,14 +222,14 @@
       "name": "a record always stands in",
       "model_case": "platforms/mutant_always_stand_in",
       "file": "platforms.js",
-      "find": "scenario.stand_in_allowed && providerClaims && claimVerified(recorded, scenario.keys)",
-      "replace": "providerClaims && claimVerified(recorded, scenario.keys)"
+      "find": "scenario.stand_in_allowed && providerClaims && claimVerified(recorded, key)",
+      "replace": "providerClaims && claimVerified(recorded, key)"
     },
     {
       "name": "a record stands in unverified",
       "model_case": "platforms/mutant_stand_in_unverified",
       "file": "platforms.js",
-      "find": "providerClaims && claimVerified(recorded, scenario.keys);",
+      "find": "providerClaims && claimVerified(recorded, key);",
       "replace": "providerClaims;"
     },
     {
@@ -304,21 +304,21 @@
     },
     {
       "name": "tree counts hard gates on the root only",
-      "model_case": "(round 2 kit)",
+      "model_case": "tree/mutant_floor_counts_root_only",
       "file": "tree.js",
       "find": "const hard = nodes.filter((node) => node.gate === 'hard');",
       "replace": "const hard = [root].filter((node) => node.gate === 'hard');"
     },
     {
       "name": "tree ignores the floor",
-      "model_case": "(round 2 kit)",
+      "model_case": "tree/mutant_ignores_floor",
       "file": "tree.js",
-      "find": "hard.length < policy.min_hard_gates",
+      "find": "hard.length < floor",
       "replace": "hard.length < 1"
     },
     {
       "name": "attempts close ignores the ticket and closes the latest open attempt",
-      "model_case": "(round 2 kit)",
+      "model_case": "attempts/mutant_close_latest_open",
       "file": "attempts.js",
       "find": "all.find((candidate) => candidate.ticket === step.close.ticket && candidate.state === 'open')",
       "replace": "all.findLast((candidate) => candidate.state === 'open')"
@@ -331,15 +331,22 @@
       "replace": "&& attempts.some((earlier) => earlier.state !== 'agreed'));"
     },
     {
-      "name": "a change of target hides earlier attempts from retried and attempts",
-      "model_case": "(round 2 kit)",
+      "name": "a change of target hides earlier attempts from the count",
+      "model_case": "attempts/mutant_change_hides_history",
       "file": "attempts.js",
-      "find": "attempts: all.length,\n    retried: isShopped(all),",
-      "replace": "attempts: onTarget.length,\n    retried: isShopped(onTarget),"
+      "find": "attempts: all.length,",
+      "replace": "attempts: onTarget.length,"
+    },
+    {
+      "name": "retried only among attempts on the same target",
+      "model_case": "attempts/mutant_retried_only_on_same_target",
+      "file": "attempts.js",
+      "find": "const retried = isShopped(all);",
+      "replace": "const retried = isShopped(onTarget);"
     },
     {
       "name": "the cap raises a level that claimed less",
-      "model_case": "(round 2 kit)",
+      "model_case": "attempts/mutant_cap_raises",
       "file": "attempts.js",
       "find": "if (capped && rank(claims) > rank('helper')) return 'helper';",
       "replace": "if (capped) return 'helper';"
@@ -348,7 +355,7 @@
       "name": "platforms verified drops the no-disagreement clause",
       "model_case": "(round 2 kit)",
       "file": "platforms.js",
-      "find": "return sameOnTwo && !keys.some((key) => keyDiffers(recorded, key));",
+      "find": "return sameOnTwo && !otherVerdict;",
       "replace": "return sameOnTwo;"
     },
     {
@@ -966,6 +973,83 @@
       "file": "plan.js",
       "find": "if (step.edit && isString(step.edit.definition) && isString(step.edit.to) && Object.hasOwn(state.content, step.edit.definition)) {",
       "replace": "if (step.edit && Object.hasOwn(state.content, step.edit.definition)) {"
+    },
+    {
+      "name": "the refusal limit ignored, two always",
+      "model_case": "(decision 0031 kit)",
+      "file": "attempts.js",
+      "find": "const limit = refusalLimit(scenario);",
+      "replace": "const limit = 2;"
+    },
+    {
+      "name": "the refusal limit off by one",
+      "model_case": "attempts/mutant_limit_off_by_one",
+      "file": "attempts.js",
+      "find": "notAgreed(all) >= limit",
+      "replace": "notAgreed(all) > limit"
+    },
+    {
+      "name": "every retry capped regardless of the limit",
+      "model_case": "attempts/mutant_cap_line_wide",
+      "file": "attempts.js",
+      "find": "const capped = shopped || (retried && notAgreed(all) >= limit);",
+      "replace": "const capped = shopped || retried;"
+    },
+    {
+      "name": "the cap on shopping only, the limit never reached",
+      "model_case": "attempts/mutant_cap_on_shopping_only",
+      "file": "attempts.js",
+      "find": "const capped = shopped || (retried && notAgreed(all) >= limit);",
+      "replace": "const capped = shopped;"
+    },
+    {
+      "name": "granted follows shopping, not the cap",
+      "model_case": "(decision 0031 kit)",
+      "file": "attempts.js",
+      "find": "answer.granted = grantedLevel(claims, capped);",
+      "replace": "answer.granted = grantedLevel(claims, shopped);"
+    },
+    {
+      "name": "retried never reported",
+      "model_case": "attempts/mutant_retried_hidden",
+      "file": "attempts.js",
+      "find": "    retried,\n  };",
+      "replace": "    retried: false,\n  };"
+    },
+    {
+      "name": "the default refusal limit is one",
+      "model_case": "(decision 0031 kit)",
+      "file": "attempts.js",
+      "find": "if (limit === undefined) return 2;",
+      "replace": "if (limit === undefined) return 1;"
+    },
+    {
+      "name": "verification decided across keys instead of per key",
+      "model_case": "platforms/mutant_verified_globally",
+      "file": "platforms.js",
+      "find": "providerClaims && claimVerified(recorded, key);",
+      "replace": "providerClaims && scenario.keys.some((other) => claimVerified(recorded, other));"
+    },
+    {
+      "name": "verification across keys, voided by a disagreement on any key",
+      "model_case": "platforms/mutant_verified_globally",
+      "file": "platforms.js",
+      "find": "providerClaims && claimVerified(recorded, key);",
+      "replace": "providerClaims && scenario.keys.some((other) => platformsWith(recorded, other, 'passed') >= 2 || platformsWith(recorded, other, 'failed') >= 2) && !scenario.keys.some((other) => keyDiffers(recorded, other));"
+    },
+    {
+      "name": "a platform's own conflicting records do not void the claim",
+      "model_case": "platforms/mutant_self_disagreement_ignored",
+      "file": "platforms.js",
+      "find": "const otherVerdict = keyDiffers(recorded, key);",
+      "replace": "const otherVerdict = [...platformMap(recorded, key).values()].every((verdicts) => verdicts.size === 1) && keyDiffers(recorded, key);"
+    },
+    {
+      "name": "the floor held against each child on its own",
+      "model_case": "tree/mutant_floor_applied_to_each_child",
+      "file": "tree.js",
+      "find": "  if (children.some((child) => child.gate !== 'hard')) return 'unguarded';\n",
+      "replace": "  if (children.some((child) => (child.gate === 'hard' ? 1 : 0) < floor)) return 'unguarded';\n"
     }
   ]
 }

@@ -24,23 +24,43 @@ function grantedLevel(claims, capped) {
   return claims;
 }
 
+// How many attempts along the line did not agree: refused, or still open.
+function notAgreed(attempts) {
+  return attempts.filter((attempt) => attempt.state !== 'agreed').length;
+}
+
+// The limit on refusals along the line before every retried agreement is capped
+// (decision 0031). A whole number of at least one, 2 when absent. The contract
+// says nothing of any other value; one below 1, or not a whole number, is taken
+// as 1, the strictest limit, so that a mistake in writing it can only cap more.
+function refusalLimit(scenario) {
+  const limit = scenario.refusals_before_cap;
+  if (limit === undefined) return 2;
+  if (!Number.isInteger(limit) || limit < 1) return 1;
+  return limit;
+}
+
 // `all` is every attempt ever taken; the current target's are those with `target` equal to `current`.
-function judge(all, current, claims) {
+// Every field is worked out from the attempts as they stand now.
+function judge(all, current, claims, limit = 2) {
   const onTarget = all.filter((attempt) => attempt.target === current);
   const shopped = isShopped(onTarget);
+  const retried = isShopped(all);
+  const capped = shopped || (retried && notAgreed(all) >= limit);
   const answer = {
     result: overallResult(onTarget),
     shopped,
-    cap: shopped ? 'helper' : null,
+    cap: capped ? 'helper' : null,
     attempts: all.length,
-    retried: isShopped(all),
+    retried,
   };
-  if (claims !== undefined) answer.granted = grantedLevel(claims, shopped);
+  if (claims !== undefined) answer.granted = grantedLevel(claims, capped);
   return answer;
 }
 
 function runScenario(scenario) {
   const all = [];
+  const limit = refusalLimit(scenario);
   let current = 0;
   const results = [];
   for (const { do: step } of scenario.steps) {
@@ -52,9 +72,9 @@ function runScenario(scenario) {
     } else if (step.change_target) {
       current += 1;
     }
-    results.push(judge(all, current, scenario.claims));
+    results.push(judge(all, current, scenario.claims, limit));
   }
   return results;
 }
 
-module.exports = { overallResult, isShopped, grantedLevel, judge, runScenario };
+module.exports = { overallResult, isShopped, notAgreed, refusalLimit, grantedLevel, judge, runScenario };
