@@ -3,7 +3,7 @@
   "name": "an_unreadable_gate_counts_as_hard",
   "claim": "C34",
   "covers": [],
-  "why": "A gate nobody can read counts as hard, so a mistake in writing one can only make delivery harder: a soft child edited to `Hard` must now pass, and a child added with gate `deferred` must pass too.",
+  "why": "Tree scenarios know only hard and soft gates. Any other text counts as hard, so a mistake in writing a gate can only make delivery harder: a soft child edited to `Hard` must now pass, and a child added with gate `deferred`, which trees do not model, must pass too.",
   "policy": {
     "min_hard_gates": 1
   },
