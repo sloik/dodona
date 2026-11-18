@@ -5,6 +5,8 @@ Exit status is 0 only if every check passed.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import hashlib
 import json
 import pathlib
@@ -209,6 +211,32 @@ def gap_an_unfinished_job_proves_nothing() -> None:
     for runs, unmeasured, mismatched, want in cases:
         if host.proves_nothing(runs, unmeasured, mismatched) != want:
             problems.append(f"tools/host.py: a job with {runs}, unmeasured {unmeasured}, mismatched {mismatched} must give {want}")
+    # The queue can mark a job failed after every file is written. Files alone must not be enough.
+    fake = ("import sys, json, pathlib\n"
+            "dest, code, marker = pathlib.Path(sys.argv[1]) / 'out', int(sys.argv[2]), sys.argv[3] == 'marker'\n"
+            "(dest / 'm').mkdir(parents=True)\n"
+            "(dest / 'm' / 'c.txt').write_text('x'); (dest / 'm' / 'c.exit').write_text('0')\n"
+            "(dest / 'measured.json').write_text(json.dumps({'/j': 'aa', '/t': 'bb'}))\n"
+            "if marker: (dest / 'complete.json').write_text(json.dumps({'cases': ['m/c']}))\n"
+            "sys.exit(code)\n")
+    for code, marker, want in ((0, "marker", True), (75, "marker", False), (0, "none", False)):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = pathlib.Path(tmp) / "fake_queue.py"
+            script.write_text(fake, encoding="utf-8")
+            bundle = pathlib.Path(tmp) / "bundle"
+            bundle.mkdir()
+            site = {"tool_files": {"java/bin/java": "/j", "tla2tools/tla2tools.jar": "/t"},
+                    "batch_command": [sys.executable, str(script), "{dest}", str(code), marker]}
+            with contextlib.redirect_stdout(io.StringIO()):
+                job = host.send_job(site, bundle, [{"name": "m/c", "cwd": ".", "argv": ["x"]}])
+            if job["complete"] is not want:
+                problems.append(f"tools/host.py: a job whose queue client exits {code} with end marker {marker} must count as complete={want}")
+    models = (ROOT / "tools" / "check_models.py").read_text(encoding="utf-8")
+    if "host.send_job" not in models or "subprocess.run" in models:
+        problems.append("tools/check_models.py must send jobs only through tools/host.py and start nothing itself")
+    workflow = (ROOT / ".github" / "workflows" / "models.yml").read_text(encoding="utf-8")
+    if "check_models.py --replay" in workflow or "check_models.py --runs" not in workflow:
+        problems.append(".github/workflows/models.yml must judge with --runs, which refuses an unfinished job; --replay is for looking only")
     driver = (ROOT / ".github" / "site" / "batch_driver.py").read_text(encoding="utf-8")
     if not (driver.find("measured.json") < driver.find("subprocess.run(case") < driver.find("complete.json")):
         problems.append(".github/site/batch_driver.py must measure its tools before the first case and write its marker after the last")

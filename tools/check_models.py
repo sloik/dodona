@@ -39,29 +39,17 @@ def state_counts(output: str) -> str:
     return lines[-1].strip() if lines else ""
 
 
-def command_for(site: dict, model_dir: pathlib.Path, spec: dict, case: dict) -> list[str]:
-    """Build the executor's argument list for one case. No shell is involved."""
-    root_module = case.get("model", spec["model"])
-    includes = sorted(p.name for p in model_dir.glob("*.tla")) + [case["config"]]
-    tool_args = [a.replace("<config>", case["config"]) for a in spec["arguments"]]
-    tool_args = [root_module if a == spec["model"] else a for a in tool_args]
-    values = {"source": str(model_dir), "timeout": str(site.get("timeout_seconds", 900))}
-    argv: list[str] = []
-    for part in site["command"]:
-        if part == "{includes}":
-            for name in includes:
-                argv += [site["include_flag"], name]
-        elif part == "{tool}":
-            argv += site["tool"] + tool_args
-        else:
-            argv.append(part.format(**values))
-    return argv
-
-
 def run_batch(site: dict, only: list[str], dumps: bool) -> pathlib.Path | None:
-    """Send every selected case to the executor as one job; return where the outputs came back."""
-    work = pathlib.Path(tempfile.mkdtemp(prefix="dodona-batch-"))
-    bundle, dest = work / "bundle", work / "fetched"
+    """Send every selected case to the executor as one job; return where the outputs came back.
+
+    The job goes through tools/host.py, the one place jobs are sent from, and
+    nothing is returned unless it ended well, its tools were measured and they
+    are the pinned ones.
+    """
+    import host
+    where = site["tool_files"]
+    tool = [where["java/bin/java"], "-cp", where["tla2tools/tla2tools.jar"], "tlc2.TLC"]
+    bundle = pathlib.Path(tempfile.mkdtemp(prefix="dodona-batch-")) / "bundle"
     cases = []
     for expected in sorted(ROOT.glob("spec/*/expected.json")):
         model_dir = expected.parent
@@ -74,33 +62,28 @@ def run_batch(site: dict, only: list[str], dumps: bool) -> pathlib.Path | None:
             args = [a.replace("<config>", case["config"]) for a in spec["arguments"]]
             args = [root_module if a == spec["model"] else a for a in args]
             cases.append({"name": f"{model_dir.name}/{case['config'].removesuffix('.cfg')}",
-                          "cwd": model_dir.name, "argv": site["tool"] + args})
+                          "cwd": model_dir.name, "argv": tool + args})
         if dumps and (model_dir / "dump.cfg").exists():
             cases.append({"name": f"{model_dir.name}/dump", "cwd": model_dir.name, "keep": ["states.dump"],
-                          "argv": site["tool"] + ["-workers", "1", "-config", "dump.cfg", "-dump", "states", "MCDump.tla"]})
+                          "argv": tool + ["-workers", "1", "-config", "dump.cfg", "-dump", "states", "MCDump.tla"]})
     if not cases:
         return None
-    shutil.copy(ROOT / ".github" / "site" / "batch_driver.py", bundle / "batch_driver.py")
-    (bundle / "manifest.json").write_text(json.dumps({"out": "out", "cases": cases}, indent=1), encoding="utf-8")
-    values = {"source": str(bundle), "dest": str(dest), "timeout": str(site.get("batch_timeout_seconds", 3600))}
-    argv = [part.format(**values) for part in site["batch_command"]]
-    print(f"sending {len(cases)} cases to the executor as one job", flush=True)
-    done = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if not dest.exists():
-        print("the executor returned nothing:", (done.stderr or done.stdout)[-400:])
+    job = host.send_job(site, bundle, cases)
+    fault = host.job_fault(job)
+    if fault:
+        print(f"nothing is judged: {fault}")
         return None
-    fetched = dest / "out" if (dest / "out").exists() else dest
-    for path in fetched.glob("*/*.exit"):
-        if path.read_text().strip() == "did-not-start":
-            path.unlink()
-    return fetched
+    return job["fetched"]
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--site", type=pathlib.Path, help="JSON file describing the site's executor")
-    mode.add_argument("--replay", type=pathlib.Path, help="judge recorded outputs instead of running")
+    mode.add_argument("--replay", type=pathlib.Path,
+                      help="read saved outputs again. For looking, not for proof: it cannot know whether the job that left them completed")
+    mode.add_argument("--runs", type=pathlib.Path,
+                      help="judge what tools/host.py collected, and only if that job ended well with the pinned tools")
     ap.add_argument("--report", type=pathlib.Path, help="write the JSON report here")
     ap.add_argument("--only", action="append", default=[], metavar="MODEL",
                     help="run only this model directory under spec/ (may be repeated)")
@@ -111,6 +94,16 @@ def main() -> int:
     args = ap.parse_args()
 
     site = json.loads(args.site.read_text(encoding="utf-8")) if args.site else None
+    if args.site and not args.batch:
+        ap.error("--site needs --batch: cases are sent to the executor as one job, never one at a time")
+    if args.runs:
+        import host
+        fault = host.job_fault(json.loads((args.runs / "runs.json").read_text(encoding="utf-8")))
+        if fault:
+            print(f"nothing is judged: {fault}")
+            print(json.dumps({"cases": 0, "matched": 0, "all_matched": False}))
+            return 1
+        args.replay = args.runs / "outputs"
     if args.batch:
         fetched = run_batch(site, args.only, args.dumps)
         if fetched is None:
@@ -135,13 +128,10 @@ def main() -> int:
                 exit_file = args.replay / model_dir.name / f"{name}.exit"
                 if out_file.exists() and exit_file.exists():
                     output = out_file.read_text(encoding="utf-8", errors="replace")
-                    exit_code = int(exit_file.read_text().strip())
+                    text = exit_file.read_text().strip()
+                    exit_code = int(text) if text.lstrip("-").isdigit() else None  # "did-not-start" is not a run
                 else:
                     output, exit_code = "", None
-            else:
-                argv = command_for(site, model_dir, spec, case)
-                done = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace")
-                output, exit_code = done.stdout, done.returncode
             if args.save and exit_code is not None:
                 (args.save / model_dir.name).mkdir(parents=True, exist_ok=True)
                 (args.save / model_dir.name / f"{name}.txt").write_text(output, encoding="utf-8")
@@ -156,6 +146,9 @@ def main() -> int:
     summary = {"cases": len(report), "matched": matched, "all_matched": matched == len(report) and bool(report)}
     if args.report:
         args.report.write_text(json.dumps({"summary": summary, "cases": report}, indent=2) + "\n", encoding="utf-8")
+    if args.replay and not (args.runs or args.batch):
+        summary["proof"] = False
+        print("read from saved outputs: this says what the files show, not that a job completed")
     print(json.dumps(summary))
     return 0 if summary["all_matched"] else 1
 

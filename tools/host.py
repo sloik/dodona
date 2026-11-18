@@ -263,8 +263,7 @@ def collect(args) -> int:
             pending.append({"obligation": obligation, "run": got["pending"]})
     finally:
         session.close()
-    work = pathlib.Path(tempfile.mkdtemp(prefix="dodona-collect-"))
-    bundle, dest = work / "bundle", work / "fetched"
+    bundle = pathlib.Path(tempfile.mkdtemp(prefix="dodona-collect-")) / "bundle"
     shutil.copytree(ROOT / "spec", bundle / "spec", ignore=shutil.ignore_patterns("runs", "*.md", "expected.json"))
     shutil.copy(ROOT / ".github" / "site" / "batch_driver.py", bundle / "batch_driver.py")
     cases = []
@@ -283,28 +282,58 @@ def collect(args) -> int:
             cases.append({"name": f"{config.parent.name}/dump", "cwd": folder, "keep": ["states.dump"],
                           "argv": [where["java/bin/java"], "-cp", where["tla2tools/tla2tools.jar"], "tlc2.TLC",
                                    "-workers", "1", "-config", "dump.cfg", "-dump", "states", "MCDump.tla"]})
-    measure = sorted(set(where.values()))
-    (bundle / "manifest.json").write_text(json.dumps({"out": "out", "cases": cases, "measure": measure}, indent=1), encoding="utf-8")
-    values = {"source": str(bundle), "dest": str(dest), "timeout": str(site.get("batch_timeout_seconds", 3600))}
-    print(f"sending {len(cases)} runs to the executor as one job", flush=True)
-    done = subprocess.run([part.format(**values) for part in site["batch_command"]], capture_output=True, text=True, encoding="utf-8", errors="replace")
-    fetched = dest / "out" if (dest / "out").exists() else dest
-    reachable = fetched.exists() and any(fetched.glob("*/*.exit"))
+    job = send_job(site, bundle, cases)
+    reachable, complete, measured = job["reachable"], job["complete"], job["measured"]
     if reachable:
-        shutil.copytree(fetched, out / "outputs", dirs_exist_ok=True)
-    else:
-        print("the executor returned nothing; every run is recorded as unavailable:", (done.stderr or done.stdout)[-300:].strip())
-    seen = json.loads((fetched / "measured.json").read_text(encoding="utf-8")) if (fetched / "measured.json").exists() else {}
-    measured = {name: seen.get(path) for name, path in where.items()}
-    marker = fetched / "complete.json"
-    complete = reachable and marker.exists() and json.loads(marker.read_text(encoding="utf-8")).get("cases") == [c["name"] for c in cases]
-    if reachable and not complete:
-        print("the job did not run to its end; nothing from it will be recorded as a result")
-    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "complete": complete, "pending": pending, "measured": measured,
+        shutil.copytree(job["fetched"], out / "outputs", dirs_exist_ok=True)
+    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "complete": complete, "queue_exit": job["exit"], "pending": pending, "measured": measured,
                                                "executor": site.get("executor_name", "site")}, indent=1) + "\n", encoding="utf-8")
     (out / "transcript-collect.json").write_text(json.dumps(transcript, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({"obligations": len(pending), "reachable": reachable, "complete": complete}))
     return 0
+
+
+def send_job(site: dict, bundle: pathlib.Path, cases: list[dict]) -> dict:
+    """Send cases to the site's executor as one job. The only place a job is sent from.
+
+    A job counts as complete only if the executor's own client says it ended
+    well AND the driver's end marker lists exactly the cases that were sent.
+    Either alone is not enough: a queue can stop a job after its files are
+    written, and files can be left by a job that was stopped.
+    """
+    where = site["tool_files"]
+    dest = bundle.parent / "fetched"
+    shutil.copy(ROOT / ".github" / "site" / "batch_driver.py", bundle / "batch_driver.py")
+    (bundle / "manifest.json").write_text(json.dumps({"out": "out", "cases": cases, "measure": sorted(set(where.values()))}, indent=1), encoding="utf-8")
+    values = {"source": str(bundle), "dest": str(dest), "timeout": str(site.get("batch_timeout_seconds", 3600))}
+    print(f"sending {len(cases)} runs to the executor as one job", flush=True)
+    try:
+        done = subprocess.run([part.format(**values) for part in site["batch_command"]], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        code, said = done.returncode, (done.stderr or done.stdout)[-300:].strip()
+    except OSError as err:
+        code, said = None, str(err)
+    fetched = dest / "out" if (dest / "out").exists() else dest
+    reachable = fetched.exists() and any(fetched.glob("*/*.exit"))
+    if not reachable:
+        print("the executor returned nothing:", said)
+    seen = json.loads((fetched / "measured.json").read_text(encoding="utf-8")) if (fetched / "measured.json").exists() else {}
+    marker = fetched / "complete.json"
+    marked = marker.exists() and json.loads(marker.read_text(encoding="utf-8")).get("cases") == [c["name"] for c in cases]
+    complete = bool(reachable and code == 0 and marked)
+    if reachable and not complete:
+        print(f"the job did not end well (the executor's client exited with {code}; end marker {'present' if marked else 'missing'}); "
+              "nothing from it will be taken as a result")
+    return {"reachable": bool(reachable), "complete": complete, "exit": code, "fetched": fetched,
+            "measured": {name: seen.get(path) for name, path in where.items()}}
+
+
+def job_fault(runs: dict) -> str | None:
+    """Why nothing from this job may be judged, measured against this site's pins; None if it may."""
+    _, pinned = lock_tools()
+    measured = runs.get("measured", {})
+    unmeasured = [n for n in sorted(pinned) if not measured.get(pinned[n]["file"])]
+    mismatched = [n for n in sorted(pinned) if pinned[n]["sha256"] is not None and measured.get(pinned[n]["file"]) != pinned[n]["sha256"]]
+    return proves_nothing(runs, unmeasured, mismatched)
 
 
 def proves_nothing(runs: dict, unmeasured: list, mismatched: list) -> str | None:
