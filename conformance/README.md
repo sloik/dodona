@@ -123,7 +123,7 @@ The result has `"status"`, the first of these that applies: `draft` if the owner
 | `{"close": {"ticket": T, "result": "agreed" or "refused"}}` | The attempt is closed with that result |
 | `{"change_target": {}}` | The thing being judged changes |
 
-A scenario may give `claims`, the separation level the act claims, and `refusals_before_cap`, a whole number of at least one, 2 when absent. Closing a ticket that was never taken, or is already closed, changes nothing. A ticket taken before a change of target can still be closed.
+A scenario may give `claims`, the separation level the act claims, and `refusals_before_cap`, a whole number of at least one, 2 when absent. Any other value of `refusals_before_cap` (zero, a negative number, a fraction, a string) makes the scenario invalid, and the kernel refuses it as it refuses any invalid input: a non-zero exit and no result. Closing a ticket that was never taken, or is already closed, changes nothing. A ticket taken before a change of target can still be closed.
 
 The result has these fields. Every field is worked out from the attempts as they stand now, in the order they were taken; the first two from those on the current target only. So closing an earlier open attempt as agreed can clear `retried`.
 

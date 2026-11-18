@@ -19,12 +19,12 @@ What a `checked` status means here, and no more:
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C1 | Given a provider that is correct and declares all its inputs: a reported pass means the obligation holds for the current inputs, and a reported failure means it does not, under any interleaving of edits, tool changes, lost runs and completions | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` | Key leaves out the tool digest; result filed under the key at completion | **checked**, run 6 |
-| C2 | Every reusable record was produced by a run that completed; an unreachable backend never produces one | [0005](../decisions/0005-closed-verdict-set.md) | `Provenance` | Unavailable recorded as passed | **checked**, run 6 |
-| C3 | With a correct provider, no evidence key ever holds both a pass and a failure | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Consistent` | Result filed under the key at completion | **checked**, run 6 |
-| C4 | Even with a provider that can be wrong, a pass is never reported while a failure is recorded for the same key | [0005](../decisions/0005-closed-verdict-set.md) | `NoPassOverFail`, small instance | With conflicting records, the pass wins | **checked**, run 6 |
-| C5 | The design does reuse records after a change that does not affect them, so C1 is not satisfied by rerunning everything | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | Reachability: `NeverReusedAfterChange` must be violated | (reachability) | **checked**, run 6 |
-| C6 | C1 depends on two trusted-base assumptions: complete declared inputs, and a correct provider. Removing either breaks it | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` must be violated in both cases | (the broken assumption is the check) | **checked**, run 6 |
+| C1 | Given a provider that is correct and declares all its inputs: a reported pass means the obligation holds for the current inputs, and a reported failure means it does not, under any interleaving of edits, tool changes, lost runs and completions | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` | Key leaves out the tool digest; result filed under the key at completion | **checked**, run 9 |
+| C2 | Every reusable record was produced by a run that completed; an unreachable backend never produces one | [0005](../decisions/0005-closed-verdict-set.md) | `Provenance` | Unavailable recorded as passed | **checked**, run 9 |
+| C3 | With a correct provider, no evidence key ever holds both a pass and a failure | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Consistent` | Result filed under the key at completion | **checked**, run 9 |
+| C4 | Even with a provider that can be wrong, a pass is never reported while a failure is recorded for the same key | [0005](../decisions/0005-closed-verdict-set.md) | `NoPassOverFail`, small instance | With conflicting records, the pass wins | **checked**, run 9 |
+| C5 | The design does reuse records after a change that does not affect them, so C1 is not satisfied by rerunning everything | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | Reachability: `NeverReusedAfterChange` must be violated | (reachability) | **checked**, run 9 |
+| C6 | C1 depends on two trusted-base assumptions: complete declared inputs, and a correct provider. Removing either breaks it | [0006](../decisions/0006-evidence-key-and-trusted-base.md) | `Sound` must be violated in both cases | (the broken assumption is the check) | **checked**, run 9 |
 
 C6 does not show the assumptions hold. It shows they are load-bearing, which is why they are in the [trusted base](../MODEL.md#6-trusted-base).
 
@@ -38,12 +38,12 @@ The model was rewritten on 2026-11-17 to add the baseline, the unguarded rule an
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | **checked**, run 6 |
-| C25 | While an intent is confirmed, a gate differs from the baseline only through an amendment on record that took effect, and only the owner's amendments take effect | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends` | A gate is edited and the intent stays confirmed; the worker's amendment takes effect | **checked**, run 6 |
-| C28 | Amendments are live rules: a sufficiently separate owner's amendment can open the way to delivery, and one below the floor cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence when the grantor cannot reach the floor | (reachability) | **checked**, run 6 |
-| C29 | An intent the owner has not confirmed, or that was edited since, is never reported delivered | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `DeliveredConfirmed` | An unconfirmed intent is reported delivered | **checked**, run 6 |
-| C30 | An intent with fewer hard gates than policy demands is never reported delivered. Children are not modelled | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredGuarded` | An intent with no hard gate is reported delivered | **checked**, run 6 |
-| C33 | An act with no separation recorded is graded `self`, as is the worker granting to itself; an amendment below policy's floor does not take effect; the level reported is the level used | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `DefaultIsLowest`, `WorkerIsSelf`, `FloorHolds`, `LevelShown` | Nothing recorded treated as a high level; the worker keeps the level it wrote down; an amendment below the floor takes effect; a higher level shown than recorded | **checked**, run 6 |
+| C23 | An intent is never reported delivered with a hard gate not passed, nor fulfilled with a deferred gate open | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredSound`, `FulfilledSound` | A hard gate whose check has not run is treated as passed; an open deferred gate does not block fulfilment | **checked**, run 9 |
+| C25 | While an intent is confirmed, a gate differs from the baseline only through an amendment on record that took effect, and only the owner's amendments take effect | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | `GateProvenance`, `OnlyOwnerAmends` | A gate is edited and the intent stays confirmed; the worker's amendment takes effect | **checked**, run 9 |
+| C28 | Amendments are live rules: a sufficiently separate owner's amendment can open the way to delivery, and one below the floor cannot | [0020](../decisions/0020-exceptions-are-granted-by-the-intent-owner-and-recorded.md) | Reachability of delivery by amendment, and its absence when the grantor cannot reach the floor | (reachability) | **checked**, run 9 |
+| C29 | An intent the owner has not confirmed, or that was edited since, is never reported delivered | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `DeliveredConfirmed` | An unconfirmed intent is reported delivered | **checked**, run 9 |
+| C30 | An intent with fewer hard gates than policy demands is never reported delivered. Children are not modelled | [0018](../decisions/0018-hard-soft-and-deferred-gates.md) | `DeliveredGuarded` | An intent with no hard gate is reported delivered | **checked**, run 9 |
+| C33 | An act with no separation recorded is graded `self`, as is the worker granting to itself; an amendment below policy's floor does not take effect; the level reported is the level used | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `DefaultIsLowest`, `WorkerIsSelf`, `FloorHolds`, `LevelShown` | Nothing recorded treated as a high level; the worker keeps the level it wrote down; an amendment below the floor takes effect; a higher level shown than recorded | **checked**, run 9 |
 
 ## Modelled in `planner/Planner.tla`
 
@@ -55,9 +55,9 @@ Bounds: five definitions, two of them in one file; the depends-on relation one o
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C9 | Nothing stale is reused, including what is stale through a dependency of a dependency of a dependency; with per-definition identity nothing current is rerun; and everything without a result resting on the current inputs is planned. A test is run only on the artifact built from the current inputs | [0002](../decisions/0002-small-kernel-everything-else-is-a-provider.md) | `NoWrongReuse`, `NoNeedlessRerun`, `PlanComplete` | The key follows one level of dependencies only, none, or too few passes for the chain; the test runs on whatever was built last; the planner reruns everything; the planner plans nothing | modelled, unchecked |
-| C8 | File-level fallback identity never causes a wrong reuse and plans everything that needs it. It does cause extra reruns, and that is shown too | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md) | `NoWrongReuse` and `PlanComplete` with file identity; `NoNeedlessRerun` must be violated there | The fallback misses a dependency of a dependency | modelled, unchecked |
-| C10 | Changing a build tool makes what it built stale, and makes checks of what it built stale | [data model](../MODEL.md#3-obligations) | `NoWrongReuse` | A build's key leaves out the compiler; a test's key leaves out the build that produced what it tests | modelled, unchecked |
+| C9 | Nothing stale is reused, including what is stale through a dependency of a dependency of a dependency; with per-definition identity nothing current is rerun; and everything without a result resting on the current inputs is planned. A test is run only on the artifact built from the current inputs | [0002](../decisions/0002-small-kernel-everything-else-is-a-provider.md) | `NoWrongReuse`, `NoNeedlessRerun`, `PlanComplete` | The key follows one level of dependencies only, none, or too few passes for the chain; the test runs on whatever was built last; the planner reruns everything; the planner plans nothing | **checked**, run 9 |
+| C8 | File-level fallback identity never causes a wrong reuse and plans everything that needs it. It does cause extra reruns, and that is shown too | [0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md) | `NoWrongReuse` and `PlanComplete` with file identity; `NoNeedlessRerun` must be violated there | The fallback misses a dependency of a dependency | **checked**, run 9 |
+| C10 | Changing a build tool makes what it built stale, and makes checks of what it built stale | [data model](../MODEL.md#3-obligations) | `NoWrongReuse` | A build's key leaves out the compiler; a test's key leaves out the build that produced what it tests | **checked**, run 9 |
 
 ## Modelled in `assurance/Assurance.tla`
 
@@ -69,9 +69,9 @@ Every combination of three links, each with one of six levels or unreported, and
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C24 | The shown level of a criterion is the weakest of its evidence links | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink` | The links are averaged; the level is always the lowest; the middle link is skipped; the kernel's scale puts observed above sampled | modelled, unchecked |
-| C31 | A link with nothing reported counts as none and never raises the level | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink` | A link nobody reported is left out | modelled, unchecked |
-| C19 | A check is reported as shown able to fail exactly when it has planted defects and every one was caught; with none planted it says so, and with one missed it says that | [data model](../MODEL.md#3-obligations) | `NonVacuitySound` | A planted defect that never ran counts as caught; a check with none planted is reported as shown; a check whose planted defect was missed is reported as having none | modelled, unchecked |
+| C24 | The shown level of a criterion is the weakest of its evidence links | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink` | The links are averaged; the level is always the lowest; the middle link is skipped; the kernel's scale puts observed above sampled | **checked**, run 9 |
+| C31 | A link with nothing reported counts as none and never raises the level | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink` | A link nobody reported is left out | **checked**, run 9 |
+| C19 | A check is reported as shown able to fail exactly when it has planted defects and every one was caught; with none planted it says so, and with one missed it says that | [data model](../MODEL.md#3-obligations) | `NonVacuitySound` | A planted defect that never ran counts as caught; a check with none planted is reported as shown; a check whose planted defect was missed is reported as having none | **checked**, run 9 |
 
 ## Modelled in `tree/IntentTree.tla`
 
@@ -85,7 +85,7 @@ Bounds: a root and one child, two criteria each, hard or soft; floors of one and
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C34 | A tree is delivered exactly when it is confirmed since its last change of shape, the whole tree counts at least the hard gates policy demands, every intent in it has a hard gate, and every hard gate passes. Adding or removing a child, or changing a gate, needs confirming again | [0030](../decisions/0030-the-hard-gate-floor-is-counted-over-the-tree.md) | `ConfirmationMatches`, `DeliveryMatches` | A child is removed or added, or a gate edited, and the confirmation stays; an unconfirmed tree is delivered; the root is delivered whatever its child is; a child with no hard gate counts as delivered; the floor is ignored, applied to each child, or counted without the child; the running count keeps a removed child or misses a child's edit | modelled, unchecked |
+| C34 | A tree is delivered exactly when it is confirmed since its last change of shape, the whole tree counts at least the hard gates policy demands, every intent in it has a hard gate, and every hard gate passes. Adding or removing a child, or changing a gate, needs confirming again | [0030](../decisions/0030-the-hard-gate-floor-is-counted-over-the-tree.md) | `ConfirmationMatches`, `DeliveryMatches` | A child is removed or added, or a gate edited, and the confirmation stays; an unconfirmed tree is delivered; the root is delivered whatever its child is; a child with no hard gate counts as delivered; the floor is ignored, applied to each child, or counted without the child; the running count keeps a removed child or misses a child's edit | **checked**, run 9 |
 
 ## Modelled in `attempts/Attempts.tla`
 
@@ -99,7 +99,7 @@ Bounds: at most three attempts and two changes of target; the history of events 
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C35 | On the current target the worst result counts and an attempt left open is a failure. Along the whole line, whatever happened to the target, every attempt is counted, and an agreement after any earlier attempt that did not agree, as the attempts stand now, is reported as retried. It is graded helper at most when shopped on the same target, or when the line has reached the policy's limit of attempts that did not agree; never above what it claimed | [0031](../decisions/0031-an-agreement-after-a-real-change-keeps-its-grade-up-to-a-limit.md) | `WorstCounts`, `RetryIsCapped`, `HistoryIsKept` | Only the latest attempt counts; an open attempt is ignored; the wrong ticket is closed; an attempt is filed under the target at closing; retrying is not reported, or only on the same target; shopping is not flagged; the cap is ignored, applied to every retry, applied without the limit, or one refusal late; the cap raises a level; a change of target forgets attempts | modelled, unchecked |
+| C35 | On the current target the worst result counts and an attempt left open is a failure. Along the whole line, whatever happened to the target, every attempt is counted, and an agreement after any earlier attempt that did not agree, as the attempts stand now, is reported as retried. It is graded helper at most when shopped on the same target, or when the line has reached the policy's limit of attempts that did not agree; never above what it claimed | [0031](../decisions/0031-an-agreement-after-a-real-change-keeps-its-grade-up-to-a-limit.md) | `WorstCounts`, `RetryIsCapped`, `HistoryIsKept` | Only the latest attempt counts; an open attempt is ignored; the wrong ticket is closed; an attempt is filed under the target at closing; retrying is not reported, or only on the same target; shopping is not flagged; the cap is ignored, applied to every retry, applied without the limit, or one refusal late; the cap raises a level; a change of target forgets attempts | **checked**, run 9 |
 
 ## Modelled in `platforms/Platforms.tla`
 
@@ -113,7 +113,7 @@ Bounds: two sets of inputs and three platforms; each platform may record each ve
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C15 | A platform's own records decide its status, and both verdicts are a conflict. A status with no record of its own exists only when policy allows stand-ins, the provider claims platform independence and that key has one verdict on at least two platforms; it is then that verdict, reported as a stand-in. Reproducibility differs on any disagreement, a platform's with itself included, agrees with at least two agreeing platforms, and is otherwise unknown | [0008](../decisions/0008-reproducibility-levels.md) | `StatusMatches`, `StandInIsReported`, `ReproMatches` | A record always stands in; stands in unverified, unclaimed, or verified by another key; a stand-in is always passed; another platform's record overrides a platform's own; a platform with both verdicts is passed; only the latest verdict is filed; a stand-in is not reported; one platform alone reproduces; a disagreement is ignored | modelled, unchecked |
+| C15 | A platform's own records decide its status, and both verdicts are a conflict. A status with no record of its own exists only when policy allows stand-ins, the provider claims platform independence and that key has one verdict on at least two platforms; it is then that verdict, reported as a stand-in. Reproducibility differs on any disagreement, a platform's with itself included, agrees with at least two agreeing platforms, and is otherwise unknown | [0008](../decisions/0008-reproducibility-levels.md) | `StatusMatches`, `StandInIsReported`, `ReproMatches` | A record always stands in; stands in unverified, unclaimed, or verified by another key; a stand-in is always passed; another platform's record overrides a platform's own; a platform with both verdicts is passed; only the latest verdict is filed; a stand-in is not reported; one platform alone reproduces; a disagreement is ignored | **checked**, run 9 |
 
 ## Modelled in `decisions/Decisions.tla`
 
@@ -125,7 +125,7 @@ The model keeps what the decision was last reviewed against apart from what the 
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C16 | A decision is flagged exactly when some name it governs no longer has the content the decision was last reviewed against, including when the name is gone, and whether or not the old content exists elsewhere | [0001](../decisions/0001-decisions-are-nodes.md) | `FlagIsExact` | The kernel tracks contents without names; a name that disappears is not flagged; the stored content is refreshed on every edit; only the first governed name is watched; a name it does not govern flags it; the flag stays after the content is changed back | modelled, unchecked |
+| C16 | A decision is flagged exactly when some name it governs no longer has the content the decision was last reviewed against, including when the name is gone, and whether or not the old content exists elsewhere | [0001](../decisions/0001-decisions-are-nodes.md) | `FlagIsExact` | The kernel tracks contents without names; a name that disappears is not flagged; the stored content is refreshed on every edit; only the first governed name is watched; a name it does not govern flags it; the flag stays after the content is changed back | **checked**, run 9 |
 
 ## Modelled in `liveness/Liveness.tla`
 
@@ -137,7 +137,7 @@ Bounds: one obligation; at most two edits, two outages and two runs that end wit
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C22 | Under those assumptions, the one obligation in the model eventually has a verdict or the stated reason that it cannot be checked, and that then stays | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again | **checked**, run 8 |
+| C22 | Under those assumptions, the one obligation in the model eventually has a verdict or the stated reason that it cannot be checked, and that then stays | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again | **checked**, run 9 |
 
 ## Checked against the seed kernel
 
@@ -517,6 +517,174 @@ Two earlier attempts at this run stopped partway, at a limit on the space a job 
 | `mutant_no_resubmit_after_loss` | temporal-violation | temporal violation | 564 / 260 |
 | `mutant_no_resubmit_after_error` | temporal-violation | temporal violation | 576 / 260 |
 | `mutant_resubmits_unsupported` | temporal-violation | temporal violation | 651 / 260 |
+
+### Run 9: every model, after the repairs of issue 27
+
+2026-11-18. Job `e679b77f658b468f8f87a0e424144f5a` on the shared Oracle queue, sent from commit `6ec2b62` on branch `model-repairs` by `tools/check_models.py --batch --dumps` through the stage-0 host: every case of the nine models and the two state lists, 121 runs in one job, which completed and listed every case sent. 119 cases, every one matched. The executor measured the checker it ran: tla2tools.jar sha256 `936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88`, the upstream release 1.7.4. Every output and exit code is kept and hashed in [runs/index.json](runs/index.json), and the repository checks judge them again. Run from a development machine, not CI; CI repeats every case on each change to main. Outputs: [runs/run-9/](runs/run-9/).
+
+**`kernel`** (14 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 27,385,032 / 3,575,936 |
+| `design_three_hashes` | no-violation | no-violation | 1,660,815 / 202,428 |
+| `design_flaky` | no-violation | no-violation | 315,212 / 38,704 |
+| `reach_pass` | violation | violation of NeverPassed | 68 / 37 |
+| `reach_fail` | violation | violation of NeverFailed | 88 / 47 |
+| `reach_reuse` | violation | violation of NeverReusedAfterChange | 249 / 130 |
+| `reach_conflict` | violation | violation of NeverConflict | 274 / 134 |
+| `mutant_key_omits_tool` | violation | violation of Sound | 230 / 120 |
+| `mutant_complete_with_current_key` | violation | violation of Sound | 223 / 117 |
+| `mutant_complete_with_current_key_consistent` | violation | violation of Consistent | 2,904 / 1,190 |
+| `mutant_unavailable_is_pass` | violation | violation of Provenance | 61 / 33 |
+| `mutant_pass_outranks_fail` | violation | violation of NoPassOverFail | 274 / 134 |
+| `assumption_undeclared_dep` | violation | violation of Sound | 266 / 140 |
+| `assumption_flaky_provider` | violation | violation of Sound | 33 / 16 |
+
+**`intent`** (18 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design_three_criteria` | no-violation | no-violation | 48,990,988 / 2,964,114 |
+| `design_two_criteria` | no-violation | no-violation | 59,977,018 / 3,803,598 |
+| `design_low_floor` | no-violation | no-violation | 76,469,914 / 4,032,666 |
+| `floor_blocks_weak_grantor` | no-violation | no-violation | 34,565,536 / 2,224,908 |
+| `reach_delivered` | violation | violation of NeverDelivered | 285 / 185 |
+| `reach_fulfilled` | violation | violation of NeverFulfilled | 12,729 / 2,167 |
+| `reach_delivered_by_amendment` | violation | violation of NeverDeliveredByAmendment | 393 / 265 |
+| `mutant_worker_can_amend` | violation | violation of OnlyOwnerAmends | 59 / 39 |
+| `mutant_worker_keeps_level` | violation | violation of WorkerIsSelf | 59 / 39 |
+| `mutant_below_floor_counts` | violation | violation of FloorHolds | 55 / 35 |
+| `mutant_missing_is_apart` | violation | violation of DefaultIsLowest | 79 / 59 |
+| `mutant_hide_level` | violation | violation of LevelShown | 55 / 35 |
+| `mutant_edit_keeps_confirmation` | violation | violation of GateProvenance | 51 / 35 |
+| `mutant_draft_delivers` | violation | violation of DeliveredConfirmed | 2 / 2 |
+| `mutant_unguarded_delivers` | violation | violation of DeliveredGuarded | 88 / 68 |
+| `mutant_delivered_ignores_unknown` | violation | violation of DeliveredSound | 6 / 6 |
+| `mutant_deferred_as_passed` | violation | violation of FulfilledSound | 15 / 13 |
+| `mutant_declared_counts_in_full` | violation | violation of DeclaredIsCapped | 55 / 35 |
+
+**`assurance`** (11 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 24,696 / 12,348 |
+| `reach_proven` | violation | violation of NeverProven |  |
+| `reach_shown` | violation | violation of NeverShown |  |
+| `mutant_average` | violation | violation of WeakestLink |  |
+| `mutant_ignore_unreported` | violation | violation of WeakestLink |  |
+| `mutant_unknown_defect_counts` | violation | violation of NonVacuitySound |  |
+| `mutant_empty_is_shown` | violation | violation of NonVacuitySound |  |
+| `mutant_always_nothing` | violation | violation of WeakestLink |  |
+| `mutant_fold_skips_middle` | violation | violation of WeakestLink |  |
+| `mutant_observed_above_sampled` | violation | violation of WeakestLink |  |
+| `mutant_failed_reported_none_planted` | violation | violation of NonVacuitySound |  |
+
+**`attempts`** (19 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 6,648 / 6,648 |
+| `design_claims_self` | no-violation | no-violation | 6,648 / 6,648 |
+| `reach_agreed` | violation | violation of NeverAgreed | 5 / 5 |
+| `reach_shopped` | violation | violation of NeverShopped | 12 / 12 |
+| `reach_retried_across_change` | violation | violation of NeverRetriedAcrossChange | 72 / 72 |
+| `reach_capped_by_limit` | violation | violation of NeverCappedByLimit | 108 / 108 |
+| `mutant_latest_only` | violation | violation of WorstCounts | 12 / 12 |
+| `mutant_open_ignored` | violation | violation of WorstCounts | 11 / 11 |
+| `mutant_close_latest_open` | violation | violation of WorstCounts | 37 / 37 |
+| `mutant_filed_at_close` | violation | violation of WorstCounts | 21 / 21 |
+| `mutant_flag_does_not_cap` | violation | violation of RetryIsCapped | 12 / 12 |
+| `mutant_flag_missed` | violation | violation of RetryIsCapped | 12 / 12 |
+| `mutant_cap_on_shopping_only` | violation | violation of RetryIsCapped | 108 / 108 |
+| `mutant_retried_only_on_same_target` | violation | violation of RetryIsCapped | 43 / 43 |
+| `mutant_retried_hidden` | violation | violation of RetryIsCapped | 12 / 12 |
+| `mutant_change_hides_history` | violation | violation of HistoryIsKept | 7 / 7 |
+| `mutant_cap_raises` | violation | violation of RetryIsCapped | 12 / 12 |
+| `mutant_cap_line_wide` | violation | violation of RetryIsCapped | 43 / 43 |
+| `mutant_limit_off_by_one` | violation | violation of RetryIsCapped | 108 / 108 |
+
+**`decisions`** (8 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 2,312 / 360 |
+| `reach_flagged` | violation | violation of NeverFlagged | 9 / 9 |
+| `mutant_identities_without_names` | violation | violation of FlagIsExact | 9 / 9 |
+| `mutant_gone_is_not_flagged` | violation | violation of FlagIsExact | 9 / 9 |
+| `mutant_refresh_on_edit` | violation | violation of FlagIsExact | 9 / 9 |
+| `mutant_first_name_only` | violation | violation of FlagIsExact | 10 / 10 |
+| `mutant_ungoverned_edit_flags` | violation | violation of FlagIsExact | 11 / 11 |
+| `mutant_sticky_flag` | violation | violation of FlagIsExact | 59 / 59 |
+
+**`liveness`** (5 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 606 / 260 |
+| `mutant_no_resubmit_after_unavailable` | temporal-violation | temporal violation | 570 / 260 |
+| `mutant_no_resubmit_after_loss` | temporal-violation | temporal violation | 564 / 260 |
+| `mutant_no_resubmit_after_error` | temporal-violation | temporal violation | 576 / 260 |
+| `mutant_resubmits_unsupported` | temporal-violation | temporal violation | 651 / 260 |
+
+**`planner`** (13 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design_definition` | no-violation | no-violation | 82,796 / 38,166 |
+| `design_file` | no-violation | no-violation | 98,745 / 48,725 |
+| `file_costs_reruns` | violation | violation of NoNeedlessRerun | 86 / 59 |
+| `reach_all_current` | violation | violation of NeverAllCurrent | 541 / 297 |
+| `mutant_direct_deps_only` | violation | violation of NoWrongReuse | 87 / 59 |
+| `mutant_no_deps` | violation | violation of NoWrongReuse | 85 / 58 |
+| `mutant_closure_two_passes` | violation | violation of NoWrongReuse | 88 / 60 |
+| `mutant_fallback_direct_deps_only` | violation | violation of NoWrongReuse | 87 / 60 |
+| `mutant_key_omits_producer` | violation | violation of NoWrongReuse | 587 / 317 |
+| `mutant_build_key_omits_compiler` | violation | violation of NoWrongReuse | 97 / 66 |
+| `mutant_test_without_build` | violation | violation of NoWrongReuse | 551 / 304 |
+| `mutant_plan_everything` | violation | violation of NoNeedlessRerun | 10 / 10 |
+| `mutant_plan_nothing` | violation | violation of PlanComplete |  |
+
+**`platforms`** (16 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design_stand_in_allowed` | no-violation | no-violation | 24,577 / 4,096 |
+| `design_stand_in_forbidden` | no-violation | no-violation | 24,577 / 4,096 |
+| `design_not_claimed` | no-violation | no-violation | 24,577 / 4,096 |
+| `reach_stand_in` | violation | violation of NeverStoodIn | 15 / 15 |
+| `reach_self_conflict` | violation | violation of NeverSelfConflict | 19 / 19 |
+| `mutant_always_stand_in` | violation | violation of StatusMatches | 2 / 2 |
+| `mutant_stand_in_unverified` | violation | violation of StatusMatches | 2 / 2 |
+| `mutant_stand_in_unclaimed` | violation | violation of StatusMatches | 15 / 15 |
+| `mutant_verified_globally` | violation | violation of StatusMatches | 146 / 80 |
+| `mutant_stand_in_always_passed` | violation | violation of StatusMatches | 87 / 66 |
+| `mutant_other_overrides_own` | violation | violation of StatusMatches | 21 / 21 |
+| `mutant_self_disagreement_ignored` | violation | violation of StatusMatches | 19 / 19 |
+| `mutant_latest_only_filed` | violation | violation of StatusMatches | 19 / 19 |
+| `mutant_stand_in_not_reported` | violation | violation of StandInIsReported | 15 / 15 |
+| `mutant_one_platform_reproduces` | violation | violation of ReproMatches | 2 / 2 |
+| `mutant_disagreement_ignored` | violation | violation of ReproMatches | 19 / 19 |
+
+**`tree`** (15 cases)
+
+| Case | Expected | Result | States generated / distinct |
+|---|---|---|---|
+| `design` | no-violation | no-violation | 1,293,440 / 111,456 |
+| `design_floor_two` | no-violation | no-violation | 1,293,440 / 111,456 |
+| `reach_delivered` | violation | violation of NeverDelivered | 4,267 / 1,679 |
+| `reach_delivered_floor_two` | violation | violation of NeverDelivered | 17,853 / 4,830 |
+| `mutant_remove_keeps_confirmation` | violation | violation of ConfirmationMatches | 2,718 / 1,266 |
+| `mutant_add_keeps_confirmation` | violation | violation of ConfirmationMatches | 556 / 408 |
+| `mutant_edit_keeps_confirmation` | violation | violation of ConfirmationMatches | 554 / 406 |
+| `mutant_unconfirmed_delivered` | violation | violation of DeliveryMatches | 81 / 81 |
+| `mutant_delivered_ignores_child` | violation | violation of DeliveryMatches | 401 / 325 |
+| `mutant_soft_child_is_delivered` | violation | violation of DeliveryMatches | 3,483 / 1,470 |
+| `mutant_ignores_floor` | violation | violation of DeliveryMatches | 185 / 177 |
+| `mutant_floor_applied_to_each_child` | violation | violation of DeliveryMatches | 17,853 / 4,830 |
+| `mutant_floor_counts_root_only` | violation | violation of DeliveryMatches | 17,853 / 4,830 |
+| `mutant_count_kept_on_remove` | violation | violation of DeliveryMatches | 4,347 / 1,794 |
+| `mutant_count_misses_child_edit` | violation | violation of DeliveryMatches | 24,887 / 7,017 |
 
 ### Not a run: the first attempt at the rewritten models
 
