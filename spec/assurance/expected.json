@@ -27,7 +27,7 @@
       "config": "design.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "Every combination of inputs satisfies the three rules."
+      "purpose": "Every combination of inputs satisfies both properties."
     },
     {
       "config": "reach_proven.cfg",

@@ -6,7 +6,7 @@
     "platforms/mutant_disagreement_ignored",
     "platforms/mutant_one_platform_reproduces"
   ],
-  "why": "One platform alone says nothing about reproducibility. Two that disagree are a failure, and a disagreement anywhere means no record may stand in.",
+  "why": "One platform alone says nothing about reproducibility. Two that disagree about a key are a failure for it, and no record stands in for that key.",
   "stand_in_allowed": true,
   "keys": [
     "k1",

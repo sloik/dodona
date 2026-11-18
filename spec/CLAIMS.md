@@ -10,10 +10,9 @@ Status values:
 
 What a `checked` status means here, and no more:
 
-- **Most of these properties restate a rule.** A second review on 2026-11-18 found that of the 18 properties in the seven rewritten models, 12 restate their definitions, 4 have thin content of their own and 2 have real content ([log](../docs/reviews/2026-11-18-rewritten-models.md)). `checked` below therefore mostly means: the rule is written down exactly, and each planted defect listed is caught. It does not mean the rule is right, and for three models the section says where the model departs from the design text.
-- **Many of these properties restate a rule.** Where a model describes a pure rule, the property that checks it says the same thing in other words, and cannot fail in the intended design. What such a model gives is an exact statement of the rule, a planted defect for each way of getting it wrong, and scenarios that carry those defects to a kernel. Each section says which of its properties have content of their own.
-- A bounded model check shows a property for the bounds in the configuration, not for all sizes. The bounds are two definitions, two obligations, two hash values and at most two runs in flight, with a smaller instance where noted.
-- The model has one kernel, a ledger that keeps what it is given, abstract hashes that never collide, and fixed dependency sets.
+- **Many of these properties still restate a rule.** A second review on 2026-11-18 found that most properties in seven rewritten models restated their own definitions ([log](../docs/reviews/2026-11-18-rewritten-models.md)). Issue 27 repaired six of them: each keeps a specification, stated over the history of events or every record, apart from a kernel working from what it stores, and adds planted defects for the direction a property did not check. Where the two sides still compute the same thing from equal values, the section says so under **What still restates the rule**; there `checked` means the rule is written down exactly and each planted defect listed is caught, not that the rule is right.
+- A bounded model check shows a property for the bounds in the configuration, not for all sizes. Each section states its bounds.
+- The models have one kernel, a ledger that keeps what it is given, and abstract hashes that never collide.
 - Nothing here says anything about an implementation. That is a separate conformance obligation ([decision 0012](../decisions/0012-spec-to-code-conformance-is-an-explicit-seam.md)).
 
 ## Modelled in `kernel/EvidenceReuse.tla`
@@ -48,9 +47,11 @@ The model was rewritten on 2026-11-17 to add the baseline, the unguarded rule an
 
 ## Modelled in `planner/Planner.tla`
 
-Bounds: five definitions, two of them in one file; the depends-on relation one of two shapes, a chain three steps deep and a diamond; two hash values, a compiler and a test runner; every behaviour of at most six steps. Builds do not fail.
+Bounds: five definitions, two of them in one file; the depends-on relation one of two shapes with different closures, a chain three steps deep and a diamond; two hash values, a compiler and a test runner; every behaviour of at most six steps. Builds do not fail.
 
-**How the properties get their content (repair, 2026-11-18).** The specification finds what a result depends on by following the relation until nothing new turns up, and the truth of a test is the artifact it actually ran on. The kernel builds its key from an index that follows the relation in a fixed number of passes, and looks artifacts up by key. The relation varies between behaviours, so a key that follows it wrongly shows. The properties compare the two in both directions: nothing wrongly reused, nothing current rerun, and everything without a right result planned. Their content is the index and the store; where key and truth are computed by the same rule the property still restates it.
+**How the properties get their content (repair, 2026-11-18).** The specification finds what a result depends on by following the relation until nothing new turns up, and the truth of a test is the artifact it actually ran on. The kernel builds its key from an index that follows the relation in a fixed number of passes, and looks artifacts up by key. The relation varies between behaviours, so a key that follows it wrongly shows. The properties compare the two in both directions: nothing wrongly reused, nothing current rerun, and everything without a right result planned. Their content is the index and the store.
+
+**What still restates the rule.** For a check and a build, the key and the truth are equal by construction once the index finds the right closure; a test's truth is still taken from the store, looked up by the build key. With the design's plan, `PlanComplete` follows from `NoWrongReuse`; it has content against a planner that plans too little.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -62,7 +63,9 @@ Bounds: five definitions, two of them in one file; the depends-on relation one o
 
 Every combination of three links, each with one of six levels or unreported, and two planted defects, each passed, failed, unknown or absent.
 
-**How the properties get their content (repair, 2026-11-18).** The specification takes the weakest of the three links as a set. The kernel goes along the chain one link at a time, keeping the weaker of what it has and the next link, and reads the scale from its own table. The properties say the two always agree, and that what the kernel reports about planted defects is what the specification says in every case, in both directions. This is still a pure rule: the specification and the kernel are two ways of writing it, and the model shows they agree and that each way of getting the kernel's version wrong is caught. It cannot show the rule is the right one.
+**How the properties get their content (repair, 2026-11-18).** The specification takes the weakest of the three links as a set. The kernel goes along the chain one link at a time, keeping the weaker of what it has and the next link, and reads the scale from its own table. The kernel answers with a level's name, read on the true scale. The properties say the two always agree, and that what the kernel reports about planted defects is what the specification says in every case, in both directions.
+
+**What still restates the rule.** The report about planted defects is the same expression on both sides; only its planted defects give it content. This is still a pure rule: the specification and the kernel are two ways of writing it, and the model shows they agree and that each way of getting the kernel's version wrong is caught. It cannot show the rule is the right one.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -74,21 +77,25 @@ Every combination of three links, each with one of six levels or unreported, and
 
 Bounds: a root and one child, two criteria each, hard or soft; floors of one and two hard gates; at most six changes of shape or confirmations. One level of children; no exceptions, no deferred gates.
 
-**Settled (repair, 2026-11-18): the floor applies to every intent in a tree.** A child is an intent, and the data model says an intent with fewer hard gates than policy demands is never delivered. So each intent, child and root, must meet the floor on its own; counting it over the whole tree let a child with too few gates through, and is now a planted defect.
+**Settled (repair, 2026-11-18): every intent in a tree is held to the floor, counted over it and its descendants.** The data model counts an intent's gates over its descendants and says an intent below the floor is unguarded; a child is an intent. So the root's count includes the child's, and the child is held to the floor by its own count. The model before checked the floor on the tree's total only, which let a child below it through; that is now a planted defect.
 
-**How the properties get their content.** The specification decides confirmation from the order of events (the last confirmation came after the last change of shape). The kernel keeps one flag and clears it on each change. The properties say the kernel's confirmation and delivery are exactly the ones the specification calls for, both ways.
+**How the properties get their content.** The specification decides confirmation from the order of events (the last confirmation came after the last change of shape) and counts gates from the tree as it is. The kernel keeps one flag, cleared on each change, and a running count of hard gates per intent, updated on each change. The properties say the kernel's confirmation and delivery are exactly the ones the specification calls for, both ways.
+
+**What still restates the rule.** Both sides use the same test of whether every hard gate passes, so a kernel that judged a passing gate wrongly would be wrong on both sides.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C34 | A tree is delivered exactly when it is confirmed since its last change of shape, every intent in it has at least the hard gates policy demands, and every hard gate passes. Adding or removing a child, or changing a gate, needs confirming again | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `ConfirmationMatches`, `DeliveryMatches` | A child is removed or added, or a gate edited, and the confirmation stays; an unconfirmed tree is delivered; the root is delivered whatever its child is; a child with no hard gate counts as delivered; the floor is ignored, counted over the whole tree, or counted on the root only | modelled, unchecked |
+| C34 | A tree is delivered exactly when it is confirmed since its last change of shape, every intent in it has at least the hard gates policy demands, counted over it and its descendants, and every hard gate passes. Adding or removing a child, or changing a gate, needs confirming again | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `ConfirmationMatches`, `DeliveryMatches` | A child is removed or added, or a gate edited, and the confirmation stays; an unconfirmed tree is delivered; the root is delivered whatever its child is; a child with no hard gate counts as delivered; the floor is ignored, checked on the root only, or counted without the child; the running count keeps a removed child or misses a child's edit | modelled, unchecked |
 
 ## Modelled in `attempts/Attempts.tla`
 
 Bounds: at most three attempts and two changes of target; the history of events kept in full. Attempts made without taking a ticket leave no record and are outside the model.
 
-**Settled (repair, 2026-11-18): a change of target does not reset the cap.** Decision 0024 says a trivial change made to get a fresh try does not reset anything, and the kernel cannot tell a trivial change from a real fix. So an agreement after any earlier attempt along the line that did not agree is retried, and the act is graded helper at most. The data model's older wording, which capped only on an unchanged target, is now a planted defect, and the data model says what the decision says.
+**Settled (repair, 2026-11-18): a change of target does not reset the count or the cap.** Decision 0024 says a trivial change made to get a fresh try does not reset the count, and the kernel cannot tell a trivial change from a real fix. The result does start again on a new target, so a trivial change still turns a refusal into an agreement, capped at helper; that is a reading of 0024, which does not say it. So an agreement after any earlier attempt along the line that did not agree is retried, and the act is graded helper at most. The data model's older wording, which capped only on an unchanged target, is now a planted defect, and the data model says what the decision says.
 
 **How the properties get their content.** The specification is stated over the history of events in the order they happened. The kernel works from its records, one per ticket, updated in place. The properties say the kernel's answers from its records are the ones the history calls for. A kernel that closes the wrong ticket, files an attempt under the target it has when it closes, or forgets attempts when the target changes, is caught even though its answers are computed by the right rule.
+
+**What still restates the rule.** Given records that mirror the history, the result, shopping and retrying are the same expressions on both sides; their content is in how the records are kept. Retrying is worked out from the attempts as they stand, so closing an earlier open attempt as agreed clears the flag.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -98,9 +105,11 @@ Bounds: at most three attempts and two changes of target; the history of events 
 
 Bounds: two sets of inputs and three platforms; each platform may record each verdict once, so a platform can disagree with itself.
 
-**Settled (repair, 2026-11-18): the claim is verified for each key.** The data model and the architecture say a result stands in for another platform only when the same key agrees on at least two platforms. The model had decided "verified" once for everything, so one key's agreement let another key's single record stand in. That is now a planted defect.
+**Settled (repair, 2026-11-18): the claim is verified for each key.** The data model and the architecture say a result stands in for another platform only when the same key agrees on at least two platforms; decision 0008 says only "checked on two". The model had decided "verified" once for everything, so one key's agreement let another key's single record stand in. That is now a planted defect.
 
 **How the properties get their content.** The specification is stated over every record ever made. The kernel works from what it has filed for each key and platform, updated one record at a time. The properties say every status, every report of a stand-in and every reproducibility answer is the one the records call for.
+
+**What still restates the rule.** Unless a record is filed wrongly, the kernel's store equals what the records say, and status, verification and reproducibility are the same expressions on both sides. Their content is in the filing (one planted defect) and in each planted defect of the rule being caught. A disagreement of a platform with itself also cancels verification; that is stricter than the design text, which does not mention it.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -111,6 +120,8 @@ Bounds: two sets of inputs and three platforms; each platform may record each ve
 Bounds: three names, two of them governed by one decision; two contents and absence. No renaming.
 
 The model keeps what the decision was last reviewed against apart from what the kernel has stored, so a kernel that quietly updates its stored value is caught. **Repair, 2026-11-18:** planted defects now flag too much as well as too little, so both halves of "exactly" are shown able to fail.
+
+**What still restates the rule.** In the design, what the kernel has stored always equals what the decision was reviewed against, so `FlagIsExact` comes down to that equality; its content is in the planted defects.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|

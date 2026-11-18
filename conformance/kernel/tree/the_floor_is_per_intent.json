@@ -5,7 +5,7 @@
   "covers": [
     "tree/mutant_floor_counts_tree"
   ],
-  "why": "With a floor of two, a root and a child with one hard gate each are not delivered, though the tree has two hard gates in all.",
+  "why": "With a floor of two, the root counts two hard gates with its child's, but the child, an intent too, counts one of its own, so the tree is not delivered.",
   "policy": {
     "min_hard_gates": 2
   },

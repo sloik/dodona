@@ -8,7 +8,8 @@
 (* criterion of the same intent. The thing being judged may change along   *)
 (* the line, and the kernel cannot tell a real fix from a trivial change   *)
 (* made to get a fresh try. So, as decision 0024 says, a change of target  *)
-(* does not reset anything:                                                *)
+(* resets neither the count nor the cap. It does reset the result, which   *)
+(* is about the current target; that is a reading of 0024, not its text:  *)
 (*                                                                         *)
 (*   On the current target the worst result counts.                        *)
 (*   Along the whole line every attempt is counted, and an agreement that  *)
@@ -121,15 +122,18 @@ Result ==
 KernelShopped ==
     IF Mutant = "flag_missed" THEN FALSE
     ELSE \E a, b \in Current : a.n < b.n /\ a.outcome # "agreed" /\ b.outcome = "agreed"
+\* What the kernel works out, and what it reports. The two planted defects in the report leave
+\* the cap alone, so each isolates the flag.
+Retried == \E a, b \in attempts : a.n < b.n /\ a.outcome # "agreed" /\ b.outcome = "agreed"
 KernelRetried ==
     CASE Mutant = "retried_only_on_same_target" -> KernelShopped
       [] Mutant = "retried_hidden" -> FALSE
-      [] OTHER -> \E a, b \in attempts : a.n < b.n /\ a.outcome # "agreed" /\ b.outcome = "agreed"
+      [] OTHER -> Retried
 KernelCount == Cardinality(attempts)
 
 \* The separation level after the cap. Capping lowers a level; it never raises one.
 Granted ==
-    LET capped == IF Mutant = "cap_on_shopping_only" THEN KernelShopped ELSE KernelRetried
+    LET capped == IF Mutant = "cap_on_shopping_only" THEN KernelShopped ELSE Retried
     IN IF capped /\ Mutant # "flag_does_not_cap"
        THEN (IF Mutant = "cap_raises" THEN "helper"
              ELSE IF Rank(Claimed) > Rank("helper") THEN "helper" ELSE Claimed)

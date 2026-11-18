@@ -102,14 +102,28 @@
       "config": "mutant_floor_counts_tree.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: the floor is counted over the whole tree, so a child with too few hard gates is delivered when the root has enough: the rule the model had before.",
+      "purpose": "Planted defect: the floor is checked on the root's count only, so a child below it is delivered: the rule the model had before.",
       "of": "DeliveryMatches"
     },
     {
       "config": "mutant_floor_counts_root_only.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: only the root's gates are held to the floor.",
+      "purpose": "Planted defect: the root's own gates are counted without its child's, so a hard gate moved into the child leaves the root unguarded.",
+      "of": "DeliveryMatches"
+    },
+    {
+      "config": "mutant_count_kept_on_remove.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the running count of the root keeps a removed child's hard gates.",
+      "of": "DeliveryMatches"
+    },
+    {
+      "config": "mutant_count_misses_child_edit.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: editing a child's gate updates the child's count and not the root's.",
       "of": "DeliveryMatches"
     }
   ]

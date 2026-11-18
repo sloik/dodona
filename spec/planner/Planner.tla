@@ -40,7 +40,9 @@ SameFile(d)  == IF d \in {"d2", "d3"} THEN {"d2", "d3"} ELSE {d}
 \* The depends-on relation is not fixed: each behaviour starts from one of two shapes, a chain
 \* three steps deep and a diamond, so a key that follows the relation wrongly shows.
 Chain   == [d \in Defs |-> CASE d = "d1" -> {"d2"} [] d = "d2" -> {"d4"} [] d = "d4" -> {"d5"} [] OTHER -> {}]
-Diamond == [d \in Defs |-> CASE d = "d1" -> {"d2", "d4"} [] d = "d4" -> {"d5"} [] OTHER -> {}]
+\* In the diamond d5 is reached by two paths, and d3, d2's file-mate, is a dependency too; what d1
+\* depends on differs between the shapes ({d2, d4, d5} and {d2, d3, d5}).
+Diamond == [d \in Defs |-> CASE d = "d1" -> {"d2", "d3"} [] d = "d2" -> {"d5"} [] d = "d3" -> {"d5"} [] OTHER -> {}]
 
 (* The specification: everything d depends on, found by following the relation until nothing new
    turns up. *)

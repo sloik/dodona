@@ -109,14 +109,14 @@
       "config": "mutant_retried_only_on_same_target.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: retried is reported only on the same target.",
+      "purpose": "Planted defect: retrying is reported only on the same target, though the cap still follows the whole line; this isolates the flag.",
       "of": "RetryIsCapped"
     },
     {
       "config": "mutant_retried_hidden.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: retried is never reported, though the cap still applies; this isolates the flag.",
+      "purpose": "Planted defect: retrying is not reported, though the cap still applies; this isolates the flag.",
       "of": "RetryIsCapped"
     },
     {

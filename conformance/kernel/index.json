@@ -22,6 +22,6 @@
     "liveness/mutant_no_resubmit_after_error": "As for the other liveness cases: the seed has no loop that submits work.",
     "liveness/mutant_resubmits_unsupported": "As above.",
     "tree/design_floor_two": "A search of the whole state space, not a behaviour.",
-    "tree/reach_delivered_floor_two": "Each node in a tree scenario has one criterion, so with a floor of two no intent can meet it and nothing is ever delivered. The scenarios with a floor of two show that every intent is held to it; reaching delivery needs two criteria on one intent, which the model has and the scenario format does not."
+    "tree/reach_delivered_floor_two": "In a tree scenario each intent has one criterion, so with a floor of two a child can never meet it on its own count, and a root alone cannot either; reaching delivery with a floor of two needs an intent with two criteria, which the model has and the scenario format does not. The scenarios with a floor of two show the floor held."
   }
 }
