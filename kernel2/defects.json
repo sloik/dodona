@@ -1064,6 +1064,27 @@
       "file": "tree.js",
       "find": "  if (children.some((child) => child.gate !== 'hard')) return 'unguarded';\n",
       "replace": "  if (children.some((child) => (child.gate === 'hard' ? 1 : 0) < floor)) return 'unguarded';\n"
+    },
+    {
+      "name": "only refused attempts count toward the limit, not open ones",
+      "model_case": "(decision 0031 kit)",
+      "file": "attempts.js",
+      "find": "attempts.filter((attempt) => attempt.state !== 'agreed').length",
+      "replace": "attempts.filter((attempt) => attempt.state === 'refused').length"
+    },
+    {
+      "name": "a tree edit accepts a gate other than hard or soft",
+      "model_case": "(tree gates kit)",
+      "file": "tree.js",
+      "find": "TREE_GATES.includes(step.edit.to)",
+      "replace": "vocabulary.GATES.includes(step.edit.to)"
+    },
+    {
+      "name": "a tree add accepts a gate other than hard or soft",
+      "model_case": "(tree gates kit)",
+      "file": "tree.js",
+      "find": "TREE_GATES.includes(step.add.gate)",
+      "replace": "vocabulary.GATES.includes(step.add.gate)"
     }
   ]
 }
