@@ -45,6 +45,10 @@ The reviews read the work. These were found by running it, the same day.
 | Planting defects against the final kit | One planted defect, another platform's record overriding a platform's own, cannot be observed in a kernel: a stand-in is only ever taken when all verdicts for the key agree | Removed from the list. The formal model still has the case |
 | The shared model checker | The rewritten planner model was too large to finish within the space a job is allowed | It is now bounded by depth: every behaviour of at most six steps from one starting state |
 
+## A second review
+
+The rewritten models were read again the next day by a separate agent. Most of their properties still restate a rule, and two models still depart from the design text: [second review](2026-11-18-rewritten-models.md).
+
 ## What the reviews did not cover
 
 - The scenarios added in response, and the new ones for acts, status and the ledger, have not been read by a reviewer looking for holes. They have been through two kernel authors working apart, which found the points above.

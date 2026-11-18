@@ -10,6 +10,7 @@ Status values:
 
 What a `checked` status means here, and no more:
 
+- **Most of these properties restate a rule.** A second review on 2026-11-18 found that of the 18 properties in the seven rewritten models, 12 restate their definitions, 4 have thin content of their own and 2 have real content ([log](../docs/reviews/2026-11-18-rewritten-models.md)). `checked` below therefore mostly means: the rule is written down exactly, and each planted defect listed is caught. It does not mean the rule is right, and for three models the section says where the model departs from the design text.
 - **Many of these properties restate a rule.** Where a model describes a pure rule, the property that checks it says the same thing in other words, and cannot fail in the intended design. What such a model gives is an exact statement of the rule, a planted defect for each way of getting it wrong, and scenarios that carry those defects to a kernel. Each section says which of its properties have content of their own.
 - A bounded model check shows a property for the bounds in the configuration, not for all sizes. The bounds are two definitions, two obligations, two hash values and at most two runs in flight, with a smaller instance where noted.
 - The model has one kernel, a ledger that keeps what it is given, abstract hashes that never collide, and fixed dependency sets.
@@ -47,9 +48,11 @@ The model was rewritten on 2026-11-17 to add the baseline, the unguarded rule an
 
 ## Modelled in `planner/Planner.tla`
 
-Bounds: four definitions in a chain plus one unrelated in a shared file, two hash values, a compiler and a test runner; every behaviour of at most six steps from one starting state. A first version bounded the number of records instead and was too large to finish. The depends-on relation does not change, and builds do not fail.
+Bounds: three definitions in a chain plus one unrelated in a shared file, two hash values, a compiler and a test runner; every behaviour of at most six steps from one starting state. A first version bounded the number of records instead and was too large to finish. The depends-on relation does not change, and builds do not fail.
 
 The model keeps the kernel's key and the truth of a result apart: the truth of a check or build is found by following the depends-on relation, and the truth of a test is the artifact it actually ran on. The properties compare the two.
+
+**What these properties are worth (second review, 2026-11-18).** For a check and a build, the kernel's key and the truth are worked out by the same expression over the same values, so with no planted defect neither property can fail, whatever the depends-on relation is; a wrong notion of "everything it depends on" would be wrong on both sides and go unseen. File identity is a superset of definition identity, so "never a wrong reuse" with the fallback is true by construction. Only the test path has content of its own: the artifact is looked up in a store by the current key. The planted defect listed for C10 leaves out the sources as well as the tool, and its recorded failure is for an edit, not a tool change. A planner that plans nothing at all would pass both properties.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -63,6 +66,8 @@ Every combination of three links, each with one of six levels or unreported, and
 
 **These properties restate the rule.** The shown level is defined as the weakest link, and the property says it is the weakest link. A model of a pure rule cannot do more: its use is that the rule is written down exactly, that each way of getting it wrong is shown to be caught, and that the conformance kit carries those cases to a kernel. The order of the levels is an input to the model, not something it checks.
 
+**Second review, 2026-11-18:** all three properties restate the rule, as said above. `NonVacuitySound` checks one direction only: reporting "none planted" for a check whose planted defect failed would pass.
+
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
 | C24 | As the rule is written in this model, the shown level of a criterion is the weakest of its evidence links | [0019](../decisions/0019-assurance-is-stated-per-link.md) | `WeakestLink`, `NotUnderstated` | The links are averaged; the level is always the lowest | **checked**, run 8 |
@@ -73,23 +78,29 @@ Every combination of three links, each with one of six levels or unreported, and
 
 Bounds: a root with up to two children, one criterion each, hard or soft; floors of one and two hard gates. One level of children; no exceptions. A child counts as delivered when its one hard gate passes; children are not themselves confirmed.
 
+**What these properties are worth (second review, 2026-11-18).** `TreeSound`, `TreeGuarded` and `TreeComplete` restate the conditions under which the model reports delivery. Only `ShapeIsConfirmed` has content of its own. **"Delivered only when it is confirmed" is checked by nothing**: no property ties delivery to confirmation, and a kernel that delivered a tree nobody confirmed would pass all four; the claim below no longer says it. With a floor of two, the model lets a child with one hard gate count as delivered, which the data model appears to forbid for an intent on its own; whether the floor applies to child intents is not decided. No planted defect keeps confirmation across a change of gate.
+
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C34 | A tree is delivered only when it is confirmed, has at least the hard gates policy demands counted over root and children, every hard gate passes and every child has a hard gate; and a tree that meets all that is delivered. Adding or removing a child, or changing a gate, needs confirming again | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `TreeSound`, `TreeGuarded`, `TreeComplete`, `ShapeIsConfirmed` | A child is removed or added and the root stays confirmed; the root is delivered whatever its children are; a child made soft counts as delivered; the floor is ignored; only the root's gates are counted | **checked**, run 7 |
+| C34 | A tree reported delivered has at least the hard gates policy demands counted over root and children, every hard gate passes and every child has a hard gate; and a confirmed tree that meets all that is delivered. That an unconfirmed tree is never delivered is not checked. Adding or removing a child, or changing a gate, needs confirming again | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `TreeSound`, `TreeGuarded`, `TreeComplete`, `ShapeIsConfirmed` | A child is removed or added and the root stays confirmed; the root is delivered whatever its children are; a child made soft counts as delivered; the floor is ignored; only the root's gates are counted | **checked**, run 7 |
 
 ## Modelled in `attempts/Attempts.tla`
 
 Bounds: at most three attempts and two changes of target. Attempts made without taking a ticket leave no record and are outside the model. The model cannot tell a real fix from a trivial change made to get a fresh try, and neither can a kernel; that is why the history is kept across changes.
 
+**What these properties are worth (second review, 2026-11-18).** `WorstCounts` and `ShoppingIsCapped` restate the model's own definitions. `HistoryIsKept` has content in its count of attempts; its "retried" half compares a value with itself and has no planted defect. **The cap never binds on an agreement that is accepted**: an agreement after a refusal on the same target is refused anyway, and the only way to an accepted agreement after a refusal is to change the target, which is not capped. That follows the data model ("unchanged target") and not decision 0024 ("a trivial change does not reset"); the two disagree and the model sides with the weaker. A kernel that always answered "refused" would pass `WorstCounts`.
+
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C35 | On the current target the worst result counts and an attempt left open is a failure. An agreement after an attempt that did not agree on the same target is flagged, and the act is then graded helper at most and never above what it claimed. Across changes of target every attempt is still counted, and an agreement after any earlier attempt that did not agree is reported as retried | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `WorstCounts`, `ShoppingIsCapped`, `HistoryIsKept` | Only the latest attempt counts; an open attempt is ignored; shopping is not flagged; the flag does not cap; the cap raises a level; a change of target hides the history | **checked**, run 8 |
+| C35 | On the current target the worst result counts and an attempt left open is a failure. An agreement after an attempt that did not agree on the same target is flagged, and the act is then graded helper at most and never above what it claimed; in this model such an agreement is also refused, so the cap is never seen to lower an accepted one. Across changes of target every attempt is still counted, and an agreement after any earlier attempt that did not agree is reported as retried | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `WorstCounts`, `ShoppingIsCapped`, `HistoryIsKept` | Only the latest attempt counts; an open attempt is ignored; shopping is not flagged; the flag does not cap; the cap raises a level; a change of target hides the history | **checked**, run 8 |
 
 ## Modelled in `platforms/Platforms.tla`
 
 Bounds: two sets of inputs and three platforms.
 
 "Verified" in this model is weak: some set of inputs has the same verdict on at least two platforms, and none has different verdicts. One agreeing sample is enough, and two agreeing failures count.
+
+**What these properties are worth (second review, 2026-11-18).** All four restate the model's definitions. **The model allows what the design text forbids**: "verified" is decided once for everything, while the data model and the architecture require the same key to agree on two platforms. So with one key agreeing on two platforms, a single record for another key stands in on the platforms that never ran it, and every property accepts that. The defect "another platform's record overrides a platform's own" also switches stand-ins on unconditionally, so it does not isolate what it names. The model keeps one record per key and platform, so a platform disagreeing with itself cannot occur in it. A kernel that always reported reproducibility as unknown unless platforms disagree would pass `ReproSound`.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -101,6 +112,8 @@ Bounds: three names, two of them governed by one decision; two contents and abse
 
 The model keeps what the decision was last reviewed against apart from what the kernel has stored, so a kernel that quietly updates its stored value is caught.
 
+**What this property is worth (second review, 2026-11-18).** `FlagIsExact` has thin content of its own: it comes down to the stored value equalling the reviewed one. No planted defect flags too much, so only one half of "exactly" is shown able to fail.
+
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
 | C16 | A decision is flagged exactly when some name it governs no longer has the content the decision was last reviewed against, including when the name is gone, and whether or not the old content exists elsewhere | [0001](../decisions/0001-decisions-are-nodes.md) | `FlagIsExact` | The kernel tracks contents without names; a name that disappears is not flagged; the stored content is refreshed on every edit; only the first governed name is watched | **checked**, run 8 |
@@ -111,9 +124,11 @@ Bounds: one obligation; at most two edits, two outages and two runs that end wit
 
 **The claim holds only under five assumptions, and they carry most of its weight**: the kernel keeps submitting whatever has no answer; the backend comes back after an outage; a run in flight ends one way or another; edits, outages, errors and losses each happen only a bounded number of times; and the kernel can tell that a run was lost. A run that hangs silently for ever is outside the model. No scenario in the conformance kit covers this, because the seed kernel has no loop that submits work.
 
+**What this property is worth (second review, 2026-11-18).** The only thing of the kernel's that `EventuallyAnswered` tests is which outcomes it tries again after; fairness and the bounds do the rest. The fairness assumed is stronger than assumption three above says: after the allowed number of failures, every run completes.
+
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C22 | Under those assumptions, every obligation eventually has a verdict or the stated reason that it cannot be checked, and that then stays | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again | **checked**, run 8 |
+| C22 | Under those assumptions, the one obligation in the model eventually has a verdict or the stated reason that it cannot be checked, and that then stays | [0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md) | `EventuallyAnswered` | After finding the backend down, after a lost run, or after an error, the kernel never tries again; an obligation that cannot be checked is submitted again and again | **checked**, run 8 |
 
 ## Checked against the seed kernel
 
@@ -385,7 +400,7 @@ Two earlier attempts at this run stopped partway, at a limit on the space a job 
 | `mutant_delivered_ignores_children` | violation | violation of TreeSound | 147 / 147 |
 | `mutant_soft_child_is_delivered` | violation | violation of TreeSound | 2,163 / 1,134 |
 
-### Run 7: the kernel again, on run 6's states
+### Run 7, kernel: the kernel again, on run 6's states
 
 2026-11-18. The seed kernel was extended, so its agreement with the two dump models was measured again on the state lists run 6 wrote out: 71,744 and 78,894 states, no difference. The second kernel agrees on the same states. No model was run for this.
 

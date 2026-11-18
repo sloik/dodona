@@ -15,7 +15,7 @@ dodona is a tool an AI agent can ask that question, so nobody has to take the ag
 | **Stage** | Early. Two seed kernels exist and do only what the conformance kit can judge. dodona is not usable yet |
 | **Exists** | Architecture, data model, 27 proposed decisions, protocol schemas, nine formal models, a conformance kit, two seed kernels written apart, a first real provider, a ledger format |
 | **Runs** | Both kernels are built and judged on macOS, Linux and Windows on every change: 93 scenarios, 104 encoding, path and key vectors, a ledger damaged at every byte and written by two kernels at once, and 158 planted defects, 80 in one kernel and 78 in the other, that the kit must reject. The two are then compared on inputs the kit does not contain. That is sampled evidence, not proof |
-| **Checked so far** | 24 of 37 design claims, by bounded model checks of small instances. Seven of the nine models were rewritten after a review found most of their properties could not fail, and all have run again. Many properties still restate a rule; the claims table says which. Both kernels agree with two of the models on every state they reach, about 150,000 in all. 6 more claims are sampled by the kit and not counted. See [the claims table](spec/CLAIMS.md) |
+| **Checked so far** | 24 of 37 design claims are marked checked: every case of every model ran to its end and showed what it was expected to. **That number says less than it sounds.** Two reviews found that most properties in seven of the nine models restate the rule they check: 12 of 18 after a rewrite. For those, "checked" means the rule is written down exactly and each planted defect is caught, not that the rule is right; and three models still depart from the design text. The claims table says where ([claims](spec/CLAIMS.md), [second review](docs/reviews/2026-11-18-rewritten-models.md)). Both kernels agree with the two older models on every state they reach, about 150,000 in all. 6 more claims are sampled by the kit and not counted |
 | **dodona on dodona** | On every change to `main`, a provider describes dodona's own model checks, the results go into a ledger, and a kernel works out the status of this project from it. Today the 94 model checks are recorded as passed, and the status is still `draft` for every intent and `unknown` for the project: nobody has confirmed the criteria in a way a kernel can read, and most criteria are not yet checked by anything a kernel can read. That is the honest answer, and changing it is the owner's act, not an agent's |
 | **Guarded by** | Automatic checks on every change: a gap that is found becomes a check ([list](docs/gap-checks.md)) |
 | **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |
@@ -178,7 +178,7 @@ Who wrote what matters here, so it is stated: the kit and the documents were wri
 | What a correct kernel must do | [conformance/](conformance/README.md) |
 | The two kernels | [kernel/](kernel/README.md), [kernel2/](kernel2/README.md) |
 | The first real provider, and how its results reach a status | [providers/tlc/](providers/tlc/provider.py), [decision 0026](decisions/0026-the-first-host-and-status-are-stage-0-helpers.md) |
-| What reviewers found wrong | [docs/reviews/](docs/reviews/2026-11-17-newest-models-and-scenarios.md) |
+| What reviewers found wrong | [docs/reviews/](docs/reviews/2026-11-18-rewritten-models.md) |
 | To take part | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Rules for agents working here | [AGENTS.md](AGENTS.md) |
 
