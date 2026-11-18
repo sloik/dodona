@@ -122,7 +122,7 @@ Agents can and should start other agents to check their work. dodona cannot make
 
 Nothing recorded means `self`. A project sets the lowest level at which an exception or a confirmation counts.
 
-**A claim is not a grade.** An agent can write down that its checker was separate. dodona shows the claim and caps the grade by who stands behind the facts: a say-so earns `helper` at most, and anything higher needs a signature from something the working agent does not control. The way to vouch now exists: a keyed check value over the facts, under a key that the project's protected policy lists, which both kernels verify. What does not exist is anything trustworthy to hold such a key, so today the highest grade is still `helper`, shown as `helper (claims apart)`. A review showed a lone agent could otherwise have claimed the fifth level of six.
+**A claim is not a grade.** An agent can write down that its checker was separate. dodona shows the claim and caps the grade by who stands behind the facts: a say-so earns `helper` at most, and anything higher needs a signature from something the working agent does not control. The way to vouch now exists: a reference harness starts the checker itself, tests it on a known-wrong case, and signs what it did with a keyed check value that both kernels verify against the project's protected policy. What does not exist is a harness the working agent cannot reach: the reference reads its key from a file. So for dodona's own work the highest grade is still `helper`, shown as `helper (claims apart)`. A review showed a lone agent could otherwise have claimed the fifth level of six.
 
 ## Nothing is built in
 

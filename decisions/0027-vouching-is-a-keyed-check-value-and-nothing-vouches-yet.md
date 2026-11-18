@@ -26,7 +26,9 @@ supersedes: []
 
 **What exists.** `tools/attest.py` computes and checks the value. Both kernels verify it, against values written into the kit and against values made fresh at test time. That is the mechanism, tested with a key that is published in the kit and worth nothing.
 
-**What does not exist.** A harness. Something has to hold a key the working agent cannot read, start the checker itself, hand it the brief and the material, keep the transcript, and sign only what it saw. `tools/attest.py` does none of that: it signs whatever record it is given. Used by the working agent on its own records it would turn every claim into an attested one, so it is not used on dodona's own records, and dodona's policy lists no key.
+**A reference harness.** `tools/harness.py` does what a harness must: it makes an empty directory with only the named material, starts the checker itself there with an almost empty environment, runs it first on a known-wrong and a known-right case, keeps everything the checker printed, and signs the record of what it did. `tools/run_harness_check.py` runs it on a real small checker and on one that agrees with everything; both kernels grade the first `tested` or `cross-make` and see through the second.
+
+**What does not exist.** A harness out of the working agent's reach. The reference reads its key from a file, so whoever can read the file can sign anything; and it takes on the caller's word who the worker is, who wrote the brief, who supplied the known cases and which make of model each side is. Run by the working agent on its own work it would turn every claim into an attested one. So it is not used on dodona's own records, and dodona's policy lists no key.
 
 ## Consequences
 

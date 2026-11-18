@@ -29,6 +29,7 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_driver_refuses_outside_the_queue` | The one file that starts the model checker could be run by hand anywhere. It must refuse, even when given a made-up job marker |
 | `gap_one_reader_of_checker_output` | The provider and the older model tool each read the checker's output their own way and could have disagreed about what a violation is |
 | `gap_an_unfinished_job_proves_nothing` | Six claims were marked checked from a job the queue had stopped part of the way, and a tool nobody had measured was indistinguishable from one not yet pinned. A job with no end marker, or a tool with no measurement, may never yield a verdict. A second review showed the queue can mark a job failed after its files are written, and that an older way of sending jobs had none of these checks: every job now goes through one gate that needs the queue's clean exit and the marker both |
+| `gap_tool_tree_digest_matches_its_vectors` | How the digest of a tool tree is computed was not written down, so nobody else could have checked a lock. The rule now has vectors, and the reference must agree with them |
 
 More checks run as their own tools in CI, because they need to build or install something:
 
@@ -40,6 +41,7 @@ More checks run as their own tools in CI, because they need to build or install 
 | `tools/run_check_cases.py` | The rules a schema cannot express were prose. A checker that breaks each one in turn must be refused by the host, and nothing recorded as passed |
 | `tools/check_transcript.py` | The first real provider sent three kinds of message its own schemas refused, and nothing noticed until a recorded session was validated |
 | `tools/run_ledger_cases.py` | A ledger entry cut short by a crash, or two writers at once, could lose or corrupt a record silently |
+| `tools/run_harness_check.py` | Separation above helper rested on a signer that signed whatever it was handed. The reference harness must really start a checker, a kernel must grade its record above helper, and a checker that agrees with everything must be seen through |
 | `tools/run_attest_check.py` | Check values in the kit were made once by the kit's author. A kernel must also accept ones made now and refuse them once the record is changed |
 | `tools/kernel_differential.py` | Two kernels can both pass the kit and still differ where the kit does not look. On its first run it found a step order the contract said nothing about, on which one kernel crashed |
 

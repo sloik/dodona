@@ -30,7 +30,7 @@ Every scenario names the claim it bears on and the model cases it covers. Each p
 
 ## How a kernel is judged
 
-`tools/run_kit.py -- <kernel command>` starts the kernel once per scenario, with the scenario as JSON on standard input. The kernel is shown what happens in each step and nothing else: the expected results and the notes about the scenario are removed first. The kernel prints `{"results": [...]}` with one result per step. Every step shown in the tables below is valid at any point of a scenario, in any order and any number of times; where a step has nothing to act on, the section says what happens. A scenario matches when every field its steps expect is present and equal. A crash, a timeout or anything else is a mismatch.
+`tools/run_kit.py -- <kernel command>` starts the kernel once per scenario, with the scenario as JSON on standard input. The kernel is shown what happens in each step and nothing else: the expected results and the notes about the scenario are removed first. The kernel prints `{"results": [...]}` with one result per step. Every step shown in the tables below is valid at any point of a scenario, in any order and any number of times; where a step has nothing to act on, the section says what happens. In every kind, a step that names something the scenario does not have (a criterion, an obligation, a definition, a run, a child, a ticket, a platform, a key, an intent) changes nothing, and a step whose value is not one the tables allow (a gate, a verdict or a level that does not exist) changes nothing either. A kernel answers every step; it never stops on one. A scenario matches when every field its steps expect is present and equal. A crash, a timeout or anything else is a mismatch.
 
 ### Evidence scenarios
 
@@ -204,6 +204,8 @@ Each intent also reports:
 
 - `gates`: how many criteria are `hard`, `soft` and `deferred`, and `deferred_open`, how many deferred criteria are not met.
 - `score`: `met`, how many criteria are met, `of` how many criteria. A criterion is met when it has at least one obligation and every one is `passed`. A criterion that nothing checks is never met.
+- `shown`: `level` and `criterion`. An evidence record may state a `level`, one of the scale in the assurance scenarios; one that states none, or something not on the scale, is `asserted`. An obligation that is `passed` has the strongest level among the records that count for it; any other obligation has `none`. A criterion has the weakest level among its obligations, and `none` if it has no obligation. `level` is the weakest among all the intent's criteria, soft ones included, and `criterion` is the first criterion, in sorted order, at that level.
+- `exceptions`: `counted` and `below_floor`. Among the agreed act records of kind `grant-amendment` whose `lineage.intent` is the intent: one counts if its `actor.id` is the intent's owner and its level is at or above `floors["grant-amendment"]`; every other is below the floor. A refused one is neither. In status scenarios an exception changes no gate; the intent scenarios judge what it changes.
 - `separation`: there must be one act of kind `confirm-baseline` and one of kind `match-check` for each pairing of a criterion with an obligation that checks it. For each, take the highest level among the agreed act records for it in the ledger: for the confirmation, those that would confirm the intent but for the floor; for a pairing, those of kind `match-check` whose target is the identity of `{"intent": I, "criterion": C, "obligation": O}`. With no such record the level is `self`. `weakest` is the lowest of these levels; `act` is the kind it belongs to, `confirm-baseline` if both kinds have it; `apart_or_better` counts those at `apart` or above; `of` is how many there must be.
 
 **Project status** is `nothing-required` if `required` is empty; otherwise `failed` if a hard criterion of a required intent has an obligation that is `failed` or `conflict`; otherwise `passed` if every required intent is `delivered` or `fulfilled`; otherwise `unknown`.
@@ -212,7 +214,7 @@ A ledger may hold entries of other kinds, and an evidence body may carry more fi
 
 A step that names an obligation, intent or criterion that does not exist changes nothing. The floor for `match-check` is read by no rule yet: a pairing's level is reported, and nothing is withheld for it.
 
-Exceptions, children and deferred time limits are left out of status scenarios; the intent and tree scenarios cover them.
+What an exception changes, children and deferred time limits are left out of status scenarios; the intent and tree scenarios cover them.
 
 ## The ledger, and core keys
 
@@ -240,6 +242,8 @@ This judges that one host. No kernel hosts a provider yet.
 
 `tools/run_attest_check.py -- <kernel> scenario` has a kernel grade act records whose check values are made at test time by the reference signer, `tools/attest.py`, and requires it to stop accepting them once the record is changed.
 
+`tools/run_harness_check.py -- <kernel> scenario` runs the reference harness, `tools/harness.py`, which really starts a checker in a directory holding only what it was given. With `harness/checker_reads.py`, which reads its files, the kernel must grade the signed record `cross-make`, `tested` or `apart` according to what the harness was given. With `harness/checker_nods.py`, which agrees with everything, the known-wrong case exposes it and the grade stops at `apart`. A record changed after signing, signed with a key policy does not list, or written without the harness, stays at `helper`.
+
 ## Rules for the kit
 
 - A scenario is added before the behaviour it tests, and is committed before any kernel that will be judged by it.
@@ -249,7 +253,6 @@ This judges that one host. No kernel hosts a provider yet.
 
 ## Not yet in the kit
 
-- Two rules for provider messages are not enforced by the stage-0 host and have no case: that every file a provider names is hashed again, and that each run of a check is submitted under its own key.
 - The evidence entries and the status report in the kit are smaller than `protocol/evidence-record.schema.json` and `protocol/status.schema.json` describe. Those schemas are the target, and nothing validates a kernel's output against them yet.
 - A kernel that hosts providers. The rules for provider messages are judged on two stage-0 hosts only.
 - Kit adequacy: running kernels with known defects against the kit and reporting the fraction it rejects.

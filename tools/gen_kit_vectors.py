@@ -199,9 +199,12 @@ def preimage(code: str, tool: str = "checker 1") -> dict:
             "provider": {"name": "example.checker", "version": "1.0.0", "protocol": "0.2"}}
 
 
-def evidence(name: str, pre: dict, verdict: str = "passed", writer: str = "kernel-a", platform: str = "p1", key=None) -> dict:
-    return {"append": {"kind": "evidence", "body": {"obligation": name, "preimage": pre, "core_key": key or canonical.identity(pre),
-                                                    "platform": platform, "verdict": verdict, "writer": writer}}}
+def evidence(name: str, pre: dict, verdict: str = "passed", writer: str = "kernel-a", platform: str = "p1", key=None, level=None) -> dict:
+    body = {"obligation": name, "preimage": pre, "core_key": key or canonical.identity(pre),
+            "platform": platform, "verdict": verdict, "writer": writer}
+    if level is not None:
+        body["level"] = level
+    return {"append": {"kind": "evidence", "body": body}}
 
 
 def baseline(intent: dict) -> str:
@@ -294,6 +297,39 @@ def status() -> None:
              pol=dict(policy, required=[]))
     bare = {"owner": "owner-1", "worker": "worker-1", "children": [], "criteria": {"c1": {"gate": "hard", "checked_by": []}}}
     soft = {"owner": "owner-1", "worker": "worker-1", "children": [], "criteria": {"c1": {"gate": "soft", "checked_by": ["ob-a"]}}}
+    def shown(level, criterion):
+        return {"intents": {"i1": {"shown": {"level": level, "criterion": criterion}}}}
+    scenario("the_headline_shows_the_weakest_link", "C24", "The level shown for an intent is the weakest of its criteria, and the report names which. A criterion with nothing passed behind it is none. A record that states no level is only asserted. Two passing records for the same inputs show the stronger. A soft criterion counts here too.",
+             [(evidence("ob-a", A, level="bounded"), shown("none", "c2")),
+              (evidence("ob-b", B, level="sampled"), shown("sampled", "c2")),
+              (evidence("ob-b", B, level="proven"), shown("bounded", "c1")),
+              (evidence("ob-a", A, level="proven"), shown("proven", "c1")),
+              (evidence("ob-a", A, level="observed", platform="p2"), shown("proven", "c1")),
+              (evidence("ob-a", A, verdict="failed", level="proven"), shown("none", "c1")),
+              ({"change": {"obligation": "ob-a", "preimage": A2}}, shown("none", "c1")),
+              (evidence("ob-a", A2), shown("asserted", "c1")),
+              (evidence("ob-a", A2, level="made-up"), shown("asserted", "c1"))],
+             intents={"i1": dict(intent, criteria={"c1": {"gate": "soft", "checked_by": ["ob-a"]}, "c2": {"gate": "hard", "checked_by": ["ob-b"]}})})
+
+    def grant(actor="owner-1", result="agreed"):
+        return {"append": {"kind": "act", "body": act(kind="grant-amendment", target=ident("loosen c1"), result=result,
+                                                       lineage={"intent": "i1", "criterion": "c1", "kind": "grant-amendment"},
+                                                       actor={"id": actor, "session": "s-" + actor}, worker={"id": "worker-1", "session": "s-100"},
+                                                       known_bad=None, given=[{"role": "criteria", "content": ident("criteria")}])}}
+
+    def exceptions(counted, below):
+        return {"intents": {"i1": {"exceptions": {"counted": counted, "below_floor": below}}}}
+    scenario("exceptions_are_in_the_headline", "C32", "Every exception asked for and agreed is in the report: counted if its owner granted it at or above the floor, and shown apart if not. One that was refused is not an exception. In these scenarios an exception changes no gate; it is only never hidden.",
+             [(act_c, exceptions(0, 0)),
+              (grant(), exceptions(1, 0)),
+              (grant(actor="worker-1"), exceptions(1, 1)),
+              (grant(actor="someone-else"), exceptions(1, 2)),
+              (grant(result="refused"), exceptions(1, 2)),
+              (grant(), exceptions(2, 2))],
+             pol=dict(policy, floors=dict(policy["floors"], **{"grant-amendment": "helper"})))
+    scenario("an_exception_below_the_floor_does_not_count", "C33", "With the floor at apart and nothing vouching for the grant, the owner's own exception is below the floor.",
+             [(grant(), exceptions(0, 1))],
+             pol=dict(policy, floors=dict(policy["floors"], **{"grant-amendment": "apart"})))
     late = {"owner": "owner-1", "worker": "worker-1", "children": [], "criteria": {"c1": {"gate": "hard", "checked_by": ["ob-a"]}, "c2": {"gate": "deferred", "checked_by": []}}}
     scenario("nothing_checked_is_nothing_met", "C30", "A criterion that nothing checks is not met, and a deferred one is still open. Found by running status on a real project: every uncovered criterion was being counted as met.",
              [(evidence("ob-a", A), {"intents": {"i1": {"status": "draft", "gates": {"hard": 1, "soft": 0, "deferred": 1, "deferred_open": 1}, "score": {"met": 1, "of": 2}},

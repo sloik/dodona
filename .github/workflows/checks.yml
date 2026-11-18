@@ -61,6 +61,8 @@ jobs:
         run: ${{ matrix.python }} tools/run_ledger_cases.py -- kernel/target/release/dodona-kernel
       - name: Check the kernel against values the reference signer makes now
         run: ${{ matrix.python }} tools/run_attest_check.py -- kernel/target/release/dodona-kernel scenario
+      - name: Run the reference harness on a real checker and have the kernel grade what it signs
+        run: ${{ matrix.python }} tools/run_harness_check.py -- kernel/target/release/dodona-kernel scenario
       - name: Compare the kernel's path check with the reference on random paths
         run: ${{ matrix.python }} tools/path_differential.py -- kernel/target/release/dodona-kernel
       # The second kernel: JavaScript, written without sight of the first.
@@ -78,8 +80,10 @@ jobs:
         run: ${{ matrix.python }} tools/run_ledger_cases.py -- node kernel2/dodona-kernel2.js
       - name: Check the second kernel against values the reference signer makes now
         run: ${{ matrix.python }} tools/run_attest_check.py -- node kernel2/dodona-kernel2.js scenario
+      - name: Run the reference harness and have the second kernel grade what it signs
+        run: ${{ matrix.python }} tools/run_harness_check.py -- node kernel2/dodona-kernel2.js scenario
       - name: Compare the two kernels on inputs the kit does not contain
-        run: ${{ matrix.python }} tools/kernel_differential.py --rounds 6 --a kernel/target/release/dodona-kernel --b node kernel2/dodona-kernel2.js
+        run: ${{ matrix.python }} tools/kernel_differential.py --rounds 8 --a kernel/target/release/dodona-kernel --b node kernel2/dodona-kernel2.js
 
   # A kit that no defective kernel fails proves nothing. Every listed defect is
   # planted in each kernel in turn and the kit must reject it. Slow, so it has

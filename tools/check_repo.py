@@ -242,6 +242,27 @@ def gap_an_unfinished_job_proves_nothing() -> None:
         problems.append(".github/site/batch_driver.py must measure its tools before the first case and write its marker after the last")
 
 
+def gap_tool_tree_digest_matches_its_vectors() -> None:
+    """How a tool tree's digest is computed was unwritten, so a lock could not have been checked by anyone else."""
+    import tooltree
+    vectors = json.loads((ROOT / "conformance" / "vectors" / "tool-tree.json").read_text(encoding="utf-8"))
+    for item in vectors["accept"]:
+        try:
+            got = tooltree.digest(item["items"])
+        except tooltree.Unusable as err:
+            got = f"refused: {err}"
+        if got != item["digest"]:
+            problems.append(f"tool-tree vectors: '{item['name']}' must have digest {item['digest']}, the reference gives {got}")
+    for item in vectors["reject"]:
+        try:
+            problems.append(f"tool-tree vectors: '{item['name']}' must be refused, the reference gives {tooltree.digest(item['items'])}")
+        except tooltree.Unusable as err:
+            if str(err) != item["reason"]:
+                problems.append(f"tool-tree vectors: '{item['name']}' must be refused as {item['reason']}, not {err}")
+    if len(vectors["accept"]) < 5 or len(vectors["reject"]) < 5:
+        problems.append("tool-tree vectors: too few to mean anything")
+
+
 def gap_one_reader_of_checker_output() -> None:
     """The provider and the older model tool each had their own reading of the checker's output and could have disagreed."""
     provider = (ROOT / "providers" / "tlc" / "provider.py").read_text(encoding="utf-8")
@@ -514,7 +535,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_provider_cases_match_the_provider, gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
-              gap_an_unfinished_job_proves_nothing]
+              gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors]
 
 
 class JudgeTests(unittest.TestCase):

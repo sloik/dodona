@@ -75,6 +75,36 @@
         "root": {
           "$ref": "common.schema.json#/$defs/relpath",
           "description": "Directory in the working directory that holds the pinned tool tree. Absent when the tree is not placed there and exists only where runs are executed; a run description then names its files as ${tool:NAME}/PATH."
+        },
+        "listing": {
+          "type": "array",
+          "description": "The files of the tree, as protocol/tool-tree-digest.md describes a listing, so that a provider can name a file of the tool without the tree being in its working directory.",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "kind"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "$ref": "common.schema.json#/$defs/relpath"
+              },
+              "kind": {
+                "enum": [
+                  "file",
+                  "program",
+                  "link"
+                ]
+              },
+              "identity": {
+                "$ref": "common.schema.json#/$defs/identity"
+              },
+              "target": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -390,6 +420,11 @@
               "optional": {
                 "type": "boolean",
                 "default": false
+              },
+              "directory": {
+                "type": "boolean",
+                "default": false,
+                "description": "The output is a directory. Everything in it comes back, described as a listing in the report."
               }
             }
           },

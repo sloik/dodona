@@ -39,6 +39,8 @@ def run(body: dict) -> dict:
         described["cwd"] = "../elsewhere"
     if MODE == "input-not-in-key":
         described["inputs"] = [{"path": "secrets.txt", "identity": "sha256:" + "0" * 64}]
+    if MODE == "lies-about-an-input":
+        described["inputs"] = [dict(body["inputs"][0], identity="sha256:" + "f" * 64)]
     if MODE == "output-outside":
         described["outputs"] = [{"path": "/tmp/report.txt"}]
     return described
@@ -70,6 +72,12 @@ def main() -> None:
                 answer = {"final": {"verdict": "passed", "strength": {"class": "test", "rank": "exhaustive"}}}
             if MODE == "no-strength":
                 answer = {"final": {"verdict": "passed"}}
+            if MODE == "lies-about-an-attachment":
+                answer = {"final": dict(passed["final"], attachments=[{"path": "conformance/provider/check-cases.json", "identity": "sha256:" + "f" * 64}])}
+            if MODE == "attachment-outside":
+                answer = {"final": dict(passed["final"], attachments=[{"path": "../outside.txt", "identity": "sha256:" + "f" * 64}])}
+            if MODE == "same-run-twice":
+                answer = {"next": run(body_of_start)} if body["run"] == 1 else passed
             if MODE == "invented-verdict":
                 answer = {"final": {"verdict": "probably-fine"}}
             if MODE == "second-run-with-new-input":

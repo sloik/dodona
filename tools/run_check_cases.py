@@ -18,7 +18,7 @@ import host  # noqa: E402
 
 ROOT = host.ROOT
 OBLIGATION = {"binding": "b", "name": "o", "kind": "check", "specified_by": ["a.txt"], "targets": ["a.txt"], "expect": "holds", "config": {}}
-INPUTS = [{"path": "a.txt", "identity": "sha256:" + "a" * 64}]
+INPUTS = [{"path": "a.txt", "identity": "sha256:" + "a" * 64}]  # a name only; the judge stands in for the executor
 TOOLS = [{"name": "checker", "version": "1", "digest": "sha256:" + "c" * 64}]
 
 
@@ -44,6 +44,7 @@ def main() -> int:
             final = got["final"]
             verdict = "unavailable" if final.get("reason") == "run-unavailable" else final["verdict"]
             result = {"outcome": "verdict", "verdict": verdict}
+            seen["keys"] = got.get("run_keys", [])
         except host.Refused as err:
             result = {"outcome": "refused", "reason": str(err)}
         finally:
@@ -57,6 +58,8 @@ def main() -> int:
             problems.append("the run was started")
         if case.get("asked_to_interpret") is False and interpreted:
             problems.append("the provider was asked to interpret a run that did not exit")
+        if "distinct_run_keys" in case and len(set(seen.get("keys", []))) != case["distinct_run_keys"]:
+            problems.append(f"expected {case['distinct_run_keys']} runs each under its own key, got keys {seen.get('keys')}")
         label = f"{case['mode']} ({case['run']})"
         if problems:
             failed += 1

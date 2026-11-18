@@ -103,8 +103,11 @@ def render(report: dict, torn: bool, entries: int, note: str) -> str:
     lines.append("obligations: " + ", ".join(f"{count} {status}" for status, count in sorted(tally.items())))
     for ident, item in sorted(report["intents"].items()):
         gates, score, apart = item["gates"], item["score"], item["separation"]
+        shown, asked = item.get("shown", {}), item.get("exceptions", {})
         lines.append(f"{ident}  {item['status']} · gates: {gates['hard']} hard, {gates['soft']} soft, {gates['deferred']} deferred"
                      f" ({gates['deferred_open']} open) · met: {score['met']} of {score['of']}"
+                     f" · shown: {shown.get('level', '?')} (weakest: criterion {shown.get('criterion', '?')})"
+                     f" · exceptions: {asked.get('counted', '?')}" + (f" and {asked['below_floor']} below the floor" if asked.get("below_floor") else "")
                      f" · separation: {apart['weakest']} ({apart['act']}), {apart['apart_or_better']} of {apart['of']} acts apart or better")
     return "\n".join(lines)
 

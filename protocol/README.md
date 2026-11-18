@@ -83,6 +83,10 @@ Validating a message against its schema is a first filter. The kernel also holds
 - **A provider cannot confirm an intent or grant an exception.** Those come only from act records with tickets the kernel issued.
 - **Each run of a check is submitted under its own key**, which includes its number, so a repeated run is never answered from an earlier one.
 
+## Tool trees
+
+A tool is pinned as a whole tree. How the digest of a tree is computed, and which trees have none, is in [tool-tree-digest.md](tool-tree-digest.md), with vectors. A check request may carry the listing of a tool tree, and a run may declare a directory as an output. The stage-0 host passes neither yet.
+
 ## The ledger
 
 What a kernel records, it appends to one file. The format, what counts as an entry cut short and what counts as damage, and how two kernels take turns, are in [ledger.md](ledger.md). The conformance kit holds the exact bytes.
