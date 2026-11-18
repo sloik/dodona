@@ -57,4 +57,4 @@ The reviewer also confirmed: no planted defect fails for a type error or an unre
 ## Not covered
 
 - The two older models (evidence reuse and intent delivery) were not read again.
-- The conformance kit's newer scenarios were not part of this review.
+- The conformance kit's newer scenarios were not part of this review; they have [their own](2026-11-18-newer-scenarios.md).

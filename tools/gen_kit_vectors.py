@@ -77,12 +77,13 @@ def core_keys() -> None:
     top_null = dict(copy.deepcopy(base), platform=None)
     more += [{"name": "a null platform inside the inputs is still a platform", "preimage": null_platform, "reason": "platform-in-core-key"},
              {"name": "a platform at the top level", "preimage": top_platform, "reason": "platform-in-core-key"},
-             {"name": "a null platform at the top level", "preimage": top_null, "reason": "platform-in-core-key"}]
+             {"name": "a null platform at the top level", "preimage": top_null, "reason": "platform-in-core-key"},
+             {"name": "a field at the top level that the definition does not have", "preimage": dict(copy.deepcopy(base), extra=1), "reason": "unknown-field"}]
     both_sorted = copy.deepcopy(base)
     for name in ("specified_by", "targets", "declared", "mapping"):
         both_sorted["inputs"][name] = canonical.sort_set([ident("code a"), ident("lib b")])
     put("conformance/vectors/core-key-more.json", {
-        "about": "More vectors for the core key, in the format of core-key.json (conformance/README.md, Core keys). Every set in a preimage is checked, not only closure; two members in descending order are unsorted; a repeat in any set is refused; and a platform is refused at the top level as well as inside the inputs, null included. `accept` holds one preimage with two members in every set, so a kernel that refuses every set of more than one member does not pass.",
+        "about": "More vectors for the core key, in the format of core-key.json (conformance/README.md, Core keys). Every set in a preimage is checked, not only closure; two members in descending order are unsorted; a repeat in any set is refused; and a platform is refused at the top level as well as inside the inputs, null included. Any field at the top level that the preimage definition does not have is refused with the same reason as a platform, `platform-in-core-key`: there is one reason for both. `accept` holds one preimage with two members in every set, so a kernel that refuses every set of more than one member does not pass.",
         "accept": [{"name": "two sorted members in every set", "preimage": both_sorted, "core_key": canonical.identity(both_sorted)}],
         "reject": more})
 
@@ -330,6 +331,9 @@ def ledger() -> None:
         ("a length with a plus sign", text + f"dodona1 +{size} {checksum} {payload}\n", corrupt(4), None),
         ("a checksum in uppercase", text + f"dodona1 {size} {checksum.upper()} {payload}\n", corrupt(4), None),
         ("two spaces between fields", text + f"dodona1  {size}  {checksum}  {payload}\n", corrupt(4), None),
+        ("two spaces after the format marker only", text + f"dodona1  {size} {checksum} {payload}\n", corrupt(4), None),
+        ("two spaces after the length only", text + f"dodona1 {size}  {checksum} {payload}\n", corrupt(4), None),
+        ("two spaces after the checksum only", text + f"dodona1 {size} {checksum}  {payload}\n", corrupt(4), "A reader that takes everything after the third space as the payload sees a payload that starts with a space: the length and the checksum no longer fit it."),
         ("a tab in place of a space", text + f"dodona1\t{size} {checksum} {payload}\n", corrupt(4), None),
         ("a space after the payload", text + f"dodona1 {size} {checksum} {payload} \n", corrupt(4), None),
         ("a byte-order mark before the first entry", "\ufeff" + text, corrupt(1), None),
@@ -643,6 +647,8 @@ def status() -> None:
               ({"append": {"kind": "evidence", "body": {}}}, nothing()),
               ({"append": {"kind": "evidence", "body": "passed"}}, nothing())]
              + [(without(whole, field), nothing()) for field in ("obligation", "platform", "writer", "core_key", "preimage")]
+             # Not rejected either: with a wrong key these would be rejected if they were records. They are not records.
+             + [(without(record("ob-a", A, core_key=canonical.identity(A2)), field), nothing()) for field in ("writer", "platform")]
              + [(added({k: v for k, v in confirm("i1", intent).items() if k != "actor"}), nothing()),
                 (added([]), nothing()),
                 (evidence("ob-a", A), {"obligations": {"ob-a": P, "ob-b": U}, "rejected": 0, "intents": {"i1": {"status": "draft"}}}),

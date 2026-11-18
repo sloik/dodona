@@ -27,7 +27,7 @@ fn line(entry: &Value) -> String {
 }
 /// The entry on one complete line, without its line feed, if the line is well
 /// formed and names `previous` as the entry before it.
-fn entry(line: &[u8], previous: Option<&str>) -> Option<Value> {
+fn entry(line: &[u8], earlier: &[String]) -> Option<Value> {
     let text = std::str::from_utf8(line).ok()?;
     let mut parts = text.splitn(4, ' ');
     let (marker, length, checksum, payload) =
@@ -40,9 +40,9 @@ fn entry(line: &[u8], previous: Option<&str>) -> Option<Value> {
     }
     let entry = json::parse(payload.as_bytes()).ok()?;
     let shaped = matches!(&entry, Value::Object(fields) if fields.len() == 3)
-        && matches!(entry.opt("kind"), Some(Value::String(_)))
+        && entry.text("kind").is_some_and(|k| !k.is_empty())
         && entry.opt("body").is_some()
-        && match (entry.opt("previous"), previous) {
+        && match (entry.opt("previous"), earlier.last()) {
             (Some(Value::Null), None) => true,
             (Some(Value::String(p)), Some(want)) => p == want,
             _ => false,
@@ -53,11 +53,13 @@ fn entry(line: &[u8], previous: Option<&str>) -> Option<Value> {
 fn parse(data: &[u8]) -> Result<Contents, usize> {
     let end = data.iter().rposition(|b| *b == b'\n').map_or(0, |i| i + 1);
     let mut entries = Vec::new();
-    let mut previous: Option<String> = None;
+    // The identity of every entry so far, in order.
+    let mut earlier: Vec<String> = Vec::new();
     if end > 0 {
-        for (i, line) in data[..end - 1].split(|b| *b == b'\n').enumerate() {
-            let e = entry(line, previous.as_deref()).ok_or(i + 1)?;
-            previous = Some(canonical::identity(&e));
+        let lines = data[..end - 1].split(|b| *b == b'\n');
+        for (i, line) in lines.enumerate() {
+            let e = entry(line, &earlier).ok_or(i + 1)?;
+            earlier.push(canonical::identity(&e));
             entries.push(e);
         }
     }
@@ -132,11 +134,14 @@ fn field<'a>(v: &'a Value, name: &str) -> Result<&'a str, String> {
 pub fn append(v: &Value) -> Result<Value, String> {
     // Everything the caller supplies is checked before the lock is taken.
     let path = field(v, "ledger")?;
-    let kind = field(v, "kind")?;
-    let body = v.opt("body").ok_or("`body` is missing")?;
     let wait = match v.opt("wait_ms") {
         Some(Value::Number(n)) => Duration::from_millis((*n).max(0) as u64),
         _ => return Err("`wait_ms` must be a number".into()),
+    };
+    // The caller supplies a kind, any non-empty string, and a body.
+    let kind = v.text("kind").filter(|k| !k.is_empty());
+    let (Some(kind), Some(body)) = (kind, v.opt("body")) else {
+        return Ok(refused("bad-request"));
     };
     let Some(_lock) = lock(path, wait)? else {
         return Ok(refused("locked"));
@@ -241,6 +246,14 @@ mod tests {
         assert_eq!(at(text.replacen('\n', "\r\n", 1)), 1);
         assert_eq!(at(text.replacen("\"b\"", "\"B\"", 1)), 2);
         assert_eq!(at(text.replacen("dodona1", "dodona2", 1)), 1);
+        // `previous` must be the entry just before, not an earlier one.
+        let (three, _) = entries(&["a", "b", "c"]);
+        let skipping = json::object(vec![
+            ("previous", json::string(&canonical::identity(&three[1]))),
+            ("kind", json::string("evidence")),
+            ("body", json::string("d")),
+        ]);
+        assert_eq!(at(format!("{text}{}", line(&skipping))), 4);
         // A torn ending excuses nothing before it.
         assert_eq!(at(format!("{}garbage\n{}", lines[0], &lines[1][..9])), 2);
         // Well formed, with the right length and checksum, but not canonical or not an entry.
@@ -257,6 +270,9 @@ mod tests {
             r#"{"body":{},"kind":"act","previous":null,"extra":1}"#,
             r#"{"body":{},"kind":"act"}"#,
             r#"{"body":{},"kind":7,"previous":null}"#,
+            r#"{"body":{},"kind":"","previous":null}"#,
+            r#"{"body":{},"kind":"act","previous":"sha256:00","extra":1}"#,
+            "null",
             r#"{"body":{},"kind":"act","previous":"sha256:00"}"#,
             r#"[]"#,
             "not json",
@@ -334,6 +350,39 @@ mod tests {
         let bad = json::object(vec![("ledger", json::string(&path))]);
         assert!(append(&bad).is_err());
         assert!(!std::path::Path::new(&lock_file).exists());
+        // No kind that is a non-empty string, or no body: refused, nothing written, no lock.
+        let fresh = scratch("fresh.ledger");
+        for (kind, body) in [
+            (None, Some(Value::Null)),
+            (Some(Value::Number(7)), Some(Value::Null)),
+            (Some(Value::Null), Some(Value::Null)),
+            (Some(json::string("")), Some(Value::Null)),
+            (Some(json::string("act")), None),
+        ] {
+            let mut request = vec![
+                ("ledger", json::string(&fresh)),
+                ("wait_ms", Value::Number(0)),
+            ];
+            request.extend(kind.map(|k| ("kind", k)));
+            request.extend(body.map(|b| ("body", b)));
+            let answer = append(&json::object(request)).unwrap();
+            assert_eq!(json::encode(&answer), r#"{"refused":"bad-request"}"#);
+            assert!(!std::path::Path::new(&fresh).exists());
+            assert!(!std::path::Path::new(&format!("{fresh}.lock")).exists());
+        }
+        // Any other kind is kept, and a null body is a body.
+        let odd = json::object(vec![
+            ("ledger", json::string(&fresh)),
+            ("kind", json::string("something-else")),
+            ("body", Value::Null),
+            ("wait_ms", Value::Number(0)),
+        ]);
+        assert!(append(&odd).unwrap().opt("appended").is_some());
+        assert!(append(&request(&fresh, "after"))
+            .unwrap()
+            .opt("appended")
+            .is_some());
+        assert!(read(&request(&fresh, "")).unwrap().opt("entries").is_some());
         let _ = fs::remove_dir_all(std::path::Path::new(&path).parent().unwrap());
     }
 }

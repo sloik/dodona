@@ -20,6 +20,8 @@ supersedes: []
 
 **The mechanism.** A harness vouches for named fields of an act record with HMAC-SHA256, under a key, over the canonical encoding of the list of covered fields and their values. Policy lists the keys that count, by name. A kernel recomputes the value. A fact is vouched for only if every field it reads is covered, the key is one policy lists and the value matches; a level is granted only if every fact of that level and of the levels below is vouched for. It is a shared-key value and not a signature: whoever can check it could have made it.
 
+**The value binds what was judged.** A review found that the first version vouched for who checked and how, and not for what: a signed refusal could be copied as an agreement, or onto another target, and still count. So nothing above `helper` is granted unless the covered fields also include the kind of act, its target, its result and what it belongs to. A key in policy that is not a real key vouches for nothing, and a record that is not well formed is graded `self`.
+
 **Why a shared key.** The seed kernels use only their language's standard library, and neither has public-key signatures in it. A keyed hash can be written in a page and tested against published vectors. The price is that the kernel must hold the key, so the kernel must also be out of the working agent's reach wherever a higher grade is to mean anything. `credentialed`, which needs a real signature, stays unavailable.
 
 **The policy anchor.** The keys that count, and the floors acts must meet, are in the policy. If the working agent can edit the policy it can list its own key. So status reads the policy from the protected reference branch, says so, and says loudly when it could not and fell back to the working copy.

@@ -39,6 +39,15 @@ fn baseline(i: &Value) -> String {
         ("criteria", criteria),
     ]))
 }
+/// Whether an evidence entry is a record at all. One that is not counts for
+/// nothing and is not counted as rejected either.
+fn is_record(body: &Value) -> bool {
+    ["obligation", "platform", "writer", "core_key"]
+        .iter()
+        .all(|f| text(body, f).is_some())
+        && body.opt("preimage").is_some()
+        && text(body, "verdict").is_some_and(|v| evidence::VERDICTS.contains(&v))
+}
 /// The key an evidence record stands under, or none if the record is rejected:
 /// it must state the core key of its own preimage.
 fn stated_key(body: &Value) -> Option<String> {
@@ -228,13 +237,9 @@ pub fn run(v: &Value) -> Vec<Value> {
     let mut out = Vec::new();
     for step in v.get("steps").array() {
         let a = step.get("do");
-        // A record with a verdict that does not exist is not a record: appending it changes nothing.
         if let Some(x) = a.opt("append") {
             if let (Some(kind), Some(body)) = (x.text("kind"), x.opt("body")) {
-                let verdict = body.text("verdict");
-                if kind != "evidence" || verdict.is_some_and(|v| evidence::VERDICTS.contains(&v)) {
-                    ledger.push((kind.into(), body.clone()));
-                }
+                ledger.push((kind.into(), body.clone()));
             }
         }
         // A change to an obligation, or a gate, that is not there has nothing to act on.
@@ -251,7 +256,11 @@ pub fn run(v: &Value) -> Vec<Value> {
                 *g = json::string(to);
             }
         }
-        let evidence = || ledger.iter().filter(|(k, _)| k == "evidence");
+        let evidence = || {
+            ledger
+                .iter()
+                .filter(|(k, b)| k == "evidence" && is_record(b))
+        };
         let rejected = evidence().filter(|(_, b)| stated_key(b).is_none()).count();
         let mut statuses: BTreeMap<&str, (&'static str, usize)> = BTreeMap::new();
         let mut obligations_out = Vec::new();
@@ -353,7 +362,10 @@ pub fn run(v: &Value) -> Vec<Value> {
         }
         let required: Vec<_> = list(policy.opt("required"))
             .iter()
-            .map(|r| reports.get(r.str()).copied())
+            .map(|r| match r {
+                Value::String(name) => reports.get(name.as_str()).copied(),
+                _ => None,
+            })
             .collect();
         out.push(json::object(vec![
             ("obligations", Value::Object(obligations_out)),
@@ -451,6 +463,24 @@ mod tests {
         assert_eq!(stated_key(&unkeyable), None);
         assert_eq!(stated_key(&value("{}")), None);
         assert!(!counts(&value("{}"), "o", Some(&key), &own, &policy));
+        // What is not a record.
+        let whole = |verdict: &str| {
+            let mut r = good.clone();
+            if let Value::Object(f) = &mut r {
+                f.push(("verdict".into(), json::string(verdict)));
+            }
+            r
+        };
+        assert!(is_record(&whole("passed")) && is_record(&whole("failed")));
+        assert!(!is_record(&whole("error")) && !is_record(&good));
+        for field in ["obligation", "platform", "writer", "core_key", "preimage"] {
+            let mut r = whole("passed");
+            if let Value::Object(f) = &mut r {
+                f.retain(|(k, _)| k != field);
+            }
+            assert!(!is_record(&r), "{field}");
+        }
+        assert!(!is_record(&json::string("text")) && !is_record(&Value::Null));
     }
     fn act(kind: &str, result: &str, target: &str, actor: &str, worker: &str) -> (String, Value) {
         (
@@ -626,14 +656,17 @@ mod tests {
                          {"do":{"append":{"kind":"evidence","body":{"verdict":"made-up"}}}},
                          {"do":{"append":{"kind":7,"body":{}}}},
                          {"do":{"change":{"obligation":7,"preimage":{}}}},
-                         {"do":{"append":{"kind":"evidence","body":{"verdict":"passed"}}}}]}"#,
+                         {"do":{"append":{"kind":"evidence","body":{"verdict":"passed"}}}},
+                         {"do":{"append":{"kind":"evidence","body":"text"}}},
+                         {"do":{"append":{"kind":"act","body":7}}},
+                         {"do":{"append":{"kind":"evidence","body":{"obligation":"ob","platform":"p","writer":"k","core_key":"sha256:00","preimage":{"inputs":{}},"verdict":"passed"}}}}]}"#,
         );
         let results = run(&scenario);
-        assert_eq!(results.len(), 9);
-        for r in &results[1..8] {
+        assert_eq!(results.len(), 12);
+        for r in &results[1..11] {
             assert_eq!(json::encode(r), json::encode(&results[0]));
         }
-        let results = &results[4..];
+        let results = &results[7..];
         let last = json::encode(&results[4]);
         assert_eq!(
             json::encode(&results[0]).replace(r#""rejected":0"#, ""),

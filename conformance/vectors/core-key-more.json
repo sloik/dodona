@@ -1,5 +1,5 @@
 {
-  "about": "More vectors for the core key, in the format of core-key.json (conformance/README.md, Core keys). Every set in a preimage is checked, not only closure; two members in descending order are unsorted; a repeat in any set is refused; and a platform is refused at the top level as well as inside the inputs, null included. `accept` holds one preimage with two members in every set, so a kernel that refuses every set of more than one member does not pass.",
+  "about": "More vectors for the core key, in the format of core-key.json (conformance/README.md, Core keys). Every set in a preimage is checked, not only closure; two members in descending order are unsorted; a repeat in any set is refused; and a platform is refused at the top level as well as inside the inputs, null included. Any field at the top level that the preimage definition does not have is refused with the same reason as a platform, `platform-in-core-key`: there is one reason for both. `accept` holds one preimage with two members in every set, so a kernel that refuses every set of more than one member does not pass.",
   "accept": [
     {
       "name": "two sorted members in every set",
@@ -512,6 +512,41 @@
         "platform": null
       },
       "reason": "platform-in-core-key"
+    },
+    {
+      "name": "a field at the top level that the definition does not have",
+      "preimage": {
+        "obligation": "sha256:a08cc2e7cd9d217f2888327463da92168c5c29cf62b590c3ecc0eb6f5e241aca",
+        "kind": "check",
+        "inputs": {
+          "specified_by": [
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "targets": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291"
+          ],
+          "closure": [
+            "sha256:1cb781ea5c85eae8d095acf5fa607d855a1c34f4bd39ff86afc7a79720955291",
+            "sha256:2367d5304fd8a822f3ba24a53d70f2ae25ca3a020d45a33cd657aa230e6ad060",
+            "sha256:930cdb46ac8d5c870f6c46dbc31e97af2beb8cb91e74234980dcf0cf3e1ee476"
+          ],
+          "tools": [
+            {
+              "name": "checker",
+              "digest": "sha256:8e2e91057aca9cf13077a6a6c1972eca061d27c1f1dbd02ab6389aea2ec6b715"
+            }
+          ],
+          "config": "sha256:fd98a4211195ab678be53a0b5f89c2daf41a4911a227ebd76ec0e0b38497c953",
+          "expect": "holds"
+        },
+        "provider": {
+          "name": "example.checker",
+          "version": "1.0.0",
+          "protocol": "0.2"
+        },
+        "extra": 1
+      },
+      "reason": "unknown-field"
     }
   ]
 }

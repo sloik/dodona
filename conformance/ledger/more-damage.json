@@ -52,6 +52,31 @@
       }
     },
     {
+      "name": "two spaces after the format marker only",
+      "file": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1  152 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n",
+      "expect": {
+        "refused": "corrupt",
+        "at": 4
+      }
+    },
+    {
+      "name": "two spaces after the length only",
+      "file": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 152  9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n",
+      "expect": {
+        "refused": "corrupt",
+        "at": 4
+      }
+    },
+    {
+      "name": "two spaces after the checksum only",
+      "file": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 152 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5  {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n",
+      "expect": {
+        "refused": "corrupt",
+        "at": 4
+      },
+      "note": "A reader that takes everything after the third space as the payload sees a payload that starts with a space: the length and the checksum no longer fit it."
+    },
+    {
       "name": "a tab in place of a space",
       "file": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1\t152 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n",
       "expect": {
