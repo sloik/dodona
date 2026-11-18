@@ -7,6 +7,9 @@
 // policy's number on its own (decision 0030, decision 0017).
 const vocabulary = require('./vocabulary');
 
+// The gates a tree allows. Any other gate in an `edit` or an `add` changes nothing.
+const TREE_GATES = ['hard', 'soft'];
+
 function treeStatus(policy, confirmed, root, children) {
   const nodes = [root, ...children];
   const hard = nodes.filter((node) => node.gate === 'hard');
@@ -35,14 +38,14 @@ function runScenario(scenario) {
       if (node && vocabulary.CHECKS.includes(step.check.status)) node.check = step.check.status;
     } else if (step.edit) {
       const node = nodeNamed(step.edit.node);
-      if (node && vocabulary.GATES.includes(step.edit.to) && node.gate !== step.edit.to) {
+      if (node && TREE_GATES.includes(step.edit.to) && node.gate !== step.edit.to) {
         node.gate = step.edit.to;
         confirmed = false;
       }
     } else if (step.remove && isString(step.remove.child)) {
       if (children.delete(step.remove.child)) confirmed = false;
     } else if (step.add) {
-      if (isString(step.add.child) && !children.has(step.add.child) && vocabulary.GATES.includes(step.add.gate)) {
+      if (isString(step.add.child) && !children.has(step.add.child) && TREE_GATES.includes(step.add.gate)) {
         children.set(step.add.child, { gate: step.add.gate, check: 'unknown' });
         confirmed = false;
       }

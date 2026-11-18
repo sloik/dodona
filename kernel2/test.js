@@ -146,6 +146,10 @@ test('tree status', () => {
   assert.equal(tree.treeStatus(two, true, node('hard', 'passed'), [node('hard', 'passed')]), 'delivered');
   assert.equal(tree.treeStatus(two, true, node('hard', 'passed'), []), 'unguarded');
   assert.equal(tree.treeStatus({ min_hard_gates: 0 }, true, node('soft', 'passed'), []), 'unguarded'); // below 1 is 1
+  // A gate other than hard or soft in an edit or an add changes nothing.
+  const run = (...steps) => tree.runScenario({ policy, root: { gate: 'hard' }, children: {}, steps: [{ do: { confirm: {} } }, ...steps.map((step) => ({ do: step }))] });
+  assert.deepEqual(run({ edit: { node: 'root', to: 'deferred' } }).map((r) => r.status), ['open', 'open']);
+  assert.deepEqual(run({ add: { child: 'k', gate: 'deferred' } }).map((r) => r.status), ['open', 'open']);
 });
 
 test('attempts: refusal then agreement is shopping', () => {
@@ -437,4 +441,14 @@ test('status: an evidence entry with a wrongly typed field is not a record and i
   for (const wrong of [{ platform: true }, { writer: 0 }, { obligation: [] }, { core_key: null }, { preimage: 'x' }]) {
     assert.equal(status.runScenario(scenario(body(wrong))).at(-1).rejected, 0);
   }
+});
+
+test('evidence: the reason is the attempt asked for last, not the one that ended last', () => {
+  const steps = [
+    { submit: { obligation: 'o', as: 'j1' } }, { backend: { to: 'down' } }, { submit: { obligation: 'o', as: 'j2' } },
+    { lose: { run: 'j1' } }, { backend: { to: 'up' } }, { submit: { obligation: 'o', as: 'j3' } }, { lose: { run: 'j3' } },
+  ];
+  const scenario = { obligations: { o: { depends_on: ['d'] } }, start: { definitions: { d: 'a' }, tool: 't', backend: 'up' }, steps: steps.map((step) => ({ do: step })) };
+  assert.deepEqual(evidence.runScenario(scenario).map((result) => result.o.reason),
+    ['pending', 'pending', 'pending', 'unavailable', 'unavailable', 'pending', 'error']);
 });

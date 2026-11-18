@@ -42,8 +42,12 @@ function judgeObligation(obligation, dependsOn, current, ledger) {
     return { status: 'failed', pending: false, reason: null };
   }
   if (ledger.running.some(here)) return { status: 'unknown', pending: true, reason: 'pending' };
+  // The most recent attempt that left no result, by when it was asked for (its submit), not by when it ended.
   const outcomes = ledger.outcomes.filter(here);
-  if (outcomes.length > 0) return { status: 'unknown', pending: false, reason: outcomes[outcomes.length - 1].outcome };
+  if (outcomes.length > 0) {
+    const latest = outcomes.reduce((best, outcome) => (outcome.asked > best.asked ? outcome : best));
+    return { status: 'unknown', pending: false, reason: latest.outcome };
+  }
   return { status: 'unknown', pending: false, reason: 'never-run' };
 }
 
@@ -57,6 +61,7 @@ function runScenario(scenario) {
   const ledger = { records: [], running: [], outcomes: [] };
   const dependsOn = (obligation) => (Object.hasOwn(scenario.obligations, obligation) ? scenario.obligations[obligation] : {}).depends_on;
   const results = [];
+  let asked = 0; // counts the submits that took effect, so attempts are ordered by when they were asked for
 
   for (const { do: step } of scenario.steps) {
     if (step.edit && isString(step.edit.definition) && isString(step.edit.to) && Object.hasOwn(state.definitions, step.edit.definition)) {
@@ -69,7 +74,8 @@ function runScenario(scenario) {
         && !ledger.running.some((run) => run.run === step.submit.as)) {
       // A submit under a name that is in flight, or for an unknown obligation, changes nothing.
       const obligation = step.submit.obligation;
-      const entry = { obligation, inputs: inputsOf(state.definitions, dependsOn(obligation)), tool: state.tool };
+      asked += 1;
+      const entry = { obligation, inputs: inputsOf(state.definitions, dependsOn(obligation)), tool: state.tool, asked };
       if (state.backend === 'up') {
         ledger.running.push({ ...entry, run: step.submit.as });
       } else {
@@ -85,7 +91,7 @@ function runScenario(scenario) {
       const at = ledger.running.findIndex((run) => run.run === step.lose.run);
       if (at >= 0) {
         const [run] = ledger.running.splice(at, 1);
-        ledger.outcomes.push({ obligation: run.obligation, inputs: run.inputs, tool: run.tool, outcome: 'error' });
+        ledger.outcomes.push({ obligation: run.obligation, inputs: run.inputs, tool: run.tool, asked: run.asked, outcome: 'error' });
       }
     }
     const result = {};
