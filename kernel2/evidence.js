@@ -7,6 +7,8 @@
 
 const vocabulary = require('./vocabulary');
 
+const { isString } = vocabulary;
+
 function inputsOf(definitions, dependsOn) {
   const inputs = {};
   for (const definition of dependsOn) inputs[definition] = definitions[definition];
@@ -53,17 +55,17 @@ function runScenario(scenario) {
     backend: scenario.start.backend,
   };
   const ledger = { records: [], running: [], outcomes: [] };
-  const dependsOn = (obligation) => (scenario.obligations[obligation] || {}).depends_on;
+  const dependsOn = (obligation) => (Object.hasOwn(scenario.obligations, obligation) ? scenario.obligations[obligation] : {}).depends_on;
   const results = [];
 
   for (const { do: step } of scenario.steps) {
-    if (step.edit && Object.hasOwn(state.definitions, step.edit.definition)) {
+    if (step.edit && isString(step.edit.definition) && isString(step.edit.to) && Object.hasOwn(state.definitions, step.edit.definition)) {
       state.definitions[step.edit.definition] = step.edit.to;
-    } else if (step.repin) {
+    } else if (step.repin && isString(step.repin.to)) {
       state.tool = step.repin.to;
     } else if (step.backend && vocabulary.BACKENDS.includes(step.backend.to)) {
       state.backend = step.backend.to;
-    } else if (step.submit && dependsOn(step.submit.obligation) !== undefined
+    } else if (step.submit && isString(step.submit.obligation) && isString(step.submit.as) && dependsOn(step.submit.obligation) !== undefined
         && !ledger.running.some((run) => run.run === step.submit.as)) {
       // A submit under a name that is in flight, or for an unknown obligation, changes nothing.
       const obligation = step.submit.obligation;
@@ -73,13 +75,13 @@ function runScenario(scenario) {
       } else {
         ledger.outcomes.push({ ...entry, outcome: 'unavailable' });
       }
-    } else if (step.complete && vocabulary.VERDICTS.includes(step.complete.verdict)) {
+    } else if (step.complete && isString(step.complete.run) && vocabulary.VERDICTS.includes(step.complete.verdict)) {
       const at = ledger.running.findIndex((run) => run.run === step.complete.run);
       if (at >= 0) {
         const [run] = ledger.running.splice(at, 1);
         ledger.records.push({ obligation: run.obligation, inputs: run.inputs, tool: run.tool, verdict: step.complete.verdict });
       }
-    } else if (step.lose) {
+    } else if (step.lose && isString(step.lose.run)) {
       const at = ledger.running.findIndex((run) => run.run === step.lose.run);
       if (at >= 0) {
         const [run] = ledger.running.splice(at, 1);

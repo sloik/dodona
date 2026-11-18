@@ -931,6 +931,41 @@
       "file": "status.js",
       "find": "owner: intent.owner, words: typeof intent.words === 'string' ? intent.words : '', children:",
       "replace": "owner: intent.owner, children:"
+    },
+    {
+      "name": "an unknown gate is not counted as hard",
+      "model_case": "(round 8)",
+      "file": "status.js",
+      "find": "  return vocabulary.GATES.includes(gate) ? gate : 'hard';",
+      "replace": "  return vocabulary.GATES.includes(gate) ? gate : 'soft';"
+    },
+    {
+      "name": "a non-string started_by is not malformed",
+      "model_case": "(round 8)",
+      "file": "acts.js",
+      "find": "  if (actor_started_by_wrong(record)) return true;\n",
+      "replace": ""
+    },
+    {
+      "name": "a make group written as a string is matched by substring",
+      "model_case": "(round 8)",
+      "file": "acts.js",
+      "find": "(policy.makes || []).filter((group) => Array.isArray(group) && group.every(isString));",
+      "replace": "(policy.makes || []).filter((group) => typeof group === 'string' || (Array.isArray(group) && group.every(isString)));"
+    },
+    {
+      "name": "a wrongly typed evidence field is counted as rejected",
+      "model_case": "(round 9)",
+      "file": "status.js",
+      "find": "(field === 'preimage' ? isObject(body[field]) : typeof body[field] === 'string')",
+      "replace": "body[field] !== undefined"
+    },
+    {
+      "name": "a step with a wrongly typed name acts",
+      "model_case": "(round 9)",
+      "file": "plan.js",
+      "find": "if (step.edit && isString(step.edit.definition) && isString(step.edit.to) && Object.hasOwn(state.content, step.edit.definition)) {",
+      "replace": "if (step.edit && Object.hasOwn(state.content, step.edit.definition)) {"
     }
   ]
 }

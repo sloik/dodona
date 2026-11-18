@@ -1,0 +1,77 @@
+{
+  "kind": "attempts",
+  "claim": "C35",
+  "name": "clean_agreement_with_values_of_the_wrong_type",
+  "covers": [],
+  "why": "The scenario clean_agreement, with after each step the same step again, once for each value it holds, with that value of the wrong type. Such a step changes nothing, so what was expected after the step it copies is expected after it too.",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": 0
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "agreed",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": false,
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "agreed",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": null
+        }
+      },
+      "expect": {
+        "result": "agreed",
+        "shopped": false,
+        "cap": null,
+        "attempts": 1
+      }
+    }
+  ]
+}

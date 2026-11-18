@@ -48,12 +48,18 @@ function absentOr(value, test) {
   return value === undefined || test(value);
 }
 
+// `actor.started_by`, when present, must be a string.
+function actor_started_by_wrong(record) {
+  return record.actor.started_by !== undefined && !isString(record.actor.started_by);
+}
+
 // A record is malformed when a required part is missing or a present field has the wrong type.
 function isMalformed(record) {
   if (!isObject(record) || !isObject(record.actor) || !isObject(record.worker)) return true;
   // A field nobody signs cannot ride along on a signed record.
   if (Object.keys(record).some((name) => !RECORD_FIELDS.includes(name))) return true;
   if (!isString(record.actor.id) || !isString(record.actor.session) || !isString(record.worker.id) || !isString(record.worker.session)) return true;
+  if (actor_started_by_wrong(record)) return true;
   const knownBad = record.known_bad;
   const attestation = record.attestation;
   const checks = [
@@ -100,7 +106,8 @@ function factsOf(record, policy) {
   const knownBad = record.known_bad;
   const actorMake = makeName(actor.make);
   const workerMake = makeName(worker.make);
-  const makes = policy.makes || [];
+  // A group that is not a list of strings is ignored.
+  const makes = (policy.makes || []).filter((group) => Array.isArray(group) && group.every(isString));
   return {
     distinct: actor.id !== worker.id && actor.session !== worker.session,
     started: present(actor.started_by) && actor.started_by !== worker.id,

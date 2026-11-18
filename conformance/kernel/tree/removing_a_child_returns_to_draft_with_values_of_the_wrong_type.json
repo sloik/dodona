@@ -1,0 +1,125 @@
+{
+  "kind": "tree",
+  "claim": "C34",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    },
+    "k2": {
+      "gate": "hard"
+    }
+  },
+  "name": "removing_a_child_returns_to_draft_with_values_of_the_wrong_type",
+  "covers": [],
+  "why": "The scenario removing_a_child_returns_to_draft, with after each step the same step again, once for each value it holds, with that value of the wrong type. Such a step changes nothing, so what was expected after the step it copies is expected after it too.",
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": 0,
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": false
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": null,
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": []
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "remove": {
+          "child": "k2"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "remove": {
+          "child": {}
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}

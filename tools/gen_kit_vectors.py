@@ -675,6 +675,8 @@ def status() -> None:
 
     def nothing(status="draft"):
         return {"obligations": {"ob-a": U, "ob-b": U}, "rejected": 0, "intents": {"i1": {"status": status}}}
+    def appended(body):
+        return {"append": {"kind": "evidence", "body": body}}
     whole = record("ob-a", A, verdict="failed")
     scenario("what_is_not_a_record_counts_for_nothing", "C18", "An evidence entry with a verdict that is neither passed nor failed, with a field missing, or with a body that is not an object, counts for nothing and is not counted as rejected either. An act with no actor is malformed and confirms nothing. The kernel answers every one of these steps and carries on: the last two steps are ordinary and must work.",
              [(evidence("ob-a", A, verdict="error"), nothing()),
@@ -685,12 +687,12 @@ def status() -> None:
              # Not rejected either: with a wrong key these would be rejected if they were records. They are not records.
              + [(without(record("ob-a", A, core_key=canonical.identity(A2)), field), nothing()) for field in ("writer", "platform")]
              # A field of the wrong type counts as lacking it: not a record, so not rejected either.
-             + [(added(dict(record("ob-a", A, core_key=canonical.identity(A2)), **{field: odd})), nothing())
+             + [(appended(dict(record("ob-a", A, core_key=canonical.identity(A2)), **{field: odd})), nothing())
                 for field, odd in (("platform", True), ("writer", 7), ("obligation", False), ("core_key", -1), ("preimage", []))]
              # Which comes first: an entry that is not a record is not one, whatever else is wrong with it.
-             + [(added(dict(record("ob-a", dict(A, inputs=dict(A["inputs"], closure=[{}]))), platform=field_value)), nothing())
+             + [(appended(dict(record("ob-a", dict(A, inputs=dict(A["inputs"], closure=[{}]))), platform=field_value)), nothing())
                 for field_value in (True, -1)]
-             + [(added(dict(record("ob-a", dict(A, kind="match-check")), platform=True, core_key=canonical.identity(A))), nothing())]
+             + [(appended(dict(record("ob-a", dict(A, kind="match-check")), platform=True, core_key=canonical.identity(A))), nothing())]
              + [(added({k: v for k, v in confirm("i1", intent).items() if k != "actor"}), nothing()),
                 (added([]), nothing()),
                 (evidence("ob-a", A), {"obligations": {"ob-a": P, "ob-b": U}, "rejected": 0, "intents": {"i1": {"status": "draft"}}}),

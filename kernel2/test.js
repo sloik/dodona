@@ -303,7 +303,7 @@ test('the safety net does not fire on any scenario of the kit', () => {
   process.stderr.write = (text) => { written.push(String(text)); return true; };
   let count = 0;
   try {
-    const base = path.join(__dirname, '..', 'conformance', 'kernel');
+    const base = path.join(process.env.DODONA_ROOT || path.join(__dirname, '..'), 'conformance', 'kernel');
     for (const kind of fs.readdirSync(base)) {
       if (!fs.statSync(path.join(base, kind)).isDirectory()) continue;
       for (const file of fs.readdirSync(path.join(base, kind))) {
@@ -377,4 +377,30 @@ test('core keys: every set, unknown fields and a platform anywhere', () => {
   assert.deepEqual(identity.coreKey(preimage({}, { mapping: ['sha256:a', 'sha256:a'] })), { refused: 'unsorted-set' });
   assert.deepEqual(identity.coreKey(preimage({ platform: null }, {})), { refused: 'platform-in-core-key' });
   assert.deepEqual(identity.coreKey(preimage({ surprise: 1 }, {})), { refused: 'unknown-field' });
+});
+
+test('a step with a value of the wrong type changes nothing', () => {
+  const { runScenario } = require('./scenario');
+  const same = (kind, scenario, good, bad) => {
+    const a = runScenario({ kind, ...scenario, steps: [{ do: good }] }).results;
+    const b = runScenario({ kind, ...scenario, steps: [{ do: good }, { do: bad }] }).results;
+    assert.deepEqual(b[1].plan === undefined ? b[1] : { plan: b[1].plan }, a[0].plan === undefined ? a[0] : { plan: a[0].plan });
+  };
+  same('attempts', {}, { take: { as: 't1' } }, { take: { as: 0 } });
+  same('plan', { granularity: 'definition', definitions: { d: { depends_on: [], file: 'f' } }, obligations: { o: { targets: ['d'] } }, start: { content: { d: 'a' }, tools: {} } },
+    { run: { obligation: 'o' } }, { edit: { definition: 'd', to: -1 } });
+  const evidence = { obligations: { o: { depends_on: ['d'] } }, start: { definitions: { d: 'a' }, tool: 't', backend: 'up' } };
+  same('evidence', evidence, { submit: { obligation: 'o', as: 'j' } }, { submit: { obligation: 'o', as: false } });
+  same('evidence', evidence, { submit: { obligation: 'o', as: 'j' } }, { edit: { definition: 'd', to: true } });
+});
+
+test('status: an evidence entry with a wrongly typed field is not a record and is not rejected', () => {
+  const pre = { obligation: 'sha256:a', kind: 'check', inputs: { targets: ['sha256:1'] }, provider: { name: 'p', version: '1', protocol: '0.2' } };
+  const body = (extra) => ({ obligation: 'a', preimage: pre, core_key: 'sha256:wrong', platform: 'p1', verdict: 'passed', writer: 'k', ...extra });
+  const scenario = (entry) => ({ self: { writer: 'k', platform: 'p1' }, policy: { min_hard_gates: 1, required: [], trusted_writers: [], floors: {}, attestors: {}, makes: [] },
+    obligations: { a: { preimage: pre } }, intents: {}, steps: [{ do: { append: { kind: 'evidence', body: entry } } }] });
+  assert.equal(status.runScenario(scenario(body({}))).at(-1).rejected, 1);
+  for (const wrong of [{ platform: true }, { writer: 0 }, { obligation: [] }, { core_key: null }, { preimage: 'x' }]) {
+    assert.equal(status.runScenario(scenario(body(wrong))).at(-1).rejected, 0);
+  }
 });

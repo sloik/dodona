@@ -5,6 +5,14 @@ use crate::{
 use std::collections::BTreeMap;
 /// The gates a criterion can have.
 pub const GATES: [&str; 3] = ["hard", "soft", "deferred"];
+/// The gate a status report counts a criterion under. One that is not exactly
+/// a gate counts as `hard`, so a mistake in writing it can only make delivery harder.
+pub fn gate_as_read(gate: Option<&Value>) -> &'static str {
+    match gate {
+        Some(Value::String(g)) => GATES.iter().find(|x| *x == g).copied().unwrap_or("hard"),
+        _ => "hard",
+    }
+}
 /// What the check behind a criterion can say.
 pub const CHECKS: [&str; 4] = ["unknown", "passed", "failed", "conflict"];
 /// A criterion as the status rule sees it: its gate, and the status of each check behind it.
@@ -224,6 +232,24 @@ mod tests {
         c[2].checks.clear();
         assert_eq!(of(&c, true, 1), "uncovered");
         assert_eq!(of(&[], true, 0), "unguarded");
+    }
+    #[test]
+    fn unreadable_gates() {
+        let read = |text: &str| gate_as_read(Some(&json::parse(text.as_bytes()).unwrap()));
+        assert_eq!(read(r#""hard""#), "hard");
+        assert_eq!(read(r#""soft""#), "soft");
+        assert_eq!(read(r#""deferred""#), "deferred");
+        for odd in [
+            r#""Hard""#,
+            r#""soft ""#,
+            "\"so\u{200b}ft\"",
+            r#""""#,
+            "7",
+            "null",
+        ] {
+            assert_eq!(read(odd), "hard", "{odd}");
+        }
+        assert_eq!(gate_as_read(None), "hard");
     }
     #[test]
     fn met_needs_a_check() {

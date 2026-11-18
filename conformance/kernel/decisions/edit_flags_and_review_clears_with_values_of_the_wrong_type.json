@@ -1,0 +1,90 @@
+{
+  "kind": "decisions",
+  "claim": "C16",
+  "governs": [
+    "n1"
+  ],
+  "names": {
+    "n1": "a",
+    "n2": "b"
+  },
+  "name": "edit_flags_and_review_clears_with_values_of_the_wrong_type",
+  "covers": [],
+  "why": "The scenario edit_flags_and_review_clears, with after each step the same step again, once for each value it holds, with that value of the wrong type. Such a step changes nothing, so what was expected after the step it copies is expected after it too.",
+  "steps": [
+    {
+      "do": {
+        "edit": {
+          "name": "n2",
+          "to": "c"
+        }
+      },
+      "expect": {
+        "flagged": false
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": 0,
+          "to": "c"
+        }
+      },
+      "expect": {
+        "flagged": false
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n2",
+          "to": false
+        }
+      },
+      "expect": {
+        "flagged": false
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": "c"
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": null,
+          "to": "c"
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "name": "n1",
+          "to": []
+        }
+      },
+      "expect": {
+        "flagged": true
+      }
+    },
+    {
+      "do": {
+        "review": {}
+      },
+      "expect": {
+        "flagged": false
+      }
+    }
+  ]
+}

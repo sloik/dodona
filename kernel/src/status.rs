@@ -49,7 +49,7 @@ fn is_record(body: &Value) -> bool {
     ["obligation", "platform", "writer", "core_key"]
         .iter()
         .all(|f| text(body, f).is_some())
-        && body.opt("preimage").is_some()
+        && matches!(body.opt("preimage"), Some(Value::Object(_)))
         && text(body, "verdict").is_some_and(|v| evidence::VERDICTS.contains(&v))
 }
 /// The key an evidence record stands under, or none if the record is rejected:
@@ -309,7 +309,7 @@ pub fn run(v: &Value) -> Vec<Value> {
                 // An obligation the project does not have is never passed, and shows nothing.
                 let of = |o: &Value| *statuses.get(o.str()).unwrap_or(&("unknown", 0));
                 criteria.push(Criterion {
-                    gate: c.get("gate").str().into(),
+                    gate: intent::gate_as_read(c.opt("gate")).into(),
                     checks: checked_by.iter().map(|o| of(o).0.to_owned()).collect(),
                 });
                 shown.push((
@@ -518,6 +518,15 @@ mod tests {
             assert!(!is_record(&r), "{field}");
         }
         assert!(!is_record(&json::string("text")) && !is_record(&Value::Null));
+        // A field of the wrong type counts as lacking.
+        for (field, wrong) in [("preimage", "[]"), ("preimage", "null"), ("writer", "7")] {
+            let mut r = whole("passed");
+            if let Value::Object(f) = &mut r {
+                f.retain(|(k, _)| k != field);
+                f.push((field.into(), value(wrong)));
+            }
+            assert!(!is_record(&r), "{field} {wrong}");
+        }
     }
     fn act(kind: &str, result: &str, target: &str, actor: &str, worker: &str) -> (String, Value) {
         (

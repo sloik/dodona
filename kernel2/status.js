@@ -39,6 +39,11 @@ function levelFor(record, intent, policy) {
   }
 }
 
+// A gate nobody can read is hard: a mistake in writing a gate can only make delivery harder.
+function effectiveGate(gate) {
+  return vocabulary.GATES.includes(gate) ? gate : 'hard';
+}
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -50,7 +55,7 @@ const RECORD_FIELDS = ['obligation', 'platform', 'writer', 'core_key', 'preimage
 function isRecord(entry) {
   const body = entry.body;
   return entry.kind === 'evidence' && isObject(body) && vocabulary.VERDICTS.includes(body.verdict)
-    && RECORD_FIELDS.every((field) => body[field] !== undefined);
+    && RECORD_FIELDS.every((field) => (field === 'preimage' ? isObject(body[field]) : typeof body[field] === 'string'));
 }
 
 // A record is rejected if its core key is not the identity of its own preimage,
@@ -131,7 +136,7 @@ function judgeIntent(id, intent, obligations, levels, ledger, state) {
     hasObligation[name] = criterion.checked_by.length > 0;
     // A criterion is met only if something checks it and every obligation passed.
     const met = states.length > 0 && states.every((state) => state === 'passed');
-    criteria[name] = { gate: criterion.gate, check: met ? 'passed' : 'unknown', met, states };
+    criteria[name] = { gate: effectiveGate(criterion.gate), check: met ? 'passed' : 'unknown', met, states };
   }
   const uncovered = Object.keys(criteria).some((name) => !hasObligation[name]);
   let status;
@@ -201,7 +206,7 @@ function projectStatus(policy, intents, reports, obligations) {
   if (policy.required.length === 0) return 'nothing-required';
   const defined = policy.required.filter((id) => Object.hasOwn(intents, id));
   const failing = defined.some((id) => Object.values(intents[id].criteria).some((criterion) => (
-    criterion.gate === 'hard' && criterion.checked_by.some((o) => ['failed', 'conflict'].includes(statusOf(obligations, o))))));
+    effectiveGate(criterion.gate) === 'hard' && criterion.checked_by.some((o) => ['failed', 'conflict'].includes(statusOf(obligations, o))))));
   if (failing) return 'failed';
   // A required intent the scenario does not define counts as not delivered.
   if (policy.required.every((id) => Object.hasOwn(reports, id) && ['delivered', 'fulfilled'].includes(reports[id].status))) return 'passed';
@@ -257,9 +262,9 @@ function runScenario(scenario) {
   };
   const ledger = [];
   return scenario.steps.map(({ do: step }) => {
-    if (step.append && isObject(step.append.body)) ledger.push({ kind: step.append.kind, body: step.append.body });
-    else if (step.change && state.obligations[step.change.obligation] && isObject(step.change.preimage)) state.obligations[step.change.obligation].preimage = step.change.preimage;
-    else if (step.set_gate && vocabulary.GATES.includes(step.set_gate.to) && state.intents[step.set_gate.intent] && state.intents[step.set_gate.intent].criteria[step.set_gate.criterion]) state.intents[step.set_gate.intent].criteria[step.set_gate.criterion].gate = step.set_gate.to;
+    if (step.append && typeof step.append.kind === 'string' && isObject(step.append.body)) ledger.push({ kind: step.append.kind, body: step.append.body });
+    else if (step.change && typeof step.change.obligation === 'string' && Object.hasOwn(state.obligations, step.change.obligation) && isObject(step.change.preimage)) state.obligations[step.change.obligation].preimage = step.change.preimage;
+    else if (step.set_gate && typeof step.set_gate.intent === 'string' && typeof step.set_gate.criterion === 'string' && vocabulary.GATES.includes(step.set_gate.to) && Object.hasOwn(state.intents, step.set_gate.intent) && Object.hasOwn(state.intents[step.set_gate.intent].criteria, step.set_gate.criterion)) state.intents[step.set_gate.intent].criteria[step.set_gate.criterion].gate = step.set_gate.to;
     return report(state, ledger);
   });
 }

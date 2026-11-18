@@ -917,6 +917,34 @@
       "file": "src/status.rs",
       "find": "text(i, \"words\").unwrap_or(\"\")",
       "replace": "text(i, \"words\").map_or(\"\", |_| \"\")"
+    },
+    {
+      "name": "status: an unknown gate is not counted as hard",
+      "model_case": null,
+      "file": "src/intent.rs",
+      "find": "GATES.iter().find(|x| *x == g).copied().unwrap_or(\"hard\")",
+      "replace": "GATES.iter().find(|x| *x == g).copied().unwrap_or(\"soft\")"
+    },
+    {
+      "name": "acts: a ticket that is not a string is not malformed",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "|| [\"ticket\", \"kind\", \"target\", \"result\"]",
+      "replace": "|| [\"kind\", \"target\", \"result\"]"
+    },
+    {
+      "name": "acts: a started_by that is not a string is not malformed",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": ".is_some_and(|s| !string(s))",
+      "replace": ".is_some_and(|s| !string(s) && false)"
+    },
+    {
+      "name": "status: a preimage that is not an object is counted as rejected",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "&& matches!(body.opt(\"preimage\"), Some(Value::Object(_)))",
+      "replace": "&& body.opt(\"preimage\").is_some()"
     }
   ]
 }

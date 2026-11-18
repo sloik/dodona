@@ -87,10 +87,15 @@ fn claims(r: &Value, p: &Value) -> usize {
     let group = |person: &Value| -> Option<usize> {
         let m = person.opt("make")?;
         let name = format!("{}/{}", text(m, "vendor")?, text(m, "family")?);
+        // A group that is not a list of strings is ignored; a name matches only an equal name.
         list(p.opt("makes")).iter().position(|g| {
-            list(Some(g))
-                .iter()
-                .any(|x| matches!(x, Value::String(s) if *s == name))
+            let group = list(Some(g));
+            let strings =
+                matches!(g, Value::Array(_)) && group.iter().all(|x| matches!(x, Value::String(_)));
+            strings
+                && group
+                    .iter()
+                    .any(|x| matches!(x, Value::String(s) if *s == name))
         })
     };
     let cross = tested && matches!((group(a), group(w)), (Some(x), Some(y)) if x != y);
@@ -224,9 +229,12 @@ fn malformed(r: &Value) -> bool {
             let covers = matches!(a.opt("covers"), Some(Value::Array(c)) if c.iter().all(string));
             object(a) && has(a, "key") && has(a, "mac") && covers
         })
-        || ["kind", "target", "result"]
+        || ["ticket", "kind", "target", "result"]
             .iter()
             .any(|k| wrong(k, &string))
+        || r.opt("actor")
+            .and_then(|a| a.opt("started_by"))
+            .is_some_and(|s| !string(s))
         || wrong("lineage", &object)
         || wrong("attempt", &|a| {
             let integer = |k: &str| matches!(a.opt(k), Some(Value::Number(_)));
@@ -461,6 +469,23 @@ mod tests {
         }
     }
     #[test]
+    fn groups_of_makes() {
+        let graded = |makes: &str| {
+            let policy = format!(r#"{{"attestors":{{}},"makes":{makes}}}"#);
+            LEVELS[grade(&record(|_| ()), &json::parse(policy.as_bytes()).unwrap()).claims]
+        };
+        assert_eq!(graded(r#"[["v/a"],["w/b"]]"#), "cross-make");
+        assert_eq!(graded(r#"[["v/a","w/b"]]"#), "tested");
+        // A group that is not a list of strings is ignored.
+        assert_eq!(graded(r#"[["v/a"],["w/b",7]]"#), "tested");
+        assert_eq!(graded(r#"[["v/a"],"w/b"]"#), "tested");
+        assert_eq!(graded(r#"[7,["v/a"],null,["w/b"]]"#), "cross-make");
+        // A name matches only an equal name, never part of one.
+        assert_eq!(graded(r#"[["v/a"],["w/bb"]]"#), "tested");
+        assert_eq!(graded(r#"[["v/a"],["xw/b"]]"#), "tested");
+        assert_eq!(graded("7"), "tested");
+    }
+    #[test]
     fn a_malformed_record_is_self() {
         assert!(!malformed(&record(|_| ())));
         assert!(!malformed(&attested(record(|_| ()), &ALL, "h", KEY)));
@@ -507,6 +532,12 @@ mod tests {
             ("attestation", r#"{"key":7,"mac":"00","covers":[]}"#),
             ("attestation", r#"{"key":"h","covers":[]}"#),
             ("kind", "7"),
+            ("ticket", "5"),
+            ("actor", r#"{"id":"judge","session":"s2","started_by":7}"#),
+            (
+                "actor",
+                r#"{"id":"judge","session":"s2","started_by":null}"#,
+            ),
             ("target", "null"),
             ("result", "true"),
             ("lineage", r#""i""#),

@@ -49,7 +49,7 @@ function intentStatus(policy, confirmed, criteria) {
 
 // True if an amend step names a criterion that exists and carries only allowed values.
 function validAmend(step, known) {
-  const claimsOk = step.claims === undefined || step.claims === null || LEVELS.includes(step.claims);
+  const claimsOk = step.claims === undefined || LEVELS.includes(step.claims);
   const sourceOk = step.source === undefined || vocabulary.SOURCES.includes(step.source);
   return known(step.criterion) && vocabulary.GATES.includes(step.to) && ['owner', 'worker'].includes(step.by) && claimsOk && sourceOk;
 }
@@ -63,7 +63,7 @@ function runScenario(scenario) {
 
   for (const { do: step } of scenario.steps) {
     let amendment = null;
-    const known = (name) => Object.hasOwn(criteria, name);
+    const known = (name) => vocabulary.isString(name) && Object.hasOwn(criteria, name);
     if (step.confirm) {
       confirmed = true;
     } else if (step.check && known(step.check.criterion) && vocabulary.CHECKS.includes(step.check.status)) {

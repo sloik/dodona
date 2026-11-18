@@ -21,6 +21,7 @@ function runScenario(scenario) {
   for (const [name, details] of Object.entries(scenario.children)) children.set(name, { gate: details.gate, check: 'unknown' });
   let confirmed = false;
   const nodeNamed = (name) => (name === 'root' ? root : children.get(name));
+  const { isString } = vocabulary;
   const results = [];
 
   for (const { do: step } of scenario.steps) {
@@ -35,10 +36,10 @@ function runScenario(scenario) {
         node.gate = step.edit.to;
         confirmed = false;
       }
-    } else if (step.remove) {
+    } else if (step.remove && isString(step.remove.child)) {
       if (children.delete(step.remove.child)) confirmed = false;
     } else if (step.add) {
-      if (!children.has(step.add.child) && vocabulary.GATES.includes(step.add.gate)) {
+      if (isString(step.add.child) && !children.has(step.add.child) && vocabulary.GATES.includes(step.add.gate)) {
         children.set(step.add.child, { gate: step.add.gate, check: 'unknown' });
         confirmed = false;
       }

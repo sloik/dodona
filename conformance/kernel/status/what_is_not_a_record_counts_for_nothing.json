@@ -686,7 +686,7 @@
     {
       "do": {
         "append": {
-          "kind": "act",
+          "kind": "evidence",
           "body": {
             "obligation": "ob-a",
             "preimage": {
@@ -747,7 +747,7 @@
     {
       "do": {
         "append": {
-          "kind": "act",
+          "kind": "evidence",
           "body": {
             "obligation": "ob-a",
             "preimage": {
@@ -808,7 +808,7 @@
     {
       "do": {
         "append": {
-          "kind": "act",
+          "kind": "evidence",
           "body": {
             "obligation": false,
             "preimage": {
@@ -869,7 +869,7 @@
     {
       "do": {
         "append": {
-          "kind": "act",
+          "kind": "evidence",
           "body": {
             "obligation": "ob-a",
             "preimage": {
@@ -930,7 +930,7 @@
     {
       "do": {
         "append": {
-          "kind": "act",
+          "kind": "evidence",
           "body": {
             "obligation": "ob-a",
             "preimage": [],
@@ -963,7 +963,7 @@
     {
       "do": {
         "append": {
-          "kind": "act",
+          "kind": "evidence",
           "body": {
             "obligation": "ob-a",
             "preimage": {
@@ -1023,7 +1023,7 @@
     {
       "do": {
         "append": {
-          "kind": "act",
+          "kind": "evidence",
           "body": {
             "obligation": "ob-a",
             "preimage": {
@@ -1083,7 +1083,7 @@
     {
       "do": {
         "append": {
-          "kind": "act",
+          "kind": "evidence",
           "body": {
             "obligation": "ob-a",
             "preimage": {

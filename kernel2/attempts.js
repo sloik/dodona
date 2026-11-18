@@ -44,9 +44,9 @@ function runScenario(scenario) {
   let current = 0;
   const results = [];
   for (const { do: step } of scenario.steps) {
-    if (step.take) {
+    if (step.take && vocabulary.isString(step.take.as)) {
       all.push({ ticket: step.take.as, target: current, state: 'open' });
-    } else if (step.close && vocabulary.RESULTS.includes(step.close.result)) {
+    } else if (step.close && vocabulary.isString(step.close.ticket) && vocabulary.RESULTS.includes(step.close.result)) {
       const attempt = all.find((candidate) => candidate.ticket === step.close.ticket && candidate.state === 'open');
       if (attempt) attempt.state = step.close.result;
     } else if (step.change_target) {

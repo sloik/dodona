@@ -192,6 +192,9 @@ def gap_kit_judge_hides_the_answers() -> None:
 
 def gap_generated_kit_files_are_current() -> None:
     """Kit files with hashes and keyed check values are generated; an edit by hand, or to the generator alone, would leave them wrong."""
+    other = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_wrong_types.py"), "--check"], capture_output=True, text=True)
+    if other.returncode != 0:
+        problems.append("the wrong-type scenarios differ from what tools/gen_wrong_types.py writes: " + (other.stdout + other.stderr).strip()[-200:])
     done = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_kit_vectors.py"), "--check"], capture_output=True, text=True)
     if done.returncode != 0:
         problems.append("the generated kit files differ from what tools/gen_kit_vectors.py writes: " + (done.stdout + done.stderr).strip()[-200:])

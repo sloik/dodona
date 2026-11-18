@@ -7,7 +7,7 @@
 //
 // Per defect it prints
 //   caught  the first judge that rejected the defective copy,
-//   MISSED  every judge accepted it,
+//   MISSED  every judge accepted it, or only the unit tests (node --test) rejected it,
 //   STALE   the text to replace was not found exactly once (nothing planted),
 //   BROKEN  the defective copy does not even load, so nothing was learned.
 // Then a JSON summary. Exit status 0 only if every defect was caught.
@@ -18,6 +18,8 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
+
+const UNIT_TESTS = 'node --test';
 
 // Each judge: a name, the tool, and the arguments after `node <kernel>`.
 const JUDGES = [
@@ -46,6 +48,10 @@ function firstRejection(copy) {
     });
     if (run.status !== 0) return judge.name;
   }
+  // Last: the unit tests of the copy, run against the repository's kit files. They are not a judge
+  // of the kit, so a defect only they reject is reported as missed by the kit.
+  const tests = spawnSync('node', ['--test', path.join(copy, 'test.js')], { env: { ...process.env, DODONA_ROOT: root }, encoding: 'utf8' });
+  if (tests.status !== 0) return UNIT_TESTS;
   return null;
 }
 
@@ -77,8 +83,10 @@ function main() {
           counts.broken += 1;
         } else {
           const judge = firstRejection(copy);
-          verdict = judge === null ? 'MISSED' : `caught (${judge})`;
-          if (judge === null) counts.missed += 1;
+          if (judge === null) verdict = 'MISSED';
+          else if (judge === UNIT_TESTS) verdict = 'MISSED by the kit (only node --test rejects it)';
+          else verdict = `caught (${judge})`;
+          if (judge === null || judge === UNIT_TESTS) counts.missed += 1;
           else counts.caught += 1;
         }
         fs.writeFileSync(file, original);
