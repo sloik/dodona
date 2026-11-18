@@ -443,11 +443,11 @@
       "replace": "return true;"
     },
     {
-      "name": "acts: uncovered fields count as vouched for",
+      "name": "acts: a field some fact reads is left out of the whole-record check",
       "model_case": "(round 2 kit)",
       "file": "acts.js",
-      "find": "vouched[fact] = holds && binds && reads.every((field) => record.attestation.covers.includes(field));",
-      "replace": "vouched[fact] = holds && binds;"
+      "find": "filter((name) => name !== 'attestation')",
+      "replace": "filter((name) => name !== 'attestation' && !Object.values(FACT_READS).flat().includes(name))"
     },
     {
       "name": "acts: a missing started_by counts as started by someone else",
