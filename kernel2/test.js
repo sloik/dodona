@@ -442,3 +442,13 @@ test('status: an evidence entry with a wrongly typed field is not a record and i
     assert.equal(status.runScenario(scenario(body(wrong))).at(-1).rejected, 0);
   }
 });
+
+test('evidence: the reason is the attempt asked for last, not the one that ended last', () => {
+  const steps = [
+    { submit: { obligation: 'o', as: 'j1' } }, { backend: { to: 'down' } }, { submit: { obligation: 'o', as: 'j2' } },
+    { lose: { run: 'j1' } }, { backend: { to: 'up' } }, { submit: { obligation: 'o', as: 'j3' } }, { lose: { run: 'j3' } },
+  ];
+  const scenario = { obligations: { o: { depends_on: ['d'] } }, start: { definitions: { d: 'a' }, tool: 't', backend: 'up' }, steps: steps.map((step) => ({ do: step })) };
+  assert.deepEqual(evidence.runScenario(scenario).map((result) => result.o.reason),
+    ['pending', 'pending', 'pending', 'unavailable', 'unavailable', 'pending', 'error']);
+});
