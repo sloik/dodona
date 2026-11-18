@@ -295,7 +295,7 @@ def gap_an_intent_reads_one_way_only() -> None:
         problems.append("tools/status.py refuses a plain criteria table")
     for row in ("| 2. | x | hard | y |", "| **2** | x | hard | y |", "| 2\u200b | x | hard | y |", "| 2 | x | Hard | y |",
                 "| 2 | a \\| b | hard | y |", "2 | x | hard | y", " | 2 | x | hard | y |", "<!-- | 2 | x | hard | y | -->",
-                "| 1 | again | soft | y |"):
+                "| 1 | again | soft | y |", "| \uff12 | x | hard | y |"):
         if status.unclear(table + row + "\n") is None:
             problems.append(f"tools/status.py reads an intent with the row {row!r} without refusing it")
     source = (ROOT / "tools" / "status.py").read_text(encoding="utf-8")
