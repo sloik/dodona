@@ -126,6 +126,48 @@ def scenario(ledger_entries: list[dict], writer: str, policy: dict) -> dict:
                      [{"do": {"change": {"obligation": next(iter(sorted(obligations))), "preimage": obligations[next(iter(sorted(obligations)))]["preimage"]}}}]}
 
 
+def coverage(intents: dict, floor: int) -> dict:
+    """Where the hard gates of each intent tree sit (decision 0030).
+
+    The floor is counted over a whole tree, so a child can be delivered with
+    fewer hard gates of its own than policy demands. That is the rule; this
+    says where it happens, so nobody reads a child's status as meeting the
+    floor alone. Each intent is counted once, however it is reached.
+    """
+    floor = max(floor, 1)
+    parent = {c: p for p, it in intents.items() for c in it["children"]}
+
+    def root_of(ident: str) -> str:
+        seen = {ident}
+        while ident in parent and parent[ident] not in seen:
+            ident = parent[ident]
+            seen.add(ident)
+        return ident
+
+    def below(ident: str) -> set:
+        found, todo = set(), [ident]
+        while todo:
+            here = todo.pop()
+            if here not in found and here in intents:
+                found.add(here)
+                todo.extend(intents[here]["children"])
+        return found
+
+    own = {i: sum(1 for c in it["criteria"].values() if c["gate"] == "hard") for i, it in intents.items()}
+    out = {}
+    for ident in intents:
+        root = root_of(ident)
+        out[ident] = {"own_hard": own[ident], "subtree_hard": sum(own[i] for i in below(ident)),
+                      "root": root, "tree_hard": sum(own[i] for i in below(root)), "floor": floor}
+        out[ident]["floor_met_only_over_tree"] = ident != root and out[ident]["subtree_hard"] < floor
+    thinnest = {}
+    for ident, item in out.items():
+        best = thinnest.get(item["root"])
+        if best is None or (item["own_hard"], ident) < (out[best]["own_hard"], best):
+            thinnest[item["root"]] = ident
+    return {"intents": out, "thinnest": thinnest}
+
+
 def render(report: dict, torn: bool, entries: int, note: str) -> str:
     lines = [f"project: {report['project']['status']}", note,
              f"ledger: {entries} entries" + (", ending in an entry that was cut short" if torn else "")
@@ -134,6 +176,9 @@ def render(report: dict, torn: bool, entries: int, note: str) -> str:
     for item in report["obligations"].values():
         tally[item["status"]] = tally.get(item["status"], 0) + 1
     lines.append("obligations: " + ", ".join(f"{count} {status}" for status, count in sorted(tally.items())))
+    where = report.get("coverage", {"intents": {}, "thinnest": {}})
+    for root, ident in sorted(where["thinnest"].items()):
+        lines.append(f"thinnest in tree {root}: intent {ident}, {where['intents'][ident]['own_hard']} hard gates of its own")
     for ident, item in sorted(report["intents"].items()):
         gates, score, apart = item["gates"], item["score"], item["separation"]
         shown, asked = item.get("shown", {}), item.get("exceptions", {})
@@ -143,6 +188,10 @@ def render(report: dict, torn: bool, entries: int, note: str) -> str:
                      f" · shown: {shown.get('level', '?')} (weakest: criterion {shown.get('criterion', '?')})"
                      f" · exceptions: {asked.get('counted', '?')}{below}"
                      f" · separation: {apart['weakest']} ({apart['act']}), {apart['apart_or_better']} of {apart['of']} acts apart or better")
+        mine = where["intents"].get(ident)
+        if mine and mine["floor_met_only_over_tree"]:
+            lines[-1] += (f" · floor: {mine['subtree_hard']} hard of its own and below, under the floor of {mine['floor']};"
+                          f" met only over tree {mine['root']} ({mine['tree_hard']} hard)")
     return "\n".join(lines)
 
 
@@ -164,6 +213,7 @@ def main() -> int:
     answer = host.kernel(args.kernel, "scenario", scenario(entries, args.writer, policy))
     report = answer["results"][-1]
     report["policy_source"] = note
+    report["coverage"] = coverage(read_intents([]), policy.get("gates", {}).get("min_hard", 1))
     print(json.dumps(report, indent=1, sort_keys=True) if args.json else render(report, False, len(entries), note))
     return 0
 

@@ -332,6 +332,30 @@ def gap_tool_tree_digest_matches_its_vectors() -> None:
         problems.append("tool-tree vectors: too few to mean anything")
 
 
+def gap_thin_coverage_is_shown() -> None:
+    """Counting the floor over a whole tree lets a child be delivered with fewer hard gates of its own
+    than policy demands (decision 0030). The owner chose to keep that rule and see where it happens."""
+    import status
+    hard = {"words": "w", "gate": "hard", "checked_by": []}
+    soft = {"words": "w", "gate": "soft", "checked_by": []}
+    tree = {"r": {"children": ["a", "b"], "criteria": {"1": hard, "2": hard}},
+            "a": {"children": [], "criteria": {"1": hard}},
+            "b": {"children": [], "criteria": {"1": hard, "2": hard, "3": soft}}}
+    where = status.coverage(tree, 2)
+    if where["thinnest"] != {"r": "a"}:
+        problems.append(f"status.coverage names {where['thinnest']} as the thinnest intent, not a")
+    flagged = sorted(i for i, x in where["intents"].items() if x["floor_met_only_over_tree"])
+    if flagged != ["a"]:
+        problems.append(f"status.coverage marks {flagged} as meeting the floor only over the tree, not a alone")
+    report = {"project": {"status": "open"}, "obligations": {}, "coverage": where,
+              "intents": {i: {"status": "delivered", "gates": {"hard": 1, "soft": 0, "deferred": 0, "deferred_open": 0},
+                              "score": {"met": 1, "of": 1}, "shown": {}, "exceptions": {},
+                              "separation": {"weakest": "self", "act": "x", "apart_or_better": 0, "of": 0}} for i in tree}}
+    text = status.render(report, False, 0, "")
+    if "thinnest in tree r: intent a" not in text or "met only over tree r" not in text:
+        problems.append("the status report does not show where a tree's hard gates are thin")
+
+
 def gap_every_tool_compiles() -> None:
     """A syntax error in the status command reached the branch because nothing ran that file."""
     for path in sorted(list((ROOT / "tools").glob("*.py")) + list((ROOT / "providers").rglob("*.py"))
@@ -725,7 +749,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
-              gap_reuse_is_decided_by_a_kernel_and_checked]
+              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown]
 
 
 class JudgeTests(unittest.TestCase):
