@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import pathlib
 import shutil
 import sys
@@ -33,6 +34,13 @@ def dumps(args) -> int:
             said = (args.fresh / model / "dump.txt").read_text(encoding="utf-8", errors="replace") if (args.fresh / model / "dump.txt").exists() else ""
             if ended != "0" or "Model checking completed. No error has been found." not in said or ", 0 states left on queue." not in said:
                 print(f"the list of states for {model} comes from a run that did not finish (exit {ended or 'none'}); it is not used or kept")
+                return 1
+            # And it holds every state the checker said it found: a file cut short at a boundary between
+            # two states is otherwise well formed, and would be checked as if it were the whole list.
+            counted = re.findall(r"(\d+) distinct states found, 0 states left on queue", said)
+            held = len(re.findall(r"(?m)^State \d+:", source.read_text(encoding="utf-8", errors="replace")))
+            if not counted or held != int(counted[-1]):
+                print(f"the list of states for {model} holds {held} states; the checker found {counted[-1] if counted else 'an unknown number'}. It is not used or kept")
                 return 1
         target = args.into / model / STATES
         target.parent.mkdir(parents=True, exist_ok=True)

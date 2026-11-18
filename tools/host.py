@@ -338,7 +338,14 @@ def preimage(obligation: dict, inputs: list[dict], tools: list[dict], manifest: 
                        "closure": canonical.sort_set([canonical.identity({"path": f["path"], "identity": f["identity"]}) for f in inputs]),
                        "tools": [{"name": t["name"], "digest": t["digest"]} for t in tools], "config": canonical.identity(obligation["config"]), "expect": obligation["expect"]},
             # The version a provider states is its word; its code is what ran. Both are in the key.
-            "provider": {"name": manifest["name"], "version": f"{manifest['version']}+{provider_code()}", "protocol": manifest["protocol"]}}
+            "provider": {"name": manifest["name"], "version": f"{manifest['version']}+{provider_code()}+{runner_code()}", "protocol": manifest["protocol"]}}
+
+
+def runner_code() -> str:
+    """A digest of the code that sends runs and judges what a provider says: a change to its rules makes earlier
+    results stop counting, as a change to the provider does."""
+    files = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in ("tools/host.py", ".github/site/batch_driver.py")}
+    return canonical.identity(files)[len("sha256:"):][:16]
 
 
 def provider_code() -> str:
@@ -394,8 +401,7 @@ def collect(args) -> int:
                 continue
             folder = config.parent.relative_to(ROOT).as_posix()
             cases.append({"name": f"{config.parent.name}/dump", "cwd": folder, "keep": ["states.dump"],
-                          "argv": [where["java/bin/java"], "-cp", where["tla2tools/tla2tools.jar"], "tlc2.TLC",
-                                   "-workers", "1", "-config", "dump.cfg", "-dump", "states", "MCDump.tla"]})
+                          "argv": [where["java/bin/java"], "-cp", where["tla2tools/tla2tools.jar"], "tlc2.TLC"] + DUMP_ARGS})
     if not cases:
         # Everything has a current result. Nothing is sent, and nothing new will be recorded.
         print("nothing to run: every check has a current result")
@@ -475,10 +481,15 @@ def kernel(command: list[str], sub: str, payload: dict) -> dict:
     return json.loads(done.stdout.decode("utf-8"))
 
 
+# How a dump model is run. Part of what a list of states depends on.
+DUMP_ARGS = ["-workers", "1", "-config", "dump.cfg", "-dump", "states", "MCDump.tla"]
+
+
 def dump_key(model_dir: pathlib.Path) -> str:
-    """What a list of states written out by a dump model depends on: its files and the pinned tools."""
+    """What a list of states written out by a dump model depends on: its files, how it is run, the pinned tools,
+    and the code that runs it."""
     files = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(model_dir.iterdir()) if p.suffix in (".tla", ".cfg")}
-    return canonical.identity({"files": files, "tools": lock_tools()[0]})
+    return canonical.identity({"files": files, "args": DUMP_ARGS, "tools": lock_tools()[0], "runner": runner_code()})
 
 
 def plan(args) -> int:
