@@ -178,7 +178,7 @@ The check value is exact:
 
 - `mac` is 64 lowercase hexadecimal digits and is compared in full. The same value in uppercase, or one that matches only in part, vouches for nothing.
 - `covers` is used in the order the record gives it. It must already be sorted as the canonical encoding sorts keys, with no name repeated. A list in any other order, or with a repeat, vouches for nothing, even if the mac was made over that very list.
-- A key in `attestors` is a non-empty string of lowercase hexadecimal digits, of even length. Anything else (an empty string, an odd number of digits, an uppercase digit, a character that is not a digit) names no key: nothing is vouched for under it. The attestation's `harness` must be the same as its `key`: a value that names one harness and was made with another's key vouches for nothing.
+- A key in `attestors` is a non-empty string of lowercase hexadecimal digits, of even length. Anything else (an empty string, an odd number of digits, an uppercase digit, a character that is not a digit) names no key: nothing is vouched for under it. The attestation's `harness` must be the same as its `key`: a value that names one harness and was made with another's key vouches for nothing. An attestation with no `harness` vouches for nothing either.
 
 **A check value binds what was judged.** No level above `helper` is granted unless `covers` also lists `ticket`, `kind`, `target`, `result` and `lineage`, in addition to the fields the facts read. Without this a vouched refusal could be copied as an agreement, or onto another target or ticket, and keep its level. With it, changing any of the five after signing breaks the mac. A record signed without them keeps its `claims` and is graded `helper`, `declared`.
 

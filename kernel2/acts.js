@@ -29,7 +29,10 @@ const LEVEL_FACTS = {
 };
 const GRADED_LEVELS = ['helper', 'apart', 'tested', 'cross-make'];
 
-const BOUND_FIELDS = ['kind', 'target', 'result', 'lineage'];
+const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];
+
+// The fields an act record may have at the top level.
+const RECORD_FIELDS = [...BOUND_FIELDS, 'actor', 'worker', 'brief', 'given', 'fresh_context', 'known_bad', 'attempt', 'transcript', 'attestation'];
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -46,6 +49,8 @@ function absentOr(value, test) {
 // A record is malformed when a required part is missing or a present field has the wrong type.
 function isMalformed(record) {
   if (!isObject(record) || !isObject(record.actor) || !isObject(record.worker)) return true;
+  // A field nobody signs cannot ride along on a signed record.
+  if (Object.keys(record).some((name) => !RECORD_FIELDS.includes(name))) return true;
   if (!isString(record.actor.id) || !isString(record.actor.session) || !isString(record.worker.id) || !isString(record.worker.session)) return true;
   const knownBad = record.known_bad;
   const attestation = record.attestation;
@@ -58,6 +63,7 @@ function isMalformed(record) {
       && typeof value.rejected_wrong === 'boolean' && typeof value.accepted_right === 'boolean'),
     absentOr(attestation, (value) => isObject(value) && isString(value.key) && isString(value.mac)
       && Array.isArray(value.covers) && value.covers.every(isString)),
+    absentOr(record.ticket, isString),
     absentOr(record.kind, isString),
     absentOr(record.target, isString),
     absentOr(record.result, isString),
@@ -126,6 +132,8 @@ function attestationHolds(record, policy) {
   const attestation = record.attestation;
   if (!attestation || !Array.isArray(attestation.covers)) return false;
   const attestors = policy.attestors || {};
+  // The harness named must be the one whose key made the check value.
+  if (attestation.harness !== attestation.key) return false;
   if (!Object.hasOwn(attestors, attestation.key)) return false;
   // A key is a non-empty string of lowercase hexadecimal digits of even length.
   if (!/^([0-9a-f]{2})+$/.test(attestors[attestation.key])) return false;

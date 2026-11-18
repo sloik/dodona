@@ -698,29 +698,29 @@
       "name": "acts: a level above helper is granted without `kind` covered",
       "model_case": "(round 4)",
       "file": "acts.js",
-      "find": "const BOUND_FIELDS = ['kind', 'target', 'result', 'lineage'];",
-      "replace": "const BOUND_FIELDS = ['target', 'result', 'lineage'];"
+      "find": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];",
+      "replace": "const BOUND_FIELDS = ['ticket', 'target', 'result', 'lineage'];"
     },
     {
       "name": "acts: a level above helper is granted without `target` covered",
       "model_case": "(round 4)",
       "file": "acts.js",
-      "find": "const BOUND_FIELDS = ['kind', 'target', 'result', 'lineage'];",
-      "replace": "const BOUND_FIELDS = ['kind', 'result', 'lineage'];"
+      "find": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];",
+      "replace": "const BOUND_FIELDS = ['ticket', 'kind', 'result', 'lineage'];"
     },
     {
       "name": "acts: a level above helper is granted without `result` covered",
       "model_case": "(round 4)",
       "file": "acts.js",
-      "find": "const BOUND_FIELDS = ['kind', 'target', 'result', 'lineage'];",
-      "replace": "const BOUND_FIELDS = ['kind', 'target', 'lineage'];"
+      "find": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];",
+      "replace": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'lineage'];"
     },
     {
       "name": "acts: a level above helper is granted without `lineage` covered",
       "model_case": "(round 4)",
       "file": "acts.js",
-      "find": "const BOUND_FIELDS = ['kind', 'target', 'result', 'lineage'];",
-      "replace": "const BOUND_FIELDS = ['kind', 'target', 'result'];"
+      "find": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];",
+      "replace": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result'];"
     },
     {
       "name": "acts: an empty or non-hex attestor key is accepted",
@@ -861,6 +861,34 @@
       "file": "intent.js",
       "find": "      // changes nothing and earns nothing.\n      amendment = { takes_effect: false, level: 'self' };",
       "replace": "      // changes nothing and earns nothing.\n      if (!known(step.amend.criterion)) amendment = { takes_effect: false, level: 'self' };"
+    },
+    {
+      "name": "acts: the ticket is not required among the binding fields",
+      "model_case": "(round 5)",
+      "file": "acts.js",
+      "find": "const BOUND_FIELDS = ['ticket', 'kind', 'target', 'result', 'lineage'];",
+      "replace": "const BOUND_FIELDS = ['kind', 'target', 'result', 'lineage'];"
+    },
+    {
+      "name": "acts: an unknown top-level field is ignored",
+      "model_case": "(round 5)",
+      "file": "acts.js",
+      "find": "  if (Object.keys(record).some((name) => !RECORD_FIELDS.includes(name))) return true;\n",
+      "replace": ""
+    },
+    {
+      "name": "acts: the harness name is not compared with the key",
+      "model_case": "(round 5)",
+      "file": "acts.js",
+      "find": "  if (attestation.harness !== attestation.key) return false;\n",
+      "replace": ""
+    },
+    {
+      "name": "status: the baseline reported leaves out the children",
+      "model_case": "(round 5)",
+      "file": "status.js",
+      "find": "  return identityOf({ owner: intent.owner, children: sortedCopy(intent.children), criteria });",
+      "replace": "  return identityOf({ owner: intent.owner, children: [], criteria });"
     }
   ]
 }

@@ -183,7 +183,7 @@ function judgeIntent(id, intent, obligations, levels, ledger, state) {
     apart_or_better: everyLevel.filter((level) => rank(level) >= rank('apart')).length,
     of: everyLevel.length,
   };
-  return { status, gates, score, shown, exceptions, separation, criteria, uncovered };
+  return { status, baseline, gates, score, shown, exceptions, separation, criteria, uncovered };
 }
 
 // The highest of some levels; `self` if there are none.
@@ -222,7 +222,7 @@ function report(state, ledger) {
     const judged = judgeIntent(id, intent, obligations, levels, ledger, state);
     reports[id] = judged;
     shown[id] = {
-      status: judged.status, gates: judged.gates, score: judged.score, shown: judged.shown, exceptions: judged.exceptions, separation: judged.separation,
+      status: judged.status, baseline: judged.baseline, gates: judged.gates, score: judged.score, shown: judged.shown, exceptions: judged.exceptions, separation: judged.separation,
     };
   }
   const rejected = ledger.filter((entry) => isRecord(entry) && isRejected(entry.body)).length;

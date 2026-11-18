@@ -502,8 +502,8 @@
       "name": "different baseline confirms",
       "model_case": null,
       "file": "src/status.rs",
-      "find": "&& text(r, \"target\") == Some(base.as_str())",
-      "replace": "&& { let _ = &base; true }"
+      "find": "&& text(r, \"target\") == Some(base)",
+      "replace": "&& { let _ = base; true }"
     },
     {
       "name": "confirmation below floor counts",
@@ -754,29 +754,29 @@
       "name": "acts: a level above helper is granted without kind covered",
       "model_case": null,
       "file": "src/acts.rs",
-      "find": "&[\"kind\", \"target\", \"result\", \"lineage\"]",
-      "replace": "&[\"target\", \"result\", \"lineage\"]"
+      "find": "&[\"ticket\", \"kind\", \"target\", \"result\", \"lineage\"]",
+      "replace": "&[\"ticket\", \"target\", \"result\", \"lineage\"]"
     },
     {
       "name": "acts: a level above helper is granted without target covered",
       "model_case": null,
       "file": "src/acts.rs",
-      "find": "&[\"kind\", \"target\", \"result\", \"lineage\"]",
-      "replace": "&[\"kind\", \"result\", \"lineage\"]"
+      "find": "&[\"ticket\", \"kind\", \"target\", \"result\", \"lineage\"]",
+      "replace": "&[\"ticket\", \"kind\", \"result\", \"lineage\"]"
     },
     {
       "name": "acts: a level above helper is granted without result covered",
       "model_case": null,
       "file": "src/acts.rs",
-      "find": "&[\"kind\", \"target\", \"result\", \"lineage\"]",
-      "replace": "&[\"kind\", \"target\", \"lineage\"]"
+      "find": "&[\"ticket\", \"kind\", \"target\", \"result\", \"lineage\"]",
+      "replace": "&[\"ticket\", \"kind\", \"target\", \"lineage\"]"
     },
     {
       "name": "acts: a level above helper is granted without lineage covered",
       "model_case": null,
       "file": "src/acts.rs",
-      "find": "&[\"kind\", \"target\", \"result\", \"lineage\"]",
-      "replace": "&[\"kind\", \"target\", \"result\"]"
+      "find": "&[\"ticket\", \"kind\", \"target\", \"result\", \"lineage\"]",
+      "replace": "&[\"ticket\", \"kind\", \"target\", \"result\"]"
     },
     {
       "name": "acts: an empty attestor key is accepted",
@@ -882,6 +882,34 @@
       "file": "src/ledger.rs",
       "find": "    let (Some(kind), Some(body)) = (kind, v.opt(\"body\")) else {\n        return Ok(refused(\"bad-request\"));\n    };",
       "replace": "    let (kind, body) = (kind.unwrap_or(\"evidence\"), v.opt(\"body\").unwrap_or(&Value::Null));"
+    },
+    {
+      "name": "acts: a level above helper is granted without ticket covered",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "&[\"ticket\", \"kind\", \"target\", \"result\", \"lineage\"]",
+      "replace": "&[\"kind\", \"target\", \"result\", \"lineage\"]"
+    },
+    {
+      "name": "acts: an unknown top-level field is ignored",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "    if undefined {",
+      "replace": "    if undefined && false {"
+    },
+    {
+      "name": "acts: the harness name is not compared with the key",
+      "model_case": null,
+      "file": "src/acts.rs",
+      "find": "if text(att, \"harness\") != Some(keyname) {",
+      "replace": "if text(att, \"harness\") != Some(keyname) && false {"
+    },
+    {
+      "name": "status: the baseline reported leaves out the gates",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "(\"gate\", c.get(\"gate\").clone()),",
+      "replace": "(\"gate\", Value::Null),"
     }
   ]
 }

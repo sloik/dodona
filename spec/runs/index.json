@@ -335,7 +335,7 @@
       ],
       "note": "The seed kernel as extended on 2026-11-18 (acts, status, ledger, core keys) agreed with the model on the same 71,744 states of the evidence model and 78,894 of the intent model that run 6 wrote out; the two models are unchanged. State lists (SHA-256): kernel 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4, intent cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d. The second kernel, kernel2, agreed on the same states. Compared on a development machine; CI repeats it on every change to main.",
       "other_files": {
-        "kernel/src/acts.rs": "6039396e36ce803a006548418eefb92838548c4201cecd8b463dd76534b28266",
+        "kernel/src/acts.rs": "60482449e152172fa75390424c19b3a88506090e894864f28464ef46aca77b0e",
         "kernel/src/assurance.rs": "08ebe98641db905b677aa2d8cd293066122dbea8397e2383a5361bf44d260ee9",
         "kernel/src/attempts.rs": "fb0f0571384d891877c489fd6453bbf4a8f5a1b1defdc953aa75a1449b05cc02",
         "kernel/src/canonical.rs": "282abe57f67333fa0986014aad01f1cad7a4a122af57a5d4ad3d9485d9541dfd",
@@ -348,7 +348,7 @@
         "kernel/src/path.rs": "a227cac23810f69fafff764b9a593fa918bd0988ec07218ecce6458097442e9b",
         "kernel/src/plan.rs": "369e8f70022a82bd282b392227b1346682fad04945df53338ecda46a28347f87",
         "kernel/src/platforms.rs": "c38816c28534ced7804866692b7a5e89521cfa9679736ef158dea60b2aa9d102",
-        "kernel/src/status.rs": "ebfed6c96e130bd6683753fb35bea9572dcae79dd4acfe4a067185ac5970b666",
+        "kernel/src/status.rs": "7b531980e6891eeefa92ab7e197a28193ad110135c2a47a48ee2f15cffb48e9d",
         "kernel/src/tree.rs": "b9b3e7ea515a4d2e4104ee313c7dea5224739c86c6f64503034b9cd6cb9c52fc",
         "kernel/src/unicode.rs": "c9e8139a873cb7cfcb26d531bb5ac740a7da7924111ee27ceda7c6e2ec558fc1",
         "kernel/src/unicode_tables.rs": "2807352dd6b0e44a6e40c1b473c0295d381995e8c6cece73ee9b099269497e08",

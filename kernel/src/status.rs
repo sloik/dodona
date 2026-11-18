@@ -142,13 +142,18 @@ fn agreed<'a>(ledger: &'a Ledger, kind: &'a str) -> impl Iterator<Item = &'a Val
         .map(|(_, r)| r)
 }
 /// The levels of the agreed acts that would confirm the intent but for the floor.
-fn confirmations(ledger: &Ledger, name: &str, intent: &Value, policy: &Value) -> Vec<usize> {
-    let base = baseline(intent);
+fn confirmations(
+    ledger: &Ledger,
+    name: &str,
+    intent: &Value,
+    base: &str,
+    policy: &Value,
+) -> Vec<usize> {
     let owner = text(intent, "owner");
     agreed(ledger, "confirm-baseline")
         .filter(|r| {
             sub(r, "lineage", "intent") == Some(name)
-                && text(r, "target") == Some(base.as_str())
+                && text(r, "target") == Some(base)
                 && owner.is_some()
                 && sub(r, "actor", "id") == owner
         })
@@ -282,7 +287,8 @@ pub fn run(v: &Value) -> Vec<Value> {
         let mut intents_out = Vec::new();
         let mut reports: BTreeMap<&str, (&'static str, bool)> = BTreeMap::new();
         for (name, i) in intents.object() {
-            let confirmations = confirmations(&ledger, name, i, policy);
+            let base = baseline(i);
+            let confirmations = confirmations(&ledger, name, i, &base, policy);
             let confirmed = confirmations.iter().any(|l| *l >= floor);
             let mut levels = vec![(
                 "confirm-baseline",
@@ -326,6 +332,7 @@ pub fn run(v: &Value) -> Vec<Value> {
                 name.clone(),
                 json::object(vec![
                     ("status", json::string(status)),
+                    ("baseline", json::string(&base)),
                     (
                         "gates",
                         json::object(vec![
@@ -511,8 +518,9 @@ mod tests {
             // About another worker: it would confirm, at `self`.
             act("confirm-baseline", "agreed", &base, "o", "x"),
         ];
-        assert_eq!(confirmations(&ledger, "i", &intent, &policy), [1, 0]);
-        assert!(confirmations(&ledger, "j", &intent, &policy).is_empty());
+        assert_eq!(confirmations(&ledger, "i", &intent, &base, &policy), [1, 0]);
+        assert!(confirmations(&ledger, "j", &intent, &base, &policy).is_empty());
+        assert!(confirmations(&ledger, "i", &intent, "sha256:11", &policy).is_empty());
         let ob = json::string("ob");
         assert_eq!(match_check(&ledger, "i", "c", &ob, &intent, &policy), 0);
         let target = canonical::identity(&value(
@@ -678,6 +686,8 @@ mod tests {
             r#"{"deferred":1,"deferred_open":1,"hard":1,"soft":0}"#
         );
         assert_eq!(json::encode(i.get("score")), r#"{"met":0,"of":2}"#);
+        let intent = scenario.get("intents").get("i");
+        assert_eq!(i.get("baseline").str(), baseline(intent));
         assert_eq!(results[4].get("project").get("status").str(), "unknown");
     }
 }

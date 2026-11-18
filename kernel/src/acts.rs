@@ -116,6 +116,10 @@ fn covered<'a>(r: &'a Value, p: &Value) -> Vec<&'a str> {
     else {
         return Vec::new();
     };
+    // A value that names one harness and was made with another's key vouches for nothing.
+    if text(att, "harness") != Some(keyname) {
+        return Vec::new();
+    }
     // A key is a non-empty, even number of lowercase hexadecimal digits. Anything else names no key.
     let key = p.opt("attestors").and_then(|a| text(a, keyname));
     let Some(key) = key.and_then(canonical::unhex).filter(|k| !k.is_empty()) else {
@@ -153,10 +157,35 @@ fn covered<'a>(r: &'a Value, p: &Value) -> Vec<&'a str> {
 }
 /// What a check value must also cover before any level above `helper` is
 /// granted, so that it binds what was judged.
-const BOUND: &[&str] = &["kind", "target", "result", "lineage"];
-/// Whether a record is malformed: `actor` or `worker` is not an object with a
-/// string `id` and `session`, or a field that is present has the wrong type.
+const BOUND: &[&str] = &["ticket", "kind", "target", "result", "lineage"];
+/// The fields an act record has at the top level.
+const FIELDS: [&str; 14] = [
+    "ticket",
+    "kind",
+    "target",
+    "result",
+    "lineage",
+    "actor",
+    "worker",
+    "brief",
+    "given",
+    "fresh_context",
+    "known_bad",
+    "attempt",
+    "transcript",
+    "attestation",
+];
+/// Whether a record is malformed: it has a field an act record does not define,
+/// `actor` or `worker` is not an object with a string `id` and `session`, or a
+/// field that is present has the wrong type.
 fn malformed(r: &Value) -> bool {
+    let undefined = match r {
+        Value::Object(fields) => fields.iter().any(|(k, _)| !FIELDS.contains(&k.as_str())),
+        _ => false,
+    };
+    if undefined {
+        return true;
+    }
     let object = |v: &Value| matches!(v, Value::Object(_));
     let string = |v: &Value| matches!(v, Value::String(_));
     let has = |v: &Value, k: &str| v.text(k).is_some();
@@ -286,7 +315,7 @@ mod tests {
         "fresh_context":true,
         "transcript":"t",
         "known_bad":{"supplied_by":"owner","wrong":"bad","right":"good","rejected_wrong":true,"accepted_right":true},
-        "kind":"match-check","target":"sha256:00","result":"agreed","lineage":{"intent":"i"}
+        "ticket":"t-1","kind":"match-check","target":"sha256:00","result":"agreed","lineage":{"intent":"i"}
     }"#;
     fn record(change: impl Fn(&mut Vec<(String, Value)>)) -> Value {
         let mut v = json::parse(FULL.as_bytes()).unwrap();
@@ -321,6 +350,7 @@ mod tests {
                 "attestation".into(),
                 json::object(vec![
                     ("key", json::string(keyname)),
+                    ("harness", json::string(keyname)),
                     ("covers", covers),
                     ("mac", json::string(&mac)),
                 ]),
@@ -333,7 +363,7 @@ mod tests {
         (LEVELS[g.claims], LEVELS[g.level])
     }
     /// In canonical order, as a check value must list them.
-    const APART: [&str; 10] = [
+    const APART: [&str; 11] = [
         "actor",
         "brief",
         "fresh_context",
@@ -342,10 +372,11 @@ mod tests {
         "lineage",
         "result",
         "target",
+        "ticket",
         "transcript",
         "worker",
     ];
-    const ALL: [&str; 11] = [
+    const ALL: [&str; 12] = [
         "actor",
         "brief",
         "fresh_context",
@@ -355,6 +386,7 @@ mod tests {
         "lineage",
         "result",
         "target",
+        "ticket",
         "transcript",
         "worker",
     ];
@@ -471,10 +503,28 @@ mod tests {
         // Whoever signed it.
         let mut signed = attested(record(|_| ()), &ALL, "h", KEY);
         if let Value::Object(f) = &mut signed {
-            set(f, "x-extra", "1");
             set(f, "brief", r#""kernel""#);
         }
         assert_eq!(graded(&signed), ("self", "self"));
+        // A field the act record does not define cannot ride along, signed or not.
+        for extra in ["x-extra", "level", "claims"] {
+            let mut signed = attested(record(|_| ()), &ALL, "h", KEY);
+            assert_eq!(graded(&signed), ("cross-make", "cross-make"));
+            if let Value::Object(f) = &mut signed {
+                set(f, extra, "1");
+            }
+            assert_eq!(graded(&signed), ("self", "self"), "{extra}");
+        }
+        let attempt = record(|f| set(f, "attempt", "2"));
+        assert!(!malformed(&attempt));
+        // The harness named must be the one whose key was used.
+        for harness in [r#""stranger""#, "7", ""] {
+            let mut r = attested(record(|_| ()), &ALL, "h", KEY);
+            if let Some(Value::Object(att)) = r.opt_mut("attestation") {
+                set(att, "harness", harness);
+            }
+            assert_eq!(graded(&r), ("cross-make", "helper"), "{harness}");
+        }
     }
     #[test]
     fn levels_above_helper_need_a_voucher() {
@@ -533,6 +583,7 @@ mod tests {
             ("target", r#""sha256:11""#),
             ("result", r#""refused""#),
             ("lineage", r#"{"intent":"j"}"#),
+            ("ticket", r#""t-2""#),
         ] {
             let mut changed = attested(full(), &ALL, "h", KEY);
             if let Value::Object(f) = &mut changed {

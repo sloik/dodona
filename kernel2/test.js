@@ -196,7 +196,7 @@ test('acts: a claim alone earns helper, a vouched record earns its level', () =>
   assert.deepEqual(acts.gradeAct(record(), policy), { claims: 'apart', level: 'helper', source: 'declared' });
   assert.deepEqual(acts.gradeAct(attest(record(), ALL), policy), { claims: 'apart', level: 'helper', source: 'declared' }); // does not bind what was judged
   const bound = { ...record(), kind: 'match-check', result: 'agreed', lineage: { intent: 'i', kind: 'match-check' } };
-  assert.deepEqual(acts.gradeAct(attest(bound, [...ALL, 'kind', 'lineage', 'result', 'target'].sort()), policy), { claims: 'apart', level: 'apart', source: 'attested' });
+  assert.deepEqual(acts.gradeAct(attest(bound, [...ALL, 'kind', 'lineage', 'result', 'target', 'ticket'].sort()), policy), { claims: 'apart', level: 'apart', source: 'attested' });
 });
 
 test('acts: a bad mac, an unlisted key or an uncovered field vouches for nothing', () => {
@@ -343,12 +343,12 @@ test('acts: a malformed record is self; the check value must bind what was judge
   assert.deepEqual(acts.gradeAct({ ...record(), transcript: 7 }, policy), { claims: 'self', level: 'self', source: 'declared' });
   const unbound = attest(record(), ALL); // covers the facts' fields but not kind, target, result, lineage
   assert.equal(acts.gradeAct(unbound, policy).level, 'helper');
-  const bound = attest(record(), [...ALL, 'kind', 'lineage', 'result', 'target'].sort());
+  const bound = attest(record(), [...ALL, 'kind', 'lineage', 'result', 'target', 'ticket'].sort());
   assert.equal(acts.gradeAct({ ...bound, lineage: { intent: 'i', kind: 'match-check' } }, policy).level, 'helper'); // lineage not in the record when signed
 });
 
 test('acts: a key that is not even-length lowercase hex names no key; covers must be sorted', () => {
-  const cover = [...ALL, 'kind', 'lineage', 'result', 'target'].sort();
+  const cover = [...ALL, 'kind', 'lineage', 'result', 'target', 'ticket'].sort();
   const rec = { ...record(), kind: 'match-check', result: 'agreed', lineage: { intent: 'i', kind: 'match-check' } };
   const good = attest(rec, cover);
   assert.equal(acts.gradeAct(good, policy).level, 'apart');
