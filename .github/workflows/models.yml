@@ -39,13 +39,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p kept
-          last=$(gh run list -R "$GITHUB_REPOSITORY" --workflow models.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId')
-          if [ -n "$last" ] && gh run download "$last" -R "$GITHUB_REPOSITORY" -n dodona-kept -D kept; then
+          # Only a run that a push to this repository's main started: a pull request, a fork or another
+          # branch cannot be the starting point, whatever its branch is called.
+          last=$(gh run list -R "$GITHUB_REPOSITORY" --workflow models.yml --branch main --event push --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          if [ -n "$last" ] && [ "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$last" -q '.head_repository.full_name + " " + .event + " " + .head_branch')" = "$GITHUB_REPOSITORY push main" ] \
+             && gh run download "$last" -R "$GITHUB_REPOSITORY" -n dodona-kept -D kept; then
             echo "kept from run $last"
+            echo "$last" > kept/from-run.txt
           else
             echo "nothing kept: every check runs"
+            rm -rf kept && mkdir -p kept
           fi
-          echo "$last" > kept/from-run.txt
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Ask the kernel which checks have a current result
@@ -141,7 +145,7 @@ jobs:
           python3 tools/keep.py summary --plan plan.json --conclude out/conclude.json --status out/status.json --kept-from kept/from-run.txt >> "$GITHUB_STEP_SUMMARY"
           { echo; echo '```'; cat out/status.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Every model check has a passing result for the inputs as they are now
-        run: python3 tools/keep.py require-passed --status out/status.json
+        run: python3 tools/keep.py require-passed --status out/status.json --plan plan.json
       - name: Validate every message of both provider sessions against the schemas
         if: always()
         run: |

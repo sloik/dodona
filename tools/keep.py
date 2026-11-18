@@ -27,6 +27,13 @@ def dumps(args) -> int:
         if not source.exists():
             print(f"no list of states for {model} at {source}")
             return 1
+        if model in plan["dumps_run"]:
+            # Made this time: only from a run that ended with status 0 and said it searched everything.
+            ended = (args.fresh / model / "dump.exit").read_text(encoding="ascii").strip() if (args.fresh / model / "dump.exit").exists() else ""
+            said = (args.fresh / model / "dump.txt").read_text(encoding="utf-8", errors="replace") if (args.fresh / model / "dump.txt").exists() else ""
+            if ended != "0" or "Model checking completed. No error has been found." not in said or ", 0 states left on queue." not in said:
+                print(f"the list of states for {model} comes from a run that did not finish (exit {ended or 'none'}); it is not used or kept")
+                return 1
         target = args.into / model / STATES
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(source, target)
@@ -69,6 +76,10 @@ def summary(args) -> int:
 
 
 def require_passed(args) -> int:
+    refused = json.loads(args.plan.read_text(encoding="utf-8")).get("refused_by_provider", []) if getattr(args, "plan", None) else []
+    if refused:
+        print(f"the provider could not make {len(refused)} case(s) into a check: {', '.join(refused[:10])}. A case that cannot be checked has not passed")
+        return 1
     report = json.loads(args.status.read_text(encoding="utf-8"))
     checks = report.get("obligations", {})
     other = sorted(name for name, item in checks.items() if item["status"] != "passed")
@@ -93,6 +104,7 @@ def main() -> int:
         three.add_argument("--" + name, type=pathlib.Path, required=True)
     four = sub.add_parser("require-passed")
     four.add_argument("--status", type=pathlib.Path, required=True)
+    four.add_argument("--plan", type=pathlib.Path, help="the plan of this run, for what the provider refused to list")
     args = ap.parse_args()
     return {"dumps": dumps, "finish": finish, "summary": summary, "require-passed": require_passed}[args.command](args)
 

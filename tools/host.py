@@ -304,11 +304,17 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
         body = session.ask("obligation.check", {"op": "run.result", "check": check_id, "run": runs, "report": report})
 
 
+# What the provider said it could not make into a check, last time it was asked. A run is not
+# green while this is not empty: a case that cannot be checked is not a case that passed.
+REFUSED_BY_PROVIDER: list[str] = []
+
+
 def list_project(session: Session, root: pathlib.Path) -> tuple[list[dict], list[dict]]:
     files = [file_ref(p, root) for p in sorted((root / "spec").glob("*/*")) if p.suffix in (".tla", ".cfg", ".json") and p.is_file()
              and p.name not in ("dump-settings.json",)]
     body = session.ask("obligation.enumerate", {"binding": "kernel-models", "definitions": [], "files": files})
     obligations = [dict(o, binding="kernel-models") for o in body["obligations"]]
+    REFUSED_BY_PROVIDER[:] = sorted(r.get("name", "?") for r in body.get("rejected", []))
     names = [o["name"] for o in obligations]
     if len(names) != len(set(names)):
         raise Refused("duplicate-obligation")
@@ -328,9 +334,19 @@ def preimage(obligation: dict, inputs: list[dict], tools: list[dict], manifest: 
     return {"obligation": canonical.identity({"binding": obligation["binding"], "name": obligation["name"]}), "kind": "check",
             "inputs": {"specified_by": canonical.sort_set([f["identity"] for f in inputs if f["path"] in obligation["specified_by"]]),
                        "targets": canonical.sort_set([f["identity"] for f in inputs if f["path"] in obligation["targets"]]),
-                       "closure": canonical.sort_set([f["identity"] for f in inputs]),
+                       # A file is its name and its content: renaming or swapping two files is a change.
+                       "closure": canonical.sort_set([canonical.identity({"path": f["path"], "identity": f["identity"]}) for f in inputs]),
                        "tools": [{"name": t["name"], "digest": t["digest"]} for t in tools], "config": canonical.identity(obligation["config"]), "expect": obligation["expect"]},
-            "provider": {"name": manifest["name"], "version": manifest["version"], "protocol": manifest["protocol"]}}
+            # The version a provider states is its word; its code is what ran. Both are in the key.
+            "provider": {"name": manifest["name"], "version": f"{manifest['version']}+{provider_code()}", "protocol": manifest["protocol"]}}
+
+
+def provider_code() -> str:
+    """A digest of every file of the provider, so a change to its code makes its results stop counting."""
+    folder = ROOT / "providers" / "tlc"
+    files = {p.relative_to(folder).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in sorted(folder.rglob("*")) if p.is_file() and "__pycache__" not in p.parts}
+    return canonical.identity(files)[len("sha256:"):][:16]
 
 
 def inputs_of(obligation: dict, files: list[dict]) -> list[dict]:
@@ -484,7 +500,13 @@ def plan(args) -> int:
     every = sorted(asked["obligations"])
     dumps_kept = json.loads((args.dumps_from / "dumps.json").read_text(encoding="utf-8")) if (args.dumps_from / "dumps.json").exists() else {}
     dumps = {d.parent.name: dump_key(d.parent) for d in sorted(ROOT.glob("spec/*/dump.cfg"))}
+    session = Session([sys.executable, str(ROOT / "providers" / "tlc" / "provider.py")], ROOT, [])
+    try:
+        list_project(session, ROOT)
+    finally:
+        session.close()
     chosen = {"run": [n for n in every if n not in current], "reuse": current, "ledger_entries": len(entries),
+              "refused_by_provider": list(REFUSED_BY_PROVIDER),
               "dumps_run": sorted(m for m, k in dumps.items() if dumps_kept.get(m) != k or not (args.dumps_from / m / "dump.states.dump").exists()),
               "dumps_reuse": sorted(m for m, k in dumps.items() if dumps_kept.get(m) == k and (args.dumps_from / m / "dump.states.dump").exists()),
               "dump_keys": dumps}

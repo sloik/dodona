@@ -24,7 +24,9 @@ The design files every result under a hash of everything it depended on ([0006](
 
 **The hash does the invalidating.** An edit to a model's files, a different pinned tool, a new provider version, or a kernel that computes keys differently all change the key, and the old result stops counting by itself. Nothing is invalidated by hand.
 
-**Lists of states are kept the same way.** A dump model's list of states is reused while its files and the pinned tools are unchanged.
+**What a result depends on, in full.** A review found three things the key left out, each of which let a result be reused after it should have stopped counting: the provider's code (only its stated version was in the key), the names of the model files (only their contents were), and whether a list of states came from a run that finished. All three are now in. A case the provider cannot make into a check turns the run red instead of disappearing, and a job that sent anything is judged for completion even when no check was among it.
+
+**Lists of states are kept the same way.** A dump model's list of states is reused while its files and the pinned tools are unchanged. A list is kept only from a dump run that ended with status 0 and reported searching everything.
 
 **The run summary says what happened.** How many checks ran, how many kept their result and from which run, and the status of every check now. The run fails unless every check has a passing result for the inputs as they are now.
 
@@ -32,6 +34,7 @@ The design files every result under a hash of everything it depended on ([0006](
 
 - A change that touches no model sends no job to the shared queue.
 - A run that fails keeps nothing, so the run after it starts from the last success. That can mean running more than needed. It never means trusting a failed run's ledger.
+- The starting point is the last successful run that a push to this repository's `main` started. A pull request's run, or a fork's with a branch named `main`, is never used: a review showed the first version would have taken one.
 - Results are trusted because the artifact comes from a run on `main` of this repository. Anyone who can write to `main` or to its workflow runs can also write the kept ledger; that is the same trust as the code itself.
 - If the artifact has expired or cannot be fetched, every check runs. Nothing is reused by default.
 

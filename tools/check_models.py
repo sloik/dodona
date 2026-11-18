@@ -101,6 +101,12 @@ def main() -> int:
         import host
         collected = json.loads((args.runs / "runs.json").read_text(encoding="utf-8"))
         sent = {item["obligation"]["name"] for item in collected.get("pending", [])}
+        if collected.get("sent"):
+            fault = host.job_fault(collected)
+            if fault:
+                print(f"nothing is judged: {fault}")
+                print(json.dumps({"cases": 0, "matched": 0, "all_matched": False}))
+                return 1
         if not sent:
             reused = len((collected.get("plan") or {}).get("reuse", []))
             print(f"nothing was run: {reused} checks kept their results from earlier runs, and the ledger says what they are")

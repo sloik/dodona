@@ -379,6 +379,8 @@ def gap_reuse_is_decided_by_a_kernel_and_checked() -> None:
                         ("--plan plan.json", "collect must send only what the plan says"),
                         ("keep.py require-passed", "a run must fail unless every check has a passing result now"),
                         ("--status success", "only a successful run's ledger may be the starting point"),
+                        ("--event push", "only a run a push started may be the starting point, never a pull request's"),
+                        ('.head_repository.full_name', "the starting point must be a run of this repository, not a fork's"),
                         ("--branch main", "only a ledger kept on main may be the starting point")):
         if needed not in workflow:
             problems.append(f".github/workflows/models.yml: {why} ({needed!r} is missing)")
