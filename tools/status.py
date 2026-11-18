@@ -74,6 +74,18 @@ def anchored_policy(ref: str) -> tuple[dict, str]:
     return tomllib.loads(there), note
 
 
+def read_ledgers(paths: list[pathlib.Path], kernel: list[str]) -> list[dict] | None:
+    """The entries of each ledger in turn, read by the kernel; None if one is damaged."""
+    entries: list[dict] = []
+    for path in paths:
+        read = host.kernel(kernel, "ledger-read", {"ledger": str(path)})
+        if "refused" in read:
+            print(f"the ledger {path} is damaged at line {read.get('at')}; no status is reported")
+            return None
+        entries += read["entries"]
+    return entries
+
+
 def scenario(ledger_entries: list[dict], writer: str, policy: dict) -> dict:
     tools, _ = host.lock_tools()
     session = host.Session([sys.executable, str(ROOT / "providers" / "tlc" / "provider.py")], ROOT, [])
@@ -104,31 +116,34 @@ def render(report: dict, torn: bool, entries: int, note: str) -> str:
     for ident, item in sorted(report["intents"].items()):
         gates, score, apart = item["gates"], item["score"], item["separation"]
         shown, asked = item.get("shown", {}), item.get("exceptions", {})
+        below = f" and {asked['below_floor']} below the floor" if asked.get("below_floor") else ""
         lines.append(f"{ident}  {item['status']} · gates: {gates['hard']} hard, {gates['soft']} soft, {gates['deferred']} deferred"
                      f" ({gates['deferred_open']} open) · met: {score['met']} of {score['of']}"
                      f" · shown: {shown.get('level', '?')} (weakest: criterion {shown.get('criterion', '?')})"
-                     f" · exceptions: {asked.get('counted', '?')}" + (f" and {asked['below_floor']} below the floor" if asked.get("below_floor") else "")
+                     f" · exceptions: {asked.get('counted', '?')}{below}"
                      f" · separation: {apart['weakest']} ({apart['act']}), {apart['apart_or_better']} of {apart['of']} acts apart or better")
     return "\n".join(lines)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--ledger", type=pathlib.Path, required=True)
+    ap.add_argument("--ledger", type=pathlib.Path, action="append", default=[],
+                    help="a ledger to read; may be repeated. The owner's ledger in the repository is always read too")
     ap.add_argument("--writer", required=True)
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--policy-ref", default="origin/main", help="the protected branch the policy is read from")
     ap.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     args = ap.parse_args()
-    read = host.kernel(args.kernel, "ledger-read", {"ledger": str(args.ledger)})
-    if "refused" in read:
-        print(f"the ledger is damaged at line {read.get('at')}; no status is reported")
+    owner = ROOT / "records" / "owner.ledger"
+    ledgers = ([owner] if owner.exists() and owner not in args.ledger else []) + args.ledger
+    entries = read_ledgers(ledgers, args.kernel)
+    if entries is None:
         return 1
     policy, note = anchored_policy(args.policy_ref)
-    answer = host.kernel(args.kernel, "scenario", scenario(read["entries"], args.writer, policy))
+    answer = host.kernel(args.kernel, "scenario", scenario(entries, args.writer, policy))
     report = answer["results"][-1]
     report["policy_source"] = note
-    print(json.dumps(report, indent=1, sort_keys=True) if args.json else render(report, read["torn"], len(read["entries"]), note))
+    print(json.dumps(report, indent=1, sort_keys=True) if args.json else render(report, False, len(entries), note))
     return 0
 
 

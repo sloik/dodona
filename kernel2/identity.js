@@ -16,10 +16,18 @@ function canonicalText(value) {
 }
 
 const SET_FIELDS = ['specified_by', 'targets', 'closure', 'declared', 'mapping'];
+const TOP_FIELDS = ['obligation', 'kind', 'inputs', 'provider'];
+const INPUT_FIELDS = ['specified_by', 'targets', 'closure', 'artifacts', 'tools', 'config', 'declared', 'expect', 'mapping'];
+const PROVIDER_FIELDS = ['name', 'version', 'protocol'];
 
 // True if the list is sorted by UTF-16 code units with no repeats.
 function isStrictlyIncreasing(list) {
   return list.every((item, position) => position === 0 || canonical.compareUnits(list[position - 1], item) < 0);
+}
+
+// True if a map has a field the definition does not have. Names starting `x-` are extensions.
+function hasUnknownField(map, allowed) {
+  return [...map.keys()].some((key) => !allowed.includes(key) && !key.startsWith('x-'));
 }
 
 // The core key of the preimage given as JSON text.
@@ -27,9 +35,15 @@ function isStrictlyIncreasing(list) {
 function coreKey(text) {
   const read = strictJson.read(text);
   if (read.refused !== undefined) return { refused: read.refused };
-  const inputs = read.value instanceof Map ? read.value.get('inputs') : undefined;
+  const preimage = read.value;
+  if (!(preimage instanceof Map)) return { refused: 'unknown-field' };
+  const inputs = preimage.get('inputs');
+  const provider = preimage.get('provider');
+  if (preimage.has('platform') || (inputs instanceof Map && inputs.has('platform'))) return { refused: 'platform-in-core-key' };
+  if (hasUnknownField(preimage, TOP_FIELDS)
+    || (inputs instanceof Map && hasUnknownField(inputs, INPUT_FIELDS))
+    || (provider instanceof Map && hasUnknownField(provider, PROVIDER_FIELDS))) return { refused: 'unknown-field' };
   if (inputs instanceof Map) {
-    if (inputs.has('platform')) return { refused: 'platform-in-core-key' };
     for (const field of SET_FIELDS) {
       const list = inputs.get(field);
       if (Array.isArray(list) && !isStrictlyIncreasing(list)) return { refused: 'unsorted-set' };

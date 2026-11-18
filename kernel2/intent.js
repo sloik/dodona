@@ -73,7 +73,11 @@ function runScenario(scenario) {
         criteria[step.edit.criterion].gate = step.edit.to;
         confirmed = false;
       }
-    } else if (step.amend && validAmend(step.amend, known)) {
+    } else if (step.amend && !validAmend(step.amend, known)) {
+      // An exception on a criterion that does not exist, or with a value outside the table,
+      // changes nothing and earns nothing.
+      amendment = { takes_effect: false, level: 'self' };
+    } else if (step.amend) {
       const judged = judgeAmendment(scenario.policy, step.amend);
       if (judged.takes_effect) criteria[step.amend.criterion].gate = step.amend.to;
       amendment = { takes_effect: judged.takes_effect, level: judged.level };

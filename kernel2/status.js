@@ -39,6 +39,20 @@ function levelFor(record, intent, policy) {
   }
 }
 
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+const RECORD_FIELDS = ['obligation', 'platform', 'writer', 'core_key', 'preimage'];
+
+// An evidence entry is a record only if its body is an object with a verdict of
+// passed or failed and all the named fields. Anything else is neither counted nor rejected.
+function isRecord(entry) {
+  const body = entry.body;
+  return entry.kind === 'evidence' && isObject(body) && vocabulary.VERDICTS.includes(body.verdict)
+    && RECORD_FIELDS.every((field) => body[field] !== undefined);
+}
+
 // A record is rejected if its core key is not the identity of its own preimage,
 // or its preimage is one that must be refused (an unsorted set, a platform in the key).
 function isRejected(body) {
@@ -71,7 +85,7 @@ function countingRecords(name, preimage, ledger, state) {
   const current = identityOf(preimage);
   const writers = [state.self.writer, ...state.policy.trusted_writers];
   return ledger
-    .filter((entry) => entry.kind === 'evidence' && !isRejected(entry.body))
+    .filter((entry) => isRecord(entry) && !isRejected(entry.body))
     .map((entry) => entry.body)
     .filter((body) => body.obligation === name
       && writers.includes(body.writer)
@@ -96,8 +110,11 @@ function obligationLevel(status, records) {
 function judgeIntent(id, intent, obligations, levels, ledger, state) {
   const policy = state.policy;
   const baseline = baselineOf(intent);
-  const acts = ledger.filter((entry) => entry.kind === 'act' && entry.body.result === 'agreed'
-    && entry.body.lineage && entry.body.lineage.intent === id).map((entry) => entry.body);
+  // Every agreed act record in the ledger; an entry whose body is not an object takes part in no rule.
+  const agreed = ledger.filter((entry) => entry.kind === 'act' && isObject(entry.body) && entry.body.result === 'agreed')
+    .map((entry) => entry.body);
+  // Those that name this intent in their lineage.
+  const acts = agreed.filter((act) => isObject(act.lineage) && act.lineage.intent === id);
 
   // The acts that would confirm the intent but for the floor, at their levels.
   const confirmLevels = acts
@@ -110,7 +127,7 @@ function judgeIntent(id, intent, obligations, levels, ledger, state) {
   const criteria = {};
   const hasObligation = {};
   for (const [name, criterion] of Object.entries(intent.criteria)) {
-    const states = criterion.checked_by.map((obligation) => obligations[obligation].status);
+    const states = criterion.checked_by.map((obligation) => statusOf(obligations, obligation));
     hasObligation[name] = criterion.checked_by.length > 0;
     // A criterion is met only if something checks it and every obligation passed.
     const met = states.length > 0 && states.every((state) => state === 'passed');
@@ -124,7 +141,7 @@ function judgeIntent(id, intent, obligations, levels, ledger, state) {
 
   // The level shown: the weakest criterion, each the weakest of its obligations.
   const criterionLevels = Object.keys(intent.criteria).sort().map((name) => {
-    const own = intent.criteria[name].checked_by.map((obligation) => levels[obligation]);
+    const own = intent.criteria[name].checked_by.map((obligation) => (Object.hasOwn(levels, obligation) ? levels[obligation] : 'none'));
     return { name, level: own.length === 0 ? 'none' : weakestOf(own) };
   });
   const shownLevel = criterionLevels.length === 0 ? 'none' : weakestOf(criterionLevels.map((item) => item.level));
@@ -153,7 +170,7 @@ function judgeIntent(id, intent, obligations, levels, ledger, state) {
   for (const [name, criterion] of Object.entries(intent.criteria)) {
     for (const obligation of criterion.checked_by) {
       const target = pairingTarget(id, name, obligation);
-      const levels = acts.filter((act) => act.kind === MATCH && act.target === target).map((act) => levelFor(act, intent, policy));
+      const levels = agreed.filter((act) => act.kind === MATCH && act.target === target).map((act) => levelFor(act, intent, policy));
       matchLevels.push(highest(levels));
     }
   }
@@ -174,13 +191,20 @@ function highest(levels) {
   return levels.reduce((a, b) => (rank(b) > rank(a) ? b : a), LEVELS[0]);
 }
 
+// The status of an obligation; one the scenario does not define is unknown.
+function statusOf(obligations, name) {
+  return Object.hasOwn(obligations, name) ? obligations[name].status : 'unknown';
+}
+
 // The project status from the intent reports.
 function projectStatus(policy, intents, reports, obligations) {
   if (policy.required.length === 0) return 'nothing-required';
-  const failing = policy.required.some((id) => Object.entries(intents[id].criteria).some(([name, criterion]) => (
-    criterion.gate === 'hard' && criterion.checked_by.some((o) => ['failed', 'conflict'].includes(obligations[o].status)))));
+  const defined = policy.required.filter((id) => Object.hasOwn(intents, id));
+  const failing = defined.some((id) => Object.values(intents[id].criteria).some((criterion) => (
+    criterion.gate === 'hard' && criterion.checked_by.some((o) => ['failed', 'conflict'].includes(statusOf(obligations, o))))));
   if (failing) return 'failed';
-  if (policy.required.every((id) => ['delivered', 'fulfilled'].includes(reports[id].status))) return 'passed';
+  // A required intent the scenario does not define counts as not delivered.
+  if (policy.required.every((id) => Object.hasOwn(reports, id) && ['delivered', 'fulfilled'].includes(reports[id].status))) return 'passed';
   return 'unknown';
 }
 
@@ -201,7 +225,7 @@ function report(state, ledger) {
       status: judged.status, gates: judged.gates, score: judged.score, shown: judged.shown, exceptions: judged.exceptions, separation: judged.separation,
     };
   }
-  const rejected = ledger.filter((entry) => entry.kind === 'evidence' && isRejected(entry.body)).length;
+  const rejected = ledger.filter((entry) => isRecord(entry) && isRejected(entry.body)).length;
   return {
     obligations,
     intents: shown,
@@ -214,12 +238,22 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+// Fills in the parts of an intent a scenario may leave out.
+function withDefaults(intents) {
+  for (const intent of Object.values(intents)) {
+    intent.children = intent.children || [];
+    intent.criteria = intent.criteria || {};
+    for (const criterion of Object.values(intent.criteria)) criterion.checked_by = criterion.checked_by || [];
+  }
+  return intents;
+}
+
 function runScenario(scenario) {
   const state = {
     self: scenario.self,
     policy: { trusted_writers: [], required: [], ...scenario.policy },
-    obligations: JSON.parse(JSON.stringify(scenario.obligations)),
-    intents: JSON.parse(JSON.stringify(scenario.intents)),
+    obligations: JSON.parse(JSON.stringify(scenario.obligations || {})),
+    intents: withDefaults(JSON.parse(JSON.stringify(scenario.intents || {}))),
   };
   const ledger = [];
   return scenario.steps.map(({ do: step }) => {

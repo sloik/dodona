@@ -110,6 +110,74 @@
       "expect": {
         "status": "fulfilled"
       }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "optional",
+          "by": "owner",
+          "claims": "apart"
+        }
+      },
+      "expect": {
+        "status": "fulfilled",
+        "amendment": {
+          "takes_effect": false,
+          "level": "self"
+        }
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "nobody"
+        }
+      },
+      "expect": {
+        "status": "fulfilled",
+        "amendment": {
+          "takes_effect": false,
+          "level": "self"
+        }
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "owner",
+          "claims": "bogus"
+        }
+      },
+      "expect": {
+        "status": "fulfilled",
+        "amendment": {
+          "takes_effect": false,
+          "level": "self"
+        }
+      }
+    },
+    {
+      "do": {
+        "amend": {
+          "criterion": "c1",
+          "to": "soft",
+          "by": "owner",
+          "claims": "apart",
+          "source": "rumour"
+        }
+      },
+      "expect": {
+        "status": "fulfilled",
+        "amendment": {
+          "takes_effect": false,
+          "level": "self"
+        }
+      }
     }
   ]
 }

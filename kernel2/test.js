@@ -194,7 +194,9 @@ const ALL = ['actor', 'worker', 'brief', 'given', 'fresh_context', 'transcript']
 
 test('acts: a claim alone earns helper, a vouched record earns its level', () => {
   assert.deepEqual(acts.gradeAct(record(), policy), { claims: 'apart', level: 'helper', source: 'declared' });
-  assert.deepEqual(acts.gradeAct(attest(record(), ALL), policy), { claims: 'apart', level: 'apart', source: 'attested' });
+  assert.deepEqual(acts.gradeAct(attest(record(), ALL), policy), { claims: 'apart', level: 'helper', source: 'declared' }); // does not bind what was judged
+  const bound = { ...record(), kind: 'match-check', result: 'agreed', lineage: { intent: 'i', kind: 'match-check' } };
+  assert.deepEqual(acts.gradeAct(attest(bound, [...ALL, 'kind', 'lineage', 'result', 'target'].sort()), policy), { claims: 'apart', level: 'apart', source: 'attested' });
 });
 
 test('acts: a bad mac, an unlisted key or an uncovered field vouches for nothing', () => {
@@ -290,4 +292,89 @@ test('status: the level shown is the weakest criterion, an exception counts only
   assert.deepEqual(results[1].intents.i.shown, { level: 'bounded', criterion: 'c2' });
   assert.deepEqual(results[2].intents.i.shown, { level: 'bounded', criterion: 'c2' }); // the strongest record counts
   assert.deepEqual(results[2].intents.i.exceptions, { counted: 0, below_floor: 0 });
+});
+
+test('the safety net does not fire on any scenario of the kit', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { runScenario } = require('./scenario');
+  const written = [];
+  const original = process.stderr.write;
+  process.stderr.write = (text) => { written.push(String(text)); return true; };
+  let count = 0;
+  try {
+    const base = path.join(__dirname, '..', 'conformance', 'kernel');
+    for (const kind of fs.readdirSync(base)) {
+      if (!fs.statSync(path.join(base, kind)).isDirectory()) continue;
+      for (const file of fs.readdirSync(path.join(base, kind))) {
+        const scenario = JSON.parse(fs.readFileSync(path.join(base, kind, file), 'utf8'));
+        // Give the kernel only what the judge gives it: each step's `do`, not what is expected.
+        runScenario({ ...scenario, steps: scenario.steps.map((step) => ({ do: step.do })) });
+        count += 1;
+      }
+    }
+  } finally {
+    process.stderr.write = original;
+  }
+  assert.ok(count > 90);
+  assert.deepEqual(written, []);
+});
+
+test('the safety net fires, and says so, when a step throws', () => {
+  const { runScenario } = require('./scenario');
+  const written = [];
+  const original = process.stderr.write;
+  process.stderr.write = (text) => { written.push(String(text)); return true; };
+  try {
+    const poisoned = { get criterion() { throw new Error('boom'); }, to: 'soft' };
+    const result = runScenario({ kind: 'intent', policy: { exception_separation: 'self', min_hard_gates: 1 },
+      criteria: { c: { gate: 'hard' } }, steps: [{ do: { confirm: {} } }, { do: { edit: poisoned } }] });
+    assert.equal(result.results.length, 2);
+  } finally {
+    process.stderr.write = original;
+  }
+  assert.ok(written.length > 0);
+});
+
+test('acts: a malformed record is self; the check value must bind what was judged', () => {
+  assert.equal(acts.isMalformed({ actor: { id: 'a', session: 's' }, worker: { id: 'w' } }), true); // no worker session
+  assert.equal(acts.isMalformed({ ...record(), fresh_context: 'yes' }), true);
+  assert.equal(acts.isMalformed({ ...record(), brief: { issued_by: 'other', content: 'x' }, given: [{ role: 'other', content: 'x' }] }), false);
+  assert.deepEqual(acts.gradeAct({ ...record(), transcript: 7 }, policy), { claims: 'self', level: 'self', source: 'declared' });
+  const unbound = attest(record(), ALL); // covers the facts' fields but not kind, target, result, lineage
+  assert.equal(acts.gradeAct(unbound, policy).level, 'helper');
+  const bound = attest(record(), [...ALL, 'kind', 'lineage', 'result', 'target'].sort());
+  assert.equal(acts.gradeAct({ ...bound, lineage: { intent: 'i', kind: 'match-check' } }, policy).level, 'helper'); // lineage not in the record when signed
+});
+
+test('acts: a key that is not even-length lowercase hex names no key; covers must be sorted', () => {
+  const cover = [...ALL, 'kind', 'lineage', 'result', 'target'].sort();
+  const rec = { ...record(), kind: 'match-check', result: 'agreed', lineage: { intent: 'i', kind: 'match-check' } };
+  const good = attest(rec, cover);
+  assert.equal(acts.gradeAct(good, policy).level, 'apart');
+  assert.equal(acts.gradeAct(good, { ...policy, attestors: { h: 'ABCD' } }).level, 'helper');
+  assert.equal(acts.gradeAct(good, { ...policy, attestors: { h: '' } }).level, 'helper');
+  const shuffled = attest(rec, [...cover].reverse());
+  assert.equal(acts.gradeAct(shuffled, policy).level, 'helper');
+});
+
+test('ledger: strict lines, any non-empty kind, no partial reads', () => {
+  const first = ledger.encodeEntry({ previous: null, kind: 'note', body: { n: 1 } });
+  assert.equal(ledger.readLedger(first.line).entries[0].kind, 'note');
+  const text = first.line.toString('utf8');
+  assert.deepEqual(ledger.readLedger(Buffer.from(text.replace('dodona1 ', 'dodona1  '))), { refused: 'corrupt', at: 1 });
+  assert.deepEqual(ledger.readLedger(Buffer.from(text.replace('dodona1 ', 'dodona2 '))), { refused: 'corrupt', at: 1 });
+  assert.deepEqual(ledger.readLedger(Buffer.from(text.replace(/ (\d+) /, (match, length) => ` 0${length} `))), { refused: 'corrupt', at: 1 });
+  assert.deepEqual(ledger.readLedger(Buffer.from('\n')), { refused: 'corrupt', at: 1 });
+  assert.deepEqual(ledger.readLedger(Buffer.from(`${text.replace(/[0-9a-f]{64}/, (digest) => digest.toUpperCase())}`)), { refused: 'corrupt', at: 1 });
+  const nullPayload = Buffer.from(`dodona1 4 ${crypto.createHash('sha256').update('null').digest('hex')} null\n`);
+  assert.deepEqual(ledger.readLedger(nullPayload), { refused: 'corrupt', at: 1 });
+});
+
+test('core keys: every set, unknown fields and a platform anywhere', () => {
+  const preimage = (top, inputs) => JSON.stringify({ obligation: 'sha256:a', kind: 'check', inputs, provider: { name: 'p', version: '1', protocol: '0.2' }, ...top });
+  assert.deepEqual(identity.coreKey(preimage({}, { declared: ['sha256:b', 'sha256:a'] })), { refused: 'unsorted-set' });
+  assert.deepEqual(identity.coreKey(preimage({}, { mapping: ['sha256:a', 'sha256:a'] })), { refused: 'unsorted-set' });
+  assert.deepEqual(identity.coreKey(preimage({ platform: null }, {})), { refused: 'platform-in-core-key' });
+  assert.deepEqual(identity.coreKey(preimage({ surprise: 1 }, {})), { refused: 'unknown-field' });
 });

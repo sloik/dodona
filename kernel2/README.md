@@ -23,12 +23,13 @@ From the repository root:
     python3 tools/run_kit.py -- node kernel2/dodona-kernel2.js scenario
     python3 tools/run_vectors.py -- node kernel2/dodona-kernel2.js canonical
     python3 tools/run_path_vectors.py -- node kernel2/dodona-kernel2.js path path-set
+    python3 tools/run_harness_check.py -- node kernel2/dodona-kernel2.js scenario
     node --test kernel2/test.js
     node kernel2/test-normalization.js .ucd
     python3 tools/run_attest_check.py -- node kernel2/dodona-kernel2.js scenario
     node kernel2/plant.js
 
-`plant.js` copies the kernel, plants each defect listed in `defects.json` one at a time, and runs every judge (kit, ledger cases, key vectors, attestation check, encoding and path vectors) on the damaged copy. A defect is caught if any judge rejects it; a copy that does not load is reported as BROKEN, not caught.
+`plant.js` copies the kernel, plants each defect listed in `defects.json` one at a time, and runs every judge (kit, ledger cases, key vectors, attestation and harness checks, encoding and path vectors) on the damaged copy. A defect is caught if any judge rejects it; a copy that does not load is reported as BROKEN, not caught.
 
 ## Unicode
 

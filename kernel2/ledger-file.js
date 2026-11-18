@@ -61,8 +61,17 @@ function syncedWrite(path, flag, bytes, truncateTo) {
   }
 }
 
-// { ledger, kind, body, wait_ms } to { appended } or { refused }.
+// { ledger, kind, body, wait_ms } to { appended } or { refused: locked, corrupt or bad-request }.
 function append(request) {
+  // A request with no string kind, no body, or no ledger name is refused and writes nothing.
+  if (typeof request.kind !== 'string' || request.kind === '' || request.body === undefined || typeof request.ledger !== 'string') {
+    return { refused: 'bad-request' };
+  }
+  try {
+    ledger.encodeEntry({ previous: null, kind: request.kind, body: request.body });
+  } catch (error) {
+    return { refused: 'bad-request' };
+  }
   const path = request.ledger;
   const waitMs = Number(request.wait_ms) || 0;
   const lockPath = `${path}.lock`;

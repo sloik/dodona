@@ -23,6 +23,7 @@ function runSafely(runner, scenario) {
   try {
     return runner.runScenario(scenario);
   } catch (error) {
+    process.stderr.write(`kernel2: a step threw (${error.message}); stepping through the scenario one step at a time\n`);
     // Take the steps one at a time; a step that throws is dropped and answered
     // with the result of the steps kept before it.
     const kept = [];
@@ -33,6 +34,7 @@ function runSafely(runner, scenario) {
         results.push(answers[answers.length - 1]);
         kept.push(step);
       } catch (stepError) {
+        process.stderr.write(`kernel2: a step was dropped because it threw (${stepError.message})\n`);
         const current = runner.runScenario({ ...scenario, steps: [...kept, NO_STEP] });
         results.push(current[current.length - 1]);
       }

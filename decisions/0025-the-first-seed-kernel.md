@@ -27,7 +27,7 @@ The conformance kit exists and was committed before any kernel. dodona needs a f
 
 **The next step up, since taken.** The model checker writes out every state two of the bounded models reach, and the kernel must give the model's answer on each one. For what those two models cover, the link between model and code is now `bounded`. For everything else it is still `sampled`.
 
-**Since then.** The seed's later work (acts, status, the ledger, core keys) was begun by that different make and finished by the make that wrote the kit. What can be claimed for those parts is `helper`, not `cross-make`.
+**Since then.** The seed's later work (acts, status, the ledger, core keys) was begun by that different make and finished by the make that wrote the kit. What can be claimed for those parts is `helper`, not `cross-make`. By the owner's direction of 2026-11-18 that is no shortfall: a fresh context is what is asked for, and a different make is the user's choice ([0024](0024-separation-is-graded-not-enforced.md)).
 
 ## Consequences
 

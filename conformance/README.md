@@ -64,7 +64,7 @@ A scenario gives the criteria with their gates as first written, and a policy: `
 | `{"edit": {"criterion": C, "to": G}}` | The gate of C is changed directly, not by an exception |
 | `{"amend": {"criterion": C, "to": G, "by": "owner" or "worker", "claims": L, "source": "declared" or "attested"}}` | An exception is asked for. `claims` is the separation level the record claims and may be absent. `source` says who stands behind the claim and is `declared` when absent |
 
-The result after each step has `"status"`, and after an `amend` step also `"amendment": {"takes_effect": true or false, "level": L}`.
+The result after each step has `"status"`, and after an `amend` step also `"amendment": {"takes_effect": true or false, "level": L}`. Every `amend` step gets that answer. One that names a criterion that does not exist, or whose `to`, `by`, `claims` or `source` is not a value the table allows, does not take effect, changes nothing, and has the level `self`.
 
 - `level` is the separation the kernel grants. It is `self` if the worker is the grantor or nothing is claimed. Otherwise it is the claimed level, capped by its source: a `declared` claim earns `helper` at most, an `attested` one `cross-make` at most.
 - An exception takes effect only if the owner granted it and its level is at or above the policy floor. The levels in order are `self`, `helper`, `apart`, `tested`, `cross-make`, `credentialed`. An exception that takes effect is the owner's own act and leaves the intent confirmed.
@@ -281,7 +281,7 @@ This judges that one host. No kernel hosts a provider yet.
 
 ## Two kernels compared
 
-`tools/kernel_differential.py --a <kernel> --b <kernel>` replays every scenario with its steps drawn again at random, repeated, dropped and reordered, and requires the two kernels to give the same answer in full, not only in the fields a scenario names. A difference, or an input neither answers, becomes a scenario. Agreement is not correctness: two kernels can be wrong the same way, and these two were both written by AI models of one vendor family for part of their code.
+`tools/kernel_differential.py --a <kernel> --b <kernel>` replays every scenario with its steps drawn again at random, repeated, dropped and reordered, and requires the two kernels to give the same answer in full, not only in the fields a scenario names. A difference, or an input neither answers, becomes a scenario. Agreement is not correctness: two kernels can be wrong the same way.
 
 `tools/run_attest_check.py -- <kernel> scenario` has a kernel grade act records whose check values are made at test time by the reference signer, `tools/attest.py`, and requires it to stop accepting them once the record is changed.
 

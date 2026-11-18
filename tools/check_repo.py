@@ -263,6 +263,16 @@ def gap_tool_tree_digest_matches_its_vectors() -> None:
         problems.append("tool-tree vectors: too few to mean anything")
 
 
+def gap_every_tool_compiles() -> None:
+    """A syntax error in the status command reached the branch because nothing ran that file."""
+    for path in sorted(list((ROOT / "tools").glob("*.py")) + list((ROOT / "providers").rglob("*.py"))
+                       + list((ROOT / "conformance").rglob("*.py")) + list((ROOT / ".github").rglob("*.py"))):
+        try:
+            compile(path.read_text(encoding="utf-8"), str(path), "exec")  # checks syntax, writes nothing
+        except SyntaxError as err:
+            problems.append(f"{path.relative_to(ROOT)} does not compile: line {err.lineno}: {err.msg}")
+
+
 def gap_one_reader_of_checker_output() -> None:
     """The provider and the older model tool each had their own reading of the checker's output and could have disagreed."""
     provider = (ROOT / "providers" / "tlc" / "provider.py").read_text(encoding="utf-8")
@@ -535,7 +545,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_provider_cases_match_the_provider, gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
-              gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors]
+              gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
+              gap_every_tool_compiles]
 
 
 class JudgeTests(unittest.TestCase):

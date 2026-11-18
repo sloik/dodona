@@ -5,7 +5,6 @@ const crypto = require('node:crypto');
 const canonical = require('./canonical');
 
 const MARKER = 'dodona1';
-const KINDS = ['evidence', 'act', 'submission', 'outcome'];
 const LF = 0x0a;
 
 function sha256Hex(bytes) {
@@ -23,13 +22,16 @@ function encodeEntry(entry) {
   return { line: Buffer.concat([head, payload, Buffer.from('\n')]), identity: `sha256:${checksum}` };
 }
 
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 // Reads one complete line (without its line feed). Returns { entry, identity } or null if it is not a good line.
+// A line is exactly: dodona1, a space, the length, a space, 64 lowercase hex digits, a space, the payload.
 function decodeLine(line) {
-  const text = new TextDecoder('utf-8', { fatal: false, ignoreBOM: true }).decode(line);
-  const match = /^dodona1 (0|[1-9][0-9]*) ([0-9a-f]{64}) /.exec(text);
+  const match = /^dodona1 (0|[1-9][0-9]*) ([0-9a-f]{64}) /.exec(line.toString('latin1'));
   if (!match) return null;
-  const headBytes = Buffer.byteLength(match[0], 'utf8');
-  const payload = line.subarray(headBytes);
+  const payload = line.subarray(match[0].length);
   if (payload.length !== Number(match[1]) || sha256Hex(payload) !== match[2]) return null;
   let payloadText;
   try {
@@ -37,12 +39,12 @@ function decodeLine(line) {
   } catch (error) {
     return null;
   }
-  const again = canonical.canonicalize(payloadText);
-  if (again.canonical !== payloadText) return null;
+  if (canonical.canonicalize(payloadText).canonical !== payloadText) return null;
   const entry = JSON.parse(payloadText);
-  const keys = Object.keys(entry).sort().join(',');
-  const shapeOk = entry !== null && typeof entry === 'object' && !Array.isArray(entry) && keys === 'body,kind,previous'
-    && KINDS.includes(entry.kind) && (entry.previous === null || typeof entry.previous === 'string');
+  // An entry has exactly previous, kind and body; kind is a non-empty string.
+  const shapeOk = isObject(entry) && Object.keys(entry).sort().join(',') === 'body,kind,previous'
+    && typeof entry.kind === 'string' && entry.kind !== ''
+    && (entry.previous === null || typeof entry.previous === 'string');
   return shapeOk ? { entry, identity: `sha256:${match[2]}` } : null;
 }
 

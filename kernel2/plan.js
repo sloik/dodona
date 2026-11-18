@@ -69,7 +69,9 @@ function runScenario(scenario) {
       state.content[step.edit.definition] = step.edit.to;
     } else if (step.repin && Object.hasOwn(state.tools, step.repin.tool)) {
       state.tools[step.repin.tool] = step.repin.to;
-    } else if (step.run && scenario.obligations[step.run.obligation]) {
+    } else if (step.run && !scenario.obligations[step.run.obligation]) {
+      ran = false; // running something that does not exist runs nothing
+    } else if (step.run) {
       const obligation = step.run.obligation;
       const source = scenario.obligations[obligation].artifact_of;
       const planned = !hasResult(scenario, state, results, obligation);

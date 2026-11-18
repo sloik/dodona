@@ -61,6 +61,13 @@ jobs:
         run: ${{ matrix.python }} tools/run_ledger_cases.py -- kernel/target/release/dodona-kernel
       - name: Check the kernel against values the reference signer makes now
         run: ${{ matrix.python }} tools/run_attest_check.py -- kernel/target/release/dodona-kernel scenario
+      - name: Status of this project from an empty ledger, and the confirmation command refusing without a terminal
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          git fetch --quiet --depth 1 origin main
+          python3 tools/status.py --ledger out/empty.ledger --writer ci --kernel kernel/target/release/dodona-kernel
+          set +e; python3 tools/confirm.py --intent 0002 --kernel kernel/target/release/dodona-kernel < /dev/null; code=$?; set -e
+          test "$code" = 2
       - name: Run the reference harness on a real checker and have the kernel grade what it signs
         run: ${{ matrix.python }} tools/run_harness_check.py -- kernel/target/release/dodona-kernel scenario
       - name: Compare the kernel's path check with the reference on random paths

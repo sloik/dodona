@@ -25,6 +25,7 @@ const JUDGES = [
   { name: 'run_ledger_cases', tool: 'run_ledger_cases.py', args: [] },
   { name: 'run_key_vectors', tool: 'run_key_vectors.py', args: ['key'] },
   { name: 'run_attest_check', tool: 'run_attest_check.py', args: ['scenario'] },
+  { name: 'run_harness_check', tool: 'run_harness_check.py', args: ['scenario'] },
   { name: 'run_vectors', tool: 'run_vectors.py', args: ['canonical'] },
   { name: 'run_path_vectors', tool: 'run_path_vectors.py', args: ['path', 'path-set'] },
 ];
