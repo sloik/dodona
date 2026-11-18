@@ -32,6 +32,7 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_tool_tree_digest_matches_its_vectors` | How the digest of a tool tree is computed was not written down, so nobody else could have checked a lock. The rule now has vectors, and the reference must agree with them |
 | `gap_every_tool_compiles` | A syntax error in the status command reached the working branch, because no check ever ran that file |
 | `gap_an_intent_reads_one_way_only` | Intent rows that a person sees but the reader skipped, or gates it misread, let an intent be reported fulfilled with a hard criterion never checked; and results written by hand into the owner's ledger counted as passed. Criteria are now data in the front matter, the table is written from it, and anything else that looks like criteria is refused |
+| `gap_runner_versions_agree` | An automatic update moved one CI job to a new Ubuntu version and left the others, so steps that run only on the named old version would have skipped without a word. All workflows use one Ubuntu version, and a step limited to a named system must name one that exists. An update that misses a line now fails on its own pull request |
 
 More checks run as their own tools in CI, because they need to build or install something:
 

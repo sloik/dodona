@@ -2,5 +2,29 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Runner versions Renovate does not find on its own: in a job matrix, and in a step that runs only on one of them. All must move together; tools/check_repo.py fails a pull request that moves only some.",
+      "managerFilePatterns": [
+        "/(^|/)\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "\\bos:\\s*(?<depName>ubuntu|windows|macos)-(?<currentValue>[0-9][0-9.]*)\\b",
+        "matrix\\.os\\s*==\\s*'(?<depName>ubuntu|windows|macos)-(?<currentValue>[0-9][0-9.]*)'"
+      ],
+      "datasourceTemplate": "github-runners",
+      "versioningTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Every runner image of one system in one pull request, so a version is never changed in some places and not others.",
+      "matchDatasources": [
+        "github-runners"
+      ],
+      "groupName": "CI runner images"
+    }
   ]
 }
