@@ -266,7 +266,7 @@
       "expect": {
         "intents": {
           "i1": {
-            "status": "delivered"
+            "status": "fulfilled"
           }
         },
         "project": {

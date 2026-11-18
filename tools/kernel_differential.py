@@ -11,7 +11,8 @@ First, every scenario is replayed with its steps drawn again at random,
 repeated, dropped and reordered. Second, values are changed as well: each
 value in a step may be replaced by another value
 that some scenario of the same kind uses under the same name, so a verdict, a
-gate, a level, a name or a key turns up where no scenario put it. Only steps
+gate, a level, a name or a key turns up where no scenario put it. Now and then a
+value of the wrong type is put in its place: true, a number, an empty list, null. Only steps
 are changed, never a scenario's settings.
 
 Each step of a scenario is valid in any order by the contract, so both
@@ -44,6 +45,9 @@ def ask(command: list[str], scenario: dict):
         return {"did-not-answer": "not-json"}
 
 
+ODD = [True, False, 0, 7, -1, "", "x", [], {}, ["a"], {"a": 1}, None]
+
+
 def leaves(value, name, pool):
     """Collect every plain value in `value` under the name of the field that holds it."""
     if isinstance(value, dict):
@@ -66,6 +70,10 @@ def changed(value, name, pool, rng, rate):
         return [changed(inner, name, pool, rng, rate) for inner in value]
     if isinstance(value, (str, bool, int)) and name in pool and rng.random() < rate:
         return rng.choice(pool[name])
+    if isinstance(value, (str, bool, int)) and rng.random() < rate / 5:
+        # A value of the wrong type where the scenario had a plain one: the kernels must agree on
+        # what that means, and a review found three places where they did not.
+        return rng.choice(ODD)
     return value
 
 

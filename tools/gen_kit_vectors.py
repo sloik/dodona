@@ -466,7 +466,7 @@ def status() -> None:
         scenario(name, "C23", f"A criterion whose gate is written {json.dumps(gate)} counts as hard. With its check not passed the intent is open and the project is not passed; a mistake in writing a gate can only make delivery harder.",
                  [({"append": {"kind": "act", "body": confirm("i1", odd)}}, {"intents": {"i1": {"status": "open", "gates": {"hard": 2, "soft": 0, "deferred": 0, "deferred_open": 0}}}}),
                   (evidence("ob-a", A), {"intents": {"i1": {"status": "open"}}, "project": {"status": "unknown"}}),
-                  (evidence("ob-b", B), {"intents": {"i1": {"status": "delivered"}}, "project": {"status": "passed"}})],
+                  (evidence("ob-b", B), {"intents": {"i1": {"status": "fulfilled"}}, "project": {"status": "passed"}})],
                  intents={"i1": odd})
     worded = {"owner": "owner-1", "worker": "worker-1", "children": [], "words": "# The kit is adequate\n\nEvery planted defect is caught.\n",
               "criteria": {"c1": {"words": "Every planted defect is caught", "gate": "hard", "checked_by": ["ob-a"]}}}
@@ -684,6 +684,13 @@ def status() -> None:
              + [(without(whole, field), nothing()) for field in ("obligation", "platform", "writer", "core_key", "preimage")]
              # Not rejected either: with a wrong key these would be rejected if they were records. They are not records.
              + [(without(record("ob-a", A, core_key=canonical.identity(A2)), field), nothing()) for field in ("writer", "platform")]
+             # A field of the wrong type counts as lacking it: not a record, so not rejected either.
+             + [(added(dict(record("ob-a", A, core_key=canonical.identity(A2)), **{field: odd})), nothing())
+                for field, odd in (("platform", True), ("writer", 7), ("obligation", False), ("core_key", -1), ("preimage", []))]
+             # Which comes first: an entry that is not a record is not one, whatever else is wrong with it.
+             + [(added(dict(record("ob-a", dict(A, inputs=dict(A["inputs"], closure=[{}]))), platform=field_value)), nothing())
+                for field_value in (True, -1)]
+             + [(added(dict(record("ob-a", dict(A, kind="match-check")), platform=True, core_key=canonical.identity(A))), nothing())]
              + [(added({k: v for k, v in confirm("i1", intent).items() if k != "actor"}), nothing()),
                 (added([]), nothing()),
                 (evidence("ob-a", A), {"obligations": {"ob-a": P, "ob-b": U}, "rejected": 0, "intents": {"i1": {"status": "draft"}}}),
