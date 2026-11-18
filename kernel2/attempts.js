@@ -6,6 +6,8 @@
 const { rank } = require('./intent');
 const vocabulary = require('./vocabulary');
 
+class InvalidScenario extends Error {}
+
 // `none`, `agreed` or `refused`. An open attempt counts as a failure.
 function overallResult(attempts) {
   if (attempts.length === 0) return 'none';
@@ -24,23 +26,47 @@ function grantedLevel(claims, capped) {
   return claims;
 }
 
+// How many attempts along the line did not agree: refused, or still open.
+function notAgreed(attempts) {
+  return attempts.filter((attempt) => attempt.state !== 'agreed').length;
+}
+
+// The limit on refusals along the line before every retried agreement is capped
+// (decision 0031): a whole number of at least one, 2 when absent. Any other value
+// makes the scenario invalid, and it is refused as a whole (conformance/README.md).
+function refusalLimit(scenario) {
+  const limit = scenario.refusals_before_cap;
+  if (limit === undefined) return 2;
+  if (!Number.isInteger(limit) || limit < 1) throw new InvalidScenario('refusals_before_cap must be a whole number of at least one');
+  return limit;
+}
+
+// Checked before any step is taken, so that the refusal is not mistaken for a step that threw.
+function validate(scenario) {
+  refusalLimit(scenario);
+}
+
 // `all` is every attempt ever taken; the current target's are those with `target` equal to `current`.
-function judge(all, current, claims) {
+// Every field is worked out from the attempts as they stand now.
+function judge(all, current, claims, limit = 2) {
   const onTarget = all.filter((attempt) => attempt.target === current);
   const shopped = isShopped(onTarget);
+  const retried = isShopped(all);
+  const capped = shopped || (retried && notAgreed(all) >= limit);
   const answer = {
     result: overallResult(onTarget),
     shopped,
-    cap: shopped ? 'helper' : null,
+    cap: capped ? 'helper' : null,
     attempts: all.length,
-    retried: isShopped(all),
+    retried,
   };
-  if (claims !== undefined) answer.granted = grantedLevel(claims, shopped);
+  if (claims !== undefined) answer.granted = grantedLevel(claims, capped);
   return answer;
 }
 
 function runScenario(scenario) {
   const all = [];
+  const limit = refusalLimit(scenario);
   let current = 0;
   const results = [];
   for (const { do: step } of scenario.steps) {
@@ -52,9 +78,9 @@ function runScenario(scenario) {
     } else if (step.change_target) {
       current += 1;
     }
-    results.push(judge(all, current, scenario.claims));
+    results.push(judge(all, current, scenario.claims, limit));
   }
   return results;
 }
 
-module.exports = { overallResult, isShopped, grantedLevel, judge, runScenario };
+module.exports = { InvalidScenario, validate, overallResult, isShopped, notAgreed, refusalLimit, grantedLevel, judge, runScenario };

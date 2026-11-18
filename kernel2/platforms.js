@@ -31,11 +31,13 @@ function keyAgrees(recorded, key) {
   return !keyDiffers(recorded, key) && platformMap(recorded, key).size >= 2;
 }
 
-// The claim of platform independence is verified when some key has the same
-// verdict on at least two platforms and no key has different verdicts anywhere.
-function claimVerified(recorded, keys) {
-  const sameOnTwo = keys.some((key) => platformsWith(recorded, key, 'passed') >= 2 || platformsWith(recorded, key, 'failed') >= 2);
-  return sameOnTwo && !keys.some((key) => keyDiffers(recorded, key));
+// The claim of platform independence is verified for one key, and only for that
+// key: it has the same verdict on at least two platforms, and no platform has
+// recorded the other verdict for it. Another key agreeing verifies nothing here.
+function claimVerified(recorded, key) {
+  const sameOnTwo = platformsWith(recorded, key, 'passed') >= 2 || platformsWith(recorded, key, 'failed') >= 2;
+  const otherVerdict = keyDiffers(recorded, key);
+  return sameOnTwo && !otherVerdict;
 }
 
 // `differs`, `agrees` or `unknown`.
@@ -51,11 +53,11 @@ function compareText(a, b) {
 
 function judge(scenario, recorded) {
   const providerClaims = scenario.provider_claims !== false;
-  const mayStandIn = scenario.stand_in_allowed && providerClaims && claimVerified(recorded, scenario.keys);
   const status = {};
   const reproduced = {};
   const stoodIn = [];
   for (const key of scenario.keys) {
+    const mayStandIn = scenario.stand_in_allowed && providerClaims && claimVerified(recorded, key);
     status[key] = {};
     reproduced[key] = reproducibility(recorded, key);
     for (const platform of scenario.platforms) {

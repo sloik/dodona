@@ -1,17 +1,20 @@
 'use strict';
 // A parent intent with children (conformance/README.md, tree scenarios).
 
-// Tree status. `nodes` is the root and every child as { gate, check };
-// `children` is the children only.
+// Tree status. `root` and each of `children` is { gate, check }.
+// The policy's floor is counted over the whole tree, root and every child, and
+// every child must have a hard gate of its own; a child is not held to the
+// policy's number on its own (decision 0030, decision 0017).
 const vocabulary = require('./vocabulary');
 
 function treeStatus(policy, confirmed, root, children) {
   const nodes = [root, ...children];
   const hard = nodes.filter((node) => node.gate === 'hard');
+  const floor = Math.max(1, policy.min_hard_gates); // a floor below 1 is 1
   if (!confirmed) return 'draft';
-  if (hard.length < policy.min_hard_gates) return 'unguarded';
+  if (hard.length < floor) return 'unguarded';
+  if (children.some((child) => child.gate !== 'hard')) return 'unguarded';
   if (hard.some((node) => node.check !== 'passed')) return 'open';
-  if (children.some((child) => child.gate !== 'hard')) return 'open';
   return 'delivered';
 }
 
