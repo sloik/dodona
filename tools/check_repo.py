@@ -286,6 +286,23 @@ def gap_every_tool_compiles() -> None:
             problems.append(f"{path.relative_to(ROOT)} does not compile: line {err.lineno}: {err.msg}")
 
 
+def gap_an_intent_reads_one_way_only() -> None:
+    """Criterion rows written `2.`, `**2**`, with an invisible character, or with a gate like `Hard` were shown and then
+    skipped or not held as hard, so an intent could be reported fulfilled with a hard criterion never checked."""
+    import status
+    table = "| # | Criterion | Gate | Checked by |\n|---|---|---|---|\n| 1 | a | hard | b |\n"
+    if status.unclear(table) is not None:
+        problems.append("tools/status.py refuses a plain criteria table")
+    for row in ("| 2. | x | hard | y |", "| **2** | x | hard | y |", "| 2\u200b | x | hard | y |", "| 2 | x | Hard | y |",
+                "| 2 | a \\| b | hard | y |", "2 | x | hard | y", " | 2 | x | hard | y |", "<!-- | 2 | x | hard | y | -->",
+                "| 1 | again | soft | y |"):
+        if status.unclear(table + row + "\n") is None:
+            problems.append(f"tools/status.py reads an intent with the row {row!r} without refusing it")
+    source = (ROOT / "tools" / "status.py").read_text(encoding="utf-8")
+    if 'e.get("kind") == "act"' not in source:
+        problems.append("tools/status.py must read only acts from the owner's ledger: a result found there was not produced by a run")
+
+
 def gap_one_reader_of_checker_output() -> None:
     """The provider and the older model tool each had their own reading of the checker's output and could have disagreed."""
     provider = (ROOT / "providers" / "tlc" / "provider.py").read_text(encoding="utf-8")

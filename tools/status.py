@@ -43,7 +43,12 @@ def unclear(text: str) -> str | None:
         return "a criterion row does not start with a bar, so a reader might not see it"
     for line in rows:
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if cells and cells[0].isdigit() and (len(cells) < 4 or cells[2] not in ("hard", "soft", "deferred")):
+        first = cells[0] if cells else ""
+        # Every row is a header, a separator, or a criterion numbered in plain ASCII digits. A row
+        # numbered `2.`, `**2**` or with an invisible character would show and not be read.
+        if not (first == "#" or set(first) <= set("-: ") or (first.isascii() and first.isdigit())):
+            return f"a table row starts with {first!r}, which is not a plain criterion number"
+        if first.isascii() and first.isdigit() and (len(cells) < 4 or cells[2] not in ("hard", "soft", "deferred")):
             return f"criterion {cells[0]} has a gate that is not hard, soft or deferred: {cells[2] if len(cells) > 2 else 'none'!r}"
     return None
 
@@ -111,7 +116,9 @@ def read_ledgers(paths: list[pathlib.Path], kernel: list[str]) -> list[dict] | N
             print(f"the ledger {path} is damaged at line {read.get('at')}; no status is reported")
             return None
         if pathlib.Path(path).absolute() == OWNER_LEDGER.absolute() and OWNER_LEDGER.resolve() == OWNER_LEDGER.absolute():
-            entries += read["entries"]
+            # The owner's ledger holds owners' acts and nothing else. A result found there was not
+            # produced by a run, so it is not read.
+            entries += [e for e in read["entries"] if e.get("kind") == "act"]
         else:
             # Acts of owners count only from the owner's ledger kept in the repository, where every
             # one is a reviewed change. An act found anywhere else is not read at all.
