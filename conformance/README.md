@@ -51,7 +51,7 @@ A scenario gives the obligations with what each depends on, the starting content
 The result after each step is an object with one entry per obligation: `{"status": S}` and, when the status is `unknown`, `"reason": R`.
 
 - `status` is `passed`, `failed`, `conflict` or `unknown`, by the rule in [the data model](../MODEL.md#4-status). Only results recorded for the current inputs count: the content of everything the obligation depends on, and the tool.
-- `reason` is `pending` if a run on the current inputs is in flight; otherwise the outcome of the most recent attempt on the current inputs that left no result, `unavailable` or `error`; otherwise `never-run`.
+- `reason` is `pending` if a run on the current inputs is in flight; otherwise the outcome of the most recent attempt on the current inputs that left no result, `unavailable` or `error`, where attempts are ordered by when they were asked for (their `submit`), not by when they ended; otherwise `never-run`. A lost run gives `error`.
 - Recorded results take precedence over a run in flight: an obligation that has passed stays `passed` while it is being checked again.
 - A run is in flight from the `submit` that started it until it is completed or lost. A `complete` or `lose` naming a run that is not in flight changes nothing. A `submit` under a name that is in flight changes nothing, whatever the backend and whichever obligation it asks for: names are shared by all obligations, and no `unavailable` is recorded. Once a run has ended, by a `complete` or a `lose`, its name may be used again.
 

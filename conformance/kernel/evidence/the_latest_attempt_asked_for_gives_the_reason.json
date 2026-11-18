@@ -1,0 +1,117 @@
+{
+  "kind": "evidence",
+  "name": "the_latest_attempt_asked_for_gives_the_reason",
+  "claim": "C1",
+  "covers": [],
+  "why": "When two attempts on the same inputs both leave no result, the reason is the one asked for last, whatever order they end in: a run lost after a later attempt found the backend down does not replace that later outcome.",
+  "obligations": {
+    "o1": {
+      "depends_on": [
+        "d1"
+      ]
+    }
+  },
+  "start": {
+    "definitions": {
+      "d1": "a"
+    },
+    "tool": "t1",
+    "backend": "up"
+  },
+  "steps": [
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "backend": {
+          "to": "down"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j2"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "lose": {
+          "run": "j1"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "unavailable"
+        }
+      }
+    },
+    {
+      "do": {
+        "backend": {
+          "to": "up"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "unavailable"
+        }
+      }
+    },
+    {
+      "do": {
+        "submit": {
+          "obligation": "o1",
+          "as": "j3"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "pending"
+        }
+      }
+    },
+    {
+      "do": {
+        "lose": {
+          "run": "j3"
+        }
+      },
+      "expect": {
+        "o1": {
+          "status": "unknown",
+          "reason": "error"
+        }
+      }
+    }
+  ]
+}
