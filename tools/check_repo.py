@@ -576,7 +576,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
-              gap_every_tool_compiles]
+              gap_every_tool_compiles, gap_an_intent_reads_one_way_only]
 
 
 class JudgeTests(unittest.TestCase):

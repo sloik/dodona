@@ -31,6 +31,7 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_an_unfinished_job_proves_nothing` | Six claims were marked checked from a job the queue had stopped part of the way, and a tool nobody had measured was indistinguishable from one not yet pinned. A job with no end marker, or a tool with no measurement, may never yield a verdict. A second review showed the queue can mark a job failed after its files are written, and that an older way of sending jobs had none of these checks: every job now goes through one gate that needs the queue's clean exit and the marker both |
 | `gap_tool_tree_digest_matches_its_vectors` | How the digest of a tool tree is computed was not written down, so nobody else could have checked a lock. The rule now has vectors, and the reference must agree with them |
 | `gap_every_tool_compiles` | A syntax error in the status command reached the working branch, because no check ever ran that file |
+| `gap_an_intent_reads_one_way_only` | Intent rows that a person sees but the reader skipped, or gates it misread, let an intent be reported fulfilled with a hard criterion never checked; and results written by hand into the owner's ledger counted as passed |
 
 More checks run as their own tools in CI, because they need to build or install something:
 

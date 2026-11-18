@@ -28,6 +28,10 @@ The owner's view, 2026-11-18: this is a somewhat artificial case, because the us
 
 **Confirmations live in the repository.** They are appended to `records/owner.ledger`, which is committed. Every confirmation is therefore a change someone can see before it reaches the protected branch, and that review is the real safeguard today. Results of checks stay out of the repository; they are produced by runs.
 
+**The owner's ledger holds acts only.** Anything else written there, a result for instance, is not read: a result counts only when a run produced it.
+
+**What the owner sees is what is read.** An intent file is refused unless it can be read one way only: every criterion row numbered in plain digits, every gate exactly `hard`, `soft` or `deferred`, no hidden comments, no repeated numbers, no row a reader might skip. A review showed rows like `| 2. |` that a person sees and the reader skipped.
+
 **Only the owner's ledger counts.** A confirmation is read only from `records/owner.ledger`. An act found in any other ledger, such as the one CI keeps, is not read at all, so an agent cannot confirm by writing to a ledger it controls. A review showed that the first version counted one from anywhere.
 
 **An agent does not confirm for the owner.** The command refuses to run without a terminal. That stops accidents and nothing else: a program can give it a terminal, and a review did. The safeguard that does work is that the owner's ledger is a reviewed, committed file.
