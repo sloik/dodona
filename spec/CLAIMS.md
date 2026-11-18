@@ -65,7 +65,7 @@ Every combination of three links, each with one of six levels or unreported, and
 
 **How the properties get their content (repair, 2026-11-18).** The specification takes the weakest of the three links as a set. The kernel goes along the chain one link at a time, keeping the weaker of what it has and the next link, and reads the scale from its own table. The kernel answers with a level's name, read on the true scale. The properties say the two always agree, and that what the kernel reports about planted defects is what the specification says in every case, in both directions.
 
-**What still restates the rule.** The report about planted defects is the same expression on both sides; only its planted defects give it content. This is still a pure rule: the specification and the kernel are two ways of writing it, and the model shows they agree and that each way of getting the kernel's version wrong is caught. It cannot show the rule is the right one.
+**What still restates the rule.** The report about planted defects is the same expression on both sides; only its planted defects give it content. This is still a pure rule: the specification and the kernel are two ways of writing it, and the model is meant to show they agree, once a run is recorded and that each way of getting the kernel's version wrong is caught. It cannot show the rule is the right one.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
@@ -77,7 +77,7 @@ Every combination of three links, each with one of six levels or unreported, and
 
 Bounds: a root and one child, two criteria each, hard or soft; floors of one and two hard gates; at most six changes of shape or confirmations. One level of children; no exceptions, no deferred gates.
 
-**Settled (repair, 2026-11-18): every intent in a tree is held to the floor, counted over it and its descendants.** The data model counts an intent's gates over its descendants and says an intent below the floor is unguarded; a child is an intent. So the root's count includes the child's, and the child is held to the floor by its own count. The model before checked the floor on the tree's total only, which let a child below it through; that is now a planted defect.
+**Settled (repair, 2026-11-18; decision 0030).** The data model counts an intent's gates over its descendants, and decision 0017 says moving a criterion into a child loses nothing. So the policy's number is counted over the whole tree, and a child is not held to it on its own; every intent in the tree, each child included, must have at least one hard gate. Holding each child to the policy's number is a planted defect.
 
 **How the properties get their content.** The specification decides confirmation from the order of events (the last confirmation came after the last change of shape) and counts gates from the tree as it is. The kernel keeps one flag, cleared on each change, and a running count of hard gates per intent, updated on each change. The properties say the kernel's confirmation and delivery are exactly the ones the specification calls for, both ways.
 
@@ -85,13 +85,13 @@ Bounds: a root and one child, two criteria each, hard or soft; floors of one and
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C34 | A tree is delivered exactly when it is confirmed since its last change of shape, every intent in it has at least the hard gates policy demands, counted over it and its descendants, and every hard gate passes. Adding or removing a child, or changing a gate, needs confirming again | [0017](../decisions/0017-intent-in-plain-words-broken-down.md) | `ConfirmationMatches`, `DeliveryMatches` | A child is removed or added, or a gate edited, and the confirmation stays; an unconfirmed tree is delivered; the root is delivered whatever its child is; a child with no hard gate counts as delivered; the floor is ignored, checked on the root only, or counted without the child; the running count keeps a removed child or misses a child's edit | modelled, unchecked |
+| C34 | A tree is delivered exactly when it is confirmed since its last change of shape, the whole tree counts at least the hard gates policy demands, every intent in it has a hard gate, and every hard gate passes. Adding or removing a child, or changing a gate, needs confirming again | [0030](../decisions/0030-the-hard-gate-floor-is-counted-over-the-tree.md) | `ConfirmationMatches`, `DeliveryMatches` | A child is removed or added, or a gate edited, and the confirmation stays; an unconfirmed tree is delivered; the root is delivered whatever its child is; a child with no hard gate counts as delivered; the floor is ignored, applied to each child, or counted without the child; the running count keeps a removed child or misses a child's edit | modelled, unchecked |
 
 ## Modelled in `attempts/Attempts.tla`
 
 Bounds: at most three attempts and two changes of target; the history of events kept in full. Attempts made without taking a ticket leave no record and are outside the model.
 
-**Settled (repair, 2026-11-18): a change of target does not reset the count or the cap.** Decision 0024 says a trivial change made to get a fresh try does not reset the count, and the kernel cannot tell a trivial change from a real fix. The result does start again on a new target, so a trivial change still turns a refusal into an agreement, capped at helper; that is a reading of 0024, which does not say it. So an agreement after any earlier attempt along the line that did not agree is retried, and the act is graded helper at most. The data model's older wording, which capped only on an unchanged target, is now a planted defect, and the data model says what the decision says.
+**Settled (repair, 2026-11-18; owner direction, decision 0031).** The data model capped only unchanged work; decision 0024 said a trivial change must not reset the count. The owner chose: shopping on the same target is capped at helper; after a change of target a retried agreement keeps its grade until the line has as many attempts that did not agree as policy allows (two by default), and is capped from then on. The result starts again on a new target. Capping every retry, and ignoring the limit, are planted defects.
 
 **How the properties get their content.** The specification is stated over the history of events in the order they happened. The kernel works from its records, one per ticket, updated in place. The properties say the kernel's answers from its records are the ones the history calls for. A kernel that closes the wrong ticket, files an attempt under the target it has when it closes, or forgets attempts when the target changes, is caught even though its answers are computed by the right rule.
 
@@ -99,7 +99,7 @@ Bounds: at most three attempts and two changes of target; the history of events 
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C35 | On the current target the worst result counts and an attempt left open is a failure. Along the whole line, whatever happened to the target, every attempt is counted, and an agreement after any earlier attempt that did not agree is reported as retried and graded helper at most, never above what it claimed | [0024](../decisions/0024-separation-is-graded-not-enforced.md) | `WorstCounts`, `RetryIsCapped`, `HistoryIsKept` | Only the latest attempt counts; an open attempt is ignored; the wrong ticket is closed; an attempt is filed under the target at closing; retrying is not capped, capped only on the same target, or not reported; shopping is not flagged; the cap raises a level; a change of target forgets attempts | modelled, unchecked |
+| C35 | On the current target the worst result counts and an attempt left open is a failure. Along the whole line, whatever happened to the target, every attempt is counted, and an agreement after any earlier attempt that did not agree, as the attempts stand now, is reported as retried. It is graded helper at most when shopped on the same target, or when the line has reached the policy's limit of attempts that did not agree; never above what it claimed | [0031](../decisions/0031-an-agreement-after-a-real-change-keeps-its-grade-up-to-a-limit.md) | `WorstCounts`, `RetryIsCapped`, `HistoryIsKept` | Only the latest attempt counts; an open attempt is ignored; the wrong ticket is closed; an attempt is filed under the target at closing; retrying is not reported, or only on the same target; shopping is not flagged; the cap is ignored, applied to every retry, applied without the limit, or one refusal late; the cap raises a level; a change of target forgets attempts | modelled, unchecked |
 
 ## Modelled in `platforms/Platforms.tla`
 
@@ -109,7 +109,7 @@ Bounds: two sets of inputs and three platforms; each platform may record each ve
 
 **How the properties get their content.** The specification is stated over every record ever made. The kernel works from what it has filed for each key and platform, updated one record at a time. The properties say every status, every report of a stand-in and every reproducibility answer is the one the records call for.
 
-**What still restates the rule.** Unless a record is filed wrongly, the kernel's store equals what the records say, and status, verification and reproducibility are the same expressions on both sides. Their content is in the filing (one planted defect) and in each planted defect of the rule being caught. A disagreement of a platform with itself also cancels verification; that is stricter than the design text, which does not mention it.
+**What still restates the rule.** Unless a record is filed wrongly, the kernel's store equals what the records say, and status, verification and reproducibility are the same expressions on both sides. Their content is in the filing (one planted defect) and in each planted defect of the rule being caught. Any disagreement about the key, a platform's with itself included, cancels verification, even where two other platforms agree; that is stricter than the design text, which asks only for two agreeing platforms.
 
 | # | Claim | Decision | Property | Planted defect that must fail | Status |
 |---|---|---|---|---|---|

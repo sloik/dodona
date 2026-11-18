@@ -5,7 +5,6 @@
   "covers": [
     "attempts/mutant_latest_only",
     "attempts/mutant_flag_missed",
-    "attempts/mutant_flag_does_not_cap",
     "attempts/reach_shopped"
   ],
   "why": "Trying again until the answer is yes does not turn a refusal into an agreement. It is flagged, and it caps the separation of the act.",

@@ -33,7 +33,7 @@
       "config": "design_floor_two.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "The same with a floor of two, which every intent in the tree must meet on its own."
+      "purpose": "The same with a floor of two, which the root's count over the tree must meet."
     },
     {
       "config": "reach_delivered.cfg",
@@ -99,10 +99,10 @@
       "of": "DeliveryMatches"
     },
     {
-      "config": "mutant_floor_counts_tree.cfg",
+      "config": "mutant_floor_applied_to_each_child.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: the floor is checked on the root's count only, so a child below it is delivered: the rule the model had before.",
+      "purpose": "Planted defect: each child is held to the policy's number on its own count, so moving a criterion into a child can leave the tree unguarded, which decision 0017 rules out.",
       "of": "DeliveryMatches"
     },
     {

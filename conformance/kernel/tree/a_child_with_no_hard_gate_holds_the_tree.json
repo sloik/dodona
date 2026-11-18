@@ -1,20 +1,20 @@
 {
   "kind": "tree",
-  "name": "the_floor_is_per_intent",
+  "name": "a_child_with_no_hard_gate_holds_the_tree",
   "claim": "C34",
   "covers": [
-    "tree/mutant_floor_counts_tree"
+    "tree/mutant_ignores_floor"
   ],
-  "why": "With a floor of two, the root counts two hard gates with its child's, but the child, an intent too, counts one of its own, so the tree is not delivered.",
+  "why": "A root with enough hard gates does not carry a child with none: every intent in a tree must have a hard gate.",
   "policy": {
-    "min_hard_gates": 2
+    "min_hard_gates": 1
   },
   "root": {
     "gate": "hard"
   },
   "children": {
     "k1": {
-      "gate": "hard"
+      "gate": "soft"
     }
   },
   "steps": [
@@ -39,13 +39,20 @@
     },
     {
       "do": {
-        "check": {
-          "node": "k1",
-          "status": "passed"
+        "remove": {
+          "child": "k1"
         }
       },
       "expect": {
-        "status": "unguarded"
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "delivered"
       }
     }
   ]

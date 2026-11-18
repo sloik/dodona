@@ -70,30 +70,6 @@ ShownName ==
 ShownRank == Rank(ShownName)
 
 NonVacuous ==
-    IF planted = {} THEN "none-planted"
-    ELSE IF \A m \in planted : defect[m] = "passed" THEN "shown" ELSE "not-shown"
-
-Reported == {l \in Links : links[l] # "unreported"}
-
-(* The kernel: it goes along the chain one link at a time, keeping the weaker of what it has and
-   the next link, as code over a list does; and it reads the scale from its own table of ranks. *)
-KRank(l) == IF Mutant = "observed_above_sampled" /\ l = "observed" THEN 3
-            ELSE IF Mutant = "observed_above_sampled" /\ l = "sampled" THEN 2 ELSE Rank(l)
-Weaker(a, b) == IF a <= b THEN a ELSE b
-Folded ==
-    IF Mutant = "fold_skips_middle"
-    THEN Weaker(KRank(links["spec-to-code"]), KRank(links["runs-to-world"]))
-    ELSE Weaker(Weaker(KRank(links["spec-to-code"]), KRank(links["code-to-runs"])), KRank(links["runs-to-world"]))
-
-ShownRank ==
-    CASE Mutant = "average" ->
-            (Rank(links["spec-to-code"]) + Rank(links["code-to-runs"]) + Rank(links["runs-to-world"])) \div 3
-      [] Mutant = "ignore_unreported" ->
-            IF Reported = {} THEN 0 ELSE Min({Rank(links[l]) : l \in Reported})
-      [] Mutant = "always_nothing" -> 0
-      [] OTHER -> Folded
-
-NonVacuous ==
     IF planted = {} THEN (IF Mutant = "empty_is_shown" THEN "shown" ELSE "none-planted")
     ELSE IF Mutant = "failed_reported_none_planted" /\ \E m \in planted : defect[m] = "failed" THEN "none-planted"
     ELSE IF \A m \in planted : defect[m] = "passed"

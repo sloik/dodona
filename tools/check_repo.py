@@ -104,36 +104,60 @@ def check_claims_match_runs() -> None:
             (ROOT / name).exists() and hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == digest
             for name, digest in run.get("other_files", {}).items()
         ) and (ROOT / "spec" / "runs" / run["outputs"]).is_dir()
-    # A run supports claims only if it was recorded against the expected outcomes too, and its
-    # saved output, judged again by the provider's own judge, still matches every case listed.
+    # A run supports claims only if it was recorded against the expected outcomes too, every file
+    # it kept is hashed in the index, and its saved output, judged again by the provider's own
+    # judge, still matches every case listed. A run of the kernel over every state ("kind":
+    # "dump") has no cases; its outputs are hashed, and what they show is judged by the run that
+    # reads them. A run replaced by a later one ("superseded_by") supports nothing.
     sys.path.insert(0, str(ROOT / "providers" / "tlc"))
     from judge import judge  # noqa: E402
 
+    needed = {n for run in index["runs"] for n in run.get("needs", [])}
     for run in index["runs"]:
-        if not current[run["id"]] or not run["claims"]:
+        rid = run["id"]
+        if run.get("superseded_by"):
+            current[rid] = False
             continue
-        if "expected.json" not in run["files"]:
-            current[run["id"]] = False
+        if not current[rid] or not (run["claims"] or rid in needed):
             continue
         out = ROOT / "spec" / "runs" / run["outputs"]
+
+        def refuse(why: str) -> None:
+            problems.append(f"spec/runs/index.json: run {rid} cannot support its claims: {why}")
+            current[rid] = False
+
+        kept = {f.name for f in out.iterdir() if f.is_file()}
+        digests = run.get("outputs_sha256")
+        if not isinstance(digests, dict) or set(digests) != kept:
+            refuse("the hash of every output file it kept is not listed")
+            continue
+        if any(hashlib.sha256((out / n).read_bytes()).hexdigest() != d for n, d in digests.items()):
+            refuse("an output file is not the one recorded")
+            continue
+        if run.get("kind") == "dump":
+            continue
+        if "expected.json" not in run["files"]:
+            refuse("expected.json is not among the files it was run on")
+            continue
         cases = json.loads((ROOT / "spec" / run["model"] / "expected.json").read_text(encoding="utf-8"))["cases"]
-        listed = {c["config"].removesuffix(".cfg") for c in cases}
-        saved = {f.stem for f in out.iterdir() if f.suffix in (".txt", ".exit")}
-        if saved != listed:
-            problems.append(f"spec/runs/{run['outputs']}: saved outputs {sorted(saved ^ listed)} do not match the cases in expected.json")
-            current[run["id"]] = False
+        unhashed = [c["config"] for c in cases if c["config"] not in run["files"]]
+        if unhashed:
+            refuse(f"configurations {unhashed} are not among the files it was run on")
+            continue
+        listed = {c["config"].removesuffix(".cfg") + ext for c in cases for ext in (".txt", ".exit")}
+        if kept != listed:
+            refuse(f"its outputs {sorted(kept ^ listed)} do not match the cases in expected.json")
             continue
         for case in cases:
             name = case["config"].removesuffix(".cfg")
-            txt, code = out / f"{name}.txt", out / f"{name}.exit"
-            if not txt.is_file() or not code.is_file():
-                problems.append(f"spec/runs/{run['outputs']}/{name}: output or exit code not kept")
-                current[run["id"]] = False
+            try:
+                code = int((out / f"{name}.exit").read_text(encoding="ascii").strip())
+            except (ValueError, UnicodeDecodeError):
+                refuse(f"{name}.exit does not hold an exit code")
                 break
-            verdict = judge(case, int(code.read_text().strip()), txt.read_text(encoding="utf-8", errors="replace"))
+            verdict = judge(case, code, (out / f"{name}.txt").read_text(encoding="utf-8", errors="replace"))
             if not verdict["match"]:
-                problems.append(f"spec/runs/{run['outputs']}/{name}: the saved output shows {verdict['outcome']}, not what expected.json says")
-                current[run["id"]] = False
+                refuse(f"the saved output of {name} shows {verdict['outcome']}, not what expected.json says")
                 break
     supported = set()
     for run in index["runs"]:

@@ -108,12 +108,12 @@ A scenario gives a `root` and `children`, each with the gate of its one criterio
 | Step | Meaning |
 |---|---|
 | `{"confirm": {}}` | The owner confirms the tree as it stands |
-| `{"check": {"node": N, "status": S}}` | The check behind N's criterion now has status S. N is `root` or a child |
+| `{"check": {"node": N, "status": S}}` | The check behind N's criterion now has status S, one of `unknown`, `passed`, `failed` or `conflict`. N is `root` or a child |
 | `{"edit": {"node": N, "to": G}}` | N's gate is changed directly |
 | `{"remove": {"child": K}}` | Child K is removed |
 | `{"add": {"child": K, "gate": G}}` | Child K is added, its check unknown |
 
-The result has `"status"`, the first of these that applies: `draft` if the owner has not confirmed, or anything was edited, added or removed since; `unguarded` if any intent in the tree has fewer hard gates than `min_hard_gates`, where an intent's hard gates are counted over it and its descendants: the root's count includes every child's, and each child, an intent too, is held to the floor by its own count; `open` if any hard gate's check is not `passed`; otherwise `delivered`. In these scenarios each node has one criterion, so with a floor of two a child can never meet it.
+The result has `"status"`, the first of these that applies: `draft` if the owner has not confirmed, or anything was edited, added or removed since; `unguarded` if the tree counts fewer hard gates than `min_hard_gates`, or fewer than one, counting the root and every child; or if any child has no hard gate (decision 0030). A child is not held to the policy's number on its own: moving a criterion into a child loses nothing (decision 0017). `open` if any hard gate's check is not `passed`; otherwise `delivered`.
 
 ### Attempts scenarios
 
@@ -123,16 +123,16 @@ The result has `"status"`, the first of these that applies: `draft` if the owner
 | `{"close": {"ticket": T, "result": "agreed" or "refused"}}` | The attempt is closed with that result |
 | `{"change_target": {}}` | The thing being judged changes |
 
-A scenario may give `claims`, the separation level the act claims. Closing a ticket that was never taken, or is already closed, changes nothing. A ticket taken before a change of target can still be closed.
+A scenario may give `claims`, the separation level the act claims, and `refusals_before_cap`, a whole number of at least one, 2 when absent. Closing a ticket that was never taken, or is already closed, changes nothing. A ticket taken before a change of target can still be closed.
 
-The result has these fields. The first two are worked out from the attempts on the current target, as they stand now, in the order they were taken.
+The result has these fields. Every field is worked out from the attempts as they stand now, in the order they were taken; the first two from those on the current target only. So closing an earlier open attempt as agreed can clear `retried`.
 
 - `"result"`: `none` if there are none; `agreed` if every one is closed as agreed; otherwise `refused`. An open attempt counts as a failure.
 - `"shopped"`: true if some attempt closed as agreed was taken after one that is not agreed.
-- `"cap"`: `helper` when retried, otherwise null. A change of target does not reset the count or the cap (decision 0024): the kernel cannot tell a real fix from a trivial change. It does reset `result` and `shopped`, which are about the current target; that part is a reading of the decision, which does not say it.
+- `"cap"`: `helper` when shopped, or when retried and the line has at least `refusals_before_cap` attempts that are not agreed, otherwise null (decision 0031). A change of target does not reset the count, and an agreement after a change keeps its grade only until that limit: the kernel cannot tell a real fix from a trivial change.
 - `"attempts"`: how many tickets have been taken in all, across changes of target.
 - `"retried"`: true if, among all attempts across changes of target, some attempt closed as agreed was taken after one that is not agreed.
-- `"granted"`, when the scenario gives `claims`: the claimed level, lowered to `helper` if retried and the claim was higher. The cap never raises a level.
+- `"granted"`, when the scenario gives `claims`: the claimed level, lowered to `helper` if `cap` is `helper` and the claim was higher. The cap never raises a level.
 
 ### Platforms scenarios
 

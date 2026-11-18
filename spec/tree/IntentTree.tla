@@ -7,10 +7,11 @@
 (* whether the child is there and every gate. Adding or removing the       *)
 (* child, or editing any gate, makes the tree a draft until it is          *)
 (* confirmed again. The tree is delivered when it is confirmed, every      *)
-(* intent in it has at least the hard gates policy demands, and every hard *)
-(* gate passes. As the data model says, an intent's gates are counted over *)
-(* it and its descendants: the root's count includes the child's, and the  *)
-(* child, an intent too, is held to the floor by its own count.            *)
+(* intent in it is guarded, and every hard gate passes (decision 0030). An *)
+(* intent's hard gates are counted over it and its descendants. The root   *)
+(* must count at least what policy demands; moving a criterion into a      *)
+(* child changes nothing in that count (decision 0017). Every intent in    *)
+(* the tree, the child too, must count at least one hard gate.             *)
 (*                                                                         *)
 (* Two descriptions are kept apart on purpose. The SPECIFICATION decides   *)
 (* confirmation from the order of events: the last confirmation came after *)
@@ -39,7 +40,7 @@ MaxEvents == 6
 
 Mutants == {"none", "remove_keeps_confirmation", "add_keeps_confirmation", "edit_keeps_confirmation",
             "unconfirmed_delivered", "delivered_ignores_child", "soft_child_is_delivered",
-            "ignores_floor", "floor_counts_tree", "floor_counts_root_only", "count_kept_on_remove",
+            "ignores_floor", "floor_applied_to_each_child", "floor_counts_root_only", "count_kept_on_remove",
             "count_misses_child_edit"}
 ASSUME Mutant \in Mutants /\ MinHard \in 1..2
 
@@ -83,13 +84,14 @@ EditGate(x, g) ==
 Toggle ==
     /\ Tick
     /\ present' = ~present
+    /\ chk' = IF present THEN chk ELSE [x \in Nodes \X Crits |-> IF x[1] = "kid" THEN "unknown" ELSE chk[x]]
     /\ confirmed' = IF (present /\ Mutant = "remove_keeps_confirmation") \/ (~present /\ Mutant = "add_keeps_confirmation")
                     THEN confirmed ELSE FALSE
     /\ lastChange' = events + 1
     /\ kcount' = IF present
                  THEN (IF Mutant = "count_kept_on_remove" THEN kcount ELSE [kcount EXCEPT !.root = @ - kcount.kid])
                  ELSE [kcount EXCEPT !.root = @ + kcount.kid]
-    /\ UNCHANGED <<gate, chk, lastConfirm>>
+    /\ UNCHANGED <<gate, lastConfirm>>
 
 Next ==
     \/ \E x \in Nodes \X Crits, v \in {"unknown", "passed", "failed"} : CheckChange(x, v)
@@ -107,16 +109,17 @@ HardPass(n) == \A c \in Crits : gate[<<n, c>>] = "hard" => chk[<<n, c>>] = "pass
 SpecConfirmed == lastConfirm > 0 /\ lastConfirm > lastChange
 \* An intent's count is over it and its descendants.
 SpecCount(n) == IF n = "root" THEN HardOf("root") + (IF present THEN HardOf("kid") ELSE 0) ELSE HardOf("kid")
+SpecGuarded(n) == SpecCount(n) >= (IF n = "root" THEN MinHard ELSE 1)
 SpecDelivered ==
     /\ SpecConfirmed
-    /\ \A n \in InTree : SpecCount(n) >= MinHard /\ HardPass(n)
+    /\ \A n \in InTree : SpecGuarded(n) /\ HardPass(n)
 
 (* The kernel. *)
 Guarded(n) ==
     CASE Mutant = "ignores_floor" -> TRUE
-      [] Mutant = "floor_counts_tree" -> kcount.root >= MinHard
+      [] Mutant = "floor_applied_to_each_child" -> kcount[n] >= MinHard
       [] Mutant = "floor_counts_root_only" -> (IF n = "root" THEN kcount.root - (IF present THEN kcount.kid ELSE 0) ELSE kcount.kid) >= MinHard
-      [] OTHER -> kcount[n] >= MinHard
+      [] OTHER -> kcount[n] >= (IF n = "root" THEN MinHard ELSE 1)
 ChildOK ==
     CASE Mutant = "delivered_ignores_child" -> TRUE
       [] Mutant = "soft_child_is_delivered" -> HardOf("kid") = 0 \/ (Guarded("kid") /\ HardPass("kid"))

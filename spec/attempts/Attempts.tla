@@ -7,16 +7,17 @@
 (* never closed counts as a failure. Attempts belong to a LINE: the same   *)
 (* criterion of the same intent. The thing being judged may change along   *)
 (* the line, and the kernel cannot tell a real fix from a trivial change   *)
-(* made to get a fresh try. So, as decision 0024 says, a change of target  *)
-(* resets neither the count nor the cap. It does reset the result, which   *)
-(* is about the current target; that is a reading of 0024, not its text:  *)
+(* made to get a fresh try. So (decision 0031):                           *)
 (*                                                                         *)
 (*   On the current target the worst result counts.                        *)
 (*   Along the whole line every attempt is counted, and an agreement that  *)
-(*   follows (in ticket order) any attempt that did not agree is "retried":*)
-(*   flagged, and the separation of the act is capped at "helper" and      *)
-(*   never raised above what it claimed. "Shopped" is the same on one      *)
-(*   target; it is reported too, and implies retried.                      *)
+(*   follows (in ticket order) any attempt that did not agree is           *)
+(*   "retried", and reported as such with the count.                       *)
+(*   An agreement after one that did not agree on the SAME target is       *)
+(*   "shopped", and capped at helper. Across a change of target the        *)
+(*   agreement keeps its grade, until the line has as many attempts that   *)
+(*   did not agree as policy allows (Limit); from then on every retried    *)
+(*   agreement is capped too. The cap never raises a level.                *)
 (*                                                                         *)
 (* Two descriptions are kept apart on purpose. The SPECIFICATION is stated *)
 (* over `log`, every event in the order it happened. The KERNEL works from *)
@@ -33,7 +34,7 @@
 (***************************************************************************)
 EXTENDS Naturals, FiniteSets, Sequences
 
-CONSTANTS MaxAttempts, Claimed, Mutant
+CONSTANTS MaxAttempts, Claimed, Limit, Mutant
 
 VARIABLES target, attempts, taken, log
 
@@ -44,8 +45,9 @@ Rank(l) == CASE l = "self" -> 0 [] l = "helper" -> 1 [] l = "apart" -> 2
 
 Mutants == {"none", "latest_only", "open_ignored", "flag_does_not_cap", "flag_missed",
             "change_hides_history", "cap_raises", "cap_on_shopping_only", "close_latest_open",
-            "filed_at_close", "retried_only_on_same_target", "retried_hidden"}
-ASSUME Mutant \in Mutants /\ MaxAttempts \in Nat /\ Claimed \in Levels
+            "filed_at_close", "retried_only_on_same_target", "retried_hidden", "cap_line_wide",
+            "limit_off_by_one"}
+ASSUME Mutant \in Mutants /\ MaxAttempts \in Nat /\ Claimed \in Levels /\ Limit \in 1..MaxAttempts
 
 Init == target = 0 /\ attempts = {} /\ taken = 0 /\ log = <<>>
 
@@ -103,8 +105,10 @@ SpecShopped ==
     \E a, b \in SpecCurrent : a < b /\ OutcomeOf(a) # "agreed" /\ OutcomeOf(b) = "agreed"
 SpecRetried ==
     \E a, b \in Tickets : a < b /\ OutcomeOf(a) # "agreed" /\ OutcomeOf(b) = "agreed"
+SpecRefusals == Cardinality({t \in Tickets : OutcomeOf(t) # "agreed"})
+SpecCapped == SpecShopped \/ (SpecRetried /\ SpecRefusals >= Limit)
 SpecGranted ==
-    IF SpecRetried /\ Rank(Claimed) > Rank("helper") THEN "helper" ELSE Claimed
+    IF SpecCapped /\ Rank(Claimed) > Rank("helper") THEN "helper" ELSE Claimed
 
 (* The kernel, from its records. *)
 
@@ -133,7 +137,11 @@ KernelCount == Cardinality(attempts)
 
 \* The separation level after the cap. Capping lowers a level; it never raises one.
 Granted ==
-    LET capped == IF Mutant = "cap_on_shopping_only" THEN KernelShopped ELSE Retried
+    LET refusals == Cardinality({a \in attempts : a.outcome # "agreed"})
+        byLimit == IF Mutant = "limit_off_by_one" THEN refusals > Limit ELSE refusals >= Limit
+        capped == CASE Mutant = "cap_on_shopping_only" -> KernelShopped
+                    [] Mutant = "cap_line_wide" -> Retried
+                    [] OTHER -> KernelShopped \/ (Retried /\ byLimit)
     IN IF capped /\ Mutant # "flag_does_not_cap"
        THEN (IF Mutant = "cap_raises" THEN "helper"
              ELSE IF Rank(Claimed) > Rank("helper") THEN "helper" ELSE Claimed)
@@ -164,4 +172,6 @@ NeverShopped == ~SpecShopped
 \* An agreement on a changed target after a refusal on the old one: not shopped,
 \* and still retried and capped.
 NeverRetriedAcrossChange == ~(SpecRetried /\ ~SpecShopped /\ SpecResult = "agreed")
+\* The limit caps an agreement that was not shopped.
+NeverCappedByLimit == ~(SpecCapped /\ ~SpecShopped)
 =============================================================================

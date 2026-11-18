@@ -127,13 +127,13 @@ Policy sets the floor that an owner's choices cannot go below without it showing
 |---|---|
 | `draft` | Not confirmed by its owner, or changed since it was |
 | `uncovered` | At least one criterion has no obligation |
-| `unguarded` | No hard gate anywhere in the intent or its descendants, or fewer than policy demands. Never becomes delivered |
+| `unguarded` | No hard gate anywhere in the intent or its descendants; or, for the root of a tree, fewer than policy demands counted over the whole tree ([decision 0030](decisions/0030-the-hard-gate-floor-is-counted-over-the-tree.md)). Never becomes delivered |
 | `open` | Covered and guarded; at least one hard gate is not passed, or a hard criterion is below the level policy demands |
 | `delivered` | Every hard gate passed at the demanded level. Reports the open deferred gates |
 | `fulfilled` | Delivered, and every deferred gate closed |
 | `overdue` | Delivered, and a deferred gate passed its limit while open |
 
-A parent needs its children delivered and its own criteria met. Gate counts and scores are totalled over all descendants, so moving a criterion into a child changes nothing in the total.
+A parent needs its children delivered and its own criteria met. Gate counts and scores are totalled over all descendants, so moving a criterion into a child changes nothing in the total. A tree in which any intent is unguarded is itself unguarded.
 
 **The status word is never reported alone.** Every result for an intent leads with the same line, in this order:
 
@@ -200,7 +200,7 @@ Separation is graded for the acts that rest on someone's word:
 
 The result of a check anyone can run again from locked inputs is graded on the evidence scale, not here; saying that it tests the criterion is still an act, and is graded. Separation is a separate axis: it is never multiplied into the evidence level. The kernel works out which acts there must be, and one with no record is at `self`. The headline shows the weakest separation among them, which act that is, and a count of acts at `apart` or better out of the number there must be. Anything resting on an act at `self` is at most `asserted`, whatever floor policy sets.
 
-Trying again is recorded: a checker takes a ticket before each attempt, an attempt with no result counts as a failure, and the worst result on the current target counts. A pass after any earlier attempt along the same line that did not pass is flagged as retried and graded no higher than `helper`, whether or not the thing judged changed in between: a change does not reset the count or the cap, because a kernel cannot tell a real fix from a trivial change made to get a fresh try (decision 0024). The result itself is judged on the current target.
+Trying again is recorded: a checker takes a ticket before each attempt, an attempt with no result counts as a failure, and the worst result on the current target counts. A pass after any earlier attempt along the same line that did not pass is flagged as retried, and the count is shown. A pass after a failure on unchanged work is graded no higher than `helper`. After a change the pass keeps its grade until the line has had as many failures as policy allows, two by default; from then on every retried pass is capped too, because a kernel cannot tell a real fix from a trivial change made to get a fresh try ([decision 0031](decisions/0031-an-agreement-after-a-real-change-keeps-its-grade-up-to-a-limit.md)). The result itself is judged on the current target.
 
 **Amendment.** Any difference from the baseline: a changed criterion, gate, limit, sample size, threshold, link to a check, or child. Granted only by the intent owner, recorded with what changed, why, by whom and at what separation, never erased. An amended criterion is at most `asserted` for the part amended. An amendment takes effect only at or above the separation floor policy sets; `apart` is the recommended floor.
 

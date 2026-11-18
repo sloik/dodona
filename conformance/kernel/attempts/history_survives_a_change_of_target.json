@@ -3,8 +3,9 @@
   "name": "history_survives_a_change_of_target",
   "claim": "C35",
   "covers": [
-    "attempts/mutant_cap_on_shopping_only",
+    "attempts/mutant_cap_line_wide",
     "attempts/mutant_change_hides_history",
+    "attempts/mutant_flag_does_not_cap",
     "attempts/mutant_retried_hidden",
     "attempts/mutant_retried_only_on_same_target",
     "attempts/reach_retried_across_change"
@@ -73,9 +74,9 @@
         "result": "agreed",
         "shopped": false,
         "retried": true,
-        "cap": "helper",
+        "cap": null,
         "attempts": 2,
-        "granted": "helper"
+        "granted": "apart"
       }
     },
     {

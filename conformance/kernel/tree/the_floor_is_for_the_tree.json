@@ -1,0 +1,53 @@
+{
+  "kind": "tree",
+  "name": "the_floor_is_for_the_tree",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_floor_applied_to_each_child",
+    "tree/reach_delivered_floor_two"
+  ],
+  "why": "With a floor of two, a root and a child with one hard gate each are delivered: the tree counts two, and a child is not held to the policy's number on its own (decision 0017: moving a criterion into a child loses nothing).",
+  "policy": {
+    "min_hard_gates": 2
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "k1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}
