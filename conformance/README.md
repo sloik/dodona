@@ -155,7 +155,7 @@ The result has `"flagged"`: true exactly when the content behind some governed n
 
 ### Acts scenarios
 
-How separate was the party behind an act of judgement ([decision 0024](../decisions/0024-separation-is-graded-not-enforced.md)). A scenario gives a `policy` with `attestors`, a map from key name to a key in hexadecimal, and `makes`, a list of groups of `vendor/family` names that count as the same make. Each step is `{"grade": R}` where R is an act record ([schema](../protocol/act-record.schema.json)). The keys in the kit are fixtures, public by design.
+How separate was the party behind an act of judgement ([decision 0024](../decisions/0024-separation-is-graded-not-enforced.md)). A scenario gives a `policy` with `attestors`, a map from key name to a key in hexadecimal, and `makes`, a list of groups of `vendor/family` names that count as the same make. A group that is not a list of strings is ignored, and a name matches only a name equal to it, never part of one. Each step is `{"grade": R}` where R is an act record ([schema](../protocol/act-record.schema.json)). The keys in the kit are fixtures, public by design.
 
 The result has `"claims"`, the level the record's facts would support if they were all true; `"level"`, the level granted; and `"source"`, `attested` if the granted level is above `helper` and otherwise `declared`.
 
@@ -198,6 +198,8 @@ The check value is exact:
   - `attestation` is not an object with a string `key`, a string `mac` and a list of strings `covers`;
   - `kind`, `target` or `result` is not a string;
   - `lineage` is not an object;
+  - `ticket` is not a string;
+  - `actor.started_by` is present and is not a string;
   - `attempt` is not an object with an integer `number` and an integer `prior`.
 
 A field that is simply absent does not make a record malformed, except that `actor` and `worker` must be there. A value of the right type that no table allows, such as a role of `other`, is not malformed either.
@@ -223,6 +225,8 @@ What a kernel reports about a whole project. A scenario gives:
 The result has `obligations` and `intents`, each an object with one entry per name; `project`, an object with a `status`; and `rejected`, a number. A floor that policy does not give is `self`.
 
 **Obligations.** An evidence record is *not a record* if its body is not an object, if its `verdict` is not `passed` or `failed`, or if it lacks `obligation`, `platform`, `writer`, `core_key` or `preimage`. Such an entry does not count for anything and is not counted as rejected either. Any other evidence record is *rejected* if its `core_key` is not the identity of its own `preimage`, or its preimage is one the core-key rules say must be refused; `rejected` is how many such records the ledger holds. A record that is not rejected *counts* for the obligation it names, and for no other, when its writer is this kernel or one of `trusted_writers`, its platform is this kernel's, and its `core_key` is the identity of the obligation's preimage as things stand. An obligation is `passed` if records count and all are passed, `failed` if all are failed, `conflict` if they differ, and otherwise `unknown` with `"reason": "never-run"`. An obligation named in a `checked_by` that the scenario does not define is `unknown`, `never-run`: the criterion has an obligation, and it has not passed.
+
+**A gate nobody can read is hard.** A criterion whose `gate` is not exactly `hard`, `soft` or `deferred` (`Hard`, a gate with a hidden character, anything else) counts as `hard` in every rule: in the floor, in `open`, in `gates`. A mistake in writing a gate can only make delivery harder, never easier. The baseline keeps the gate as written.
 
 **Baseline.** Lists marked sorted are sorted as the canonical encoding sorts keys. The baseline of an intent is the identity of `{"owner": O, "words": T, "children": [sorted], "criteria": {C: {"words": W, "gate": G, "checked_by": [sorted]}}}`, where T is the intent as written, all of it, and W is each criterion's wording, each the empty string when the scenario gives none. Changing anything in what the owner confirmed, a title, a row, a hidden comment, changes the baseline. Rewording a criterion changes the baseline, so a confirmation of the old words stops counting.
 

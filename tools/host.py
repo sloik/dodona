@@ -49,7 +49,7 @@ LEVEL_OF_RANK = {"documented": "asserted", "sampled": "sampled", "bounded": "bou
 PLATFORM = {"os": "linux", "arch": "aarch64", "libc": "gnu"}
 # Characters that can start or join a path, or make a program read one: a separator, the parent
 # directory, a home directory, an argument file, a variable.
-PATHLIKE = re.compile(r"[/\\~@$%]|\.\.")
+PATHLIKE = re.compile(r"[/\\~@$%]|\.\.|[^\x20-\x7e]")  # look-alikes of / and .. are outside printable ASCII
 TOOL_FILE = re.compile(r"\$\{tool:([A-Za-z0-9._-]+)\}/([A-Za-z0-9._/-]+)")
 TOOL_NAME = re.compile(r"\$\{tool:([^}]*)\}")  # every mention of a tool in an argument, with or without a file after it
 MAX_RUNS = 8  # a check may ask for this many runs and no more
@@ -99,7 +99,11 @@ class Session:
     def send(self, message: dict) -> None:
         self.transcript.append({"to": "provider", "message": message})
         try:
-            self.tree.proc.stdin.write(json.dumps(message, ensure_ascii=False).encode("utf-8") + b"\n")
+            data = json.dumps(message, ensure_ascii=False).encode("utf-8") + b"\n"
+        except UnicodeEncodeError:
+            raise Refused("encoding") from None  # a lone surrogate the provider sent cannot be passed on
+        try:
+            self.tree.proc.stdin.write(data)
             self.tree.proc.stdin.flush()
         except OSError:
             raise Refused("closed") from None
@@ -120,6 +124,8 @@ class Session:
             raise Refused("encoding") from None
         except ValueError as err:
             raise Refused(str(err) if str(err) in ("duplicate-key", "not-an-integer") else "malformed") from None
+        if depth(message) > 64:
+            raise Refused("too-deep")
         if not isinstance(message, dict) or not isinstance(message.get("type"), str):
             raise Refused("malformed")
         self.transcript.append({"to": "kernel", "message": message})
@@ -148,6 +154,14 @@ class Session:
         except Refused:
             pass
         self.tree.end()
+
+
+def depth(value) -> int:
+    if isinstance(value, dict):
+        return 1 + max((depth(v) for v in value.values()), default=0)
+    if isinstance(value, list):
+        return 1 + max((depth(v) for v in value), default=0)
+    return 0
 
 
 def no_repeats(pairs):
@@ -218,8 +232,8 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
     inputs = {f.get("path") for f in run.get("inputs", [])}
     for arg in run.get("args", []):
         text = str(arg)
-        if text in inputs or TOOL_FILE.fullmatch(text):
-            continue
+        if text in inputs or TOOL_FILE.fullmatch(text) or "\x00" in text:
+            continue  # a NUL byte is refused below, under its own reason
         if PATHLIKE.search(text):
             raise Refused("bad-path")  # an argument may name only the run's own files, and only as a whole argument
     if run.get("env"):

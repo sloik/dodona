@@ -50,7 +50,7 @@ def main() -> int:
     ap.add_argument("--policy-ref", default="origin/main")
     ap.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
     args = ap.parse_args()
-    if args.ledger.is_symlink():
+    if args.ledger.absolute().resolve() != args.ledger.absolute():
         print("refused: the owner's ledger must be a file in the repository, not a link to one elsewhere")
         return 2
     args.ledger = args.ledger.resolve()
@@ -94,7 +94,8 @@ def main() -> int:
     if "appended" not in answer:
         print("the kernel refused to write the entry:", answer)
         return 1
-    print(f"recorded in {args.ledger.relative_to(ROOT)}. Commit that file to make it count.")
+    where = args.ledger.relative_to(ROOT) if args.ledger.is_relative_to(ROOT) else args.ledger
+    print(f"recorded in {where}. Only records/owner.ledger counts; commit it to make the confirmation count.")
     return 0
 
 

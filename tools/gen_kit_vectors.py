@@ -134,9 +134,9 @@ def attest(record: dict, key_hex: str = KEY_GOOD, key_id: str = "harness-1", cov
 
 
 def acts() -> None:
-    def scenario(name, why, covers, steps):
+    def scenario(name, why, covers, steps, policy=None):
         put(f"conformance/kernel/acts/{name}.json", {
-            "kind": "acts", "name": name, "claim": "C36", "covers": covers, "why": why, "policy": POLICY,
+            "kind": "acts", "name": name, "claim": "C36", "covers": covers, "why": why, "policy": policy or POLICY,
             "steps": [{"do": {"grade": record}, "expect": expect} for record, expect in steps]})
 
     def want(level, claims, source):
@@ -151,6 +151,10 @@ def acts() -> None:
                want("tested", "tested", "attested")),
               (attest(act(actor=dict(full["actor"], make={"vendor": "vendor-z", "family": "unknown"}))),
                want("tested", "tested", "attested"))])
+    scenario("a_make_group_must_be_a_list", "A group of makes that is not a list of names is ignored, and a name matches only a name equal to it. Written as plain strings, the groups list nobody, so no make is shown to be other and the grade stops at tested.", [],
+             [(attest(full), want("tested", "tested", "attested")),
+              (attest(act(actor=dict(full["actor"], make={"vendor": "vendor", "family": "b"}))), want("tested", "tested", "attested"))],
+             policy=dict(POLICY, makes=["vendor-a/family-x", "vendor-b/family-y"]))
     scenario("a_claim_alone_earns_helper", "The same facts with nobody vouching for them are a claim. The claim is shown and the grade is helper.", [],
              [(full, want("helper", "cross-make", "declared")),
               (act(known_bad=None, given=[g for g in full["given"] if not g["role"].startswith("known")]),
@@ -204,7 +208,10 @@ def acts() -> None:
               (dict(bound, attempt={"number": 1, "prior": 0}), HELP),
               (dict(bound, attempt="granted"), SELF),
               (dict(bound, attempt={"note": "x"}), SELF),
-              (attest(dict(full, attempt={"number": 2, "prior": 1})), TOP)]
+              (attest(dict(full, attempt={"number": 2, "prior": 1})), TOP),
+              (attest(dict(full, ticket=5)), SELF),
+              (attest(dict(full, actor=dict(full["actor"], started_by=True))), SELF),
+              (attest(dict(full, actor=dict(full["actor"], started_by={}))), SELF)]
              + [(attest(full, covers=FIELDS + [b for b in BIND if b != left_out], bind=False), HELP) for left_out in BIND]
              + [(attest({k: v for k, v in full.items() if k != left_out}, covers=FIELDS + [b for b in BIND if b != left_out], bind=False), HELP)
                 for left_out in BIND])
@@ -453,6 +460,14 @@ def status() -> None:
               ({"set_gate": {"intent": "i1", "criterion": "c2", "to": "soft"}}, {"intents": {"i1": {"status": "draft", "gates": {"hard": 1, "soft": 1, "deferred": 0, "deferred_open": 0}}}}),
               ({"append": {"kind": "act", "body": confirm("i1", {**intent, "criteria": {**intent["criteria"], "c2": {"gate": "soft", "checked_by": ["ob-b"]}}})}}, {"intents": {"i1": {"status": "open"}}}),
               ({"set_gate": {"intent": "i1", "criterion": "c2", "to": "deferred"}}, {"intents": {"i1": {"status": "open"}}})])
+    for name, gate in (("a_gate_nobody_can_read_is_hard", "Hard"), ("a_gate_with_a_hidden_character_is_hard", "hard\u200b")):
+        odd = {"owner": "owner-1", "worker": "worker-1", "children": [],
+               "criteria": {"c1": {"gate": "hard", "checked_by": ["ob-a"]}, "c2": {"gate": gate, "checked_by": ["ob-b"]}}}
+        scenario(name, "C23", f"A criterion whose gate is written {json.dumps(gate)} counts as hard. With its check not passed the intent is open and the project is not passed; a mistake in writing a gate can only make delivery harder.",
+                 [({"append": {"kind": "act", "body": confirm("i1", odd)}}, {"intents": {"i1": {"status": "open", "gates": {"hard": 2, "soft": 0, "deferred": 0, "deferred_open": 0}}}}),
+                  (evidence("ob-a", A), {"intents": {"i1": {"status": "open"}}, "project": {"status": "unknown"}}),
+                  (evidence("ob-b", B), {"intents": {"i1": {"status": "delivered"}}, "project": {"status": "passed"}})],
+                 intents={"i1": odd})
     worded = {"owner": "owner-1", "worker": "worker-1", "children": [], "words": "# The kit is adequate\n\nEvery planted defect is caught.\n",
               "criteria": {"c1": {"words": "Every planted defect is caught", "gate": "hard", "checked_by": ["ob-a"]}}}
     reworded = {**worded, "criteria": {"c1": {**worded["criteria"]["c1"], "words": "Nothing needs to be caught"}}}

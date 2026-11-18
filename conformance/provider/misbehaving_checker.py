@@ -73,6 +73,8 @@ def run(body: dict) -> dict:
         described["env"] = {"JAVA_TOOL_OPTIONS": "-javaagent:x.jar"}
     if MODE == "output-over-an-input":
         described["outputs"] = [{"path": "a.txt"}]
+    if MODE == "look-alike-separator":
+        described["args"] = ["-config=\uff0fetc\uff0fpasswd", "a.txt"]
     if MODE == "argument-outside":
         described["args"] = ["/etc/passwd", "a.txt"]
     if MODE == "argument-climbs-out":

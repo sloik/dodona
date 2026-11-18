@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import re
 import pathlib
 import subprocess
 import sys
@@ -36,6 +37,14 @@ def unclear(text: str) -> str | None:
         return "two criteria have the same number"
     if any(line != line.lstrip() for line in rows):
         return "a table row is indented"
+    if any("\\|" in line for line in rows):
+        return "a table row has an escaped bar"
+    if any(re.match(r"\s*\d+\s*\|", line) and not line.lstrip().startswith("|") for line in text.splitlines()):
+        return "a criterion row does not start with a bar, so a reader might not see it"
+    for line in rows:
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if cells and cells[0].isdigit() and (len(cells) < 4 or cells[2] not in ("hard", "soft", "deferred")):
+            return f"criterion {cells[0]} has a gate that is not hard, soft or deferred: {cells[2] if len(cells) > 2 else 'none'!r}"
     return None
 
 
@@ -101,7 +110,7 @@ def read_ledgers(paths: list[pathlib.Path], kernel: list[str]) -> list[dict] | N
         if "refused" in read:
             print(f"the ledger {path} is damaged at line {read.get('at')}; no status is reported")
             return None
-        if pathlib.Path(path).absolute() == OWNER_LEDGER.absolute() and not OWNER_LEDGER.is_symlink():
+        if pathlib.Path(path).absolute() == OWNER_LEDGER.absolute() and OWNER_LEDGER.resolve() == OWNER_LEDGER.absolute():
             entries += read["entries"]
         else:
             # Acts of owners count only from the owner's ledger kept in the repository, where every

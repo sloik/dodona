@@ -379,6 +379,14 @@
       "reason": "output-overwrites-input",
       "ran": false,
       "why": "A run may not write over a file it was given."
+    },
+    {
+      "mode": "look-alike-separator",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "ran": false,
+      "why": "A character that only looks like a separator is refused too: a free word may hold printable ASCII only."
     }
   ]
 }
