@@ -1,5 +1,5 @@
 {
-  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. Nothing may be recorded as passed except in the control and in the cases whose outcome is the verdict `passed`. `runs` is how many runs the executor must have been given, no more and no fewer. `deadline_ms`, where given, is the deadline the host is given; `names_a_missing_file` makes the obligation name a file that is not among the inputs.",
+  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. Nothing may be recorded as passed except in the control and in the cases whose outcome is the verdict `passed`. `runs` is how many runs the executor must have been given, no more and no fewer. `deadline_ms`, where given, is the deadline the host is given; `names_a_missing_file` makes the obligation name a file that is not among the inputs. `second_input` gives the check a second input, b.txt; `many_inputs` gives it that many more, so that a request is long; `change_input` breaks one field of the host's own input (null removes it); `not_on` lists platforms where the provider cannot make what the case needs.",
   "cases": [
     {
       "mode": "well-behaved",
@@ -450,9 +450,9 @@
       "mode": "args-not-a-list",
       "run": "exited",
       "outcome": "refused",
-      "reason": "bad-arguments",
+      "reason": "bad-description",
       "runs": 0,
-      "why": "A run's arguments are a list of strings."
+      "why": "A run's arguments are a list of strings; a description of the wrong shape is refused before anything else is looked at in it."
     },
     {
       "mode": "failed-another-class",
@@ -526,6 +526,264 @@
       "runs": 0,
       "names_a_missing_file": true,
       "why": "An obligation names a file the check was not given; the check is refused before the provider is sent anything."
+    },
+    {
+      "mode": "outputs-not-a-list",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-description",
+      "runs": 0,
+      "why": "Outputs that are not a list are not 'no outputs': a path the host never looked at must not reach an executor."
+    },
+    {
+      "mode": "inputs-not-a-list",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-description",
+      "runs": 0,
+      "why": "Inputs that are not a list are refused the same way."
+    },
+    {
+      "mode": "tools-missing",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-description",
+      "runs": 0,
+      "why": "A run description lists the tools it uses; one without that list is refused."
+    },
+    {
+      "mode": "env-null",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "env-not-allowed",
+      "runs": 0,
+      "why": "Any env field, whatever its value, is refused: null, an empty list and an empty string are not a way round the rule."
+    },
+    {
+      "mode": "output-over-another-input",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "output-overwrites-input",
+      "runs": 0,
+      "second_input": true,
+      "why": "An output may not have the path of any of the check's inputs, not only the run's own."
+    },
+    {
+      "mode": "output-differs-in-case",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "output-overwrites-input",
+      "runs": 0,
+      "why": "Paths that differ only in letter case are the same file on a disk that ignores case."
+    },
+    {
+      "mode": "nul-in-tool-argument",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-arguments",
+      "runs": 0,
+      "why": "An argument holding NUL is refused for that, even where it looks like a tool's file."
+    },
+    {
+      "mode": "wall-ms-huge",
+      "run": "exited",
+      "outcome": "verdict",
+      "verdict": "passed",
+      "runs": 1,
+      "why": "A very long time limit is not a reason to end the run at once."
+    },
+    {
+      "mode": "two-check-capabilities",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-manifest",
+      "runs": 0,
+      "why": "A manifest names each capability once: two strengths for one capability leave the ceiling unknown."
+    },
+    {
+      "mode": "capability-not-an-object",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-manifest",
+      "runs": 0,
+      "why": "Every capability in a manifest is an object."
+    },
+    {
+      "mode": "unknown-ceiling",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-manifest",
+      "runs": 0,
+      "why": "A strength rank the scale does not have leaves the ceiling unknown."
+    },
+    {
+      "mode": "tools-as-names",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-manifest",
+      "runs": 0,
+      "why": "A manifest's tools are objects with a name."
+    },
+    {
+      "mode": "tool-name-with-a-slash",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-manifest",
+      "runs": 0,
+      "why": "A tool's name is letters, digits, dot, underscore and hyphen only, so that ${tool:NAME} can never hide a path."
+    },
+    {
+      "mode": "stops-reading",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "deadline",
+      "runs": 0,
+      "deadline_ms": 3000,
+      "many_inputs": 4000,
+      "why": "A provider that stops reading cannot hold the host past its deadline: the deadline covers what the host sends as well as what it waits for."
+    },
+    {
+      "mode": "attachments-not-a-list",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-final",
+      "runs": 1,
+      "why": "A final's attachments are a list; anything else is a final of the wrong shape."
+    },
+    {
+      "mode": "strength-without-class",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "strength-class-mismatch",
+      "runs": 1,
+      "why": "A strength without a class does not state the class the manifest declares."
+    },
+    {
+      "mode": "final-not-an-object",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-final",
+      "runs": 1,
+      "why": "A final is an object."
+    },
+    {
+      "mode": "next-is-null",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-description",
+      "runs": 0,
+      "why": "A next that is not a run description is refused."
+    },
+    {
+      "mode": "attachment-is-a-pipe",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "runs": 1,
+      "not_on": [
+        "win32"
+      ],
+      "why": "An attachment is a regular file: a pipe would hold the host for ever."
+    },
+    {
+      "mode": "attachment-is-a-link-outside",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "runs": 1,
+      "not_on": [
+        "win32"
+      ],
+      "why": "An attachment is reached without following a link: a link can lead out of the project."
+    },
+    {
+      "mode": "fraction-in-a-body",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "not-an-integer",
+      "runs": 0,
+      "why": "Strict reading holds inside a body as at the top."
+    },
+    {
+      "mode": "duplicate-key-nested",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "duplicate-key",
+      "runs": 0,
+      "why": "A repeated key inside a nested object is refused as at the top."
+    },
+    {
+      "mode": "integer-too-large",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "not-an-integer",
+      "runs": 0,
+      "why": "An integer beyond plus or minus 2^53-1 cannot be read the same everywhere, and is refused."
+    },
+    {
+      "mode": "lone-surrogate",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "encoding",
+      "runs": 0,
+      "why": "A string holding half of a UTF-16 pair is not text."
+    },
+    {
+      "mode": "result-without-a-body",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "unexpected",
+      "runs": 0,
+      "why": "A result whose body is not an object is not an answer."
+    },
+    {
+      "mode": "deep-and-duplicate",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "duplicate-key",
+      "runs": 0,
+      "why": "A line is read whole before its depth is measured, so a repeated key in it is found first."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "report-with-a-fraction",
+      "outcome": "verdict",
+      "verdict": "error",
+      "runs": 1,
+      "why": "An executor's report is read strictly too; one that is not is no report, and the run ended in error."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-input",
+      "runs": 0,
+      "change_input": {
+        "obligation.specified_by": null
+      },
+      "why": "The host's own input must have the shape the contract gives: an obligation without specified_by is refused, not guessed at."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-input",
+      "runs": 0,
+      "change_input": {
+        "tool.digest": null
+      },
+      "why": "A tool given to the check without a digest is refused before anything is sent."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-input",
+      "runs": 0,
+      "change_input": {
+        "input.identity": null
+      },
+      "why": "An input given to the check without an identity is refused before anything is sent."
     }
   ]
 }

@@ -8,6 +8,7 @@ and reads one report from standard output. How the run ends is taken from DODONA
 - `exited`: a report as protocol/messages.schema.json describes it, for the platform and tools
   the run described, exit status 0, and a captured output that is a real file in the project;
 - `other-platform`, `other-tool`: the same, but on another platform, or with another tool digest;
+- `report-with-a-fraction`: an exited report whose exit status is written `0.0`, which strict reading refuses;
 - `fails`: exits with status 1 and prints nothing; `silent`: exits 0 and prints nothing;
 - anything else: a complete report with that `end`, which the host must treat as a run that did not finish.
 
@@ -38,6 +39,9 @@ if True:
     if END == "other-tool" and tools:
         tools[0]["digest"] = "sha256:" + "d" * 64
     platform = {"os": "macos", "arch": "x86_64"} if END == "other-platform" else run.get("platform")
-    report = {"handle": "h", "end": END if END not in ("other-platform", "other-tool") else "exited", "exit_status": 0, "platform": platform, "isolation": "best-effort", "outputs": [],
+    report = {"handle": "h", "end": END if END not in ("other-platform", "other-tool", "report-with-a-fraction") else "exited", "exit_status": 0, "platform": platform, "isolation": "best-effort", "outputs": [],
               "tools_ran": tools, "captured_output": {"path": "captured.txt", "identity": identity}}
-sys.stdout.buffer.write(json.dumps(report).encode("utf-8") + b"\n")
+text = json.dumps(report)
+if END == "report-with-a-fraction":
+    text = text.replace('"exit_status": 0', '"exit_status": 0.0')  # read strictly, a report like this is no report
+sys.stdout.buffer.write(text.encode("utf-8") + b"\n")

@@ -66,7 +66,13 @@ def main() -> None:
         return
     if MODE == "never-answers":
         time.sleep(600)
-    send(manifest(hello.get("echo", "")), b"\r\n" if MODE == "carriage-return" else b"\n")
+    if MODE == "loose-but-valid-json":
+        # Valid JSON that the strict reading of a check would refuse: a session reads it as JSON.
+        text = json.dumps(manifest(hello.get("echo", "")))[:-1] + ', "extra": {"v": 1.5, "w": 1, "w": 2, "deep": ' + "[" * 70 + "]" * 70 + "}}"
+        OUT.write(text.encode("utf-8") + b"\n")
+        OUT.flush()
+    else:
+        send(manifest(hello.get("echo", "")), b"\r\n" if MODE == "carriage-return" else b"\n")
     request = read()
     if request is None:
         return

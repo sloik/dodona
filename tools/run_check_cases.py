@@ -75,11 +75,25 @@ def judge(case: dict, host: list[str]) -> list[str]:
         for f in (seen, record, pidfile):
             f.write_text("", encoding="utf-8")
         inputs = [{"path": "a.txt", "identity": "sha256:" + hashlib.sha256(b"a\n").hexdigest()}]
+        if case.get("second_input"):
+            (project / "b.txt").write_bytes(b"b\n")
+            inputs.append({"path": "b.txt", "identity": "sha256:" + hashlib.sha256(b"b\n").hexdigest()})
+        for n in range(case.get("many_inputs", 0)):
+            inputs.append({"path": f"many/file-{n:05d}.txt", "identity": "sha256:" + "0" * 64})
         obligation = dict(OBLIGATION)
         if case.get("names_a_missing_file"):
             obligation["targets"] = ["a.txt", "b.txt"]
+        tools = [dict(t) for t in TOOLS]
+        for key, value in case.get("change_input", {}).items():
+            # A host input that breaks its own shape: the host must refuse it, not crash.
+            target, field = key.split(".")
+            item = {"obligation": obligation, "tool": tools[0], "input": inputs[0]}[target]
+            if value is None:
+                item.pop(field, None)
+            else:
+                item[field] = value
         asked = {"root": str(project), "provider": [sys.executable, str(KIT / "misbehaving_checker.py")],
-                 "obligation": obligation, "inputs": inputs, "tools": TOOLS, "platform": PLATFORM,
+                 "obligation": obligation, "inputs": inputs, "tools": tools, "platform": PLATFORM,
                  "executor": [sys.executable, str(KIT / "fake_executor.py")], "deadline_ms": case.get("deadline_ms", 20000)}
         env = dict(os.environ, DODONA_CHECKER_MODE=case["mode"], DODONA_TEST_SEEN=str(seen), DODONA_TEST_PIDFILE=str(pidfile),
                    DODONA_EXECUTOR_END=case["run"], DODONA_EXECUTOR_RECORD=str(record), DODONA_EXECUTOR_ROOT=str(project))
@@ -104,7 +118,7 @@ def judge(case: dict, host: list[str]) -> list[str]:
         problems.append("the host printed no JSON object")
     elif {k: answer.get(k) for k in want} != want:
         problems.append(f"expected {want}, got {{{', '.join(f'{k!r}: {answer.get(k)!r}' for k in want)}}}")
-    if case.get("names_a_missing_file"):
+    if case.get("reason") in ("unknown-file", "bad-input"):
         if got_msgs:
             problems.append("the provider was sent something before the check was refused")
     elif not got_msgs or got_msgs[0]["got"] != "hello":
@@ -147,6 +161,9 @@ def main() -> int:
     spec = json.loads((KIT / "check-cases.json").read_text(encoding="utf-8"))
     failed = 0
     for case in spec["cases"]:
+        if sys.platform in case.get("not_on", []):
+            print(f"skip     {case['mode']} ({case['run']}): not on {sys.platform}, where the provider cannot make what the case needs")
+            continue
         problems = judge(case, host)
         label = f"{case['mode']} ({case['run']})"
         if problems:

@@ -118,6 +118,11 @@
       "outcome": "error",
       "reason": "wrong-capability",
       "why": "A result must be for the capability that was asked for."
+    },
+    {
+      "mode": "loose-but-valid-json",
+      "outcome": "ok",
+      "why": "A session reads JSON as JSON: a fraction, a repeated key or deep nesting in a valid message is not malformed there (the strict reading belongs to a check)."
     }
   ]
 }
