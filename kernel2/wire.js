@@ -7,9 +7,11 @@
 // held whole); a carriage return before the line feed or a byte-order mark is
 // `framing`; bytes that are not UTF-8 are `encoding`; text that is not one JSON
 // object with a string `type` is `malformed`. Read strictly, as in a check, a
-// repeated key is `duplicate-key`, a number with a fraction or exponent is
-// `not-an-integer`, and nesting deeper than 64 is `too-deep`. The provider closing
-// its output is `closed`; a wait that outlasts its deadline is `deadline`.
+// repeated key at any depth is `duplicate-key`; a number with a fraction or an
+// exponent, or an integer beyond 2^53 - 1, is `not-an-integer`; half of a UTF-16
+// pair is `encoding`; and, judged after the line is read whole, nesting deeper than
+// 64 is `too-deep`. The provider closing its output is `closed`; a wait, or a send,
+// that outlasts its deadline is `deadline`.
 //
 // Standard error is read all the time; only the first `maxLog` bytes are kept.
 
@@ -19,9 +21,15 @@ const { plain } = require('./plain');
 const MAX_DEPTH = 64;
 const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 
-// What a strict reading refuses, as a reason a host reports. A lone surrogate and an
-// integer out of range are named by no rule; they make the message not one message.
-const STRICT_REASONS = { 'not-json': 'malformed', 'duplicate-key': 'duplicate-key', 'not-an-integer': 'not-an-integer', 'too-deep': 'too-deep' };
+// What a strict reading refuses, as the reason a host reports.
+const STRICT_REASONS = {
+  'not-json': 'malformed',
+  'duplicate-key': 'duplicate-key',
+  'not-an-integer': 'not-an-integer',
+  'integer-out-of-range': 'not-an-integer',
+  'invalid-string': 'encoding',
+  'too-deep': 'too-deep',
+};
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -40,7 +48,7 @@ function parseLine(line, strict) {
   let message;
   if (strict) {
     const read = strictJson.read(text, { maxDepth: MAX_DEPTH });
-    if (read.refused !== undefined) return { reason: STRICT_REASONS[read.refused] || 'malformed' };
+    if (read.refused !== undefined) return { reason: STRICT_REASONS[read.refused] };
     if (!(read.value instanceof Map)) return { reason: 'malformed' };
     message = plain(read.value);
   } else {
@@ -127,7 +135,7 @@ class Wire {
   // Resolves at the next change, or at `until` (a performance.now() time), whichever is first.
   change(until) {
     return new Promise((resolve) => {
-      const timer = setTimeout(resolve, Math.max(0, until - performance.now()));
+      const timer = setTimeout(resolve, Math.max(0, Math.min(until - performance.now(), 2147483647)));
       this.waiters.push(() => {
         clearTimeout(timer);
         resolve();
@@ -153,12 +161,39 @@ class Wire {
     return this.items.length > 0 || this.partialBytes > 0;
   }
 
-  send(message) {
+  // Sends one message. Resolves to null once the provider has taken it all, or to
+  // `deadline` if it has not by `until`. A provider that has gone is left to reading.
+  async send(message, until = Infinity) {
+    if (this.closed) return null;
+    let accepted;
+    try {
+      accepted = this.child.stdin.write(`${JSON.stringify(message)}\n`);
+    } catch (error) {
+      return null;
+    }
+    if (accepted || this.child.stdin.destroyed) return null;
+    const drained = await new Promise((resolve) => {
+      const done = (value) => {
+        clearTimeout(timer);
+        this.child.stdin.off('drain', onDrain);
+        this.child.stdin.off('close', onDrain);
+        resolve(value);
+      };
+      const onDrain = () => done(true);
+      const timer = setTimeout(() => done(false), Math.max(0, Math.min(until - performance.now(), 2147483647)));
+      this.child.stdin.on('drain', onDrain);
+      this.child.stdin.on('close', onDrain);
+    });
+    return drained ? null : 'deadline';
+  }
+
+  // Sends without waiting: for shutdown, after which the provider is ended anyway.
+  post(message) {
     if (this.closed) return;
     try {
       this.child.stdin.write(`${JSON.stringify(message)}\n`);
     } catch (error) {
-      // the provider has gone; reading will say so
+      // the provider has gone
     }
   }
 

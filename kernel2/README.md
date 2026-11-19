@@ -19,7 +19,7 @@ Each command reads standard input and prints one JSON object, except `session`, 
     node kernel2/dodona-kernel2.js session --deadline-ms N --max-line N --max-log N -- <provider command>
                                                 one provider session (conformance/README.md, "Session")
 
-The provider and the executor are commands the kernel is given; it names no tool. To end every process a provider started, the kernel starts it in a process group of its own on Linux and macOS, and walks the process table from it down (`ps` there, `Get-CimInstance Win32_Process` on Windows), because a process keeps its parent's id on Windows after the parent has exited.
+The provider and the executor are commands the kernel is given; it names no tool. To end every process a provider or an executor started, the kernel starts each in a process group of its own on Linux and macOS and ends the group. On Windows, where Node can make no job object, it reads the process table (`Get-CimInstance Win32_Process`) and ends everything below the command, since a process keeps its parent's id after the parent has exited; if the table cannot be read, the command fails rather than end less.
 
 ## Judging it
 
