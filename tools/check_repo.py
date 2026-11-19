@@ -709,7 +709,14 @@ def gap_workflows_are_safe() -> None:
     for old, new in (("python3 -I tools/check_docs.py diff", "python3 tools/check_docs.py diff"),
                      ("fetch-depth: 0", "fetch-depth: 0\n          ref: ${{ github.event.pull_request.head.sha }}"),
                      ("contents: read", "contents: write"),
-                     ("persist-credentials: false", "persist-credentials: true")):
+                     ("persist-credentials: false", "persist-credentials: true"),
+                     ("refs/pull/$PR_NUMBER/head:", "refs/pull/$PR_NUMBER/merge:"),
+                     ("PR_HEAD: ${{ github.event.pull_request.head.sha }}", "PR_HEAD: ${{ github.event.pull_request.merge_commit_sha }}"),
+                     ('git checkout --quiet --detach "$BASE"', 'git checkout --quiet --detach "$HEAD"'),
+                     ('git checkout --quiet --detach "$BASE"', 'git worktree add "$RUNNER_TEMP/pr" "$HEAD"'),
+                     ('git checkout --quiet --detach "$BASE"', 'git switch --detach "$HEAD"'),
+                     ("run: |\n", 'run: |\n          echo "${{ github.event.pull_request.title }}"\n'),
+                     ("run: |\n", 'run: |\n          echo "${{ github.head_ref }}"\n')):
         if "pull_request_target" in text and (old not in text or not pull_request_target_problems(text.replace(old, new, 1))):
             problems.append(f".github/workflows/docs.yml: the pull_request_target guard does not notice {new.strip()!r}")
 
@@ -728,7 +735,32 @@ def pull_request_target_problems(text: str) -> list[str]:
         found.append("keeps credentials in the checkout under pull_request_target")
     if any(re.search(r"\bpython3?(?! -I)\s", line) for line in text.split("\n") if not line.lstrip().startswith("#")):
         found.append("runs Python without -I under pull_request_target, so a file in the working directory could be imported")
+    if re.search(r"refs/pull/[^\s'\"]*/merge|merge_commit_sha", text):
+        found.append("uses the pull request's merge commit under pull_request_target, which holds its code")
+    runs = run_blocks(text)
+    for cmd in re.findall(r"\bgit\s+(?:checkout|switch|worktree\s+add)\b[^\n;&|]*", runs):
+        if cmd.split()[-1] != '"$BASE"':
+            found.append(f"checks out something other than the base under pull_request_target: {cmd.strip()!r}")
+    if re.search(r"github\.event\.pull_request\.(title|body|head\.ref|head\.label)|github\.head_ref", runs):
+        found.append("puts text the pull request's author chose into a run: block under pull_request_target; pass it through env:")
     return found
+
+
+def run_blocks(text: str) -> str:
+    """The text of every run: block of a workflow, comments left out."""
+    out, indent = [], None
+    for line in text.split("\n"):
+        stripped = line.lstrip()
+        here = len(line) - len(stripped)
+        if indent is not None and stripped and here <= indent:
+            indent = None
+        m = re.match(r"(-\s+)?run:\s*(.*)$", stripped)
+        if m:
+            indent = here
+            out.append(m.group(2))
+        elif indent is not None and not stripped.startswith("#"):
+            out.append(stripped)
+    return "\n".join(out)
 
 
 def gap_every_check_is_listed() -> None:

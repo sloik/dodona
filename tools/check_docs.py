@@ -4,6 +4,7 @@
     python tools/check_docs.py self-test                                # plant a fault for each check; each must fail
     python tools/check_docs.py diff --base REV [--head REV] [--pr-body FILE] [--repo DIR]
     python tools/check_docs.py pins-only --base REV --head REV [--repo DIR]   # exit 0 if only pinned versions changed
+    python tools/check_docs.py jobs --head REV --own WORKFLOW --name NAME... [--repo DIR]   # no other workflow may use these job names
 
 The usual way documents go wrong here is quiet: code changes and the text that
 describes it does not. The repository-wide checks compare what the code and
@@ -55,6 +56,11 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 MAP_FILE = "docs/doc-map.toml"
 WAIVER = re.compile(r"^Docs-unchanged: ([a-z0-9][a-z0-9-]*): (.+)$")
 MIN_REASON_CHARS, MIN_REASON_WORDS = 40, 6
+# The files that decide how a change is judged. A change to any of them, or to a [[rule]] of the map,
+# fails the change that makes it: nothing else stops a change from loosening what judges it, as the owner
+# opens the pull requests and a code-owner review therefore never applies.
+JUDGING_FILES = ("tools/check_docs.py", ".github/workflows/docs.yml", ".github/CODEOWNERS")
+JUDGING = "changes how changes are judged; the owner merges over this failure"
 TOOL_DIRS = ("tools/", "providers/", "conformance/", ".github/site/")
 SKIPPED_PARTS = {".git", "__pycache__", "target", "node_modules"}
 
@@ -892,6 +898,8 @@ def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], message
         notes.append(f"ignored: a waiver names rule {rid!r}, which {MAP_FILE} does not have")
     if base_map is None:
         notes.append(f"the base has no {MAP_FILE}: this change is judged by the map it brings, which a reviewer must read")
+    for path in sorted({p for _, p in changed} & set(JUDGING_FILES)):
+        problems.append(f"{path}: this change {JUDGING}")
     triggered: dict[str, tuple[dict, list[str]]] = {}
     for status, path in sorted(changed, key=lambda c: c[1]):
         if path.endswith(".md"):
@@ -953,11 +961,16 @@ def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], message
                     problems.append(f"{MAP_FILE}: this change adds or alters [[{kind}]] {e}. An exemption, absent path or known "
                                     "drift added by the change it excuses is granting yourself an exception (AGENTS.md rule 8): "
                                     "the owner adds it, in a change of its own or by merging over this failure")
+                elif kind == "rule":
+                    problems.append(f"{MAP_FILE}: this change adds or alters [[rule]] {e}: it {JUDGING}")
                 else:
                     notes.append(f"{MAP_FILE}: this change adds or alters [[{kind}]] {e}; review it")
             for e in sorted(before - after):
-                notes.append(f"{MAP_FILE}: this change removes or alters [[{kind}]] {e}; "
-                             "files the base's entry covers are still judged by it here")
+                if kind == "rule":
+                    problems.append(f"{MAP_FILE}: this change removes or alters [[rule]] {e}: it {JUDGING}")
+                else:
+                    notes.append(f"{MAP_FILE}: this change removes or alters [[{kind}]] {e}; "
+                                 "files the base's entry covers are still judged by it here")
     for num, governed in sorted((decisions or {}).items()):
         hit = sorted({p for _, p in changed for g in governed if not p.endswith(".md")
                       and (p == g.rstrip("/") or (g.endswith("/") and p.startswith(g)))})
@@ -999,22 +1012,72 @@ def pin_lines_only(paths: list[str], patch: str) -> bool:
     if not paths or any(not re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p) for p in paths):
         return False
     hunks: list[tuple[list[str], list[str]]] = []
+    with_hunks: set[str] = set()
+    current = None
     header = False  # between a file's `diff` line and its first hunk, where `---` and `+++` name the file
     for line in patch.replace("\r\n", "\n").split("\n"):
-        if line.startswith("diff "):
-            header = True
+        if line.startswith("diff --git a/"):
+            rest = line[len("diff --git a/"):]
+            half = (len(rest) - 3) // 2  # without renames both names are the same: a/P b/P
+            if rest[half:half + 3] != " b/" or rest[:half] != rest[half + 3:]:
+                return False
+            current, header = rest[:half], True
+        elif line.startswith(("diff ", "Binary files ", "GIT binary patch")):
+            return False  # another kind of diff, or bytes no line can show
         elif line.startswith("@@"):
+            if current is None:
+                return False
             header = False
+            with_hunks.add(current)
             hunks.append(([], []))
         elif header:
-            if line.startswith(("new file", "deleted file", "rename", "similarity", "old mode", "new mode")):
+            if line.startswith(("new file", "deleted file", "rename", "similarity", "old mode", "new mode", "copy ")):
                 return False
         elif line[:1] in ("+", "-"):
             if not hunks:
                 return False
             hunks[-1][0 if line[0] == "-" else 1].append(line[1:])
+    if set(paths) != with_hunks:
+        return False  # every changed file must show its change as lines
     return bool(hunks) and all(len(old) == len(new) and old and all(_same_pin(o, n) for o, n in zip(old, new))
                                for old, new in hunks)
+
+
+def workflow_jobs(text: str) -> set[str]:
+    """The ids and names of a workflow's jobs, read from the block under its top-level `jobs:`. A required
+    check is matched by name, so these are what another workflow could take over."""
+    found, inside, job_indent = set(), False, None
+    for line in text.replace("\r\n", "\n").split("\n"):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent == 0:
+            inside = line.rstrip() == "jobs:"
+            job_indent = None
+            continue
+        if not inside:
+            continue
+        if job_indent is None:
+            job_indent = indent
+        m = re.fullmatch(r"\s*([\"']?)([\w-]+)\1:\s*", line)
+        if indent == job_indent and m:
+            found.add(m.group(2))
+        m = re.fullmatch(r"\s*name:\s*([\"']?)(.*?)\1\s*", line)
+        if job_indent is not None and indent == job_indent + 2 and m:
+            found.add(m.group(2))
+    return found
+
+
+def job_clashes(workflows: dict[str, str], own: str, names: set[str]) -> list[str]:
+    """Other workflows that define a job with one of `names` as its id or name."""
+    return [f"{path} defines a job {name!r}, as {own} does: a required check of that name could be passed by it"
+            for path, text in sorted(workflows.items()) if path != own for name in sorted(names & workflow_jobs(text))]
+
+
+def head_workflows(root: pathlib.Path, head: str) -> dict[str, str]:
+    listing = git(root, "ls-tree", "-r", "--name-only", "-z", head, ".github/workflows/").decode("utf-8").split("\0")
+    return {p: git(root, "show", f"{head}:{p}").decode("utf-8", "replace") for p in listing
+            if re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p)}
 
 
 def pins_only(root: pathlib.Path, base: str, head: str, env: dict | None = None) -> bool:
@@ -1237,6 +1300,19 @@ def _diff_cases(doc_map: dict) -> list[tuple[str, str | None, tuple]]:
          ([("M", "README.md")], {"README.md"}, [], doc_map,
           {**doc_map, "exempt": [{**e, "paths": e["paths"] + ["tools/h*.py"]} for e in doc_map["exempt"]]},
           None, ["spec/runs/r/a.txt", "tools/host.py"])),
+        ("the checker changed", "tools/check_docs.py: this change changes how changes are judged",
+         ([("M", "tools/check_docs.py")], {"docs/gap-checks.md"}, [], doc_map, doc_map)),
+        ("the workflow that runs the checker changed", ".github/workflows/docs.yml: this change changes how",
+         ([("M", ".github/workflows/docs.yml")], {"docs/gap-checks.md"}, [], doc_map, doc_map)),
+        ("a rule added", "adds or alters [[rule]]",
+         ([("M", "README.md")], {"README.md"}, [], doc_map,
+          {**doc_map, "rule": doc_map["rule"] + [{"id": "probe", "code": ["newdir/*"], "docs": ["README.md"], "why": "x"}]})),
+        ("a rule removed", "removes or alters [[rule]]",
+         ([("M", "README.md")], {"README.md"}, [], doc_map,
+          {**doc_map, "rule": [r for r in doc_map["rule"] if r["id"] != "encoding"]})),
+        ("a rule's documents changed", "alters [[rule]]",
+         ([("M", "README.md")], {"README.md"}, [], doc_map,
+          {**doc_map, "rule": [{**r, "docs": r["docs"] + ["README.md"]} if r["id"] == "host" else r for r in doc_map["rule"]]})),
         ("an absent path added by the change that names it", "adds or alters [[absent]]",
          ([("M", "README.md")], {"README.md"}, [], doc_map,
           {**doc_map, "absent": doc_map["absent"] + [{"path": "tools/gone.py", "why": "planted by the self-test"}]})),
@@ -1305,8 +1381,9 @@ def _git_case(problems: list[str]) -> None:
             try:
                 judge(root, "0" * 40, "HEAD", None)
                 problems.append("self-test: a base of zeros was judged instead of refused")
-            except CannotRun:
-                pass
+            except CannotRun as err:
+                if "no usable revision" not in str(err):
+                    problems.append(f"self-test: a base of zeros was refused without saying so: {err}")
             try:
                 judge(root, "1" * 40, "HEAD", None)
                 problems.append("self-test: a base missing from the history (a force-push) was judged instead of refused")
@@ -1387,30 +1464,64 @@ def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
         if (not report_problems(body)) != should_pass:
             problems.append(f"self-test: the pull request report rule gave the wrong answer for {body!r}")
     wf = [".github/workflows/checks.yml"]
-    head = "diff --git a/x b/x\nindex 1..2 100644\n--- a/x\n+++ b/x\n"
+
+    def h(body: str, path: str = wf[0], extra: str = "") -> str:  # a file's diff header, then its hunks
+        return f"diff --git a/{path} b/{path}\n{extra}index 1..2 100644\n--- a/{path}\n+++ b/{path}\n" + body
+
+    bump = "@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+      - uses: a/b@2222 # v2\n"
+    other = ".github/workflows/models.yml"
     for what, paths, patch, want in (
-            ("an action's ref and version comment", wf, "@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+      - uses: a/b@2222 # v2\n", True),
+            ("an action's ref and version comment", wf, h(bump), True),
             ("runner versions in a matrix and a condition", wf,
-             "@@ -3 +3 @@\n-          - os: ubuntu-24.04\n+          - os: ubuntu-26.04\n"
-             "@@ -9 +9 @@\n-        if: matrix.os == 'ubuntu-24.04'\n+        if: matrix.os == 'ubuntu-26.04'\n", True),
-            ("a new step using an action", wf, "@@ -4,0 +5 @@\n+      - uses: a/b@2222 # v2\n", False),
-            ("the action of another owner", wf, "@@ -1 +1 @@\n-      - uses: a/b@1111\n+      - uses: evil/b@2222\n", False),
-            ("one system for another", wf, "@@ -2 +2 @@\n-    runs-on: ubuntu-24.04\n+    runs-on: windows-2025\n", False),
-            ("a deleted condition", wf, "@@ -9 +8,0 @@\n-        if: matrix.os == 'ubuntu-24.04'\n", False),
-            ("a self-hosted runner", wf, "@@ -2 +2 @@\n-    runs-on: ubuntu-24.04\n+    runs-on: self-hosted\n", False),
-            ("a local action", wf, "@@ -1 +1 @@\n-      - uses: ./act@1\n+      - uses: ./act@2\n", False),
-            ("a runner from an expression", wf, "@@ -2 +2 @@\n-    runs-on: ubuntu-24.04\n+    runs-on: ${{ inputs.os }}\n", False),
-            ("a command", wf, "@@ -7 +7 @@\n-        run: python3 tools/check_repo.py\n+        run: true\n", False),
-            ("a removed line that reads like a file header", wf, head + "@@ -1,2 +1 @@\n----\n-      - uses: a/b@1\n+      - uses: a/b@2\n", False),
-            ("a file outside the workflows", wf + ["tools/host.py"], "@@ -1 +1 @@\n-      - uses: a/b@1\n+      - uses: a/b@2\n", False),
+             h("@@ -3 +3 @@\n-          - os: ubuntu-24.04\n+          - os: ubuntu-26.04\n"
+               "@@ -9 +9 @@\n-        if: matrix.os == 'ubuntu-24.04'\n+        if: matrix.os == 'ubuntu-26.04'\n"), True),
+            ("pins in two workflows", wf + [other], h(bump) + h(bump, other), True),
+            ("a new step using an action", wf, h("@@ -4,0 +5 @@\n+      - uses: a/b@2222 # v2\n"), False),
+            ("the action of another owner", wf, h("@@ -1 +1 @@\n-      - uses: a/b@1111\n+      - uses: evil/b@2222\n"), False),
+            ("one system for another", wf, h("@@ -2 +2 @@\n-    runs-on: ubuntu-24.04\n+    runs-on: windows-2025\n"), False),
+            ("a deleted condition", wf, h("@@ -9 +8,0 @@\n-        if: matrix.os == 'ubuntu-24.04'\n"), False),
+            ("a self-hosted runner", wf, h("@@ -2 +2 @@\n-    runs-on: ubuntu-24.04\n+    runs-on: self-hosted\n"), False),
+            ("a local action", wf, h("@@ -1 +1 @@\n-      - uses: ./act@1\n+      - uses: ./act@2\n"), False),
+            ("a runner from an expression", wf, h("@@ -2 +2 @@\n-    runs-on: ubuntu-24.04\n+    runs-on: ${{ inputs.os }}\n"), False),
+            ("a command", wf, h("@@ -7 +7 @@\n-        run: python3 tools/check_repo.py\n+        run: true\n"), False),
+            ("a changed indentation", wf, h("@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+        - uses: a/b@2222 # v2\n"), False),
+            ("a mode change beside a pin bump", wf, h(bump, extra="old mode 100644\nnew mode 100755\n"), False),
+            ("a changed file with no lines shown", wf + [other], h(bump) + h("", other), False),
+            ("a binary file", wf, f"diff --git a/{wf[0]} b/{wf[0]}\nindex 1..2 100644\nBinary files a/{wf[0]} and b/{wf[0]} differ\n", False),
+            ("hunks with no file header", wf, bump, False),
+            ("a binary note after a pin bump", wf, h(bump) + f"Binary files a/{wf[0]} and b/{wf[0]} differ\n", False),
+            ("a removed line that reads like a file header", wf, h("@@ -1,2 +1 @@\n----\n-      - uses: a/b@1\n+      - uses: a/b@2\n"), False),
+            ("a file outside the workflows", wf + ["tools/host.py"], h(bump), False),
             ("nothing", wf, "", False)):
         if pin_lines_only(paths, patch) != want:
             problems.append(f"self-test: pin_lines_only takes {what} for {'a' if not want else 'no'} change of pinned versions only")
+    own = ".github/workflows/docs.yml"
+    workflows = {p: repo.read(p) for p in repo.glob(".github/workflows/*.yml")}
+    names = workflow_jobs(workflows.get(own, ""))
+    if len(names) < 2 or job_clashes(workflows, own, names):
+        problems.append(f"self-test: the docs job's id and name are not both read, or another workflow already uses them: {sorted(names)}")
+    for what, edit in (("the same job name", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n}\n", 1)),
+                       ("the same job id", lambda s, n: s.replace("  checks:\n", f"  {n}:\n", 1))):
+        for name in sorted(names):
+            if " " in name and what.endswith("id") or " " not in name and what.endswith("name"):
+                continue
+            planted = {**workflows, ".github/workflows/checks.yml": edit(workflows[".github/workflows/checks.yml"], name)}
+            if not job_clashes(planted, own, names):
+                problems.append(f"self-test: another workflow with {what} as the docs job was not noticed")
+    for raw, shown in (("a\nPROBLEM forged", "a\\nPROBLEM forged"), ("a\r::error::x", "a\\r: :error: :x"), ("a\x1b[2Kb", "a?[2Kb")):
+        if printable(raw) != shown:
+            problems.append(f"self-test: output text {raw!r} is printed as {printable(raw)!r}, not {shown!r}")
     if substance("a  b\r\nc\n") != substance("a b\nc") or substance("a b") == substance("a c"):
         problems.append("self-test: the comparison of document substance is wrong")
     if with_git:
         _git_case(problems)
     return problems
+
+
+def printable(line: str) -> str:
+    """Text from commit messages is printed: it must stay on its line and not read as a command to a CI runner."""
+    line = line.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r")
+    return re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "?", line).replace("::", ": :")
 
 
 def main() -> int:
@@ -1424,6 +1535,11 @@ def main() -> int:
     one.add_argument("--repo", type=pathlib.Path, default=ROOT,
                      help="the repository to judge; by default the one this file is in. CI runs the base's copy of "
                           "this file on the change, so that a change cannot loosen the checker that judges it")
+    three = sub.add_parser("jobs")
+    three.add_argument("--head", required=True)
+    three.add_argument("--own", required=True, help="the workflow whose jobs no other may share")
+    three.add_argument("--name", action="append", required=True, help="a job id or name it uses (may be repeated)")
+    three.add_argument("--repo", type=pathlib.Path, default=ROOT)
     two = sub.add_parser("pins-only")
     two.add_argument("--base", required=True)
     two.add_argument("--head", required=True)
@@ -1431,6 +1547,16 @@ def main() -> int:
     args = ap.parse_args()
     if args.command == "self-test":
         found, notes = self_test(), []
+    elif args.command == "jobs":
+        try:
+            clashes = job_clashes(head_workflows(args.repo.resolve(), args.head), args.own, set(args.name))
+        except CannotRun as err:
+            print(f"COULD NOT RUN {err}")
+            return 2
+        for line in clashes:
+            print("PROBLEM", printable(line))
+        print("job names:", "FAILED" if clashes else "no other workflow uses them")
+        return 1 if clashes else 0
     elif args.command == "pins-only":
         try:
             only = pins_only(args.repo.resolve(), args.base, args.head)
@@ -1451,8 +1577,8 @@ def main() -> int:
     else:
         found, notes = repo_problems(), []
     for kind, lines in (("NOTE", notes), ("PROBLEM", found)):
-        for line in lines:  # text from commit messages is printed; it must not read as a command to a CI runner
-            print(kind, re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "?", line).replace("::", ": :"))
+        for line in lines:
+            print(kind, printable(line))
     print("documents and code:", "FAILED" if found else "agree")
     return 1 if found else 0
 
