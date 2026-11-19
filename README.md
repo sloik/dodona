@@ -202,6 +202,7 @@ What makes a second opinion worth having is a fresh context: an author or a chec
 | What dodona is meant to do, as a roadmap | [intents/](intents/README.md) |
 | Why it is designed this way | [decisions/](decisions/README.md) |
 | What has actually been checked | [spec/CLAIMS.md](spec/CLAIMS.md) |
+| The project in numbers, and which of them may only go up | [docs/metrics.md](docs/metrics.md) |
 | How providers talk to the kernel | [protocol/](protocol/README.md), [writing a provider](docs/writing-a-provider.md) |
 | How a project is configured | [docs/configuration.md](docs/configuration.md) |
 | What a correct kernel must do | [conformance/](conformance/README.md) |

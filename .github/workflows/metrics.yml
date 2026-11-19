@@ -1,0 +1,116 @@
+name: Metrics
+# How complete and how well checked the project is, in numbers read from its own
+# files (tools/metrics.py, docs/metrics.md), with the change since the last
+# successful run on main. A ratcheted number that went down fails the run unless
+# a commit in the change carries a line
+#   Metrics-down: <metric>: <reason of at least six words>
+# Runs on hosted machines only and executes nothing but the metrics tool.
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+  actions: read   # to fetch the metrics kept by the last successful run on main
+concurrency:
+  group: metrics-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  # The tool's own planted changes, on every platform dodona supports.
+  self-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            python: python3
+          - os: ubuntu-26.04
+            python: python3
+          - os: windows-2025
+            python: python
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Plant changes and require each to be judged right
+        run: ${{ matrix.python }} -I tools/metrics.py self-test
+
+  metrics:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The whole history, so the commit messages since the earlier metrics can be read.
+          fetch-depth: 0
+      - name: Measure
+        run: python3 -I tools/metrics.py --json --commit "$(git rev-parse HEAD)" > metrics.json
+      # Kept before comparing: a run that then fails is not successful, and only
+      # a successful run's metrics are ever used as the earlier ones.
+      - name: Keep these metrics for the next run
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dodona-metrics
+          path: metrics.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Fetch the metrics kept by the last successful run on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p earlier
+          # Any failed lookup fails this step. Only these three answers mean there is nothing to compare with.
+          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows" -q '.workflows[] | select(.path == ".github/workflows/metrics.yml") | .id')
+          if [ -z "$id" ]; then
+            echo "this workflow is not on main yet, so no run on main has kept any metrics" > earlier/none.txt; exit 0
+          fi
+          # Only a run that a push to this repository's main started: a pull request, a fork or another
+          # branch cannot be the starting point, whatever its branch is called.
+          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$id/runs?branch=main&event=push&status=success&per_page=1" -q '.workflow_runs[0].id // empty')
+          if [ -z "$last" ]; then
+            echo "no run of this workflow on main has succeeded yet" > earlier/none.txt; exit 0
+          fi
+          origin=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$last" -q '.head_repository.full_name + " " + .event + " " + .head_branch')
+          if [ "$origin" != "$GITHUB_REPOSITORY push main" ]; then
+            echo "::error::run $last is not a push to this repository's main ($origin)"; exit 1
+          fi
+          kept=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$last/artifacts" -q '[.artifacts[] | select(.name == "dodona-metrics" and .expired == false)] | length')
+          if [ "$kept" = "0" ]; then
+            echo "run $last on main kept no metrics, or they have expired" > earlier/none.txt; exit 0
+          fi
+          gh run download "$last" -R "$GITHUB_REPOSITORY" -n dodona-metrics -D earlier
+          echo "$last" > earlier/from-run.txt
+      - name: Compare with the earlier metrics, and write both to the job summary
+        run: |
+          set -euo pipefail
+          python3 -I tools/metrics.py --markdown > table.md
+          if [ -f earlier/none.txt ]; then
+            note="Not compared: $(cat earlier/none.txt). Nothing is judged; the numbers are shown only."
+            { echo "## Metrics"; echo; echo "$note"; echo; cat table.md; } >> "$GITHUB_STEP_SUMMARY"
+            echo "$note"
+            python3 -I tools/metrics.py
+            exit 0
+          fi
+          # Waivers are read from every commit in this change that the earlier metrics did not include,
+          # the same way for a pull request and for a push.
+          base=$(python3 -I -c 'import json, re; c = json.load(open("earlier/metrics.json", encoding="utf-8")).get("commit") or ""; print(c if re.fullmatch("[0-9a-f]{40}", c) else "")')
+          if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git log --format=%B "$base..HEAD" > messages.txt
+            note="Waivers are read from the messages of the commits in \`$base..HEAD\`."
+          else
+            : > messages.txt
+            note="The commit the earlier metrics were measured on is not in this history, so no waiver can be read: any ratcheted number that went down fails."
+          fi
+          set +e
+          python3 -I tools/metrics.py --compare earlier/metrics.json --messages messages.txt --markdown > compare.md
+          code=$?
+          set -e
+          { echo "## Metrics"; echo; echo "Compared with run $(cat earlier/from-run.txt) on main. $note"; echo; cat compare.md; } >> "$GITHUB_STEP_SUMMARY"
+          echo "$note"
+          cat compare.md
+          exit $code
