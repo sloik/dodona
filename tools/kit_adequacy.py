@@ -35,8 +35,10 @@ JUDGES = (("ledger", "run_ledger_cases.py", []), ("core-key", "run_key_vectors.p
           ("attest", "run_attest_check.py", ["scenario"]), ("harness", "run_harness_check.py", ["scenario"]),
           ("input", "run_input_cases.py", []), ("session", "run_provider_cases.py", ["session"]),
           ("host-check", "run_check_cases.py", ["check"]))
-# The host judges take about a minute each, so a defect in the host's own files is tried on them first.
-HOST_FILES = ("src/host.rs", "src/session.rs", "src/proc.rs", "src/wire.rs", "src/jsonread.rs")
+# The host judges take about a minute each, so a defect in the host's own files is tried first on the
+# judge meant for that file: the check judge for the check, the session judge for the session.
+FIRST_JUDGE = {"src/host.rs": "host-check", "src/jsonread.rs": "host-check",
+               "src/session.rs": "session", "src/proc.rs": "session", "src/wire.rs": "session"}
 
 
 def passes_kit(kernel_dir: pathlib.Path, defect_file: str | None = None) -> tuple[bool, list[str]]:
@@ -56,8 +58,9 @@ def passes_kit(kernel_dir: pathlib.Path, defect_file: str | None = None) -> tupl
     if not ok and defect_file is not None:
         return ok, failing
     judges = list(JUDGES)
-    if defect_file in HOST_FILES:
-        judges.sort(key=lambda judge: judge[0] not in ("session", "host-check"))
+    if defect_file in FIRST_JUDGE:
+        first = FIRST_JUDGE[defect_file]
+        judges.sort(key=lambda judge: (judge[0] != first, judge[0] not in ("session", "host-check")))
     # The ledger, the core keys and freshly made check values are judged by their own tools.
     for label, tool, extra in judges:
         other = subprocess.run([sys.executable, str(ROOT / "tools" / tool), "--", str(binary)] + extra, capture_output=True, text=True)

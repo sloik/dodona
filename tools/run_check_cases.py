@@ -107,6 +107,8 @@ def judge(case: dict, host: list[str]) -> list[str]:
                 else:
                     asked[field] = value
         sent = json.dumps(asked) if "whole_input" not in case else json.dumps(case["whole_input"])
+        if "input_text" in case:
+            sent = case["input_text"]  # text that is not JSON at all
         env = dict(os.environ, DODONA_CHECKER_MODE=case["mode"], DODONA_TEST_SEEN=str(seen), DODONA_TEST_PIDFILE=str(pidfile),
                    DODONA_EXECUTOR_END=case["run"], DODONA_EXECUTOR_RECORD=str(record), DODONA_EXECUTOR_ROOT=str(project))
         proc = subprocess.Popen(host, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)

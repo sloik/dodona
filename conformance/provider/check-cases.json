@@ -1,5 +1,5 @@
 {
-  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. Nothing may be recorded as passed except in the control and in the cases whose outcome is the verdict `passed`. `runs` is how many runs the executor must have been given, no more and no fewer. `deadline_ms`, where given, is the deadline the host is given; `names_a_missing_file` makes the obligation name a file that is not among the inputs. `second_input` gives the check a second input, b.txt; `many_inputs` gives it that many more, so that a request is long; `change_input` breaks one field of the host's own input (null removes it); `names_a_missing_spec` makes the obligation's specified_by name a file that is not among the inputs; `change_input` keys of the form `asked.FIELD` change the whole input's field; `whole_input` replaces the whole input; `not_on` lists platforms where the provider cannot make what the case needs.",
+  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. Nothing may be recorded as passed except in the control and in the cases whose outcome is the verdict `passed`. `runs` is how many runs the executor must have been given, no more and no fewer. `deadline_ms`, where given, is the deadline the host is given; `names_a_missing_file` makes the obligation name a file that is not among the inputs. `second_input` gives the check a second input, b.txt; `many_inputs` gives it that many more, so that a request is long; `change_input` breaks one field of the host's own input (null removes it); `names_a_missing_spec` makes the obligation's specified_by name a file that is not among the inputs; `change_input` keys of the form `asked.FIELD` change the whole input's field; `whole_input` replaces the whole input; `input_text` sends text that is not JSON in its place; `not_on` lists platforms where the provider cannot make what the case needs.",
   "cases": [
     {
       "mode": "well-behaved",
@@ -1051,6 +1051,15 @@
       "reason": "bad-input",
       "runs": 0,
       "why": "An input that is not an object is refused, not crashed on."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "exited",
+      "input_text": "this is not JSON",
+      "outcome": "refused",
+      "reason": "bad-input",
+      "runs": 0,
+      "why": "Input that is not JSON at all is refused like input that is not an object."
     }
   ]
 }
