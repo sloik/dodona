@@ -7,6 +7,7 @@ reads a `hello`, answers with a manifest, reads one request and answers it,
 then waits for `shutdown`. In every mode but `well-behaved` it does one thing
 wrong. `cases.json` lists the modes with the outcome a host must reach.
 
+If DODONA_TEST_SEEN is set, every message the provider receives is appended to that file, one per line.
 If the environment variable DODONA_TEST_PIDFILE is set, the provider appends
 its own process id, and the id of any process it starts, to that file, one per
 line, so a judge can check that nothing is left running afterwards.
@@ -35,12 +36,19 @@ def send(obj, ending: bytes = b"\n") -> None:
 
 def read():
     line = sys.stdin.buffer.readline()
-    return json.loads(line.decode("utf-8")) if line else None
+    message = json.loads(line.decode("utf-8")) if line else None
+    seen = os.environ.get("DODONA_TEST_SEEN")
+    if seen and message is not None:
+        # For the judge only: every message as it arrived, so what the host sends is judged, not taken on its word.
+        with open(seen, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(message) + "\n")
+    return message
 
 
-def manifest():
-    return {"type": "manifest", "protocol": "0.2", "name": "misbehaving", "version": "0",
-            "capabilities": [{"capability": "decision.index"}], "trusted_base": []}
+def manifest(echo):
+    return {"type": "manifest", "echo": echo + (" changed" if MODE == "wrong-echo" else ""),
+            "manifest": {"protocol": "0.2", "name": "misbehaving", "version": "0",
+                         "capabilities": [{"capability": "decision.index"}], "tools": [], "trusted_base": []}}
 
 
 def sleeper() -> None:
@@ -51,7 +59,7 @@ def sleeper() -> None:
 
 def main() -> None:
     note_pid(os.getpid())
-    read()  # hello
+    hello = read() or {}
     if MODE == "byte-order-mark":
         OUT.write(b"\xef\xbb\xbf")
     if MODE == "garbage":
@@ -65,13 +73,23 @@ def main() -> None:
         return
     if MODE == "never-answers":
         time.sleep(600)
-    send(manifest(), b"\r\n" if MODE == "carriage-return" else b"\n")
+    if MODE == "loose-but-valid-json":
+        # Valid JSON that the strict reading of a check would refuse: a session reads it as JSON.
+        text = json.dumps(manifest(hello.get("echo", "")))[:-1] + ', "extra": {"v": 1.5, "w": 1, "w": 2, "deep": ' + "[" * 70 + "]" * 70 + "}}"
+        OUT.write(text.encode("utf-8") + b"\n")
+        OUT.flush()
+    else:
+        send(manifest(hello.get("echo", "")), b"\r\n" if MODE == "carriage-return" else b"\n")
     request = read()
     if request is None:
         return
     answer = {"type": "result", "id": request.get("id"), "capability": request.get("capability"), "body": {"decisions": []}}
     if MODE == "wrong-id":
         answer["id"] = "not-the-id-that-was-asked"
+    if MODE == "answers-with-an-error":
+        answer = {"type": "error", "id": request.get("id"), "code": "internal", "message": "no"}
+    if MODE == "answers-another-capability":
+        answer["capability"] = "obligation.check"
     if MODE == "bad-encoding":
         OUT.write(b'{"type": "result", "id": "\xff\xfe"}\n')
         OUT.flush()
@@ -95,8 +113,15 @@ def main() -> None:
         time.sleep(600)
     if MODE == "two-answers":
         send(answer)
+    if MODE == "nan-in-an-answer":
+        OUT.write(('{"type": "result", "id": %s, "capability": %s, "body": {"x": NaN}}\n'
+                   % (json.dumps(request.get("id")), json.dumps(request.get("capability")))).encode("utf-8"))
+        OUT.flush()
+        time.sleep(600)
     send(answer)
     read()  # shutdown
+    if MODE == "ignores-shutdown":
+        time.sleep(600)
 
 
 if __name__ == "__main__":

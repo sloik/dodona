@@ -2,7 +2,7 @@
 
 Stage-0 helper (decision 0023).
 
-    python tools/check_states.py --model kernel --dump FILE -- <kernel command>
+    python tools/check_states.py --model kernel --dump FILE [--settings FILE] -- <kernel command>
     python tools/check_states.py --model intent --dump FILE -- <kernel command>
 
 The model checker can write out every state it reached (its `-dump` option).

@@ -480,9 +480,10 @@
             "exited",
             "timed-out",
             "cancelled",
-            "limit-exceeded"
+            "limit-exceeded",
+            "unavailable"
           ],
-          "description": "How the run ended. Anything but exited ends the check in error; the provider is not asked to interpret it."
+          "description": "How the run ended. unavailable means the executor could not run it at all, and the check ends unavailable; anything else but exited ends the check in error. The provider is not asked to interpret a run that did not exit."
         },
         "exit_status": {
           "type": "integer",
@@ -532,7 +533,7 @@
     },
     "final_check": {
       "type": "object",
-      "description": "A final verdict. strength is required for passed and failed. A final of passed or failed with no run behind it is refused by the kernel and the check ends in error: a verdict must rest on at least one run. The strength may not exceed the one the manifest declares; the kernel lowers it if it does.",
+      "description": "A final verdict. strength is required for passed and failed. A final of passed or failed with no run behind it is refused by the kernel: a verdict must rest on at least one run. The strength may not exceed the one the manifest declares, in rank or class; a final that does is refused (conformance/README.md, Host checks).",
       "required": [
         "verdict"
       ],

@@ -81,7 +81,7 @@ Validating a message against its schema is a first filter. The kernel also holds
 - **A verdict rests on a run.** A final `passed` or `failed` with no run behind it is refused.
 - **Strength has a ceiling.** A result may not claim a stronger rank than the provider's manifest declares.
 - **A run that did not exit ends the check.** A run that timed out, was cancelled or exceeded a limit ends the check in `error`; the provider is not asked to interpret it.
-- **Later runs use only what is in the key or what an earlier run of the same check produced.**
+- **Every run uses only what is in the key.** What an earlier run of the same check produced reaches the provider in that run's report, never as an input of a later run ([host rule 9](../conformance/README.md#host-checks-rules-a-schema-cannot-express)).
 - **A provider cannot confirm an intent or grant an exception.** Those come only from act records with tickets the kernel issued.
 - **Each run of a check is submitted under its own key**, which includes its number, so a repeated run is never answered from an earlier one.
 

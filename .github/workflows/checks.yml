@@ -15,15 +15,21 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    # The name is the system alone, not the runner's version: main's ruleset requires these
+    # checks by name, and a runner bump must not rename a required check.
+    name: checks (${{ matrix.system }})
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-26
+            system: macos
             python: python3
           - os: ubuntu-26.04
+            system: linux
             python: python3
           - os: windows-2025
+            system: windows
             python: python
     runs-on: ${{ matrix.os }}
     # The run itself takes seconds. The allowance is for waiting on a hosted
@@ -44,7 +50,7 @@ jobs:
       - name: Judge the reference host with the misbehaving provider
         run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.python }} tools/provider_host.py
       - name: Judge the stage-0 host with a checker that breaks one rule at a time
-        run: ${{ matrix.python }} tools/run_check_cases.py
+        run: ${{ matrix.python }} tools/run_check_cases.py -- ${{ matrix.python }} tools/host.py check
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Kernel unit tests
@@ -72,6 +78,10 @@ jobs:
         run: ${{ matrix.python }} tools/run_input_cases.py -- kernel/target/release/dodona-kernel
       - name: Run the reference harness on a real checker and have the kernel grade what it signs
         run: ${{ matrix.python }} tools/run_harness_check.py -- kernel/target/release/dodona-kernel scenario
+      - name: Judge the kernel as the host of a provider session (decision 0033)
+        run: ${{ matrix.python }} tools/run_provider_cases.py -- kernel/target/release/dodona-kernel session
+      - name: Judge the kernel as the host of a check, against the misbehaving checker (decision 0033)
+        run: ${{ matrix.python }} tools/run_check_cases.py -- kernel/target/release/dodona-kernel check
       - name: Compare the kernel's path check with the reference on random paths
         run: ${{ matrix.python }} tools/path_differential.py -- kernel/target/release/dodona-kernel
       # The second kernel: JavaScript, written without sight of the first.
@@ -93,6 +103,10 @@ jobs:
         run: ${{ matrix.python }} tools/run_input_cases.py -- node kernel2/dodona-kernel2.js
       - name: Run the reference harness and have the second kernel grade what it signs
         run: ${{ matrix.python }} tools/run_harness_check.py -- node kernel2/dodona-kernel2.js scenario
+      - name: Judge the second kernel as the host of a provider session (decision 0033)
+        run: ${{ matrix.python }} tools/run_provider_cases.py -- node kernel2/dodona-kernel2.js session
+      - name: Judge the second kernel as the host of a check, against the misbehaving checker (decision 0033)
+        run: ${{ matrix.python }} tools/run_check_cases.py -- node kernel2/dodona-kernel2.js check
       - name: Compare the two kernels on inputs the kit does not contain
         run: ${{ matrix.python }} tools/kernel_differential.py --rounds 8 --a kernel/target/release/dodona-kernel --b node kernel2/dodona-kernel2.js
 
@@ -110,7 +124,10 @@ jobs:
             run: node kernel2/plant.js
     name: planted defects (${{ matrix.kernel }} kernel)
     runs-on: ubuntu-26.04
-    timeout-minutes: 120
+    # Every planted defect is built and judged on its own. With the host judges this took 86 and 109
+    # minutes on 2026-11-19; the limit leaves room for that to grow. If it does, split the list into
+    # shards rather than raise the limit again.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

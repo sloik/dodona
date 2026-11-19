@@ -51,6 +51,35 @@ def alive(pid: int) -> bool:
         return True
 
 
+def same(a, b) -> bool:
+    """Equal as JSON text, so a boolean never stands in for a number, nor a float for an integer."""
+    return json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+def sent_problems(case: dict, seen: pathlib.Path, limits: dict) -> list[str]:
+    """What the host sent, as the provider recorded it, against what the session text requires."""
+    got = [json.loads(line) for line in seen.read_text(encoding="utf-8").splitlines() if line] if seen.exists() else []
+    problems = []
+    hello = got[0] if got else None
+    echo = hello.get("echo") if isinstance(hello, dict) else None
+    if not (isinstance(hello, dict) and hello.get("type") == "hello"):
+        problems.append("the session did not open with hello")
+    elif not (same({k: v for k, v in hello.items() if k != "echo"},
+                   {"type": "hello", "protocol": ["0.2"], "limits": {"max_line_bytes": limits["max_line_bytes"], "deadline_ms": limits["deadline_ms"]}})
+              and isinstance(echo, str) and any(ord(c) > 127 for c in echo) and any(ord(c) < 32 for c in echo)):
+        problems.append("hello was not the message the session text gives")
+    requests = [m for m in got if isinstance(m, dict) and m.get("type") == "request"]
+    want = {"type": "request", "id": "1", "deadline_ms": limits["deadline_ms"], "capability": "decision.index", "body": {"files": []}}
+    if any(not same(m, want) for m in requests) or len(requests) > 1:
+        problems.append("the request was not the one the session text gives")
+    if case["outcome"] == "ok":
+        if not requests:
+            problems.append("no request was sent")
+        if not got or not same(got[-1], {"type": "shutdown"}):
+            problems.append("the session did not end with shutdown")
+    return problems
+
+
 def main() -> int:
     if "--" not in sys.argv or sys.argv[-1] == "--":
         print(__doc__)
@@ -63,7 +92,8 @@ def main() -> int:
         problems = []
         with tempfile.TemporaryDirectory() as tmp:
             pidfile = pathlib.Path(tmp) / "pids"
-            env = dict(os.environ, DODONA_TEST_PIDFILE=str(pidfile))
+            seen = pathlib.Path(tmp) / "seen"
+            env = dict(os.environ, DODONA_TEST_PIDFILE=str(pidfile), DODONA_TEST_SEEN=str(seen))
             command = host + ["--deadline-ms", str(limits["deadline_ms"]), "--max-line", str(limits["max_line_bytes"]),
                               "--max-log", str(limits["max_log_bytes"]), "--", sys.executable, str(PROVIDER), case["mode"]]
             started = time.monotonic()
@@ -91,6 +121,7 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 problems.append("the host itself did not return")
             time.sleep(0.3)
+            problems += sent_problems(case, seen, limits)
             pids = [int(p) for p in pidfile.read_text().split()] if pidfile.exists() else []
             left = [p for p in pids if alive(p)]
             if left:

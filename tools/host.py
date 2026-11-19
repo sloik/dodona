@@ -85,9 +85,11 @@ class Session:
             answer = self.receive()
             if answer.get("type") != "manifest" or answer.get("echo") != echo:
                 raise Refused("bad-manifest")
-            self.manifest = answer["manifest"]
+            self.manifest = answer.get("manifest")
+            if not manifest_has_its_shape(self.manifest):
+                raise Refused("bad-manifest")
         except Refused:
-            self.tree.end()  # a session that never opened leaves no provider behind
+            self.close()  # shutdown is sent at the end of every session, and no provider is left behind
             raise
 
     @staticmethod
@@ -106,11 +108,22 @@ class Session:
             data = json.dumps(message, ensure_ascii=False).encode("utf-8") + b"\n"
         except UnicodeEncodeError:
             raise Refused("encoding") from None  # a lone surrogate the provider sent cannot be passed on
-        try:
-            self.tree.proc.stdin.write(data)
-            self.tree.proc.stdin.flush()
-        except OSError:
-            raise Refused("closed") from None
+        import threading
+        failed: list = []
+
+        def write():
+            try:
+                self.tree.proc.stdin.write(data)
+                self.tree.proc.stdin.flush()
+            except (OSError, ValueError):
+                failed.append(True)
+        writer = threading.Thread(target=write, daemon=True)
+        writer.start()
+        writer.join(self.deadline_s)
+        if writer.is_alive():
+            raise Refused("deadline")  # a provider that stops reading cannot hold the host past the deadline
+        if failed:
+            raise Refused("closed")
 
     def receive(self) -> dict:
         import queue
@@ -122,14 +135,7 @@ class Session:
             raise Refused("closed" if kind == "closed" else "too-long")
         if raw.startswith(b"\xef\xbb\xbf") or raw.endswith(b"\r"):
             raise Refused("framing")
-        try:
-            message = json.loads(raw.decode("utf-8"), object_pairs_hook=no_repeats, parse_float=no_fractions)
-        except UnicodeDecodeError:
-            raise Refused("encoding") from None
-        except ValueError as err:
-            raise Refused(str(err) if str(err) in ("duplicate-key", "not-an-integer") else "malformed") from None
-        if depth(message) > 64:
-            raise Refused("too-deep")
+        message = strict_load(raw)
         if not isinstance(message, dict) or not isinstance(message.get("type"), str):
             raise Refused("malformed")
         self.transcript.append({"to": "kernel", "message": message})
@@ -155,7 +161,8 @@ class Session:
     def close(self) -> None:
         try:
             self.send({"type": "shutdown"})
-        except Refused:
+            self.tree.proc.wait(timeout=1)  # a provider is given a moment to exit on its own
+        except (Refused, subprocess.TimeoutExpired):
             pass
         self.tree.end()
 
@@ -181,6 +188,78 @@ def no_fractions(text):
     raise ValueError("not-an-integer")
 
 
+def safe_integer(text):
+    value = int(text)
+    if abs(value) > 2 ** 53 - 1:
+        raise ValueError("not-an-integer")  # beyond this, a number cannot be read the same everywhere
+    return value
+
+
+def half_pair(value) -> bool:
+    """Whether a string anywhere in the value holds half of a UTF-16 pair."""
+    if isinstance(value, str):
+        return any(0xD800 <= ord(c) <= 0xDFFF for c in value)
+    if isinstance(value, dict):
+        return any(half_pair(k) or half_pair(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(half_pair(v) for v in value)
+    return False
+
+
+def not_json(text):
+    raise ValueError("malformed")  # NaN and Infinity are not JSON, whatever Python's reader allows
+
+
+def strict_load(raw: bytes):
+    """Read one JSON text as the canonical encoding writes it, or raise Refused with the reason."""
+    try:
+        value = json.loads(raw.decode("utf-8"), object_pairs_hook=no_repeats, parse_float=no_fractions, parse_int=safe_integer,
+                           parse_constant=not_json)
+    except UnicodeDecodeError:
+        raise Refused("encoding") from None
+    except ValueError as err:
+        raise Refused(str(err) if str(err) in ("duplicate-key", "not-an-integer") else "malformed") from None
+    if half_pair(value):
+        raise Refused("encoding")
+    if depth(value) > 64:
+        raise Refused("too-deep")
+    return value
+
+
+TOOL_NAME_TEXT = re.compile(r"[A-Za-z0-9._-]+")
+
+
+def manifest_has_its_shape(manifest) -> bool:
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("capabilities"), list):
+        return False
+    names = []
+    for item in manifest["capabilities"]:
+        if not isinstance(item, dict) or not isinstance(item.get("capability"), str):
+            return False
+        names.append(item["capability"])
+        strength = item.get("strength")
+        if item["capability"] == "obligation.check" and "strength" in item:  # given as null is given
+            if not isinstance(strength, dict) or not isinstance(strength.get("class"), str) or strength.get("rank") not in RANKS:
+                return False
+    if len(names) != len(set(names)):
+        return False
+    tools = manifest.get("tools")  # a manifest without a list of tools is not read as declaring none
+    return isinstance(tools, list) and all(isinstance(t, dict) and isinstance(t.get("name"), str) and TOOL_NAME_TEXT.fullmatch(t["name"]) for t in tools)
+
+
+def description_has_its_shape(run) -> bool:
+    def objects(value, *fields):
+        return isinstance(value, list) and all(isinstance(v, dict) and all(isinstance(v.get(f), str) for f in fields) for v in value)
+    if not isinstance(run, dict):
+        return False
+    program = run.get("program")
+    return (isinstance(program, dict) and isinstance(program.get("tool"), str) and isinstance(program.get("path"), str)
+            and isinstance(run.get("args"), list) and objects(run.get("inputs"), "path", "identity") and objects(run.get("outputs"), "path")
+            and objects(run.get("tools"), "name", "digest") and isinstance(run.get("platform"), dict)
+            and ("cwd" not in run or isinstance(run["cwd"], str))
+            and ("limits" not in run or (isinstance(run["limits"], dict) and all(type(v) is int for v in run["limits"].values()))))
+
+
 def declared_strength(manifest: dict, capability: str) -> dict | None:
     for item in manifest["capabilities"]:
         if item["capability"] == capability and "strength" in item:
@@ -199,6 +278,23 @@ def run_key(check_key: str, number: int, description: dict) -> str:
     return canonical.identity({"check": check_key, "run": number, "description": canonical.identity(description)})
 
 
+def plain_file(root: pathlib.Path, relative: str) -> bool:
+    """A regular file of at most 64 MiB, reached from root without following a link at any step."""
+    import os
+    import stat
+    here = root
+    for part in relative.split("/"):
+        here = here / part
+        try:
+            mode = os.lstat(here).st_mode
+        except OSError:
+            return False
+        if stat.S_ISLNK(mode):
+            return False
+    info = os.lstat(here)
+    return stat.S_ISREG(info.st_mode) and info.st_size <= 64 * 1024 * 1024
+
+
 def rehash(item: dict, root: pathlib.Path) -> None:
     """A provider's word for what a file contains is never taken: the bytes are hashed again."""
     path = root / item["path"]
@@ -206,11 +302,18 @@ def rehash(item: dict, root: pathlib.Path) -> None:
         raise Refused("identity-mismatch")
 
 
+def ascii_lower(text: str) -> str:
+    """Lower-case ASCII letters only: rule 8 folds no other case."""
+    return text.translate(str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"))
+
+
 def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str], known_tools: dict[str, str],
                           platform: dict | None = None, named_files: set[str] | None = None) -> None:
     """The rules a run description must keep before anything is executed.
     `known_tools` gives the digest of each tool the check was given: the ones its result is keyed by.
     `platform` is the platform the check was asked for; `named_files` the files its obligation names."""
+    if not description_has_its_shape(run):
+        raise Refused("bad-description")
     if platform is not None and run.get("platform") != platform:
         raise Refused("platform-mismatch")  # a run must target the platform the check was asked for
     declared = {t["name"] for t in manifest.get("tools", [])}
@@ -220,11 +323,13 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
         raise Refused("undeclared-tool")
     if any(tool not in known_tools for tool in named):
         raise Refused("tool-not-in-key")  # declared, but not among the tools this check was given
-    for item in run.get("tools", []):
-        if not isinstance(item, dict) or item.get("name") not in known_tools:
-            raise Refused("tool-not-in-key")
-        if item.get("digest") != known_tools.get(item["name"]):
-            raise Refused("tool-digest-mismatch")  # the run would use another tool than the one the result is keyed by
+    if any(tool not in {t.get("name") for t in run.get("tools", [])} for tool in named):
+        raise Refused("tool-not-in-run")  # a tool the run uses is pinned in its own tools, or its digest is never checked
+    # Each rule is checked over every entry before the next rule.
+    if any(not isinstance(item, dict) or item.get("name") not in known_tools for item in run.get("tools", [])):
+        raise Refused("tool-not-in-key")
+    if any(item.get("digest") != known_tools.get(item["name"]) for item in run.get("tools", [])):
+        raise Refused("tool-digest-mismatch")  # the run would use another tool than the one the result is keyed by
     placed = [m for a in run.get("args", []) if isinstance(a, str) for m in TOOL_FILE.findall(a)]
     for path in ([program.get("path", "")] + [f.get("path", "") for f in run.get("inputs", []) + run.get("outputs", [])]
                  + [path for _, path in placed] + ([run["cwd"]] if "cwd" in run else [])):
@@ -240,15 +345,15 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
             continue  # a NUL byte is refused below, under its own reason
         if PATHLIKE.search(text):
             raise Refused("bad-path")  # an argument may name only the run's own files, and only as a whole argument
-    if run.get("env"):
-        raise Refused("env-not-allowed")  # a variable can change what a program loads; the stage-0 host allows none
-    if {f.get("path") for f in run.get("outputs", [])} & inputs:
-        raise Refused("output-overwrites-input")
-    for item in run.get("inputs", []):
-        if item["path"] not in known_inputs:
-            raise Refused("input-not-in-key")
-        if known_inputs[item["path"]] is not None and item.get("identity") != known_inputs[item["path"]]:
-            raise Refused("identity-mismatch")
+    if "env" in run:
+        raise Refused("env-not-allowed")  # a variable can change what a program loads; any env field is refused, whatever its value
+    taken = {ascii_lower(p) for p in inputs | set(known_inputs)}
+    if any(ascii_lower(f["path"]) in taken for f in run["outputs"]):
+        raise Refused("output-overwrites-input")  # compared without regard to case: a disk may ignore it
+    if any(item["path"] not in known_inputs for item in run.get("inputs", [])):
+        raise Refused("input-not-in-key")
+    if any(known_inputs[item["path"]] is not None and item.get("identity") != known_inputs[item["path"]] for item in run.get("inputs", [])):
+        raise Refused("identity-mismatch")
     if not isinstance(run.get("args"), list) or not all(isinstance(a, str) and "\x00" not in a for a in run["args"]):
         raise Refused("bad-arguments")
     if named_files is not None and not named_files <= {f.get("path") for f in run.get("inputs", [])}:
@@ -257,23 +362,31 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
 
 def check_final(final: dict, manifest: dict, capability: str, runs_done: int, root: pathlib.Path = ROOT) -> None:
     """The rules a final answer must keep."""
-    for item in final.get("attachments", []):
-        if pathcheck.check(str(item.get("path", "")).encode("utf-8", errors="surrogatepass")) is not None:
+    if not isinstance(final, dict):
+        raise Refused("bad-final")
+    attachments = final.get("attachments", [])
+    if not isinstance(attachments, list) or not all(isinstance(a, dict) and isinstance(a.get("path"), str) and isinstance(a.get("identity"), str) for a in attachments):
+        raise Refused("bad-final")
+    # Each rule is checked over every attachment before the next rule.
+    for item in attachments:
+        if pathcheck.check(item["path"].encode("utf-8", errors="surrogatepass")) is not None or not plain_file(root, item["path"]):
             raise Refused("bad-path")
+    for item in attachments:
         rehash(item, root)
     if final.get("verdict") not in ("passed", "failed", "error", "unsupported"):
         raise Refused("bad-verdict")
     if final["verdict"] in ("passed", "failed"):
         if runs_done == 0:
             raise Refused("verdict-without-run")
-        top, got = ceiling(manifest, capability), final.get("strength", {}).get("rank")
+        strength = final.get("strength")
+        top, got = ceiling(manifest, capability), strength.get("rank") if isinstance(strength, dict) else None
         if got not in RANKS or top is None or RANKS.index(got) > RANKS.index(top):
             raise Refused("strength-above-ceiling")
         if final["strength"].get("class") != declared_strength(manifest, capability).get("class"):
             raise Refused("strength-class-mismatch")  # a test is not a proof, whatever its rank
 
 
-def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], report_for) -> dict:
+def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], report_for, root: pathlib.Path = ROOT) -> dict:
     """Take one obligation through start, runs and final. `report_for(run_number, description)` returns
     the executor's report for a run, or None if there is none yet, in which case the description is returned."""
     known = {f["path"]: f["identity"] for f in inputs}
@@ -288,10 +401,12 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
         if ("next" in body) == ("final" in body):
             raise Refused("neither-or-both")
         if "final" in body:
-            check_final(body["final"], session.manifest, "obligation.check", runs)
+            check_final(body["final"], session.manifest, "obligation.check", runs, root)
             return {"final": body["final"], "runs": runs, "run_keys": keys}
         if runs >= MAX_RUNS:
             raise Refused("too-many-runs")  # refused when the next run is asked for, before it starts
+        if not description_has_its_shape(body["next"]):
+            raise Refused("bad-description")
         check_run_description(body["next"], session.manifest, known, known_tools, PLATFORM,
                               set(obligation.get("specified_by", []) + obligation.get("targets", [])))
         keys.append(run_key(check_key, runs + 1, body["next"]))
@@ -300,7 +415,18 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
             return {"pending": body["next"], "run_key": keys[-1]}
         runs += 1
         if report.get("end") != "exited":
-            return {"final": {"verdict": "error", "reason": "run-" + str(report.get("end"))}, "runs": runs}
+            # Only the executor's report makes a check unavailable, so the mark is kept outside the final,
+            # where nothing a provider says can set it.
+            return {"final": {"verdict": "error", "reason": "run-" + str(report.get("end"))}, "runs": runs,
+                    "unavailable": report.get("end") == "unavailable"}
+        # What the executor says ran must be what was asked for: another platform or another tool is an
+        # error, never a result (protocol/messages.schema.json, run_report).
+        asked_tools = sorted((t.get("name"), t.get("digest")) for t in body["next"].get("tools", []))
+        ran = report.get("tools_ran")
+        ran_tools = (sorted((t.get("name"), t.get("digest")) for t in ran)
+                     if isinstance(ran, list) and all(isinstance(t, dict) for t in ran) else None)
+        if report.get("platform") != body["next"].get("platform") or ran_tools != asked_tools:
+            return {"final": {"verdict": "error", "reason": "run-report-mismatch"}, "runs": runs}
         body = session.ask("obligation.check", {"op": "run.result", "check": check_id, "run": runs, "report": report})
 
 
@@ -597,6 +723,82 @@ def conclude(args) -> int:
     return 0
 
 
+def check(args) -> int:
+    """One obligation through a provider, each run sent to an executor command: the host rules on their own.
+
+    Reads {"root", "provider", "obligation", "inputs", "tools", "platform", "executor", "deadline_ms"} on
+    standard input and prints {"outcome": "verdict", "verdict": V} or {"outcome": "refused", "reason": R}
+    (conformance/README.md, "Host checks"). The reference for tools/run_check_cases.py.
+    """
+    global PLATFORM
+    try:
+        asked = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+    except ValueError:
+        asked = None
+    if not isinstance(asked, dict):
+        print(json.dumps({"outcome": "refused", "reason": "bad-input"}))
+        return 0
+
+    def report_for(number, description):
+        given = {"number": number, "run_key": run_key(check_key, number, description), "run": description}
+        wall = description.get("limits", {}).get("wall_ms")
+        # At least wall_ms plus 60 seconds, and 24 hours at most; with no wall_ms, the 24 hours.
+        wait = min(wall / 1000 + 60, 86_400) if isinstance(wall, int) else 86_400
+        # The executor runs in a process group (Unix) or job (Windows) of its own, and everything in it is
+        # ended when it returns, so a run cannot leave work behind it.
+        try:
+            tree = Session._start(asked["executor"], root)  # started in the project's root
+        except OSError:
+            return {"end": "executor-failed"}
+        try:
+            out, _ = tree.proc.communicate(json.dumps(given).encode("utf-8"), timeout=wait)
+            # The report is read as a message is: its first line, ended by a line feed alone.
+            line = out.split(b"\n", 1)[0]
+            if b"\n" not in out or line.endswith(b"\r") or line.startswith(b"\xef\xbb\xbf"):
+                raise Refused("framing")
+            report = strict_load(line)
+        except subprocess.TimeoutExpired:
+            return {"end": "timed-out"}
+        except (OSError, Refused):
+            return {"end": "executor-failed"}
+        finally:
+            tree.end()
+        return report if tree.proc.returncode == 0 and isinstance(report, dict) else {"end": "executor-failed"}
+
+    def strings(value):
+        return isinstance(value, list) and all(isinstance(v, str) for v in value)
+    shaped = (isinstance(asked.get("root"), str) and strings(asked.get("provider")) and asked["provider"] and strings(asked.get("executor"))
+              and asked["executor"] and isinstance(asked.get("obligation"), dict) and strings(asked["obligation"].get("specified_by"))
+              and strings(asked["obligation"].get("targets")) and isinstance(asked.get("inputs"), list)
+              and all(isinstance(i, dict) and isinstance(i.get("path"), str) and isinstance(i.get("identity"), str) for i in asked["inputs"])
+              and isinstance(asked.get("tools"), list)
+              and all(isinstance(t, dict) and isinstance(t.get("name"), str) and isinstance(t.get("digest"), str) for t in asked["tools"])
+              and isinstance(asked.get("platform"), dict) and type(asked.get("deadline_ms")) is int and asked["deadline_ms"] > 0)
+    if not shaped:
+        print(json.dumps({"outcome": "refused", "reason": "bad-input"}))  # before the provider is started
+        return 0
+    root = pathlib.Path(asked["root"]).resolve()
+    PLATFORM = asked["platform"]
+    check_key = canonical.identity({"obligation": asked["obligation"], "inputs": asked["inputs"]})
+    named = set(asked["obligation"].get("specified_by", []) + asked["obligation"].get("targets", []))
+    if not named <= {f["path"] for f in asked["inputs"]}:
+        print(json.dumps({"outcome": "refused", "reason": "unknown-file"}))  # before the provider is started
+        return 0
+    session = None
+    try:
+        session = Session(asked["provider"], root, [], deadline_s=asked.get("deadline_ms", 60000) / 1000)
+        driven = drive_check(session, asked["obligation"], asked["inputs"], asked["tools"], report_for, root)
+        verdict = "unavailable" if driven.get("unavailable") else driven["final"]["verdict"]
+        answer = {"outcome": "verdict", "verdict": verdict}
+    except Refused as err:
+        answer = {"outcome": "refused", "reason": str(err)}
+    finally:
+        if session is not None:
+            session.close()
+    print(json.dumps(answer))
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
@@ -617,8 +819,9 @@ def main() -> int:
     two.add_argument("--ledger", type=pathlib.Path, required=True)
     two.add_argument("--writer", required=True)
     two.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
+    sub.add_parser("check", help="one obligation through a provider, runs sent to an executor command; reads JSON on standard input")
     args = ap.parse_args()
-    return {"collect": collect, "conclude": conclude, "plan": plan}[args.command](args)
+    return {"collect": collect, "conclude": conclude, "plan": plan, "check": check}[args.command](args)
 
 
 if __name__ == "__main__":

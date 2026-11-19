@@ -100,6 +100,40 @@
       "outcome": "error",
       "why": "A provider that hangs with a child holding its output open: the host must end the session at the deadline and leave nothing running.",
       "reason": "deadline"
+    },
+    {
+      "mode": "wrong-echo",
+      "outcome": "error",
+      "reason": "bad-manifest",
+      "why": "The manifest must return the hello's echo unchanged: a provider that mangles text it is given is refused before anything is asked of it."
+    },
+    {
+      "mode": "answers-with-an-error",
+      "outcome": "error",
+      "reason": "provider-error",
+      "why": "A request answered with an error is not a result."
+    },
+    {
+      "mode": "answers-another-capability",
+      "outcome": "error",
+      "reason": "wrong-capability",
+      "why": "A result must be for the capability that was asked for."
+    },
+    {
+      "mode": "loose-but-valid-json",
+      "outcome": "ok",
+      "why": "A session reads JSON as JSON: a fraction, a repeated key or deep nesting in a valid message is not malformed there (the strict reading belongs to a check)."
+    },
+    {
+      "mode": "nan-in-an-answer",
+      "outcome": "error",
+      "reason": "malformed",
+      "why": "NaN is not JSON, so a line holding it is not a message, even though a session otherwise reads JSON loosely."
+    },
+    {
+      "mode": "ignores-shutdown",
+      "outcome": "ok",
+      "why": "A provider that answers and then does not exit after shutdown is ended with its process group after a second; its answer stands, and nothing it started is left running."
     }
   ]
 }

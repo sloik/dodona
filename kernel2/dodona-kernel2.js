@@ -2,9 +2,12 @@
 'use strict';
 // The second dodona kernel. Reads standard input, prints one JSON object.
 //
-//     node dodona-kernel2.js scenario | canonical | key | path | path-set | states | ledger-append | ledger-read
+//     node dodona-kernel2.js scenario | canonical | key | path | path-set | states | ledger-append | ledger-read | check
+//     node dodona-kernel2.js session --deadline-ms N --max-line N --max-log N -- <provider command>
 //
-// This file is the only one that touches input and output.
+// The rules are pure functions. This file reads the kernel's own input and output;
+// session.js, check.js and the modules they use start and talk to the commands a
+// host is given (a provider, an executor), and ledger-file.js keeps the ledger file.
 
 const fs = require('node:fs');
 const { runScenario } = require('./scenario');
@@ -14,6 +17,9 @@ const { checkPath, findCollisions } = require('./paths');
 const { coreKey } = require('./identity');
 const ledgerFile = require('./ledger-file');
 const strictJson = require('./strict-json');
+const { plain } = require('./plain');
+const { runSession } = require('./session');
+const { runCheck } = require('./check');
 
 function decodeText(bytes) {
   try {
@@ -21,18 +27,6 @@ function decodeText(bytes) {
   } catch (error) {
     return null;
   }
-}
-
-// Turns what the strict reader returns (Map, BigInt) into plain JavaScript values.
-function plain(value) {
-  if (value instanceof Map) {
-    const object = {};
-    for (const [key, member] of value) Object.defineProperty(object, key, { value: plain(member), enumerable: true, writable: true, configurable: true });
-    return object;
-  }
-  if (Array.isArray(value)) return value.map(plain);
-  if (typeof value === 'bigint') return Number(value);
-  return value;
 }
 
 // Reads an input as strictly as the canonical encoding writes: bytes that are not
@@ -44,6 +38,16 @@ function readInput(bytes) {
   const read = strictJson.read(text);
   if (read.refused !== undefined) throw new Error(`input refused: ${read.refused}`);
   return plain(read.value);
+}
+
+// The check command's input, or null when it is not JSON at all: the check refuses
+// that, as any input without its shape, with `bad-input`.
+function readCheckInput(bytes) {
+  try {
+    return readInput(bytes);
+  } catch (error) {
+    return null;
+  }
 }
 
 function parseHex(text) {
@@ -68,22 +72,52 @@ const commands = {
   'ledger-append': (bytes) => ledgerFile.append(readInput(bytes)),
   'ledger-read': (bytes) => ledgerFile.read(readInput(bytes)),
   'path-set': (bytes) => ({ collisions: findCollisions(readInput(bytes).paths) }),
+  check: (bytes) => runCheck(readCheckInput(bytes)),
 };
 
+// Commands that read no standard input, given the rest of the command line.
+const noInput = {
+  session: (argv) => runSession(argv),
+};
+
+const USAGE = 'usage: dodona-kernel2.js scenario | canonical | key | path | path-set | states | ledger-append | ledger-read | check\n'
+  + '       dodona-kernel2.js session --deadline-ms N --max-line N --max-log N -- <provider command>\n';
+
+// Prints the answer, then ends the process: a process a provider left behind and that
+// was ended must not keep this one waiting on a stream it held.
+function finish(answer, code) {
+  const text = answer === undefined ? '' : `${JSON.stringify(answer)}\n`;
+  process.stdout.write(text, () => process.exit(code));
+}
+
+function fail(error) {
+  process.stderr.write(`error: ${error.message}\n`, () => process.exit(2));
+}
+
 function main() {
-  const command = commands[process.argv[2]];
+  const name = process.argv[2];
+  if (noInput[name] !== undefined) {
+    Promise.resolve().then(() => noInput[name](process.argv.slice(3))).then((answer) => finish(answer, 0), fail);
+    return;
+  }
+  const command = commands[name];
   if (command === undefined) {
-    process.stderr.write('usage: dodona-kernel2.js scenario | canonical | key | path | path-set | states | ledger-append | ledger-read\n');
+    process.stderr.write(USAGE);
     process.exitCode = 2;
     return;
   }
+  let answer;
   try {
-    const answer = command(fs.readFileSync(0));
-    process.stdout.write(`${JSON.stringify(answer)}\n`);
+    answer = command(fs.readFileSync(0));
   } catch (error) {
-    process.stderr.write(`error: ${error.message}\n`);
-    process.exitCode = 2;
+    fail(error);
+    return;
   }
+  if (answer instanceof Promise) {
+    answer.then((value) => finish(value, 0), fail);
+    return;
+  }
+  process.stdout.write(`${JSON.stringify(answer)}\n`);
 }
 
 main();

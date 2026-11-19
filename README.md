@@ -13,12 +13,41 @@ dodona is a tool an AI agent can ask that question, so nobody has to take the ag
 | | |
 |---|---|
 | **Stage** | Early. Two seed kernels exist and do only what the conformance kit can judge. dodona is not usable yet |
-| **Exists** | Architecture, data model, 32 proposed decisions, protocol schemas, nine formal models, a conformance kit, two seed kernels written apart, a first real provider, a ledger format |
-| **Runs** | Both kernels are built and judged on macOS, Linux and Windows on every change: 150 scenarios, 119 encoding, path and key vectors, and 89 ledger checks including damage at every byte and two kernels writing at once. On Linux, 300 planted defects, 143 in one kernel and 157 in the other, must each be rejected. The two are then compared on a thousand inputs the kit does not contain, with steps reshuffled and values changed. A reference harness really starts a checker, and both kernels grade what it signs. That is sampled evidence, not proof |
+| **Exists** | Architecture, data model, 33 proposed decisions, protocol schemas, nine formal models, a conformance kit, two seed kernels written apart, a first real provider, a ledger format |
+| **Runs** | Both kernels are built and judged on macOS, Linux and Windows on every change: 150 scenarios, 119 encoding, path and key vectors, and 89 ledger checks including damage at every byte and two kernels writing at once. On Linux, 460 planted defects, 216 in one kernel and 244 in the other, must each be rejected. The two are then compared on a thousand inputs the kit does not contain, with steps reshuffled and values changed. A reference harness really starts a checker, and both kernels grade what it signs. Both kernels also host providers themselves: 22 cases of a misbehaving provider session and 132 of a misbehaving checker, judged from what the provider and the executor record of what the host sent them, against what the contract says it must send. A host written to forge those records is not caught ([decision 0033](decisions/0033-a-kernel-hosts-providers.md)). That is sampled evidence, not proof |
 | **Checked so far** | 24 of 37 design claims are marked checked: every case of every model ran to its end in one completed job on the shared queue and showed what it was expected to (run 9; the repaired liveness model, run 10). Issue 27 repaired the models so that each keeps a specification apart from a kernel and carries planted defects for both directions, and settled the three places where a model departed from the design text ([decision 0030](decisions/0030-the-hard-gate-floor-is-counted-over-the-tree.md) and [0031](decisions/0031-an-agreement-after-a-real-change-keeps-its-grade-up-to-a-limit.md), both by owner direction, and [0032](decisions/0032-a-stand-in-is-verified-for-its-own-key-and-any-disagreement-withdraws-it.md)); the seventh, liveness, gained the direction its property did not check. **Some properties still restate their rule**: where the specification and the kernel compute the same thing from equal values, the claims table says so, and there "checked" means the rule is written down exactly and each planted defect is caught, not that the rule is right ([claims](spec/CLAIMS.md)). Both kernels agree with the two older models on every state they reach, about 150,000 in all. 6 more claims are sampled by the kit and not counted |
 | **dodona on dodona** | On every change to `main`, a provider describes dodona's own model checks, the results go into a ledger, and a kernel works out the status of this project from it. Today the 94 model checks are recorded as passed, and the status is still `draft` for every intent and `unknown` for the project: nobody has confirmed the criteria in a way a kernel can read, and most criteria are not yet checked by anything a kernel can read. That is the honest answer, and changing it is the owner's act, not an agent's |
 | **Guarded by** | Automatic checks on every change: a gap that is found becomes a check ([list](docs/gap-checks.md)) |
 | **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |
+
+## Roadmap: where we are
+
+dodona is bootstrapped in six stages ([decision 0011](decisions/0011-self-hosting-through-a-verified-seed.md)). Each stage says what it establishes and what it does not.
+
+| Stage | What it means | Where it is |
+|---|---|---|
+| **0. Design and models** | The rules are written down and checked by a model checker before any kernel exists | **Done**, with a caveat: every model ran to its end on the shared queue, but some properties still restate their rule ([claims](spec/CLAIMS.md)) |
+| **1. Conformance kit** | Scenarios, vectors and planted defects that judge any kernel, written apart from the kernels | **Done**, and growing with every round of review ([conformance/](conformance/README.md)) |
+| **2. Seed kernel** | A first kernel that passes the kit | **Done** ([kernel/](kernel/README.md)) |
+| **3. The seed checks dodona** | dodona's own obligations are run, recorded in a ledger and reported on by a kernel | **In progress.** It runs on every change to `main`, but through stage-0 helpers in Python. Next: the kernels run the pipeline and the status command themselves |
+| **4. The seed builds its successor** | A kernel built and checked by dodona, which rebuilds itself | Not started |
+| **5. A second, independent kernel** | Written apart from the first, so a defect must be in both to go unnoticed | **In progress.** It exists, passes the same kit and is compared with the first on every change ([kernel2/](kernel2/README.md)); one exposure between the authors is recorded below |
+
+### Now, in order
+
+| Step | Status |
+|---|---|
+| The owner confirms an intent's criteria and gates, recorded in a ledger in the repository | Done |
+| Checks that already have a current result are reused between CI runs, with the counts shown | Done ([issue 22](https://github.com/sloik/dodona/issues/22)) |
+| The formal models repaired so each property can fail, with planted defects both ways | Done ([issue 27](https://github.com/sloik/dodona/issues/27)) |
+| A kernel hosts providers itself: a provider session and one check to a verdict | Being merged ([decision 0033](decisions/0033-a-kernel-hosts-providers.md), first step) |
+| A kernel runs the whole pipeline and answers one status command an agent can run, replacing the Python helpers | Next (decision 0033, second step) |
+| A second real provider of another kind, a test runner, end to end into the ledger and the status | After that |
+| Checks that documentation follows code, and a metrics ratchet, on every pull request | In review, on their own branches |
+
+### Not planned yet
+
+Intent trees deeper than one level ([issue 32](https://github.com/sloik/dodona/issues/32)), a planner that does not take a test's truth from the build key ([issue 33](https://github.com/sloik/dodona/issues/33)), a harness the working agent cannot reach ([issue 26](https://github.com/sloik/dodona/issues/26)), and stage 4. What each intent asks for is in [intents/](intents/README.md).
 
 ## The chain dodona watches
 
@@ -160,9 +189,9 @@ flowchart LR
     class S3,S5 now
 ```
 
-The project is between stages. A first seed in Rust and a second in JavaScript pass the same kit. The second was written without sight of the first, from the documents alone. Run on dodona's own repository, the seed reports honestly that nothing is delivered yet. A kernel checking itself adds no trust in itself; that is what the second kernel is for, and the two are compared on every change.
+Where each stage stands is in the [roadmap](#roadmap-where-we-are) above. The project is between stages. A first seed in Rust and a second in JavaScript pass the same kit. The second was written without sight of the first, from the documents alone. Run on dodona's own repository, the seed reports honestly that nothing is delivered yet. A kernel checking itself adds no trust in itself; that is what the second kernel is for, and the two are compared on every change.
 
-What makes a second opinion worth having is a fresh context: an author or a checker that has not seen the work it is judged against, and so cannot lean on it. That is what dodona asks for and grades. A different make of model is not required. Whether to use one is the user's choice, where it raises the odds of catching a shared blind spot. Here, the kit and both kernels were written by the same make of model, each kernel by an agent that never saw the other; the first kernel was begun by a different make.
+What makes a second opinion worth having is a fresh context: an author or a checker that has not seen the work it is judged against, and so cannot lean on it. That is what dodona asks for and grades. A different make of model is not required. Whether to use one is the user's choice, where it raises the odds of catching a shared blind spot. Here, the kit and both kernels were written by the same make of model, each kernel by an agent that never saw the other; the first kernel was begun by a different make. One exception is recorded: while the kernels' hosts were reworked (decision 0033), a scratch folder shared by mistake showed the first kernel's author, after it had written its host, a list of the second kernel's planted defects that quotes lines of that kernel's host code. Two planted defects it added afterwards resemble entries in that list. Each author now has a folder of its own.
 
 ## Where to go next
 

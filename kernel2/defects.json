@@ -1099,6 +1099,615 @@
       "file": "tree.js",
       "find": "children.set(name, { gate: gateCountsAs(details.gate), check: 'unknown' });",
       "replace": "children.set(name, { gate: details.gate, check: 'unknown' });"
+    },
+    {
+      "name": "check: the host's input need not have its shape",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!isListOf(request.tools, ['name', 'digest'])) return 'bad-input';\n",
+      "replace": ""
+    },
+    {
+      "name": "check: a file the obligation names need not be among the inputs",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (!namedFiles(request.obligation).every((file) => given.has(file))) return refused('unknown-file');\n",
+      "replace": ""
+    },
+    {
+      "name": "check: the manifest's echo is not compared",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "if (hello.type !== 'manifest' || hello.echo !== ECHO) return refused('bad-manifest');",
+      "replace": "if (hello.type !== 'manifest') return refused('bad-manifest');"
+    },
+    {
+      "name": "manifest: a capability need not be an object",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!manifest.capabilities.every((entry) => isObject(entry) && isString(entry.capability))) return 'bad-manifest';\n",
+      "replace": ""
+    },
+    {
+      "name": "manifest: a capability may be named twice",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (new Set(names).size !== names.length) return 'bad-manifest';\n",
+      "replace": ""
+    },
+    {
+      "name": "manifest: the declared rank need not be on the scale",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "isString(check.strength.class) && RANKS.includes(check.strength.rank))",
+      "replace": "isString(check.strength.class))"
+    },
+    {
+      "name": "manifest: a tool's name may hold any character",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "isString(tool.name) && TOOL_NAME.test(tool.name))) return 'bad-manifest';",
+      "replace": "isString(tool.name))) return 'bad-manifest';"
+    },
+    {
+      "name": "check: an answer's id is not compared",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (message.id !== id) return 'wrong-id';\n",
+      "replace": ""
+    },
+    {
+      "name": "check: an error answer is taken as a result",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (message.type === 'error') return 'provider-error';\n  if (message.type !== 'result') return 'unexpected';\n  if (message.capability !== 'obligation.check') return 'wrong-capability';",
+      "replace": "  if (message.type !== 'result' && message.type !== 'error') return 'unexpected';\n  if (message.capability !== 'obligation.check' && message.type !== 'error') return 'wrong-capability';"
+    },
+    {
+      "name": "check: an answer's capability is not compared",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (message.capability !== 'obligation.check') return 'wrong-capability';\n",
+      "replace": ""
+    },
+    {
+      "name": "check: a result need not have an object body",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (!isObject(message.body)) return 'unexpected';\n",
+      "replace": ""
+    },
+    {
+      "name": "check: an answer need not have exactly one of next and final",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "    if (('next' in body) === ('final' in body)) return refused('neither-or-both');\n",
+      "replace": "    if (!('next' in body) && !('final' in body)) return refused('neither-or-both');\n"
+    },
+    {
+      "name": "check: messages are read leniently",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "maxLog: MAX_LOG_BYTES, strict: true });",
+      "replace": "maxLog: MAX_LOG_BYTES, strict: false });"
+    },
+    {
+      "name": "reading: a lone surrogate is malformed, not encoding",
+      "model_case": "(host checks)",
+      "file": "wire.js",
+      "find": "  'invalid-string': 'encoding',",
+      "replace": "  'invalid-string': 'malformed',"
+    },
+    {
+      "name": "reading: an integer beyond 2^53 - 1 is malformed, not not-an-integer",
+      "model_case": "(host checks)",
+      "file": "wire.js",
+      "find": "  'integer-out-of-range': 'not-an-integer',",
+      "replace": "  'integer-out-of-range': 'malformed',"
+    },
+    {
+      "name": "check: the provider is waited for without a deadline",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "const waitFor = () => wire.next(performance.now() + deadline);",
+      "replace": "const waitFor = () => wire.next(performance.now() + 3600000);"
+    },
+    {
+      "name": "host rule 1: a ninth run is allowed",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "if (check.runs >= MAX_RUNS) return 'too-many-runs';",
+      "replace": "if (check.runs > MAX_RUNS) return 'too-many-runs';"
+    },
+    {
+      "name": "host rule 2: a description need not have its shape",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!hasShape(description)) return 'bad-description';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 2: missing tools are read as none",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "    && isListOf(run.tools, ['name', 'digest'])",
+      "replace": "    && (run.tools === undefined || isListOf(run.tools, ['name', 'digest']))"
+    },
+    {
+      "name": "host rule 2: outputs that are not a list are read as none",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "    && isListOf(run.outputs, ['path'])",
+      "replace": "    && (isObject(run.outputs) || isListOf(run.outputs, ['path']))"
+    },
+    {
+      "name": "host rule 2: inputs that are not a list are read as none",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "    && isListOf(run.inputs, ['path', 'identity'])",
+      "replace": "    && (isObject(run.inputs) || isListOf(run.inputs, ['path', 'identity']))"
+    },
+    {
+      "name": "host rule 2: arguments that are not a list are read as none",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "    && Array.isArray(run.args)\n",
+      "replace": "\n"
+    },
+    {
+      "name": "host rule 3: the run's platform is not compared",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (identityOf(run.platform === undefined ? null : run.platform) !== identityOf(check.platform)) return 'platform-mismatch';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 4: a tool the manifest does not declare may run",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (toolsNamed(run).some((name) => !check.declared.has(name))) return 'undeclared-tool';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 4: a named tool the check was not given may run",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (toolsNamed(run).some((name) => !check.given.has(name))) return 'tool-not-in-key';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 4: the run's tool list may name a tool the check was not given",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (tools.some((tool) => !check.given.has(tool.name))) return 'tool-not-in-key';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 4: a tool's digest is not compared",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (tools.some((tool) => check.given.get(tool.name) !== tool.digest)) return 'tool-digest-mismatch';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 4: only the first tool named in an argument is looked at",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "for (const match of argument.matchAll(TOOL_REFERENCE)) named.push(match[1]);",
+      "replace": "{ const match = /\\$\\{tool:([^}]*)\\}/.exec(argument); if (match !== null) named.push(match[1]); }"
+    },
+    {
+      "name": "host rule 5: no path of a run is checked",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!pathsOf(run).every(passesPathCheck)) return 'bad-path';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 5: the starting directory is not checked",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if ('cwd' in run) paths.push(run.cwd);\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 6: arguments are not held to the allowlist",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!args.every((argument) => argumentAllowed(argument, runInputs))) return 'bad-path';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 5: a tool file's PATH may hold any character",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!toolFiles(run).every(holdsToolFileCharacters)) return 'bad-path';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 6: a word may hold characters outside printable ASCII",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "    if (code < 0x20 || code > 0x7e) return false;\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 7: a run may set environment variables",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if ('env' in run) return 'env-not-allowed';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 7: an env of null is taken as none",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if ('env' in run) return 'env-not-allowed';",
+      "replace": "  if (run.env !== undefined && run.env !== null) return 'env-not-allowed';"
+    },
+    {
+      "name": "host rule 8: an output may overwrite an input",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (outputs.some((output) => taken.has(asciiLower(output.path)))) return 'output-overwrites-input';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 8: outputs are compared with inputs in their case",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "taken.has(asciiLower(output.path))",
+      "replace": "taken.has(output.path)"
+    },
+    {
+      "name": "host rule 8: outputs are compared with the run's inputs only",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "new Set([...runInputs, ...check.inputs.keys()].map(asciiLower));",
+      "replace": "new Set([...runInputs].map(asciiLower));"
+    },
+    {
+      "name": "host rule 9: a run may read an input not in the key",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (inputs.some((input) => !check.inputs.has(input.path))) return 'input-not-in-key';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 9: an input's identity is taken on the provider's word",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (inputs.some((input) => check.inputs.get(input.path) !== input.identity)) return 'identity-mismatch';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 10: arguments need not be strings without NUL",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!args.every((argument) => isString(argument) && !argument.includes('\\u0000'))) return 'bad-arguments';\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 11: a run need not be given the files its obligation names",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!check.named.every((path) => runInputs.includes(path))) return 'missing-input';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: a final that is not an object is a bad verdict",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!isObject(final)) return 'bad-final';",
+      "replace": "  if (!isObject(final)) return 'bad-verdict';"
+    },
+    {
+      "name": "final: attachments that are not a list are read as none",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if ('attachments' in final && !isListOf(final.attachments, ['path', 'identity'])) return 'bad-final';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: an attachment need not be a regular file reached through no link",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!attachments.every((attachment) => check.isRegularFile(attachment.path))) return 'bad-path';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: an attachment's identity is taken on the provider's word",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!attachments.every((attachment) => check.identityOf(attachment.path) === attachment.identity)) return 'identity-mismatch';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: any verdict is accepted",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!VERDICTS.includes(final.verdict)) return 'bad-verdict';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: a verdict need not rest on a run",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (check.runs < 1) return 'verdict-without-run';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: failed need not rest on a run",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "const RESTING_ON_A_RUN = ['passed', 'failed'];",
+      "replace": "const RESTING_ON_A_RUN = ['passed'];"
+    },
+    {
+      "name": "final: the strength has no ceiling",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (rank(final.strength) < 0 || rank(final.strength) > rank(check.ceiling)) return 'strength-above-ceiling';\n",
+      "replace": "  if (rank(final.strength) < 0) return 'strength-above-ceiling';\n"
+    },
+    {
+      "name": "final: the strength's class is not compared",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (objectOr(final.strength).class !== objectOr(check.ceiling).class) return 'strength-class-mismatch';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: ranks compared in the wrong order",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "const RANKS = ['documented', 'sampled', 'bounded', 'exhaustive'];",
+      "replace": "const RANKS = ['exhaustive', 'bounded', 'sampled', 'documented'];"
+    },
+    {
+      "name": "check: the run key leaves out the run's number",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "return identityOf({ check: checkKey, run: number, description: identityOf(description) });",
+      "replace": "return identityOf({ check: checkKey, description: identityOf(description) });"
+    },
+    {
+      "name": "check: a run that did not exit is passed to the provider",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (report.end !== 'exited') return verdict('error');\n",
+      "replace": ""
+    },
+    {
+      "name": "check: an unavailable run is an error",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (report.end === 'unavailable') return verdict('unavailable');\n",
+      "replace": ""
+    },
+    {
+      "name": "check: the report's platform is not compared with the run's",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (identityOf(report.platform === undefined ? null : report.platform) !== identityOf(run.platform)) return verdict('error');\n",
+      "replace": ""
+    },
+    {
+      "name": "check: the report's tools are not compared with the run's",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (!sameTools(report.tools_ran, run.tools)) return verdict('error');\n",
+      "replace": ""
+    },
+    {
+      "name": "check: an executor that prints no report is passed on",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (!isObject(report)) return verdict('error');\n",
+      "replace": "  if (!isObject(report)) return null;\n"
+    },
+    {
+      "name": "check: the report is read leniently",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  const read = strictJson.read(text, { maxDepth: MAX_DEPTH });\n  if (read.refused !== undefined || !(read.value instanceof Map)) return null;\n  return plain(read.value);",
+      "replace": "  try {\n    const value = JSON.parse(text);\n    return isObject(value) ? value : null;\n  } catch (error) {\n    return null;\n  }"
+    },
+    {
+      "name": "check: the wait for the executor overflows the timer",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "Math.min(wall + EXECUTOR_MARGIN_MS, EXECUTOR_MOST_MS)",
+      "replace": "wall + EXECUTOR_MARGIN_MS"
+    },
+    {
+      "name": "check: the run result names the run's request, not the start",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "body: { op: 'run.result', check: startId, run: number, report } });",
+      "replace": "body: { op: 'run.result', check: String(sent), run: number, report } });"
+    },
+    {
+      "name": "check: a provider process is left running",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "    await Promise.race([child.exited, processes.pause(1000)]);\n    await processes.endTree(child);\n",
+      "replace": "    child.kill();\n"
+    },
+    {
+      "name": "session: a provider process is left running",
+      "model_case": "(session)",
+      "file": "session.js",
+      "find": "    await processes.endTree(child);\n",
+      "replace": "    child.kill();\n"
+    },
+    {
+      "name": "session: JSON is read strictly",
+      "model_case": "(session)",
+      "file": "session.js",
+      "find": "maxLog: options.maxLog, strict: false });",
+      "replace": "maxLog: options.maxLog, strict: true });"
+    },
+    {
+      "name": "session: the manifest's echo is not compared",
+      "model_case": "(session)",
+      "file": "session.js",
+      "find": "if (message.type !== 'manifest' || message.echo !== ECHO || ",
+      "replace": "if (message.type !== 'manifest' || "
+    },
+    {
+      "name": "session: an answer's id is not compared",
+      "model_case": "(session)",
+      "file": "session.js",
+      "find": "  if (message.id !== '1') return 'wrong-id';\n",
+      "replace": ""
+    },
+    {
+      "name": "session: an answer's capability is not compared",
+      "model_case": "(session)",
+      "file": "session.js",
+      "find": "  if (message.capability !== 'decision.index') return 'wrong-capability';\n",
+      "replace": ""
+    },
+    {
+      "name": "session: a second answer is ignored",
+      "model_case": "(session)",
+      "file": "session.js",
+      "find": "    if (wire.hasMore()) return 'unexpected';\n    if (child.hasExited) {\n      // What it wrote just before it exited may still be on its way.\n      await wire.change(performance.now() + 100);\n      return wire.hasMore() ? 'unexpected' : null;\n    }\n",
+      "replace": "    if (child.hasExited) return null;\n"
+    },
+    {
+      "name": "session: the deadline is not kept",
+      "model_case": "(session)",
+      "file": "session.js",
+      "find": "  const until = performance.now() + options.deadlineMs;\n",
+      "replace": "  const until = performance.now() + options.deadlineMs * 100;\n"
+    },
+    {
+      "name": "reading: a carriage return before the line feed is accepted",
+      "model_case": "(session)",
+      "file": "wire.js",
+      "find": "  if (line.length > 0 && line[line.length - 1] === 0x0d) return { reason: 'framing' };\n",
+      "replace": ""
+    },
+    {
+      "name": "reading: a byte-order mark is accepted",
+      "model_case": "(session)",
+      "file": "wire.js",
+      "find": "  if (line.subarray(0, 3).equals(BOM)) return { reason: 'framing' };\n",
+      "replace": ""
+    },
+    {
+      "name": "reading: a long line is held whole",
+      "model_case": "(session)",
+      "file": "wire.js",
+      "find": "      if (this.partialBytes + piece.length > this.maxLine) {",
+      "replace": "      if (this.partialBytes + piece.length > this.maxLine * 16) {"
+    },
+    {
+      "name": "reading: bytes that are not UTF-8 are replaced",
+      "model_case": "(session)",
+      "file": "wire.js",
+      "find": "    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(line);",
+      "replace": "    text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(line);"
+    },
+    {
+      "name": "reading: a message need not be an object with a type",
+      "model_case": "(session)",
+      "file": "wire.js",
+      "find": "  if (!isObject(message) || typeof message.type !== 'string') return { reason: 'malformed' };\n",
+      "replace": "  if (message === null || typeof message !== 'object') return { reason: 'malformed' };\n"
+    },
+    {
+      "name": "reading: the log is not marked as cut short",
+      "model_case": "(session)",
+      "file": "wire.js",
+      "find": "log_truncated: this.logBytes > this.maxLog",
+      "replace": "log_truncated: false"
+    },
+    {
+      "name": "processes: the process group is not ended",
+      "model_case": "(session)",
+      "file": "processes.js",
+      "find": "  if (POSIX) {\n    killGroup(pid);\n    kill(pid);",
+      "replace": "  if (POSIX) {\n    kill(pid);"
+    },
+    {
+      "name": "final: an attachment's path is not checked",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!attachments.every((attachment) => passesPathCheck(attachment.path))) return 'bad-path';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: a link at an inner step of an attachment's path is followed",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "      const status = fs.lstatSync(at);\n",
+      "replace": "      const status = last ? fs.lstatSync(at) : fs.statSync(at);\n"
+    },
+    {
+      "name": "check: the executor's processes are not ended when it returns",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  await processes.endTree(child);\n  if (timedOut) return { end: 'timed-out' };",
+      "replace": "  if (timedOut) {\n    await processes.endTree(child);\n    return { end: 'timed-out' };\n  }"
+    },
+    {
+      "name": "check: the executor's exit status is ignored",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (child.exitCode !== 0 || size > MAX_REPORT_BYTES) return null;",
+      "replace": "  if (size > MAX_REPORT_BYTES) return null;"
+    },
+    {
+      "name": "host rule 4: a tool the run does not list may be named",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (toolsNamed(run).some((name) => !tools.some((tool) => tool.name === name))) return 'tool-not-in-run';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: a provider may give the verdict unavailable",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "const VERDICTS = ['passed', 'failed', 'error', 'unsupported'];",
+      "replace": "const VERDICTS = ['passed', 'failed', 'error', 'unsupported', 'unavailable'];"
+    },
+    {
+      "name": "check: the executor is started outside the root",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  const child = processes.start(executor, root);",
+      "replace": "  const child = processes.start(executor, process.cwd());"
+    },
+    {
+      "name": "check: the executor is waited for no longer than the host's deadline",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "timer = setTimeout(() => resolve(true), executorWait(asked.run));",
+      "replace": "timer = setTimeout(() => resolve(true), Math.min(executorWait(asked.run), 2000));"
+    },
+    {
+      "name": "check: a report ended by a carriage return is read",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (line[line.length - 1] === 0x0d || (line.length >= 3",
+      "replace": "  if ((line.length >= 3"
+    },
+    {
+      "name": "check: the report is read from the whole output, not its first line",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  const end = bytes.indexOf(0x0a);\n  if (end <= 0) return null;\n  const line = bytes.subarray(0, end);",
+      "replace": "  const text0 = bytes.toString('latin1').trim();\n  const line = Buffer.from(text0, 'latin1');\n  if (line.length === 0) return null;"
+    },
+    {
+      "name": "session: a provider that ignores shutdown loses its answer",
+      "model_case": "(session)",
+      "file": "session.js",
+      "find": "    if (performance.now() >= graceEnds) return null;",
+      "replace": "    if (performance.now() >= graceEnds) return 'deadline';"
     }
   ]
 }

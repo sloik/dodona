@@ -1,20 +1,27 @@
-#![forbid(unsafe_code)]
+// Unsafe code is allowed in one module only: `proc`, which ends process trees.
+#![deny(unsafe_code)]
 mod acts;
 mod assurance;
 mod attempts;
 mod canonical;
 mod decisions;
 mod evidence;
+mod host;
 mod intent;
 mod json;
+mod jsonread;
 mod ledger;
 mod path;
 mod plan;
 mod platforms;
+#[allow(unsafe_code)]
+mod proc;
+mod session;
 mod status;
 mod tree;
 mod unicode;
 mod unicode_tables;
+mod wire;
 use json::Value;
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
@@ -34,6 +41,8 @@ fn answer(command: &str, input: &[u8]) -> Result<Value, String> {
         Err(reason) if command == "key" => {
             return Ok(json::object(vec![("refused", json::string(reason))]))
         }
+        // A check's input that is not a JSON object is refused as `bad-input`.
+        Err(_) if command == "check" => Value::Null,
         Err(reason) => return Err(format!("the input is not acceptable JSON: {reason}")),
     };
     let kind = || match v.opt("kind") {
@@ -46,6 +55,7 @@ fn answer(command: &str, input: &[u8]) -> Result<Value, String> {
         "path-set" => path::set(&v),
         "ledger-append" => ledger::append(&v)?,
         "ledger-read" => ledger::read(&v)?,
+        "check" => host::check(&v)?,
         "scenario" => results(match kind()? {
             "acts" => acts::run(&v),
             "status" => status::run(&v),
@@ -68,11 +78,17 @@ fn answer(command: &str, input: &[u8]) -> Result<Value, String> {
     })
 }
 fn main() -> ExitCode {
-    let command = std::env::args().nth(1).unwrap_or_default();
-    let mut input = Vec::new();
-    let answer = match io::stdin().read_to_end(&mut input) {
-        Ok(_) => answer(&command, &input),
-        Err(e) => Err(format!("cannot read standard input: {e}")),
+    let args: Vec<String> = std::env::args().collect();
+    let command = args.get(1).cloned().unwrap_or_default();
+    // A session takes its limits and the provider as arguments and reads no input.
+    let answer = if command == "session" {
+        session::run(&args[2..])
+    } else {
+        let mut input = Vec::new();
+        match io::stdin().read_to_end(&mut input) {
+            Ok(_) => answer(&command, &input),
+            Err(e) => Err(format!("cannot read standard input: {e}")),
+        }
     };
     match answer {
         Ok(answer) => {
