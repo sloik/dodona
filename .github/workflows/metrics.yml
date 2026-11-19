@@ -107,7 +107,7 @@ jobs:
             note="The commit the earlier metrics were measured on is not in this history, so no waiver can be read: any ratcheted number that went down fails."
           fi
           set +e
-          python3 -I tools/metrics.py --compare earlier/metrics.json --messages messages.txt --markdown > compare.md
+          python3 -I tools/metrics.py --compare earlier/metrics.json --messages messages.txt --markdown > compare.md 2>&1
           code=$?
           set -e
           { echo "## Metrics"; echo; echo "Compared with run $(cat earlier/from-run.txt) on main. $note"; echo; cat compare.md; } >> "$GITHUB_STEP_SUMMARY"

@@ -73,6 +73,7 @@ The commits read are the same for a pull request and for a push: every commit re
 - a scenario removed, with no waiver, a valid waiver, a waiver among other commit text, a reason of five words, no reason, a waiver for another metric, one for a metric that does not exist and one with the key misspelt: only the two valid waivers pass;
 - a claim un-checked, with and without a waiver;
 - a planted defect removed from each kernel, a vector, a ledger case, a host case and a session case removed, a gap check, a decision record and a claim taken out of their lists;
-- sources that cannot be read: a heading renamed, a claim checked by a run that is not recorded, unknown statuses, a file that is not JSON, and earlier files that are malformed;
+- the same drop and a waiver whose reason holds `|` and a backtick, with the Markdown output CI uses;
+- sources that cannot be read: a heading renamed, a claim checked by a run that is not recorded, unknown statuses, a file that is not JSON, one that is not UTF-8, a vectors file whose name cannot be a metric, and earlier files that are malformed. Each must exit 2; a crash is exit 2 too, never 1;
 - for every ratcheted metric, an earlier value one higher, which must fail on that metric's row, and for every shown metric the same, which must pass;
 - a ratcheted metric that is gone, with and without a waiver, a shown metric that is gone, and a ratchet taken away.

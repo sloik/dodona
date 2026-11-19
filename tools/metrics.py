@@ -71,7 +71,10 @@ def _text(root: pathlib.Path, rel: str) -> str:
     path = root / rel
     if not path.is_file():
         raise Unmeasurable(f"{rel}: missing")
-    return path.read_text(encoding="utf-8")
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as err:
+        raise Unmeasurable(f"{rel}: not UTF-8: {err}") from None
 
 
 def _json(root: pathlib.Path, rel: str):
@@ -222,7 +225,7 @@ def measure(root: pathlib.Path) -> list[dict]:
     records = sorted((root / "decisions").glob("[0-9]*.md"))
     by_status = dict.fromkeys(DECISION_STATUSES, 0)
     for path in records:
-        m = re.search(r"^status: (\S+)$", path.read_text(encoding="utf-8"), flags=re.M)
+        m = re.search(r"^status: (\S+)$", _text(root, f"decisions/{path.name}"), flags=re.M)
         if not m or m.group(1) not in by_status:
             raise Unmeasurable(f"decisions/{path.name}: status missing or not one of {', '.join(DECISION_STATUSES)}")
         by_status[m.group(1)] += 1
@@ -248,8 +251,11 @@ def measure(root: pathlib.Path) -> list[dict]:
     add("gaps.tool_checks", len(rows), True, f"{rel} (rows of the 'Tool' table)")
 
     names = [m["name"] for m in out]
-    assert len(names) == len(set(names)), "a metric name is used twice"
-    assert all(METRIC_NAME.match(n) for n in names), "a metric name is malformed"
+    for name in names:
+        if names.count(name) > 1:
+            raise Unmeasurable(f"two metrics would be called {name!r}")
+        if not METRIC_NAME.match(name):
+            raise Unmeasurable(f"a metric would be called {name!r}: names are lower case letters, digits, '_', '-' and '.'")
     return out
 
 
@@ -432,7 +438,7 @@ def self_test() -> int:
         shown = sorted(n for n, m in baseline["metrics"].items() if not m["ratchet"])
 
         def judge(label: str, root: pathlib.Path, expect: int, messages: str = "", against: dict | None = None,
-                  must_say: str | None = None, fails: str | None = None) -> None:
+                  must_say: str | None = None, fails: str | None = None, markdown: bool = False) -> None:
             bf = base_file
             if against is not None:
                 counter[0] += 1
@@ -441,11 +447,12 @@ def self_test() -> int:
             counter[0] += 1
             mf = tmpdir / f"m{counter[0]}.txt"
             mf.write_text(messages, encoding="utf-8")
-            code, out = cli("--root", str(root), "--compare", str(bf), "--messages", str(mf))
+            code, out = cli("--root", str(root), "--compare", str(bf), "--messages", str(mf), *(["--markdown"] if markdown else []))
             ok = code == expect and (must_say is None or must_say in out)
             if fails is not None:
                 # The row of that metric itself must carry the failure.
-                ok = ok and any(line.startswith(fails + " ") and "FAIL:" in line for line in out.splitlines())
+                row = f"| `{fails}` |" if markdown else fails + " "
+                ok = ok and any(line.startswith(row) and "FAIL:" in line for line in out.splitlines())
             results.append((label, ok, f"exit {code}, expected {expect}" + (f", output must say {must_say!r}" if must_say else "")
                             + (f", the row of {fails} must fail" if fails else "")
                             + ("" if ok else "\n" + out)))
@@ -500,6 +507,11 @@ def self_test() -> int:
         judge("a scenario removed, waiver key misspelt", no_scenario, 1, f"metrics-down: kit.scenarios: {good}\n",
               must_say="looks like a waiver")
 
+        judge("a scenario removed, no waiver, as Markdown", no_scenario, 1, fails="kit.scenarios", markdown=True)
+        judge("a scenario removed, waiver with a pipe and a backtick, as Markdown", no_scenario, 0,
+              "Metrics-down: kit.scenarios: the scenario | judged `a` rule the contract dropped\n", markdown=True,
+              must_say="the scenario \\| judged \\`a\\` rule")
+
         # A claim un-checked: the checked count is ratcheted, the unchecked count only shown.
         unchecked = planted(lambda r: replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| modelled, unchecked |"))
         judge("a claim un-checked, no waiver", unchecked, 1, fails="claims.checked")
@@ -541,6 +553,11 @@ def self_test() -> int:
               planted(lambda r: replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| checked |")), 2)
         judge("unreadable: a decision with an unknown status",
               planted(lambda r: replace_once(r, "decisions/0001-decisions-are-nodes.md", "status: proposed", "status: approved")), 2)
+        def upper_vectors(r):
+            shutil.copyfile(r / "conformance/vectors/paths.json", r / "conformance/vectors/Paths2.json")
+        judge("unreadable: a vectors file whose name cannot be a metric", planted(upper_vectors), 2, must_say="cannot measure")
+        judge("unreadable: a claims file that is not UTF-8",
+              planted(lambda r: (r / "spec/CLAIMS.md").write_bytes(b"\xff\xfe| C1 |")), 2, must_say="not UTF-8")
         judge("unreadable: defects file is not JSON",
               planted(lambda r: (r / "kernel/defects.json").write_text("{", encoding="utf-8")), 2)
         judge("unreadable: earlier file has the wrong format", base_root, 2, against={"format": "other", "metrics": {}})
@@ -594,9 +611,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "self-test":
         return self_test()
     try:
+        return run(args)
+    except Exception as err:  # noqa: BLE001 - a crash must never read as "a ratchet went down" (exit 1)
+        print(_ascii(f"cannot measure: unexpected {type(err).__name__}: {err}"), file=sys.stderr)
+        return 2
+
+
+def run(args) -> int:
+    try:
         metrics = measure(pathlib.Path(args.root))
     except Unmeasurable as err:
-        print(_ascii(f"cannot measure: {err}"))
+        print(_ascii(f"cannot measure: {err}"), file=sys.stderr)
         return 2
     if args.json:
         print(json.dumps(as_json(metrics, args.commit), indent=2))
@@ -608,10 +633,10 @@ def main(argv: list[str] | None = None) -> int:
         old = read_baseline(pathlib.Path(args.compare))
         messages = pathlib.Path(args.messages).read_text(encoding="utf-8") if args.messages else ""
     except BadBaseline as err:
-        print(_ascii(f"cannot compare: {err}"))
+        print(_ascii(f"cannot compare: {err}"), file=sys.stderr)
         return 2
     except OSError as err:
-        print(_ascii(f"cannot read the commit messages: {err}"))
+        print(_ascii(f"cannot read the commit messages: {err}"), file=sys.stderr)
         return 2
     rows, refused, unused, failed = compare(old, metrics, messages)
     print(comparison(old, rows, refused, unused, failed, args.markdown))
