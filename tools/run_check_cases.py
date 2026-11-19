@@ -63,6 +63,16 @@ def records(path: pathlib.Path) -> list:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
+def same(a, b) -> bool:
+    """Equal as JSON text, so a boolean never stands in for a number, nor a float for an integer."""
+    return json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+# Modes in which the provider stops reading, or is still asleep when the host gives up on it, so it
+# cannot record a shutdown that was sent.
+CANNOT_SEE_SHUTDOWN = {"stops-reading", "too-slow"}
+
+
 def judge(case: dict, host: list[str]) -> list[str]:
     problems: list[str] = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -83,6 +93,8 @@ def judge(case: dict, host: list[str]) -> list[str]:
         obligation = dict(OBLIGATION)
         if case.get("names_a_missing_file"):
             obligation["targets"] = ["a.txt", "b.txt"]
+        if case.get("non_ascii_input"):
+            inputs.append({"path": "\u00c9.txt", "identity": "sha256:" + "0" * 64})
         if case.get("names_a_missing_spec"):
             obligation["specified_by"] = ["a.txt", "spec.txt"]
         tools = [dict(t) for t in TOOLS]
@@ -151,18 +163,26 @@ def judge(case: dict, host: list[str]) -> list[str]:
         if given.get("run_key") != canonical.identity({"check": check_key, "run": n, "description": canonical.identity(given.get("run"))}):
             problems.append(f"run {n} was not given the key the contract gives")
     starts = [m for m in got_msgs if m["got"] == "start"]
-    if starts and starts[0].get("body") != {"obligation": obligation, "inputs": inputs, "tools": tools, "platform": PLATFORM}:
+    if starts and not same(starts[0].get("body"), {"obligation": obligation, "inputs": inputs, "tools": tools, "platform": PLATFORM}):
         problems.append("the start request did not carry the obligation, inputs, tools and platform the host was given")
     hellos = [m for m in got_msgs if m["got"] == "hello"]
     echo = hellos[0].get("echo") if hellos else None
     if hellos and not (isinstance(echo, str) and any(ord(c) > 127 for c in echo) and any(ord(c) < 32 for c in echo)):
         problems.append("hello's echo did not hold both a non-ASCII and a control character")
-    if case.get("outcome") == "verdict" and got_msgs and got_msgs[-1]["got"] != "shutdown":
+    if hellos:
+        envelope = hellos[0].get("hello") or {}
+        limits = envelope.get("limits")
+        if not (same(envelope.get("protocol"), ["0.2"]) and isinstance(limits, dict)
+                and all(type(limits.get(k)) is int for k in ("max_line_bytes", "deadline_ms"))):
+            problems.append("hello did not offer protocol 0.2 with its limits")
+    if any(m.get("capability") != "obligation.check" for m in got_msgs if m["got"] in ("start", "run.result")):
+        problems.append("a request was sent for another capability than obligation.check")
+    if hellos and case["mode"] not in CANNOT_SEE_SHUTDOWN and got_msgs[-1]["got"] != "shutdown":
         problems.append("the session did not end with shutdown")
     results = [m for m in got_msgs if m["got"] == "run.result"]
     for m in results:
         n = m.get("run")
-        if not isinstance(n, int) or not 1 <= n <= len(printed) or m.get("report") != printed[n - 1]:
+        if not isinstance(n, int) or not 1 <= n <= len(printed) or not same(m.get("report"), printed[n - 1]):
             problems.append(f"run {n!r} was passed back with a report other than the one the executor printed")
     if case["run"] in ("exited", "leaves-a-child", "slow"):
         for n in range(1, len(started) + 1):

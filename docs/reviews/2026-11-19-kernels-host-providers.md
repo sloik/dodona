@@ -30,6 +30,23 @@ Date: 2026-11-19. Each kernel gained a `session` and a `check` command, written 
 | 13 | Windows process handling: no timeout on the process-table read, a reused pid could be ended, a failed job assignment went unnoticed | Done in each kernel |
 | 14 | Few cases for the host's own input | Four added, and one for input that is not JSON |
 
+## Round five: a review of round four, on the kit and the reference only
+
+Asked to report only a path to a wrong pass, hosts disagreeing on text already written, or a false statement. Both kernels already did the right thing in every case it found, so nothing changed in either kernel.
+
+| # | Finding | Done |
+|---|---|---|
+| 1 | A provider could make the reference report `unavailable` by giving the reason `run-unavailable` | The mark is kept outside the final, where a provider cannot set it; a case |
+| 2 | The reference folded non-ASCII case in rule 8 | ASCII letters only; a case with `É.txt` and `é.txt` |
+| 3, 4 | The reference dropped a `tools_ran` entry that is not an object, and crashed on `null` | Both end the check in error; two cases |
+| 5 | The judge looked for the closing `shutdown` only after a verdict, and the reference sent none after a refusal at `hello` | The text says every check whose session opened ends with `shutdown`; the judge checks it; the reference sends it |
+| 6 | The check judge did not check `hello`'s protocol and limits, the requests' capability, or reports type for type; and its slow executor answered too soon to judge the wait | All checked; reports and the start request compared as JSON text; the slow executor answers after 12 s against a `wall_ms` of 10 s |
+| 7 | The session judge checked nothing the host sends | The provider records every message; `hello`, the request and `shutdown` are compared with the text |
+| 8 | Two cases rested on an order of reasons inside one rule that the text did not give | The text now gives it: each reason over every entry, in the rule's order |
+| 9, 10 | C20, C21, the run-9 note and a "not yet in the kit" line were stale or overstated | Corrected |
+
+Eleven faults planted in the reference hosts (the four bugs put back, and the mutants the reviewer had shown passing) are each caught by the judges.
+
 ## How the open choices were settled
 
 Where the contract left a choice open and the three hosts differed, the choice was made from a rule already in the text, never because a kernel did it. Several came out the way both kernels had chosen, and the reference host was changed to match. So that this can be checked, here is each choice with the rule it follows from:

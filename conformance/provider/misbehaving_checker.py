@@ -44,6 +44,9 @@ def read():
             entry["report"] = body.get("report")
         if message.get("type") == "hello":
             entry["echo"] = message.get("echo")
+            entry["hello"] = {k: message.get(k) for k in ("protocol", "limits")}
+        if message.get("type") == "request":
+            entry["capability"] = message.get("capability")
         note(entry)
     return message
 
@@ -149,7 +152,9 @@ def run(body: dict) -> dict:
         described["tools"] = []
         described["args"] = ["${tool:checker}/lib/rules.jar", "a.txt"]
     if MODE == "waits-for-wall-ms":
-        described["limits"] = {"wall_ms": 1000}
+        described["limits"] = {"wall_ms": 10000}
+    if MODE == "output-differs-in-non-ascii-case":
+        described["outputs"] = [{"path": "\u00e9.txt"}]
     if MODE == "two-faults-tool-digest-and-unknown":
         described["tools"] = [{"name": "checker", "digest": "sha256:" + "e" * 64}, {"name": "shell", "digest": "sha256:" + "e" * 64}]
     if MODE == "two-faults-input-identity-and-unknown":
@@ -292,6 +297,8 @@ def main() -> None:
             if MODE == "two-faults-attachment-identity-and-path":
                 answer = {"final": dict(passed["final"], attachments=[{"path": "evidence.txt", "identity": "sha256:" + "f" * 64},
                                                                       {"path": "missing.txt", "identity": "sha256:" + "0" * 64}])}
+            if MODE == "final-error-saying-unavailable":
+                answer = {"final": {"verdict": "error", "reason": "run-unavailable"}}
             if MODE == "same-run-twice":
                 answer = {"next": run(body_of_start)} if body["run"] == 1 else passed
             if MODE == "invented-verdict":

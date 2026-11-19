@@ -89,7 +89,7 @@ class Session:
             if not manifest_has_its_shape(self.manifest):
                 raise Refused("bad-manifest")
         except Refused:
-            self.tree.end()  # a session that never opened leaves no provider behind
+            self.close()  # shutdown is sent at the end of every session, and no provider is left behind
             raise
 
     @staticmethod
@@ -302,6 +302,11 @@ def rehash(item: dict, root: pathlib.Path) -> None:
         raise Refused("identity-mismatch")
 
 
+def ascii_lower(text: str) -> str:
+    """Lower-case ASCII letters only: rule 8 folds no other case."""
+    return text.translate(str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"))
+
+
 def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str], known_tools: dict[str, str],
                           platform: dict | None = None, named_files: set[str] | None = None) -> None:
     """The rules a run description must keep before anything is executed.
@@ -342,8 +347,8 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
             raise Refused("bad-path")  # an argument may name only the run's own files, and only as a whole argument
     if "env" in run:
         raise Refused("env-not-allowed")  # a variable can change what a program loads; any env field is refused, whatever its value
-    taken = {p.lower() for p in inputs | set(known_inputs)}
-    if any(f["path"].lower() in taken for f in run["outputs"]):
+    taken = {ascii_lower(p) for p in inputs | set(known_inputs)}
+    if any(ascii_lower(f["path"]) in taken for f in run["outputs"]):
         raise Refused("output-overwrites-input")  # compared without regard to case: a disk may ignore it
     if any(item["path"] not in known_inputs for item in run.get("inputs", [])):
         raise Refused("input-not-in-key")
@@ -410,11 +415,16 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
             return {"pending": body["next"], "run_key": keys[-1]}
         runs += 1
         if report.get("end") != "exited":
-            return {"final": {"verdict": "error", "reason": "run-" + str(report.get("end"))}, "runs": runs}
+            # Only the executor's report makes a check unavailable, so the mark is kept outside the final,
+            # where nothing a provider says can set it.
+            return {"final": {"verdict": "error", "reason": "run-" + str(report.get("end"))}, "runs": runs,
+                    "unavailable": report.get("end") == "unavailable"}
         # What the executor says ran must be what was asked for: another platform or another tool is an
         # error, never a result (protocol/messages.schema.json, run_report).
         asked_tools = sorted((t.get("name"), t.get("digest")) for t in body["next"].get("tools", []))
-        ran_tools = sorted((t.get("name"), t.get("digest")) for t in report.get("tools_ran", []) if isinstance(t, dict))
+        ran = report.get("tools_ran")
+        ran_tools = (sorted((t.get("name"), t.get("digest")) for t in ran)
+                     if isinstance(ran, list) and all(isinstance(t, dict) for t in ran) else None)
         if report.get("platform") != body["next"].get("platform") or ran_tools != asked_tools:
             return {"final": {"verdict": "error", "reason": "run-report-mismatch"}, "runs": runs}
         body = session.ask("obligation.check", {"op": "run.result", "check": check_id, "run": runs, "report": report})
@@ -777,8 +787,8 @@ def check(args) -> int:
     session = None
     try:
         session = Session(asked["provider"], root, [], deadline_s=asked.get("deadline_ms", 60000) / 1000)
-        final = drive_check(session, asked["obligation"], asked["inputs"], asked["tools"], report_for, root)["final"]
-        verdict = "unavailable" if final.get("reason") == "run-unavailable" else final["verdict"]
+        driven = drive_check(session, asked["obligation"], asked["inputs"], asked["tools"], report_for, root)
+        verdict = "unavailable" if driven.get("unavailable") else driven["final"]["verdict"]
         answer = {"outcome": "verdict", "verdict": verdict}
     except Refused as err:
         answer = {"outcome": "refused", "reason": str(err)}

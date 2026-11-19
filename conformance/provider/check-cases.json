@@ -1,5 +1,5 @@
 {
-  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. Nothing may be recorded as passed except in the control and in the cases whose outcome is the verdict `passed`. `runs` is how many runs the executor must have been given, no more and no fewer. `deadline_ms`, where given, is the deadline the host is given; `names_a_missing_file` makes the obligation name a file that is not among the inputs. `second_input` gives the check a second input, b.txt; `many_inputs` gives it that many more, so that a request is long; `change_input` breaks one field of the host's own input (null removes it); `names_a_missing_spec` makes the obligation's specified_by name a file that is not among the inputs; `change_input` keys of the form `asked.FIELD` change the whole input's field; `whole_input` replaces the whole input; `input_text` sends text that is not JSON in its place; `not_on` lists platforms where the provider cannot make what the case needs.",
+  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. Nothing may be recorded as passed except in the control and in the cases whose outcome is the verdict `passed`. `runs` is how many runs the executor must have been given, no more and no fewer. `deadline_ms`, where given, is the deadline the host is given; `names_a_missing_file` makes the obligation name a file that is not among the inputs. `second_input` gives the check a second input, b.txt; `many_inputs` gives it that many more, so that a request is long; `change_input` breaks one field of the host's own input (null removes it); `names_a_missing_spec` makes the obligation's specified_by name a file that is not among the inputs; `change_input` keys of the form `asked.FIELD` change the whole input's field; `whole_input` replaces the whole input; `non_ascii_input` adds an input named É.txt; `input_text` sends text that is not JSON in its place; `not_on` lists platforms where the provider cannot make what the case needs.",
   "cases": [
     {
       "mode": "well-behaved",
@@ -891,7 +891,7 @@
       "outcome": "verdict",
       "verdict": "passed",
       "runs": 1,
-      "why": "A host waits for the executor at least the run's wall_ms plus 60 seconds, however short its own deadline."
+      "why": "A host waits for the executor at least the run's wall_ms plus 60 seconds, however short its own deadline: here the run states 10 seconds and the executor answers after 12."
     },
     {
       "mode": "two-faults-tool-digest-and-unknown",
@@ -1060,6 +1060,39 @@
       "reason": "bad-input",
       "runs": 0,
       "why": "Input that is not JSON at all is refused like input that is not an object."
+    },
+    {
+      "mode": "final-error-saying-unavailable",
+      "run": "exited",
+      "outcome": "verdict",
+      "verdict": "error",
+      "runs": 1,
+      "why": "A provider's error stays an error whatever reason it gives: only the executor's report makes a check unavailable."
+    },
+    {
+      "mode": "output-differs-in-non-ascii-case",
+      "run": "exited",
+      "non_ascii_input": true,
+      "outcome": "verdict",
+      "verdict": "passed",
+      "runs": 1,
+      "why": "Outputs are compared with inputs ignoring the case of ASCII letters only: é.txt is not É.txt."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "tools-ran-with-a-number",
+      "outcome": "verdict",
+      "verdict": "error",
+      "runs": 1,
+      "why": "A report's tools_ran must be the run's tools; a stray entry is not ignored."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "tools-ran-null",
+      "outcome": "verdict",
+      "verdict": "error",
+      "runs": 1,
+      "why": "A report whose tools_ran is not a list names no tools, so it is not the run's tools."
     }
   ]
 }

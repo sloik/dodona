@@ -7,6 +7,7 @@ reads a `hello`, answers with a manifest, reads one request and answers it,
 then waits for `shutdown`. In every mode but `well-behaved` it does one thing
 wrong. `cases.json` lists the modes with the outcome a host must reach.
 
+If DODONA_TEST_SEEN is set, every message the provider receives is appended to that file, one per line.
 If the environment variable DODONA_TEST_PIDFILE is set, the provider appends
 its own process id, and the id of any process it starts, to that file, one per
 line, so a judge can check that nothing is left running afterwards.
@@ -35,7 +36,13 @@ def send(obj, ending: bytes = b"\n") -> None:
 
 def read():
     line = sys.stdin.buffer.readline()
-    return json.loads(line.decode("utf-8")) if line else None
+    message = json.loads(line.decode("utf-8")) if line else None
+    seen = os.environ.get("DODONA_TEST_SEEN")
+    if seen and message is not None:
+        # For the judge only: every message as it arrived, so what the host sends is judged, not taken on its word.
+        with open(seen, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(message) + "\n")
+    return message
 
 
 def manifest(echo):
