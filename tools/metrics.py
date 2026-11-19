@@ -38,6 +38,7 @@ import contextlib
 import fnmatch
 import io
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -67,15 +68,21 @@ SOURCES = [
 ]
 OPTIONAL_SOURCES = {"tools/check_docs.py"}
 GATE_WORKFLOW = ".github/workflows/metrics.yml"
-BOOTSTRAP_BEFORE = "8530ca05e6be7d706417170e7cd0f2f12f410286"  # the last commit of main before this tool
+SELF_TEST_WORKFLOW = ".github/workflows/metrics-self-test.yml"
+# A change to any of these changes how changes are judged: the gate fails it, and the owner merges over that.
+JUDGE_FILES = ("tools/metrics.py", GATE_WORKFLOW, SELF_TEST_WORKFLOW)
+# The last commit of main before this tool lives in one place only: BOOTSTRAP_BEFORE in the env of the gate
+# workflow's step. The workflow guard below requires it to be a full commit id used in exactly one test.
 
 KERNEL_VECTOR_FILES = ("canonical", "core-key", "core-key-more", "paths")  # what the kernels are judged with
 TOOL_TREE_VECTOR_FILES = ("tool-tree",)                                    # judged against the reference only
-VECTOR_KEYS = ("accept", "reject", "reject_bytes", "collisions")
+# The lists each vector file may hold, and must: any other list, or one missing, is unreadable.
+VECTOR_LISTS = {"canonical": ("accept", "reject"), "core-key": ("accept", "reject"), "core-key-more": ("accept", "reject"),
+                "paths": ("accept", "reject", "reject_bytes", "collisions"), "tool-tree": ("accept", "reject")}
 DECISION_STATUSES = ("proposed", "accepted", "superseded", "rejected")      # decisions/README.md
 EXPLANATION_KEY = "Metrics-down:"
 EXPLANATION_MIN_WORDS = 6
-METRIC_NAME = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_-]+)*$")
+METRIC_NAME = re.compile(r"[a-z0-9_]+(\.[a-z0-9_-]+)*")  # always used with fullmatch
 SHOW_IDS = 20
 
 
@@ -243,6 +250,13 @@ def _named(items: list, field: str, where: str) -> list[str]:
     return _ids((e.get(field) for e in items), where)
 
 
+def _objects(items: list, field: str, where: str) -> list:
+    """Items that are counted, not told apart: each must still be an object with its field."""
+    if any(not isinstance(e, dict) or not isinstance(e.get(field), str) for e in items):
+        raise Unmeasurable(f"{where}: an item that is not an object with a '{field}'")
+    return items
+
+
 def _vector_id(entry):
     if isinstance(entry, str):
         return entry
@@ -251,6 +265,22 @@ def _vector_id(entry):
             if isinstance(entry.get(field), str):
                 return entry[field]
     return None
+
+
+def _markdown(text: str, rel: str) -> list[tuple[str, bool]]:
+    """Each line, and whether it is inside a fenced block. An HTML comment can hide a row from a reader while
+    a parser counts it, so a parsed file with one is unreadable."""
+    if "<!--" in text:
+        raise Unmeasurable(f"{rel}: holds an HTML comment, which could hide what is counted")
+    out, fence = [], None
+    for line in text.split("\n"):
+        m = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if m and (fence is None or m.group(1)[0] == fence):
+            out.append((line, True))
+            fence = m.group(1)[0] if fence is None else None
+            continue
+        out.append((line, fence is not None))
+    return out
 
 
 def _section(text: str, heading: str, rel: str) -> list[str]:
@@ -262,6 +292,8 @@ def _section(text: str, heading: str, rel: str) -> list[str]:
     for line in lines[lines.index(heading) + 1:]:
         if re.match(r"^#{1,2} ", line):
             break
+        if "<!--" in line or re.match(r"^\s*(`{3,}|~{3,})", line):
+            raise Unmeasurable(f"{rel}: under {heading!r}, an HTML comment or a fenced block")
         body.append(line)
     return body
 
@@ -269,7 +301,10 @@ def _section(text: str, heading: str, rel: str) -> list[str]:
 def _table_rows(text: str, header_start: str, rel: str, many: bool = False) -> list[list[str]]:
     """Cells of the data rows of the table whose header line starts with header_start: exactly one such
     table, or with many, at least one, all read."""
-    lines = text.split("\n")
+    marked = _markdown(text, rel)
+    lines = [line for line, _ in marked]
+    if any(fenced and line.lstrip().startswith("|") for line, fenced in marked):
+        raise Unmeasurable(f"{rel}: a table row inside a fenced block")
     starts = [i for i, line in enumerate(lines) if line.startswith(header_start)]
     if not starts or (len(starts) > 1 and not many):
         raise Unmeasurable(f"{rel}: not {'at least' if many else 'exactly'} one table whose header starts {header_start!r}")
@@ -290,6 +325,14 @@ def _check_list(tree, rel: str, name: str) -> set[str]:
         module = ast.parse(tree.read(rel))
     except SyntaxError as err:
         raise Unmeasurable(f"{rel}: does not parse: {err}") from None
+    # One binding, and nothing that changes it afterwards: otherwise the list read is not the list that runs.
+    stores = [n for n in ast.walk(module) if isinstance(n, ast.Name) and n.id == name and not isinstance(n.ctx, ast.Load)]
+    changed = [n for n in ast.walk(module) if (isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == name
+                                               and n.attr in ("append", "extend", "insert", "remove", "pop", "clear", "sort", "reverse"))
+               or (isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id == name
+                   and not isinstance(n.ctx, ast.Load))]
+    if len(stores) != 1 or changed:
+        raise Unmeasurable(f"{rel}: {name} must be bound exactly once and never changed ({len(stores)} bindings, {len(changed)} changes)")
     for node in module.body:
         if (isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets)
                 and isinstance(node.value, (ast.List, ast.Tuple)) and all(isinstance(e, ast.Name) for e in node.value.elts)):
@@ -345,18 +388,22 @@ def measure(tree) -> list[dict]:
         if not isinstance(data, dict):
             raise Unmeasurable(f"{rel}: not an object")
         groups = {}
-        for key, value in data.items():
-            if isinstance(value, list):
-                if key not in VECTOR_KEYS:
-                    raise Unmeasurable(f"{rel}: a list '{key}' that is not one of {', '.join(VECTOR_KEYS)}")
-                ids = [_vector_id(e) for e in value]
-                # Items with an identity are tracked one by one; a list where any item has none, by count.
-                groups[f"{stem}.json:{key}"] = (_ids(ids, f"{rel} '{key}'") if value and None not in ids else len(value))
-        if not groups:
-            raise Unmeasurable(f"{rel}: no lists of vectors")
+        allowed = VECTOR_LISTS[stem]
+        extra = sorted(k for k, v in data.items() if isinstance(v, list) and k not in allowed)
+        missing = [k for k in allowed if not isinstance(data.get(k), list)]
+        if extra or missing:
+            raise Unmeasurable(f"{rel}: holds the lists {', '.join(allowed)} and no other "
+                               f"(other: {', '.join(extra) or 'none'}; missing: {', '.join(missing) or 'none'})")
+        for key in allowed:
+            value = data[key]
+            if any(not isinstance(e, (dict, str)) for e in value):
+                raise Unmeasurable(f"{rel} '{key}': an item that is neither an object nor a string")
+            ids = [_vector_id(e) for e in value]
+            # Items with an identity are tracked one by one, however few; a list where any item has none, by count.
+            groups[f"{stem}.json:{key}"] = (_ids(ids, f"{rel} '{key}'") if value and None not in ids else len(value))
         per_file[stem] = groups
     ratchet("kit.vectors", {g: v for s in KERNEL_VECTOR_FILES for g, v in per_file[s].items()},
-            f"conformance/vectors/{{{','.join(KERNEL_VECTOR_FILES)}}}.json ({', '.join(VECTOR_KEYS)})")
+            f"conformance/vectors/{{{','.join(KERNEL_VECTOR_FILES)}}}.json (accept, reject, reject_bytes, collisions)")
     ratchet("kit.tool_tree_vectors", per_file["tool-tree"], "conformance/vectors/tool-tree.json (accept, reject)")
     for stem in stems:
         shown(f"kit.vectors.{stem}", sum(len(v) if isinstance(v, list) else v for v in per_file[stem].values()),
@@ -368,7 +415,7 @@ def measure(tree) -> list[dict]:
     if not isinstance(more.get("unlisted_kind"), dict):
         raise Unmeasurable(f"{b}: no 'unlisted_kind'")
     ratchet("kit.ledger_listed_cases", {
-        "cases.json:append": len(_list(cases, "append", a)),
+        "cases.json:append": len(_objects(_list(cases, "append", a), "kind", f"{a} 'append'")),
         "cases.json:damage": _named(_list(cases, "damage", a), "name", f"{a} 'damage'"),
         "more-damage.json:damage": _named(_list(more, "damage", b), "name", f"{b} 'damage'"),
         "more-damage.json:bad_requests": _named(_list(more, "bad_requests", b), "name", f"{b} 'bad_requests'"),
@@ -377,12 +424,13 @@ def measure(tree) -> list[dict]:
 
     rel = "conformance/provider/check-cases.json"
     # Two cases share a mode here, so they have no identity of their own: counted.
-    ratchet("kit.host_check_cases", {"cases": len(_list(_json(tree, rel), "cases", rel))}, f"{rel} (cases, counted)")
+    ratchet("kit.host_check_cases", {"cases": len(_objects(_list(_json(tree, rel), "cases", rel), "mode", rel))},
+            f"{rel} (cases, counted)")
     rel = "conformance/provider/cases.json"
     ratchet("kit.session_cases", {"cases": _named(_list(_json(tree, rel), "cases", rel), "mode", rel)},
             f"{rel} (cases, identity: mode)")
 
-    # Planted defects, counted only: what a kernel is judged by is the planting, not this list.
+    # Planted defects, read for their names only: a kernel is judged by planting them, not by this list.
     for kernel in ("kernel", "kernel2"):
         rel = f"{kernel}/defects.json"
         ratchet(f"planted_defects.{kernel}", {"defects": _named(_list(_json(tree, rel), "defects", rel), "name", rel)},
@@ -391,6 +439,8 @@ def measure(tree) -> list[dict]:
     # Claims.
     rel = "spec/CLAIMS.md"
     text = tree.read(rel)
+    if any(fenced and re.match(r"^\| C\d+ \|", line) for line, fenced in _markdown(text, rel)):
+        raise Unmeasurable(f"{rel}: a claim row inside a fenced block")
     runs = set(re.findall(r"^### Run (\d+)\b", text, flags=re.M))
     by: dict[str, list[str]] = {"checked": [], "sampled_by_kit": [], "modelled_unchecked": [], "not_modelled": []}
     seen: list[str] = []
@@ -472,7 +522,7 @@ def measure(tree) -> list[dict]:
     for name in names:
         if names.count(name) > 1:
             raise Unmeasurable(f"two metrics would be called {name!r}")
-        if not METRIC_NAME.match(name):
+        if not METRIC_NAME.fullmatch(name):
             raise Unmeasurable(f"a metric would be called {name!r}: names are lower case letters, digits, '_', '-' and '.'")
     return out
 
@@ -494,7 +544,7 @@ def read_baseline(path: pathlib.Path) -> dict:
         raise BadBaseline(f"{path.name}: not a {FORMAT} file")
     for name, m in data["metrics"].items():
         if (not isinstance(m, dict) or type(m.get("value")) is not int or type(m.get("ratchet")) is not bool
-                or not METRIC_NAME.match(name)):
+                or not METRIC_NAME.fullmatch(name)):
             raise BadBaseline(f"{path.name}: metric {name!r} has no integer value and boolean ratchet")
         items = m.get("items")
         if m["ratchet"] and (not isinstance(items, dict) or any(
@@ -513,7 +563,7 @@ def read_explanations(messages: str, known: set[str]) -> tuple[dict[str, str], l
             name, sep, reason = line[len(EXPLANATION_KEY):].strip().partition(":")
             name, reason = name.strip(), reason.strip()
             words = [w for w in reason.split() if re.search(r"\w", w)]
-            if not sep or not METRIC_NAME.match(name):
+            if not sep or not METRIC_NAME.fullmatch(name):
                 malformed.append(f"{line!r}: not 'Metrics-down: <metric>: <reason>'")
             elif name not in known:
                 malformed.append(f"{line!r}: no metric is called {name!r}")
@@ -535,7 +585,7 @@ def _taken(before: dict, after: dict | None) -> list[str]:
         if new is None:
             lost.append(f"{group}: gone" + (f" ({len(old)} items)" if isinstance(old, list) else f" (count {old})"))
         elif isinstance(old, list) and isinstance(new, list):
-            lost += [f"{group}: {printable(i)} taken away" for i in sorted(set(old) - set(new))]
+            lost += [f"{printable(group)}: {printable(i)} taken away" for i in sorted(set(old) - set(new))]
         elif isinstance(old, list):
             lost.append(f"{group}: its items are no longer told apart (were {len(old)} with identities)")
         else:
@@ -616,7 +666,9 @@ def table(metrics: list[dict], markdown: bool) -> str:
     return _ascii("\n".join(lines))
 
 
-def comparison(title: str, rows, malformed, unused, failed, markdown: bool) -> str:
+def comparison(title: str, rows, malformed, unused, failed, markdown: bool, judged: list[str] | None = None) -> str:
+    """The table, what was taken away, the explanations, and one result line. `failed` is whether a ratcheted
+    item was taken away; `judged` lists changes to how changes are judged, each a failure of its own."""
     lines = [title, ""]
     blank = lambda v: "" if v is None else v  # noqa: E731
     if markdown:
@@ -641,8 +693,12 @@ def comparison(title: str, rows, malformed, unused, failed, markdown: bool) -> s
         lines += ["", "Lines in the change's commits that are not well-formed explanations:"] + [bullet + esc(x) for x in malformed]
     if unused:
         lines += ["", "Explanations for a metric that lost nothing:"] + [bullet + esc(x) for x in unused]
-    lines += ["", "Result: FAILED, a ratcheted item was taken away. An explanation does not change this; "
-                  "only the owner can merge over it." if failed else "Result: no ratcheted item was taken away."]
+    if judged:
+        lines += ["", "Changes to how changes are judged:"] + [bullet + esc(printable(x)) for x in judged]
+    reasons = (["a ratcheted item was taken away"] if failed else []) + (["the change changes how changes are judged"] if judged else [])
+    lines += ["", f"Result: FAILED, {' and '.join(reasons)}. An explanation does not change this; the owner decides "
+                  "whether to merge over it." if reasons else "Result: no ratcheted item was taken away, and how changes are "
+                  "judged is unchanged." if judged is not None else "Result: no ratcheted item was taken away."]
     return _ascii("\n".join(lines))
 
 
@@ -675,9 +731,16 @@ def workflow_jobs(text: str) -> set[str]:
 def job_clashes(repo: pathlib.Path, head: str, own: str, names: set[str]) -> list[str]:
     """Other workflows of head that define a job with one of names as its id or name."""
     tree = GitTree(repo, head)
+    own = own.replace("\\", "/").removeprefix("./")
     paths = [p for p in tree.entries if re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p) and p != own]
     return [f"{p} defines a job {n!r}, as {own} does: a required check of that name could be passed by it"
             for p in sorted(paths) for n in sorted(names & workflow_jobs(tree.read(p)))]
+
+
+def judge_changes(base, head) -> list[str]:
+    """A change to the tool or its workflows changes how changes are judged, now or at the next step."""
+    return [f"{path} changes how changes are judged; the owner merges over this failure"
+            for path in JUDGE_FILES if base.entries.get(path) != head.entries.get(path)]
 
 
 def run_blocks(text: str) -> str:
@@ -700,7 +763,9 @@ def run_blocks(text: str) -> str:
 def workflow_problems(text: str) -> list[str]:
     """The gate runs on pull_request_target, with main's workflow and a token. It is safe only while
     nothing from the pull request is checked out or run, the token can only read, and the tool that
-    judges comes from main (or, for a push, from the commit before it)."""
+    judges comes from main (or, for a push, from the commit before it). This is advisory: it reads the
+    text for known ways of breaking that, and a determined edit can get past it. A change to the
+    workflow itself always fails the gate (judge_changes)."""
     text = text.replace("\r\n", "\n")
     found = []
     trigger = text.split("\njobs:")[0]
@@ -724,15 +789,21 @@ def workflow_problems(text: str) -> list[str]:
         found.append("keeps credentials in the checkout")
     if re.search(r"^\s+(ref|repository):", text, flags=re.M):
         found.append("tells the checkout which ref or repository to take: it must take main's commit only")
-    if runs.count(f'if git merge-base --is-ancestor "$TOOL_REV" {BOOTSTRAP_BEFORE}; then') != 1 \
-            or len(re.findall(r"\bexit 0\b", runs)) != 1:
-        found.append(f"lets a change pass unjudged other than when the trusted revision is no later than {BOOTSTRAP_BEFORE[:7]}")
+    shas = re.findall(r"^\s+BOOTSTRAP_BEFORE:\s*(\S+)\s*$", text, flags=re.M)
+    if len(shas) != 1 or not re.fullmatch(r"[0-9a-f]{40}", shas[0]) \
+            or runs.count('if git merge-base --is-ancestor "$TOOL_REV" "$BOOTSTRAP_BEFORE"; then') != 1 \
+            or runs.count("BOOTSTRAP_BEFORE") != 1 or len(re.findall(r"\bexit 0\b", runs)) != 1:
+        found.append("lets a change pass unjudged other than when the trusted revision is no later than BOOTSTRAP_BEFORE, "
+                     "one full commit id set once in env")
     if any(re.search(r"\bpython3?(?! -I)\s", line) for line in text.split("\n") if not line.lstrip().startswith("#")):
         found.append("runs Python without -I, so a file in the working directory could be imported")
     if re.search(r"refs/pull/[^\s'\"]*/merge|merge_commit_sha", text):
         found.append("uses the pull request's merge commit, which holds its code")
-    if re.search(r"\bgit\s+(?:checkout|switch|restore|reset|worktree|stash|apply|am|merge|pull|rebase|cherry-pick)(?![\w-])", runs):
+    if re.search(r"\bgit\b[^\n]*?\s(checkout|switch|restore|reset|worktree|stash|apply|am|merge|pull|rebase|cherry-pick"
+                 r"|read-tree|checkout-index|update-index|clone|archive)(?![\w-])", runs):
         found.append("changes the checked-out files with git: nothing of the change may reach the working tree")
+    if re.search(r"\|\s*(bash|sh|zsh|dash|python3?|perl|ruby|node|xargs|tar)\b|\b(eval|source|tar)\b|^\s*\.\s", runs, flags=re.M):
+        found.append("pipes into a shell or interpreter, evaluates text, or unpacks files: nothing of the change may run")
     if re.search(r"\bpython3?\s+-I\s+(?!\"\$TOOL\")", runs):
         found.append("runs Python on something other than \"$TOOL\", the tool taken from the trusted revision")
     shows = re.findall(r"git show (\S+)", runs)
@@ -763,20 +834,52 @@ EXPECTED_RATCHETED = {
 MUTANTS = [
     ("the ledger count ignores bad_requests",
      '"more-damage.json:bad_requests": _named(_list(more, "bad_requests", b), "name", f"{b} \'bad_requests\'"),', ""),
-    ("vectors count only accept lists", "            if isinstance(value, list):", '            if isinstance(value, list) and key == "accept":'),
+    ("vectors count only accept lists", "        for key in allowed:\n            value = data[key]", "        for key in allowed[:1]:\n            value = data[key]"),
     ("scenarios skip a kind", "    for kind in kinds:\n        names, _ = tree.listing", "    for kind in kinds[1:]:\n        names, _ = tree.listing"),
     ("a ratchet removed", 'ratchet("gaps.tool_checks", {"tools": _ids([c[0] for c in _table_rows(text, "| Tool |", rel)], rel)},',
      'shown("gaps.tool_checks", len([c[0] for c in _table_rows(text, "| Tool |", rel)]),'),
-    ("ratchets compare counts, not identities", "            lost += [f\"{group}: {printable(i)} taken away\" for i in sorted(set(old) - set(new))]",
-     "            lost += [f\"{group}: count\" for _ in range(len(old) - len(new))]"),
+    ("ratchets compare counts, not identities",
+     '            lost += [f"{printable(group)}: {printable(i)} taken away" for i in sorted(set(old) - set(new))]',
+     '            lost += [f"{group}: count" for _ in range(len(old) - len(new))]'),
+    ("a list of identities turned into a count is no loss",
+     '            lost.append(f"{group}: its items are no longer told apart (were {len(old)} with identities)")', "            pass"),
+    ("small lists are counted, not told apart", "if value and None not in ids else len(value))",
+     "if value and None not in ids and len(ids) > 3 else len(value))"),
     ("an explanation turns a failure green", "            failed = True\n            if name in explanations:",
      "            failed = name not in explanations\n            if name in explanations:"),
+    ("a change to the tool or its workflows is not judged",
+     "for path in JUDGE_FILES if base.entries.get(path) != head.entries.get(path)]", "for path in JUDGE_FILES if False]"),
     ("duplicate identities are accepted", "        if i in seen:\n            raise", "        if False:\n            raise"),
     ("a stray line under 'Not yet in the kit' is accepted", "        elif line.strip():\n            raise", "        elif False:\n            raise"),
+    ("a heading found twice is accepted", "    if lines.count(heading) != 1:", "    if lines.count(heading) < 1:"),
+    ("HTML comments are accepted", '    if "<!--" in text:\n        raise', "    if False:\n        raise"),
+    ("claim rows in a fenced block are counted", "    if any(fenced and re.match(", "    if False and any(fenced and re.match("),
     ("listed gap checks are not looked up in GAP_CHECKS", "        if m.group(1) not in in_code:", "        if False:"),
+    ("a check list bound twice is accepted", "    if len(stores) != 1 or changed:", "    if False:"),
+    ("vector files may hold any lists", "        if extra or missing:", "        if False:"),
+    ("vector items of any type are accepted", "            if any(not isinstance(e, (dict, str)) for e in value):", "            if False:"),
+    ("counted items need not be objects",
+     "    if any(not isinstance(e, dict) or not isinstance(e.get(field), str) for e in items):", "    if False:"),
+    ("metric names are matched as a prefix", "        if not METRIC_NAME.fullmatch(name):\n            raise Unmeasurable(f\"a metric would be called",
+     "        if not METRIC_NAME.match(name):\n            raise Unmeasurable(f\"a metric would be called"),
+    ("a link read from git is followed",
+     '        if mode not in ("100644", "100755"):\n            raise Unmeasurable(f"{rel}: a link or submodule, not a file")\n        if oid',
+     '        if False:\n            raise Unmeasurable(f"{rel}: a link or submodule, not a file")\n        if oid'),
+    ("a link in a folder on disk is followed", "            if entry.is_symlink():\n                raise", "            if False:\n                raise"),
     ("identities are printed raw", "{printable(i)} taken away", "{i} taken away"),
-    ("a crash reads as a failed ratchet", "        return 2\n\n\ndef run(", "        return 1\n\n\ndef run("),
+    ("error messages are printed raw", "    print(_ascii(printable(message)), file=sys.stderr)", "    print(_ascii(message), file=sys.stderr)"),
+    ("a crash reads as a failed ratchet", "        return 2\n\n\ndef complain(", "        return 1\n\n\ndef complain("),
+    ("job ids are not compared, only names", "        if indent == job_indent and m:\n            found.add(m.group(2))",
+     "        if False and indent == job_indent and m:\n            found.add(m.group(2))"),
+    ("the jobs guard reads .yml only", 're.fullmatch(r"\\.github/workflows/[^/]+\\.ya?ml", p) and p != own]',
+     're.fullmatch(r"\\.github/workflows/[^/]+\\.yml", p) and p != own]'),
+    ("the jobs guard compares the gate with itself", "and p != own]", "]"),
     ("the workflow guard ignores Python without -I", 'if any(re.search(r"\\bpython3?(?! -I)\\s", line)', 'if False and any(re.search(r"\\bpython3?(?! -I)\\s", line)'),
+    ("the workflow guard ignores write permissions and secrets",
+     'if re.search(r"^\\s+[\\w-]+:\\s*write\\b", text, flags=re.M) or "secrets." in text:', "if False:"),
+    ("the workflow guard ignores self-hosted runners", 'if "self-hosted" in text:', "if False:"),
+    ("the workflow guard misses git with options before the command", 'r"\\bgit\\b[^\\n]*?\\s(checkout|', 'r"\\bgit\\s+(checkout|'),
+    ("the workflow guard misses pipes into a shell", 'if re.search(r"\\|\\s*(bash|', 'if False and re.search(r"\\|\\s*(bash|'),
 ]
 
 # Unsafe edits of the gate workflow. The guard must notice each.
@@ -784,27 +887,38 @@ UNSAFE_WORKFLOW_EDITS = [
     ('python3 -I "$TOOL" --repo', 'python3 "$TOOL" --repo'),
     ('python3 -I "$TOOL" --repo', 'python3 -I tools/metrics.py --repo'),
     ("fetch-depth: 0", "fetch-depth: 0\n          ref: ${{ github.event.pull_request.head.sha }}"),
+    ("fetch-depth: 0", "fetch-depth: 0\n          ref: refs/pull/${{ github.event.pull_request.number }}/head"),
+    ("fetch-depth: 0", "fetch-depth: 0\n          repository: ${{ github.event.pull_request.head.repo.full_name }}"),
     ("contents: read", "contents: write"),
+    ("    runs-on: ubuntu-26.04\n", "    runs-on: ubuntu-26.04\n    permissions:\n      checks: write\n"),
+    ("          MAIN_NOW: ${{ github.sha }}\n", "          MAIN_NOW: ${{ github.sha }}\n          TOKEN: ${{ secrets.PAT }}\n"),
+    ("runs-on: ubuntu-26.04", "runs-on: [self-hosted, linux]"),
     ("persist-credentials: false", "persist-credentials: true"),
     ("refs/pull/$PR_NUMBER/head:", "refs/pull/$PR_NUMBER/merge:"),
     ("PR_HEAD: ${{ github.event.pull_request.head.sha }}", "PR_HEAD: ${{ github.event.pull_request.merge_commit_sha }}"),
+    ("MAIN_NOW: ${{ github.sha }}", "MAIN_NOW: ${{ github.event.pull_request.head.sha }}"),
     ('git show "$TOOL_REV:tools/metrics.py"', 'git show "$HEAD:tools/metrics.py"'),
     ('TOOL_REV="$MAIN_NOW"', 'TOOL_REV="$HEAD"'),
     ('TOOL_REV="$PUSH_BEFORE"', 'TOOL_REV="$MAIN_NOW"'),
     ("set -uo pipefail\n", 'set -uo pipefail\n          git checkout --quiet --detach "$HEAD"\n'),
+    ("set -uo pipefail\n", 'set -uo pipefail\n          git -c advice.detachedHead=false checkout "$HEAD"\n'),
     ("set -uo pipefail\n", 'set -uo pipefail\n          git worktree add "$RUNNER_TEMP/pr" "$HEAD"\n'),
+    ("set -uo pipefail\n", 'set -uo pipefail\n          git read-tree -u --reset "$HEAD"\n'),
+    ("set -uo pipefail\n", 'set -uo pipefail\n          git cat-file -p "$HEAD:run.sh" | bash\n'),
+    ("set -uo pipefail\n", 'set -uo pipefail\n          git archive "$HEAD" | tar -x\n'),
+    ("set -uo pipefail\n", 'set -uo pipefail\n          eval "$(cat "$RUNNER_TEMP/x")"\n'),
     ("set -uo pipefail\n", 'set -uo pipefail\n          echo "${{ github.event.pull_request.title }}"\n'),
     ("set -uo pipefail\n", 'set -uo pipefail\n          echo "${{ github.head_ref }}"\n'),
     ("  pull_request_target:", "  pull_request:\n  pull_request_target:"),
     ("  pull_request_target:", "  pull_request:"),
     ("cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}", "cancel-in-progress: true"),
     ("@3d3c42e5aac5ba805825da76410c181273ba90b1", "@v7"),
-    ("MAIN_NOW: ${{ github.sha }}", "MAIN_NOW: ${{ github.event.pull_request.head.sha }}"),
-    ("fetch-depth: 0", "fetch-depth: 0\n          ref: refs/pull/${{ github.event.pull_request.number }}/head"),
-    ("fetch-depth: 0", "fetch-depth: 0\n          repository: ${{ github.event.pull_request.head.repo.full_name }}"),
-    (f'--is-ancestor "$TOOL_REV" {BOOTSTRAP_BEFORE}; then', '--is-ancestor "$TOOL_REV" "$HEAD"; then'),
-    (f'--is-ancestor "$TOOL_REV" {BOOTSTRAP_BEFORE}; then',
-     f'--is-ancestor "$TOOL_REV" {BOOTSTRAP_BEFORE} || git cat-file -e "$HEAD:tools/metrics.py"; then'),
+    ('--is-ancestor "$TOOL_REV" "$BOOTSTRAP_BEFORE"; then', '--is-ancestor "$TOOL_REV" "$HEAD"; then'),
+    ('--is-ancestor "$TOOL_REV" "$BOOTSTRAP_BEFORE"; then',
+     '--is-ancestor "$TOOL_REV" "$BOOTSTRAP_BEFORE" || git cat-file -e "$HEAD:tools/metrics.py"; then'),
+    ("BOOTSTRAP_BEFORE: {BOOTSTRAP}", "BOOTSTRAP_BEFORE: main"),
+    ("          BOOTSTRAP_BEFORE: {BOOTSTRAP}\n",
+     "          BOOTSTRAP_BEFORE: {BOOTSTRAP}\n          BOOTSTRAP_BEFORE: 0000000000000000000000000000000000000000\n"),
     ('say "PROBLEM cannot judge: $TOOL_REV has no tools/metrics.py."\n            exit 1',
      'say "PROBLEM cannot judge: $TOOL_REV has no tools/metrics.py."\n            exit 0'),
 ]
@@ -813,6 +927,7 @@ UNSAFE_WORKFLOW_EDITS = [
 def self_test(mutants: bool) -> int:
     """Plant changes in copies of the sources and require each to be judged as stated, through the CLI."""
     results: list[tuple[str, bool, str]] = []
+    skipped: list[str] = []
     me = pathlib.Path(__file__).resolve()
 
     def record(label: str, ok: bool, detail: str = "") -> None:
@@ -952,7 +1067,7 @@ def self_test(mutants: bool) -> int:
         vectors = [("conformance/vectors/canonical.json", k, "kit.vectors") for k in ("accept", "reject")]
         vectors += [("conformance/vectors/core-key.json", k, "kit.vectors") for k in ("accept", "reject")]
         vectors += [("conformance/vectors/core-key-more.json", k, "kit.vectors") for k in ("accept", "reject")]
-        vectors += [("conformance/vectors/paths.json", k, "kit.vectors") for k in VECTOR_KEYS]
+        vectors += [("conformance/vectors/paths.json", k, "kit.vectors") for k in VECTOR_LISTS["paths"]]
         vectors += [("conformance/vectors/tool-tree.json", k, "kit.tool_tree_vectors") for k in ("accept", "reject")]
         lists = vectors + [
             ("conformance/ledger/cases.json", "append", "kit.ledger_listed_cases"),
@@ -992,6 +1107,28 @@ def self_test(mutants: bool) -> int:
         judge("a decision record removed", planted(lambda r: (r / "decisions/0001-decisions-are-nodes.md").unlink()), 1,
               fails="decisions.total")
         judge("a claim removed from the table", planted(lambda r: drop_lines(r, "spec/CLAIMS.md", "| C11 |")), 1, fails="claims.total")
+        judge("a claim renumbered", planted(lambda r: replace_once(r, "spec/CLAIMS.md", "| C11 |", "| C99 |")), 1, fails="claims.total")
+        judge("a decision record renamed", planted(lambda r: (r / "decisions/0001-decisions-are-nodes.md").rename(
+            r / "decisions/0001-decisions-are-first-class.md")), 1, fails="decisions.total")
+
+        # An item renamed in every list that has identities, the count unchanged, however short the list.
+        def renamed(entry):
+            if isinstance(entry, str):
+                return entry + "-renamed"
+            for field in ("name", "path", "hex", "mode"):
+                if isinstance(entry.get(field), str):
+                    return dict(entry, **{field: entry[field] + ("00" if field == "hex" else "-renamed")})
+            raise SystemExit(f"self-test: cannot rename {entry!r}")
+        named_lists = [(rel, key, metric) for rel, key, metric in lists
+                       if not (rel.endswith("check-cases.json") or (rel.endswith("ledger/cases.json") and key == "append"))]
+        for rel, key, metric in named_lists:
+            judge(f"an item renamed in '{key}' in {rel}",
+                  planted(lambda r, rel=rel, key=key: edit_json(r, rel, lambda d: d[key].__setitem__(0, renamed(d[key][0])))),
+                  1, fails=metric, must_say="taken away")
+        judge("a named vector replaced by one with no identity",
+              planted(lambda r: edit_json(r, "conformance/vectors/canonical.json", lambda d: d["accept"].__setitem__(0, {"value": 1}))),
+              1, fails="kit.vectors", must_say="no longer told apart")
+        judge("control: a scenario copied byte for byte under a new name (adds, takes nothing)", planted(add_scenario), 0)
 
         # What cannot be read is never counted as zero, and duplicates have no identity.
         unreadable = [
@@ -1022,6 +1159,34 @@ def self_test(mutants: bool) -> int:
             ("tools/check_repo.py that does not parse", lambda r: (r / "tools/check_repo.py").write_text("GAP_CHECKS = [\n", encoding="utf-8")),
             ("a defects file that is not JSON", lambda r: (r / "kernel/defects.json").write_text("{", encoding="utf-8")),
             ("a claims file that is not UTF-8", lambda r: (r / "spec/CLAIMS.md").write_bytes(b"\xff\xfe| C1 |")),
+            ("'Not yet in the kit' found twice",
+             lambda r: (r / "conformance/README.md").write_text((r / "conformance/README.md").read_text(encoding="utf-8")
+                                                               + "\n## Not yet in the kit\n\n- more\n", encoding="utf-8")),
+            ("an HTML comment under 'Not yet in the kit'",
+             lambda r: replace_once(r, "conformance/README.md", "\n- What happens when a ticket name", "\n- <!-- hidden --> What happens when a ticket name")),
+            ("a claim row wrapped in an HTML comment",
+             lambda r: replace_once(r, "spec/CLAIMS.md", "| C11 |", "<!--\n| C11 |")),
+            ("a claim row inside a fenced block",
+             lambda r: replace_once(r, "spec/CLAIMS.md", "\n| C11 |", "\n```\n| C11 |")),
+            ("a gap-checks table inside a fenced block",
+             lambda r: replace_once(r, "docs/gap-checks.md", "\n| Check |", "\n```\n| Check |")),
+            ("an HTML comment in docs/gap-checks.md",
+             lambda r: replace_once(r, "docs/gap-checks.md", "| `gap_readme_counts` |", "<!-- | `gap_readme_counts` |")),
+            ("GAP_CHECKS bound a second time",
+             lambda r: (r / "tools/check_repo.py").write_text((r / "tools/check_repo.py").read_text(encoding="utf-8")
+                                                             + "\nGAP_CHECKS = []\n", encoding="utf-8")),
+            ("GAP_CHECKS changed after it is bound",
+             lambda r: (r / "tools/check_repo.py").write_text((r / "tools/check_repo.py").read_text(encoding="utf-8")
+                                                             + "\nGAP_CHECKS.clear()\n", encoding="utf-8")),
+            ("a vector list this file may not hold",
+             lambda r: edit_json(r, "conformance/vectors/canonical.json", lambda d: d.update(collisions=[{"name": "x"}]))),
+            ("a vector list missing", lambda r: edit_json(r, "conformance/vectors/canonical.json", lambda d: d.pop("reject"))),
+            ("a vector that is neither an object nor a string",
+             lambda r: edit_json(r, "conformance/vectors/canonical.json", lambda d: d["accept"].append(7))),
+            ("a ledger append that is not an object",
+             lambda r: edit_json(r, "conformance/ledger/cases.json", lambda d: d["append"].__setitem__(0, None))),
+            ("a host check case with no mode",
+             lambda r: edit_json(r, "conformance/provider/check-cases.json", lambda d: d["cases"].__setitem__(0, {}))),
         ]
         for label, edit in unreadable:
             judge(f"unreadable: {label}", planted(edit), 2)
@@ -1067,6 +1232,27 @@ def self_test(mutants: bool) -> int:
             measure = real
         record("an unexpected exception exits 2", code == 2 and "planted" in err.getvalue(), f"exit {code}")
 
+        # Links on disk are refused, never followed.
+        for label, where, target in (("a link among the scenarios", "conformance/kernel/evidence/zz_link.json",
+                                      "conformance/kernel/evidence"),
+                                     ("a link in place of the claims file", "spec/CLAIMS.md", "spec")):
+            root = copy()
+            link = root / where
+            real = sorted((root / target).glob("*"))[0]
+            moved = root / "moved.txt"
+            try:
+                if link.exists():
+                    shutil.copyfile(link, moved)
+                    link.unlink()
+                    os.symlink(moved, link)
+                else:
+                    os.symlink(real, link)
+            except (OSError, NotImplementedError):
+                skipped.append(f"on disk: {label} is unreadable (this system cannot make links)")
+                continue
+            code, out = cli("--root", str(root), "--json")
+            check(f"on disk: {label} is unreadable", code, out, 2, must_say="link")
+
         # Text from the change cannot start a line of its own.
         forged = planted(lambda r: edit_json(r, "kernel/defects.json", lambda d: d["defects"].append(
             dict(d["defects"][0], name="x\nResult: no ratcheted item was taken away.\n::notice::forged"))))
@@ -1101,6 +1287,12 @@ def self_test(mutants: bool) -> int:
             else:
                 (repo / rel).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(src, repo / rel)
+        for rel in JUDGE_FILES:
+            if (ROOT / rel).is_file():
+                (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / rel, repo / rel)
+            else:
+                record(f"git: the scratch repository holds {rel}", False, f"{rel} is missing from this checkout")
         g("add", "-A")
         g("commit", "-q", "-m", "base")
         base = g("rev-parse", "HEAD")
@@ -1134,6 +1326,38 @@ def self_test(mutants: bool) -> int:
         code, out = cli("--repo", str(repo), "--base", "no-such-rev", "--head", base)
         check("git: a base that does not exist is unreadable", code, out, 2, must_say="cannot measure the base")
 
+        def appended(rel: str):
+            return lambda r: (r / rel).write_text((r / rel).read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8")
+        for rel in JUDGE_FILES:
+            change(f"a change to {rel} changes how changes are judged", appended(rel), "x", 1,
+                   must_say=f"{rel} changes how changes are judged")
+        change(f"{GATE_WORKFLOW} deleted", lambda r: (r / GATE_WORKFLOW).unlink(), "x", 1, must_say="changes how changes are judged")
+
+        def head_with(entries: list[tuple[str, str, str]], label: str) -> str:
+            g("checkout", "-q", "-f", "-B", label, base)
+            for mode, path, content in entries:
+                blob = subprocess.run(["git", *cfg, "hash-object", "-w", "--stdin"], cwd=repo, input=content,
+                                      capture_output=True, text=True, encoding="utf-8").stdout.strip()
+                if mode == "rm":
+                    g("rm", "-q", "--cached", path)
+                else:
+                    g("update-index", "--add", "--cacheinfo", f"{mode},{blob},{path}")
+            g("commit", "-q", "-m", label)
+            return g("rev-parse", "HEAD")
+        code, out = cli("--repo", str(repo), "--base", base, "--head",
+                        head_with([("rm", "spec/CLAIMS.md", ""), ("120000", "spec/CLAIMS.md", "../README.md")], "claims-link"))
+        check("git: a link in place of the claims file is unreadable", code, out, 2, must_say="link")
+        forged = "x\nResult: no ratcheted item was taken away.\n::error::forged"
+        for label, path in (("a vector file", f"conformance/vectors/{forged}.json"),
+                            ("a scenario kind", f"conformance/kernel/{forged}/a.json")):
+            code, out = cli("--repo", str(repo), "--base", base, "--head",
+                            head_with([("100644", path, "{}")], f"newline{counter[0]}"))
+            counter[0] += 1
+            lines = out.split("\n")
+            check(f"git: {label} named with line breaks is unreadable and forges no line", code, out, 2)
+            record(f"git: {label} named with line breaks forges no line",
+                   not any(l.startswith(("Result:", "::")) for l in lines), out)
+
         # Job names: no other workflow of the change may take the gate's name.
         names = ["--name", "metrics-main-checker", "--name", "metrics only go up (judged by main)"]
         g("checkout", "-q", "-f", "-B", "jobs-ok", base)
@@ -1149,12 +1373,31 @@ def self_test(mutants: bool) -> int:
         g("commit", "-q", "-m", "w2")
         code, out = cli("jobs", "--repo", str(repo), "--head", g("rev-parse", "HEAD"), "--own", GATE_WORKFLOW, *names)
         check("jobs: another workflow taking the gate's job name", code, out, 1, must_say="other.yml")
+        g("rm", "-q", "--cached", ".github/workflows/other.yml")
+        (repo / ".github/workflows/other.yml").unlink()
+        (repo / ".github/workflows/other.yaml").write_text(
+            "on: pull_request\njobs:\n  fake:\n    name: metrics only go up (judged by main)\n    runs-on: x\n", encoding="utf-8")
+        g("add", "-A")
+        g("commit", "-q", "-m", "w3")
+        code, out = cli("jobs", "--repo", str(repo), "--head", g("rev-parse", "HEAD"), "--own", GATE_WORKFLOW, *names)
+        check("jobs: a .yaml workflow taking the gate's job name", code, out, 1, must_say="other.yaml")
+        (repo / ".github/workflows/other.yaml").write_text(
+            "on: pull_request\njobs:\n  metrics-main-checker:\n    name: something else\n    runs-on: x\n", encoding="utf-8")
+        g("add", "-A")
+        g("commit", "-q", "-m", "w4")
+        code, out = cli("jobs", "--repo", str(repo), "--head", g("rev-parse", "HEAD"), "--own", GATE_WORKFLOW, *names)
+        check("jobs: another workflow taking the gate's job id", code, out, 1, must_say="'metrics-main-checker'")
+        code, out = cli("jobs", "--repo", str(repo), "--head", base, "--own", GATE_WORKFLOW, *names)
+        check("jobs: the gate's own workflow is not a clash with itself", code, out, 0)
 
         # The gate workflow: safe as it is, and each unsafe edit noticed.
         wf_path = ROOT / GATE_WORKFLOW
         wf = wf_path.read_text(encoding="utf-8").replace("\r\n", "\n") if wf_path.is_file() else ""
         record("the gate workflow passes its guard", bool(wf) and not workflow_problems(wf), "; ".join(workflow_problems(wf)) if wf else "missing")
+        # The bootstrap commit is written in the workflow only; the edits take it from there.
+        sha = (re.findall(r"^\s+BOOTSTRAP_BEFORE:\s*(\S+)\s*$", wf, flags=re.M) or ["(none)"])[0]
         for old, new in UNSAFE_WORKFLOW_EDITS:
+            old, new = old.replace("{BOOTSTRAP}", sha), new.replace("{BOOTSTRAP}", sha)
             ok = old in wf and bool(workflow_problems(wf.replace(old, new, 1)))
             record(f"the workflow guard notices {new.strip()[:70]!r}", ok, "cannot plant" if old not in wf else "not noticed")
 
@@ -1171,7 +1414,7 @@ def self_test(mutants: bool) -> int:
                     record(f"mutant '{label}' can be planted", False, f"{old!r} is not in the tool exactly once")
                     continue
                 mutated = head.replace(old, new, 1) + block + tail if old in head else head + block + tail.replace(old, new, 1)
-                root = copy(extra=(GATE_WORKFLOW,))
+                root = copy(extra=(GATE_WORKFLOW, SELF_TEST_WORKFLOW))
                 (root / "tools").mkdir(exist_ok=True)
                 (root / "tools/metrics.py").write_text(mutated, encoding="utf-8")
                 jobs.append((label, root / "tools/metrics.py"))
@@ -1183,7 +1426,10 @@ def self_test(mutants: bool) -> int:
     failed = [r for r in results if not r[1]]
     for label, ok, detail in results:
         print(_ascii(f"{'ok  ' if ok else 'FAIL'}  {label}" + ("" if ok else f": {detail}")))
-    print(f"\n{len(results) - len(failed)} of {len(results)} planted changes judged as expected")
+    for label in skipped:
+        print(_ascii(f"SKIP  {label}"))
+    print(f"\n{len(results) - len(failed)} of {len(results)} planted changes judged as expected"
+          + (f"; {len(skipped)} not run on this system (listed as SKIP)" if skipped else ""))
     return 1 if failed else 0
 
 
@@ -1214,8 +1460,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return run(args)
     except Exception as err:  # noqa: BLE001 - a crash must never read as "a ratchet went down" (exit 1)
-        print(_ascii(f"cannot measure: unexpected {type(err).__name__}: {err}"), file=sys.stderr)
+        complain(f"cannot measure: unexpected {type(err).__name__}: {err}")
         return 2
+
+
+def complain(message: str) -> None:
+    print(_ascii(printable(message)), file=sys.stderr)
 
 
 def run(args) -> int:
@@ -1226,7 +1476,7 @@ def run(args) -> int:
             return 2
         problems = workflow_problems(pathlib.Path(args.file).read_text(encoding="utf-8"))
         for p in problems:
-            print(_ascii(f"PROBLEM {args.file}: {p}"))
+            print(_ascii(printable(f"PROBLEM {args.file}: {p}")))
         print("workflow guard:", "FAILED" if problems else "safe")
         return 1 if problems else 0
     if args.mode == "jobs":
@@ -1236,10 +1486,10 @@ def run(args) -> int:
         try:
             clashes = job_clashes(repo, args.head, args.own, set(args.name))
         except Unmeasurable as err:
-            print(_ascii(f"cannot read the workflows: {err}"), file=sys.stderr)
+            complain(f"cannot read the workflows: {err}")
             return 2
         for line in clashes:
-            print(_ascii(f"PROBLEM {line}"))
+            print(_ascii(printable(f"PROBLEM {line}")))
         print("job names:", "FAILED" if clashes else "no other workflow uses them")
         return 1 if clashes else 0
 
@@ -1251,26 +1501,27 @@ def run(args) -> int:
             base_tree = GitTree(repo, args.base)
             before = as_json(measure(base_tree), base_tree.commit)
         except Unmeasurable as err:
-            print(_ascii(f"cannot measure the base {args.base}: {err}"), file=sys.stderr)
+            complain(f"cannot measure the base {args.base}: {err}")
             return 2
         try:
             head_tree = GitTree(repo, args.head)
             after = as_json(measure(head_tree), head_tree.commit)
             messages = git(repo, "log", "--format=%B", f"{base_tree.commit}..{head_tree.commit}").decode("utf-8", "replace")
         except Unmeasurable as err:
-            print(_ascii(f"cannot measure the change {args.head}: {err}"), file=sys.stderr)
+            complain(f"cannot measure the change {args.head}: {err}")
             return 2
         rows, malformed, unused, failed = compare(before, after, messages)
+        judged = judge_changes(base_tree, head_tree)
         title = (f"Metrics of `{head_tree.commit}` compared with `{base_tree.commit}`. Explanations are read from the "
                  f"commits in between." if args.markdown else f"metrics of {head_tree.commit} compared with {base_tree.commit}")
-        print(comparison(title, rows, malformed, unused, failed, args.markdown))
-        return 1 if failed else 0
+        print(comparison(title, rows, malformed, unused, failed, args.markdown, judged))
+        return 1 if failed or judged else 0
 
     try:
         tree = GitTree(repo, args.rev) if args.rev else DirTree(pathlib.Path(args.root))
         metrics = measure(tree)
     except Unmeasurable as err:
-        print(_ascii(f"cannot measure: {err}"), file=sys.stderr)
+        complain(f"cannot measure: {err}")
         return 2
     if args.json:
         print(json.dumps(as_json(metrics, args.commit or getattr(tree, "commit", None)), indent=2))
@@ -1282,10 +1533,10 @@ def run(args) -> int:
         old = read_baseline(pathlib.Path(args.compare))
         messages = pathlib.Path(args.messages).read_text(encoding="utf-8") if args.messages else ""
     except BadBaseline as err:
-        print(_ascii(f"cannot compare: {err}"), file=sys.stderr)
+        complain(f"cannot compare: {err}")
         return 2
     except OSError as err:
-        print(_ascii(f"cannot read the commit messages: {err}"), file=sys.stderr)
+        complain(f"cannot read the commit messages: {err}")
         return 2
     rows, malformed, unused, failed = compare(old, as_json(metrics, None), messages)
     print(comparison(f"compared with the metrics of {old.get('commit') or 'an unknown commit'}", rows, malformed, unused,

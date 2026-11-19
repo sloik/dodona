@@ -11,9 +11,18 @@ python tools/metrics.py --base REV --head REV  what a change took away, read fro
 python tools/metrics.py self-test              plants changes and requires each to be judged right
 ```
 
-`python tools/metrics.py --help` lists the rest. The exit code is 0 when nothing ratcheted was taken away, 1 when something was, and 2 when something could not be measured. A file that is missing, or that does not read the way the tool expects, stops the tool with exit 2 and is never counted as zero. Examples: a renamed heading, a stray line in a list, a claim with an unknown status, a claim marked checked by a run that is not recorded, or two items with the same identity.
+`python tools/metrics.py --help` lists the rest. The exit code is 0 when nothing ratcheted was taken away, 1 when something was (or, between two commits, when the tool or its workflows changed), and 2 when something could not be measured. A file that is missing, or that does not read the way the tool expects, stops the tool with exit 2 and is never counted as zero. Examples:
 
-CI shows the numbers and what changed on each pull request and each push to `main`. The run fails when a ratcheted item was taken away. That stops a merge only where `main`'s rules require the check; elsewhere it only reports.
+- a heading renamed or found twice, or a stray line in a list;
+- an HTML comment in a file that is parsed, or a row inside a fenced block;
+- a claim with an unknown status, or one marked checked by a run that is not recorded;
+- two items with the same identity, or a list or item of a kind the tool does not know;
+- a link in place of a file;
+- a check list in `tools/check_repo.py` bound twice or changed after it is bound.
+
+CI shows the numbers and what changed on each pull request and each push to `main`, judged by the copy of this tool on `main` (for a push, the copy from before it). The check fails when a ratcheted item was taken away, and when a change edits `tools/metrics.py`, `.github/workflows/metrics.yml` or `.github/workflows/metrics-self-test.yml`, because that changes how changes are judged. The owner decides whether to merge over a failure.
+
+The check stops a merge only once `main`'s ruleset requires it. Until then it reports and blocks nothing. The owner adds it there after this tool is on `main` and after a live pull request has shown that the check attaches to the pull request's head commit. The pull request that brings this tool is never judged by it, because the check runs `main`'s copy and there is none yet.
 
 ## What is measured
 
@@ -55,7 +64,7 @@ A shown metric can move either way as the project grows:
 - the decisions by status change when the owner accepts or supersedes a record;
 - the breakdowns by kind and by file change when an item moves between files, and their totals are ratcheted.
 
-When one tool measures both sides of a change, which is what CI does, the tool's own list of ratchets is the same on both sides. A change to that list is therefore not judged by this check; it is a change to `tools/metrics.py`, reviewed like any other, and the self-test requires the list to match the expected one. Only `--compare FILE`, against numbers saved earlier, sees a ratcheted metric that disappeared or stopped being ratcheted, and counts that as taking its items away.
+In CI one copy of the tool measures both sides of a change, so a change to its list of ratchets is not seen as a metric moving. It is seen as a change to `tools/metrics.py`, which fails the check on its own. The self-test also requires the list to match the expected one. Only `--compare FILE`, against numbers saved earlier, sees a ratcheted metric that disappeared or stopped being ratcheted, and counts that as taking its items away.
 
 Adding something the tool does not know, such as a new vector file or a new claim status, makes the tool unable to measure until it learns it, so such a change fails until `tools/metrics.py` is updated or the owner merges over it.
 
@@ -71,6 +80,12 @@ The line starts with `Metrics-down:`, names one metric exactly and gives a reaso
 
 Each change is compared with its own base, so a removal that the owner merged over does not carry forward to the next change.
 
+## What the check cannot see
+
+- **Its own job name, taken by another workflow.** A required check is matched by its name. `tools/metrics.py jobs` fails the check when another workflow of the change defines a job with the gate's id or name, in a `.yml` or `.yaml` file. This is best effort. It reads plain block-style YAML. A name made by an expression or a matrix, written in flow style or with escapes, or a check run created through the API gets past it. What remains is that taking the name needs a workflow file in the change, which a reviewer sees.
+- **Unsafe edits of its own workflow.** The self-test reads `metrics.yml` for known ways of running or checking out the pull request's code and plants each one. That reading is advisory, because a determined edit could get past it. Any change to the workflow fails the check anyway.
+- **What a file means.** The tool counts what files state. A scenario whose content is emptied, or a defect cut down to its name, keeps its identity and is not seen as taken away.
+
 ## The self-test
 
 `python tools/metrics.py self-test` works on copies of the source files in a temporary folder, on a scratch git repository and on faulty copies of the tool itself. For each, it requires the stated exit code and, where something is taken away, that the row of that metric is the one that fails. It checks:
@@ -78,16 +93,19 @@ Each change is compared with its own base, so a removal that the owner merged ov
 - that the ratcheted metrics are exactly the expected list, which is kept apart from the code that measures;
 - controls that must pass: nothing changed, an item added, a shown number lowered;
 - every ratcheted list taken from in turn: a scenario from each kind, an item from every vector list, ledger list, case list and defect list, a claim, a checked mark, a decision record, a gap check and a tool check;
-- a scenario renamed, which takes one away although the count is unchanged;
+- an item renamed in every list that has identities, however short the list, and a scenario, claim and decision renamed: each takes one away although the count is unchanged;
+- a named vector replaced by one with no identity, and a scenario copied byte for byte, which takes nothing;
+- a change to each of `tools/metrics.py` and the two workflows, and the gate workflow deleted, in a scratch git repository;
 - explanations that are well formed, too short, empty, for another metric, for no metric or with a misspelt key, each shown and none passing the change, in text and in Markdown;
 - sources that cannot be read, each of which must exit 2:
-  - a renamed heading, a stray line or a heading under "Not yet in the kit";
+  - a renamed heading, the heading twice, a stray line, a heading or an HTML comment under "Not yet in the kit";
+  - a claim row in an HTML comment or a fenced block, a gap-checks table in a fenced block, a comment in `docs/gap-checks.md`;
   - unknown statuses, and a run that is not recorded;
-  - duplicate identities, unknown vector files or lists, and names that cannot be metrics;
-  - a listed gap check that `GAP_CHECKS` lacks, and a `tools/check_repo.py` that does not parse;
-  - files that are not JSON or not UTF-8, a link in place of a file, earlier files that are malformed, and an unexpected exception;
+  - duplicate identities, unknown vector files, a vector list a file may not hold or one missing, an item of the wrong type, and names that cannot be metrics;
+  - a listed gap check that no check list has, `GAP_CHECKS` bound twice or changed afterwards, and a `tools/check_repo.py` that does not parse;
+  - files that are not JSON or not UTF-8, a link in place of a file in git and on disk (where the system can make links; otherwise the case is listed as SKIP), earlier files that are malformed, and an unexpected exception;
 - for every ratcheted metric and each of its groups, an earlier state with one item more, which must fail, and for every shown metric an earlier number one higher, which must pass;
-- that a name holding a line break cannot add a line of its own to the report, such as a forged result;
-- that no other workflow of a change may use the gate's job name;
-- that the gate workflow is safe, with each unsafe edit planted and noticed;
-- that each planted fault in the tool makes its own self-test fail. The faults are: ignoring `bad_requests`, counting only `accept` lists, skipping a kind, removing a ratchet, comparing counts instead of identities, letting an explanation pass a change, accepting duplicates or stray lines, not looking listed checks up in `GAP_CHECKS`, printing identities raw, a crash reading as exit 1, and a workflow guard that misses Python run without `-I`.
+- that a name holding a line break, as an identity, a vector file or a kind of scenario, cannot add a line of its own to the report, such as a forged result;
+- that the jobs guard finds the gate's job name and job id in another `.yml` or `.yaml` workflow, and does not find the gate's own workflow;
+- the workflow guard: the gate workflow passes it, and each unsafe edit planted in it is noticed (among them write permissions, a secret, a self-hosted runner, `git -c ... checkout`, `read-tree -u`, a pipe into `bash` or `tar`, `eval`, and a loosened bootstrap test);
+- that each fault planted in the tool makes its own self-test fail. `MUTANTS` in `tools/metrics.py` lists the faults, each named for what it breaks.
