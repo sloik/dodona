@@ -5,7 +5,7 @@
 //! hello, the manifest with its echo, one `decision.index` request, shutdown,
 //! and every process the provider started ended. One deadline covers it all.
 use crate::json::{self, Value};
-use crate::proc::Tree;
+use crate::proc::{self, Tree};
 use crate::wire::{self, Log, Peer};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -122,6 +122,7 @@ pub fn run(args: &[String]) -> Result<Value, String> {
     );
     let mut tree = match tree {
         Ok(t) => t,
+        Err(e) if proc::unconfined(&e) => return Err(e.to_string()),
         Err(_) => return Ok(outcome(Err("closed"), 0, false)),
     };
     let log = Log::drain(tree.child.stderr.take().expect("piped"), limits.max_log);

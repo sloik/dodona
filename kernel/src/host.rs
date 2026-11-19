@@ -9,7 +9,7 @@
 use crate::canonical;
 use crate::json::{self, Value};
 use crate::path;
-use crate::proc::Tree;
+use crate::proc::{self, Tree};
 use crate::session::{answer_fault, hello};
 use crate::wire::{self, Log, Peer};
 use std::io::{Read, Write};
@@ -27,8 +27,10 @@ pub const RANKS: [&str; 4] = ["documented", "sampled", "bounded", "exhaustive"];
 pub const VERDICTS: [&str; 4] = ["passed", "failed", "error", "unsupported"];
 /// The largest attachment the host hashes again.
 pub const MAX_ATTACHMENT: u64 = 64 << 20;
-/// The longest the host waits for an executor beyond its deadline: 24 hours.
+/// The longest the host waits for an executor: 24 hours.
 pub const MAX_WALL_MS: u64 = 24 * 60 * 60 * 1000;
+/// How much longer than a run's `wall_ms` the host waits for its executor.
+pub const EXECUTOR_GRACE_MS: u64 = 60 * 1000;
 
 /// What the check was given, and what the manifest declared.
 pub struct Given {
@@ -196,6 +198,12 @@ pub fn run_fault(g: &Given, runs: usize, run: &Value) -> Option<&'static str> {
     }
     if named.iter().any(|t| !g.tools.iter().any(|(n, _)| n == t)) {
         return Some("tool-not-in-key");
+    }
+    if named
+        .iter()
+        .any(|t| !run_tools.iter().any(|e| e.text("name") == Some(t)))
+    {
+        return Some("tool-not-in-run");
     }
     let given = |e: &Value| {
         g.tools
@@ -449,16 +457,31 @@ pub fn manifest(m: &Value) -> Option<(Vec<String>, Ceiling)> {
 
 /// Give one run to the executor command and read its report, strictly. None when
 /// the executor fails, prints no object that can be read, or is not done by `wait`.
-fn execute(executor: &[String], root: &Path, asked: &Value, wait: Duration) -> Option<Value> {
-    let mut tree = Tree::spawn(
+/// An executor that could not be confined to a tree of its own is not run at
+/// all: that is `Err`, and ends the command.
+fn execute(
+    executor: &[String],
+    root: &Path,
+    asked: &Value,
+    wait: Duration,
+) -> Result<Option<Value>, String> {
+    let tree = Tree::spawn(
         Command::new(&executor[0])
             .args(&executor[1..])
             .current_dir(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null()),
-    )
-    .ok()?;
+    );
+    match tree {
+        Ok(tree) => Ok(report_of(tree, asked, wait)),
+        Err(e) if proc::unconfined(&e) => Err(e.to_string()),
+        Err(_) => Ok(None),
+    }
+}
+
+/// The report of an executor started as `tree`, or None.
+fn report_of(mut tree: Tree, asked: &Value, wait: Duration) -> Option<Value> {
     let mut stdout = tree.child.stdout.take()?;
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -487,15 +510,36 @@ fn execute(executor: &[String], root: &Path, asked: &Value, wait: Duration) -> O
     if !status.success() {
         return None;
     }
-    match wire::strict(std::str::from_utf8(out.trim_ascii()).ok()?) {
+    match wire::strict(std::str::from_utf8(report_line(&out)?).ok()?) {
         Ok(v @ Value::Object(_)) => Some(v),
         _ => None,
     }
 }
 
+/// The report an executor printed: its first line, ended by a line feed alone.
+/// No line feed, a carriage return before it, or an empty first line is no report.
+pub fn report_line(out: &[u8]) -> Option<&[u8]> {
+    let end = out.iter().position(|b| *b == b'\n')?;
+    let line = &out[..end];
+    (!line.is_empty() && !line.ends_with(b"\r")).then_some(line)
+}
+
+/// How long the host waits for an executor: the run's `wall_ms` and a minute
+/// more, whatever the host's own deadline, at most 24 hours; 24 hours when the
+/// run states no `wall_ms`.
+pub fn executor_wait(run: &Value) -> Duration {
+    let ms = match run.opt("limits").and_then(|l| l.opt("wall_ms")) {
+        Some(Value::Number(n)) => (*n).max(0) as u64 + EXECUTOR_GRACE_MS,
+        _ => MAX_WALL_MS,
+    };
+    Duration::from_millis(ms.min(MAX_WALL_MS))
+}
+
 enum Outcome {
     Verdict(String),
     Refused(&'static str),
+    /// The command cannot go on: a process could not be confined.
+    Fatal(String),
 }
 
 struct Asked {
@@ -623,16 +667,16 @@ fn drive(
             ),
             ("run", run.clone()),
         ]);
-        let wall = match run.opt("limits").and_then(|l| l.opt("wall_ms")) {
-            Some(Value::Number(n)) if *n > 0 => (*n as u64).min(MAX_WALL_MS),
-            _ => 0,
-        };
         let report = execute(
             &asked.executor,
             Path::new(&asked.root),
             &given,
-            wait + Duration::from_millis(wall),
+            executor_wait(run),
         );
+        let report = match report {
+            Ok(report) => report,
+            Err(why) => return Ok(Outcome::Fatal(why)),
+        };
         if let Some(verdict) = report_fault(run, report.as_ref()) {
             return Ok(Outcome::Verdict(verdict.to_owned()));
         }
@@ -677,6 +721,7 @@ pub fn check(v: &Value) -> Result<Value, String> {
             ("reason", json::string(r)),
             runs,
         ]),
+        Outcome::Fatal(why) => return Err(why),
     })
 }
 
@@ -692,6 +737,7 @@ fn host(asked: &Asked, g: &mut Given, runs: &mut usize) -> Outcome {
     );
     let mut tree = match tree {
         Ok(t) => t,
+        Err(e) if proc::unconfined(&e) => return Outcome::Fatal(e.to_string()),
         Err(_) => return Outcome::Refused("closed"),
     };
     let log = Log::drain(tree.child.stderr.take().expect("piped"), 65536);
@@ -795,10 +841,32 @@ mod tests {
             fault(&with("program", r#"{"tool":"shell","path":"bin/sh"}"#)),
             Some("tool-not-in-key")
         );
+        // The program's tool is not in the run's own tools: that comes first.
         assert_eq!(
             fault(&with(
                 "tools",
                 &format!(r#"[{{"name":"shell","digest":"{C}"}}]"#)
+            )),
+            Some("tool-not-in-run")
+        );
+        assert_eq!(fault(&with("tools", "[]")), Some("tool-not-in-run"));
+        assert_eq!(
+            fault(&with(
+                "tools",
+                &format!(
+                    r#"[{{"name":"checker","digest":"{C}"}},{{"name":"shell","digest":"{C}"}}]"#
+                )
+            )),
+            Some("tool-not-in-key")
+        );
+        // Rule by rule over every entry: a wrong digest in one entry and an unknown
+        // tool in another give the earlier rule's reason.
+        assert_eq!(
+            fault(&with(
+                "tools",
+                &format!(
+                    r#"[{{"name":"checker","digest":"{A}"}},{{"name":"shell","digest":"{C}"}}]"#
+                )
             )),
             Some("tool-not-in-key")
         );
@@ -900,6 +968,27 @@ mod tests {
         assert!(!tool_file_passes("y=/z"));
         assert!(!tool_file_passes("lib/x\u{e9}.jar"));
         assert!(!tool_file_passes("../x"));
+    }
+    #[test]
+    fn the_executor_report_and_wait() {
+        assert_eq!(report_line(b"{}\n"), Some(&b"{}"[..]));
+        assert_eq!(report_line(b"{}\nmore\n"), Some(&b"{}"[..]));
+        assert_eq!(report_line(b"{}"), None);
+        assert_eq!(report_line(b"{}\r\n"), None);
+        assert_eq!(report_line(b"\n{}\n"), None);
+        assert_eq!(report_line(b""), None);
+        let wait = |limits: &str| executor_wait(&v(&format!(r#"{{"limits":{limits}}}"#)));
+        assert_eq!(wait(r#"{"wall_ms":1000}"#), Duration::from_millis(61_000));
+        assert_eq!(wait(r#"{"wall_ms":0}"#), Duration::from_millis(60_000));
+        assert_eq!(
+            wait(r#"{"output_bytes":1}"#),
+            Duration::from_millis(MAX_WALL_MS)
+        );
+        assert_eq!(
+            wait(r#"{"wall_ms":9007199254740991}"#),
+            Duration::from_millis(MAX_WALL_MS)
+        );
+        assert_eq!(executor_wait(&v("{}")), Duration::from_millis(MAX_WALL_MS));
     }
     #[test]
     fn the_run_key_has_the_number() {
