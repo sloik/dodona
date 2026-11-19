@@ -35,10 +35,10 @@ CI shows the numbers and what changed on each pull request and each push to `mai
 | `decisions.total` | `decisions/[0-9]*.md` | ratcheted, by file name |
 | `decisions.<status>` | the `status:` line of each record | shown |
 | `gaps.not_in_kit` | the `- ` items under "Not yet in the kit" in `conformance/README.md`; any other line there is unreadable | shown |
-| `gaps.gap_checks` | the "Check" table in `docs/gap-checks.md`; each must be an entry of `GAP_CHECKS` in `tools/check_repo.py`, read from its source | ratcheted, by check name |
+| `gaps.gap_checks` | every "Check" table in `docs/gap-checks.md`; each check must be an entry of `GAP_CHECKS` in `tools/check_repo.py` or, where that file exists, of `CHECKS` in `tools/check_docs.py`, read from their source | ratcheted, by check name |
 | `gaps.tool_checks` | the "Tool" table in `docs/gap-checks.md` | ratcheted, by its first cell |
 
-The planted-defect lists are counted only. A kernel is judged by planting the defects (`tools/kit_adequacy.py`, `kernel2/plant.js`), not by this count.
+The planted-defect lists are read for their names only. A kernel is judged by planting the defects (`tools/kit_adequacy.py`, `kernel2/plant.js`), not by this list.
 
 `kit.vectors` counts the same 119 vectors as the README. `kit.ledger_listed_cases` is the 46 cases the two files list. It is not the README's 89 ledger checks, which are what `tools/run_ledger_cases.py` makes of those cases when it runs, including a cut at every byte.
 
@@ -55,7 +55,9 @@ A shown metric can move either way as the project grows:
 - the decisions by status change when the owner accepts or supersedes a record;
 - the breakdowns by kind and by file change when an item moves between files, and their totals are ratcheted.
 
-A ratcheted metric that disappears, or stops being ratcheted, counts as taking its items away.
+When one tool measures both sides of a change, which is what CI does, the tool's own list of ratchets is the same on both sides. A change to that list is therefore not judged by this check; it is a change to `tools/metrics.py`, reviewed like any other, and the self-test requires the list to match the expected one. Only `--compare FILE`, against numbers saved earlier, sees a ratcheted metric that disappeared or stopped being ratcheted, and counts that as taking its items away.
+
+Adding something the tool does not know, such as a new vector file or a new claim status, makes the tool unable to measure until it learns it, so such a change fails until `tools/metrics.py` is updated or the owner merges over it.
 
 ## When an item is taken away on purpose
 
@@ -85,6 +87,7 @@ Each change is compared with its own base, so a removal that the owner merged ov
   - a listed gap check that `GAP_CHECKS` lacks, and a `tools/check_repo.py` that does not parse;
   - files that are not JSON or not UTF-8, a link in place of a file, earlier files that are malformed, and an unexpected exception;
 - for every ratcheted metric and each of its groups, an earlier state with one item more, which must fail, and for every shown metric an earlier number one higher, which must pass;
+- that a name holding a line break cannot add a line of its own to the report, such as a forged result;
 - that no other workflow of a change may use the gate's job name;
 - that the gate workflow is safe, with each unsafe edit planted and noticed;
-- that each planted fault in the tool makes its own self-test fail. The faults are: ignoring `bad_requests`, counting only `accept` lists, skipping a kind, removing a ratchet, comparing counts instead of identities, letting an explanation pass a change, accepting duplicates or stray lines, not looking listed checks up in `GAP_CHECKS`, a crash reading as exit 1, and a workflow guard that misses Python run without `-I`.
+- that each planted fault in the tool makes its own self-test fail. The faults are: ignoring `bad_requests`, counting only `accept` lists, skipping a kind, removing a ratchet, comparing counts instead of identities, letting an explanation pass a change, accepting duplicates or stray lines, not looking listed checks up in `GAP_CHECKS`, printing identities raw, a crash reading as exit 1, and a workflow guard that misses Python run without `-I`.

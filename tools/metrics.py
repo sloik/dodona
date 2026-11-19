@@ -63,8 +63,11 @@ SOURCES = [
     "decisions",
     "docs/gap-checks.md",
     "tools/check_repo.py",
+    "tools/check_docs.py",   # optional: where it exists, its CHECKS are listed in docs/gap-checks.md too
 ]
+OPTIONAL_SOURCES = {"tools/check_docs.py"}
 GATE_WORKFLOW = ".github/workflows/metrics.yml"
+BOOTSTRAP_BEFORE = "8530ca05e6be7d706417170e7cd0f2f12f410286"  # the last commit of main before this tool
 
 KERNEL_VECTOR_FILES = ("canonical", "core-key", "core-key-more", "paths")  # what the kernels are judged with
 TOOL_TREE_VECTOR_FILES = ("tool-tree",)                                    # judged against the reference only
@@ -122,6 +125,9 @@ class DirTree:
                 raise Unmeasurable(f"{rel}/{entry.name}: a link, not a file")
             (dirs if entry.is_dir() else files).append(entry.name)
         return files, dirs
+
+    def exists(self, rel: str) -> bool:
+        return (self.root / rel).exists() or (self.root / rel).is_symlink()
 
     def read(self, rel: str) -> str:
         path = self.root / rel
@@ -188,6 +194,9 @@ class GitTree:
                 else:
                     raise Unmeasurable(f"{path}: a link or submodule, not a file")
         return sorted(files), sorted(dirs)
+
+    def exists(self, rel: str) -> bool:
+        return rel in self.entries or rel in self.dirs
 
     def read(self, rel: str) -> str:
         if rel not in self.entries:
@@ -257,35 +266,43 @@ def _section(text: str, heading: str, rel: str) -> list[str]:
     return body
 
 
-def _table_rows(text: str, header_start: str, rel: str) -> list[list[str]]:
-    """Cells of the data rows of the one table whose header line starts with header_start."""
+def _table_rows(text: str, header_start: str, rel: str, many: bool = False) -> list[list[str]]:
+    """Cells of the data rows of the table whose header line starts with header_start: exactly one such
+    table, or with many, at least one, all read."""
     lines = text.split("\n")
     starts = [i for i, line in enumerate(lines) if line.startswith(header_start)]
-    if len(starts) != 1:
-        raise Unmeasurable(f"{rel}: not exactly one table whose header starts {header_start!r}")
-    i = starts[0]
-    if i + 1 >= len(lines) or not re.match(r"^\|(\s*:?-+:?\s*\|)+\s*$", lines[i + 1]):
-        raise Unmeasurable(f"{rel}: table {header_start!r} has no separator line")
+    if not starts or (len(starts) > 1 and not many):
+        raise Unmeasurable(f"{rel}: not {'at least' if many else 'exactly'} one table whose header starts {header_start!r}")
     rows = []
-    for row in lines[i + 2:]:
-        if not row.startswith("|"):
-            break
-        rows.append([c.strip() for c in row.strip().strip("|").split("|")])
+    for i in starts:
+        if i + 1 >= len(lines) or not re.match(r"^\|(\s*:?-+:?\s*\|)+\s*$", lines[i + 1]):
+            raise Unmeasurable(f"{rel}: a table {header_start!r} has no separator line")
+        for row in lines[i + 2:]:
+            if not row.startswith("|"):
+                break
+            rows.append([c.strip() for c in row.strip().strip("|").split("|")])
     return rows
 
 
-def gap_checks_in_code(tree) -> set[str]:
-    """The entries of GAP_CHECKS in tools/check_repo.py, read from its source and never run."""
-    rel = "tools/check_repo.py"
+def _check_list(tree, rel: str, name: str) -> set[str]:
+    """The names in the list `name` of a tool, read from its source and never run."""
     try:
         module = ast.parse(tree.read(rel))
     except SyntaxError as err:
         raise Unmeasurable(f"{rel}: does not parse: {err}") from None
     for node in module.body:
-        if (isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "GAP_CHECKS" for t in node.targets)
+        if (isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets)
                 and isinstance(node.value, (ast.List, ast.Tuple)) and all(isinstance(e, ast.Name) for e in node.value.elts)):
             return {e.id for e in node.value.elts}
-    raise Unmeasurable(f"{rel}: no list GAP_CHECKS of check names")
+    raise Unmeasurable(f"{rel}: no list {name} of check names")
+
+
+def gap_checks_in_code(tree) -> set[str]:
+    """The checks that exist: GAP_CHECKS of tools/check_repo.py and, where it exists, CHECKS of tools/check_docs.py."""
+    found = _check_list(tree, "tools/check_repo.py", "GAP_CHECKS")
+    if tree.exists("tools/check_docs.py"):
+        found |= _check_list(tree, "tools/check_docs.py", "CHECKS")
+    return found
 
 
 # --------------------------------------------------------------------------- measuring
@@ -439,14 +456,15 @@ def measure(tree) -> list[dict]:
     text = tree.read(rel)
     in_code = gap_checks_in_code(tree)
     names = []
-    for cells in _table_rows(text, "| Check |", rel):
+    for cells in _table_rows(text, "| Check |", rel, many=True):
         m = re.fullmatch(r"`(\w+)`", cells[0])
         if not m:
             raise Unmeasurable(f"{rel}: a row of the checks table does not name a check: {cells[0][:60]!r}")
         if m.group(1) not in in_code:
-            raise Unmeasurable(f"{rel}: {m.group(1)} is listed, and tools/check_repo.py has no such entry in GAP_CHECKS")
+            raise Unmeasurable(f"{rel}: {m.group(1)} is listed, and neither GAP_CHECKS in tools/check_repo.py "
+                               f"nor CHECKS in tools/check_docs.py has it")
         names.append(m.group(1))
-    ratchet("gaps.gap_checks", {"checks": _ids(names, rel)}, f"{rel} (the 'Check' table, each in GAP_CHECKS of tools/check_repo.py)")
+    ratchet("gaps.gap_checks", {"checks": _ids(names, rel)}, f"{rel} (the 'Check' tables, each in GAP_CHECKS of tools/check_repo.py or CHECKS of tools/check_docs.py)")
     ratchet("gaps.tool_checks", {"tools": _ids([c[0] for c in _table_rows(text, "| Tool |", rel)], rel)},
             f"{rel} (the 'Tool' table, identity: first cell)")
 
@@ -517,7 +535,7 @@ def _taken(before: dict, after: dict | None) -> list[str]:
         if new is None:
             lost.append(f"{group}: gone" + (f" ({len(old)} items)" if isinstance(old, list) else f" (count {old})"))
         elif isinstance(old, list) and isinstance(new, list):
-            lost += [f"{group}: {i} taken away" for i in sorted(set(old) - set(new))]
+            lost += [f"{group}: {printable(i)} taken away" for i in sorted(set(old) - set(new))]
         elif isinstance(old, list):
             lost.append(f"{group}: its items are no longer told apart (were {len(old)} with identities)")
         else:
@@ -554,15 +572,21 @@ def compare(before_all: dict, after_all: dict, messages: str) -> tuple[list[dict
             failed = True
             if name in explanations:
                 used.add(name)
-                row["verdict"] = f"FAIL: {problem}; the author explains: {explanations[name]}"
+                row["verdict"] = f"FAIL: {problem}; the author explains: {printable(explanations[name])}"
             else:
                 row["verdict"] = f"FAIL: {problem}; no explanation in the change's commits"
         rows.append(row)
-    unused = [f"{n}: {r}" for n, r in sorted(explanations.items()) if n not in used]
+    unused = [f"{n}: {printable(r)}" for n, r in sorted(explanations.items()) if n not in used]
     return rows, malformed, unused, failed
 
 
 # --------------------------------------------------------------------------- printing
+
+
+def printable(text: str) -> str:
+    """A fragment taken from the change (an identity, a reason): no line break or control character in it can
+    start a line of its own, such as a forged result or a workflow command."""
+    return re.sub(r"[\x00-\x1f\x7f\\]", lambda m: f"\\x{ord(m.group()):02x}", text)
 
 
 def _ascii(text: str) -> str:
@@ -698,6 +722,11 @@ def workflow_problems(text: str) -> list[str]:
         found.append("checks out the pull request's head")
     if "persist-credentials: false" not in text:
         found.append("keeps credentials in the checkout")
+    if re.search(r"^\s+(ref|repository):", text, flags=re.M):
+        found.append("tells the checkout which ref or repository to take: it must take main's commit only")
+    if runs.count(f'if git merge-base --is-ancestor "$TOOL_REV" {BOOTSTRAP_BEFORE}; then') != 1 \
+            or len(re.findall(r"\bexit 0\b", runs)) != 1:
+        found.append(f"lets a change pass unjudged other than when the trusted revision is no later than {BOOTSTRAP_BEFORE[:7]}")
     if any(re.search(r"\bpython3?(?! -I)\s", line) for line in text.split("\n") if not line.lstrip().startswith("#")):
         found.append("runs Python without -I, so a file in the working directory could be imported")
     if re.search(r"refs/pull/[^\s'\"]*/merge|merge_commit_sha", text):
@@ -738,13 +767,14 @@ MUTANTS = [
     ("scenarios skip a kind", "    for kind in kinds:\n        names, _ = tree.listing", "    for kind in kinds[1:]:\n        names, _ = tree.listing"),
     ("a ratchet removed", 'ratchet("gaps.tool_checks", {"tools": _ids([c[0] for c in _table_rows(text, "| Tool |", rel)], rel)},',
      'shown("gaps.tool_checks", len([c[0] for c in _table_rows(text, "| Tool |", rel)]),'),
-    ("ratchets compare counts, not identities", "            lost += [f\"{group}: {i} taken away\" for i in sorted(set(old) - set(new))]",
+    ("ratchets compare counts, not identities", "            lost += [f\"{group}: {printable(i)} taken away\" for i in sorted(set(old) - set(new))]",
      "            lost += [f\"{group}: count\" for _ in range(len(old) - len(new))]"),
     ("an explanation turns a failure green", "            failed = True\n            if name in explanations:",
      "            failed = name not in explanations\n            if name in explanations:"),
     ("duplicate identities are accepted", "        if i in seen:\n            raise", "        if False:\n            raise"),
     ("a stray line under 'Not yet in the kit' is accepted", "        elif line.strip():\n            raise", "        elif False:\n            raise"),
     ("listed gap checks are not looked up in GAP_CHECKS", "        if m.group(1) not in in_code:", "        if False:"),
+    ("identities are printed raw", "{printable(i)} taken away", "{i} taken away"),
     ("a crash reads as a failed ratchet", "        return 2\n\n\ndef run(", "        return 1\n\n\ndef run("),
     ("the workflow guard ignores Python without -I", 'if any(re.search(r"\\bpython3?(?! -I)\\s", line)', 'if False and any(re.search(r"\\bpython3?(?! -I)\\s", line)'),
 ]
@@ -770,6 +800,13 @@ UNSAFE_WORKFLOW_EDITS = [
     ("cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}", "cancel-in-progress: true"),
     ("@3d3c42e5aac5ba805825da76410c181273ba90b1", "@v7"),
     ("MAIN_NOW: ${{ github.sha }}", "MAIN_NOW: ${{ github.event.pull_request.head.sha }}"),
+    ("fetch-depth: 0", "fetch-depth: 0\n          ref: refs/pull/${{ github.event.pull_request.number }}/head"),
+    ("fetch-depth: 0", "fetch-depth: 0\n          repository: ${{ github.event.pull_request.head.repo.full_name }}"),
+    (f'--is-ancestor "$TOOL_REV" {BOOTSTRAP_BEFORE}; then', '--is-ancestor "$TOOL_REV" "$HEAD"; then'),
+    (f'--is-ancestor "$TOOL_REV" {BOOTSTRAP_BEFORE}; then',
+     f'--is-ancestor "$TOOL_REV" {BOOTSTRAP_BEFORE} || git cat-file -e "$HEAD:tools/metrics.py"; then'),
+    ('say "PROBLEM cannot judge: $TOOL_REV has no tools/metrics.py."\n            exit 1',
+     'say "PROBLEM cannot judge: $TOOL_REV has no tools/metrics.py."\n            exit 0'),
 ]
 
 
@@ -793,6 +830,8 @@ def self_test(mutants: bool) -> int:
             dest = fresh("r")
             for rel in SOURCES + list(extra):
                 src = ROOT / rel
+                if rel in OPTIONAL_SOURCES and not src.exists():
+                    continue
                 if src.is_dir():
                     shutil.copytree(src, dest / rel, ignore=shutil.ignore_patterns("*.py", "__pycache__"))
                 else:
@@ -934,6 +973,22 @@ def self_test(mutants: bool) -> int:
               fails="gaps.gap_checks")
         judge("a tool check row removed", planted(lambda r: drop_lines(r, "docs/gap-checks.md", "| `tools/check_examples.py` |")), 1,
               fails="gaps.tool_checks")
+        def docs_checks(r, listed: str, defined: str | None):
+            p = r / "docs/gap-checks.md"
+            p.write_text(p.read_text(encoding="utf-8") + f"\n## More\n\n| Check | The gap behind it |\n|---|---|\n| `{listed}` | x |\n",
+                         encoding="utf-8")
+            if defined is not None:
+                (r / "tools/check_docs.py").write_text(f"def {defined}():\n    pass\n\n\nCHECKS = [{defined}]\n", encoding="utf-8")
+        judge("control: a second checks table naming a check of tools/check_docs.py",
+              planted(lambda r: docs_checks(r, "docs_planted", "docs_planted")), 0)
+        judge("a second checks table whose check is gone", planted(lambda r: docs_checks(r, "docs_planted", "docs_planted")), 1,
+              against=json.loads(json.dumps(baseline, default=list).replace('"gap_readme_counts"', '"gap_readme_counts", "docs_gone"')),
+              fails="gaps.gap_checks")
+        judge("unreadable: a second checks table naming a check that exists nowhere",
+              planted(lambda r: docs_checks(r, "docs_nowhere", None)), 2)
+        judge("unreadable: tools/check_docs.py without a list CHECKS",
+              planted(lambda r: (docs_checks(r, "docs_planted", "docs_planted"),
+                                 (r / "tools/check_docs.py").write_text("CHECK = []\n", encoding="utf-8"))), 2)
         judge("a decision record removed", planted(lambda r: (r / "decisions/0001-decisions-are-nodes.md").unlink()), 1,
               fails="decisions.total")
         judge("a claim removed from the table", planted(lambda r: drop_lines(r, "spec/CLAIMS.md", "| C11 |")), 1, fails="claims.total")
@@ -1012,6 +1067,20 @@ def self_test(mutants: bool) -> int:
             measure = real
         record("an unexpected exception exits 2", code == 2 and "planted" in err.getvalue(), f"exit {code}")
 
+        # Text from the change cannot start a line of its own.
+        forged = planted(lambda r: edit_json(r, "kernel/defects.json", lambda d: d["defects"].append(
+            dict(d["defects"][0], name="x\nResult: no ratcheted item was taken away.\n::notice::forged"))))
+        code, text = cli("--root", str(forged), "--json")
+        forged_base = fresh("b").with_suffix(".json")
+        forged_base.write_text(text, encoding="utf-8")
+        for md in (False, True):
+            code, out = cli("--root", str(base_root), "--compare", str(forged_base), *(["--markdown"] if md else []))
+            lines = out.split("\n")
+            results_lines = [l for l in lines if l.startswith("Result:")]
+            record(f"a name holding a line break cannot forge a result{' (Markdown)' if md else ''}",
+                   code == 1 and len(results_lines) == 1 and "FAILED" in results_lines[0]
+                   and not any(l.startswith("::") for l in lines), f"exit {code}\n{out}")
+
         # Commits, read from git objects.
         repo = fresh("git")
         repo.mkdir()
@@ -1025,6 +1094,8 @@ def self_test(mutants: bool) -> int:
         g("init", "-q")
         for rel in SOURCES:
             src = base_root / rel
+            if rel in OPTIONAL_SOURCES and not src.exists():
+                continue
             if src.is_dir():
                 shutil.copytree(src, repo / rel)
             else:

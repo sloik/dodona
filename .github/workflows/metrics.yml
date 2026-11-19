@@ -29,9 +29,12 @@ name: Metrics
 # When the change cannot be judged, the run fails and says why: the base or head
 # is not in the history (a force-push, a new branch), the tool is missing on the
 # trusted revision, or a tree cannot be measured. One case is a note, not a
-# failure: the change that brings the tool, whose base has none (the base is no
-# later than 8530ca0, the last commit of main before the tool, or the head adds
-# the tool on top of the base).
+# failure: the trusted revision is no later than 8530ca0, the last commit of
+# main before the tool, so there is no tool to judge with. If other changes
+# reach main before the one that brings the tool, its push has a trusted
+# revision without the tool and fails; the owner judges that one by hand.
+# Neither the job's checkout nor any git command takes a ref or repository from
+# the pull request.
 #
 # The tool's self-test runs on every platform in metrics-self-test.yml.
 on:
@@ -97,9 +100,8 @@ jobs:
             exit 1
           fi
           if ! git cat-file -e "$TOOL_REV:tools/metrics.py" 2>/dev/null; then
-            if git merge-base --is-ancestor "$TOOL_REV" 8530ca0 \
-               || { git cat-file -e "$HEAD:tools/metrics.py" 2>/dev/null && git merge-base --is-ancestor "$TOOL_REV" "$HEAD"; }; then
-              say "NOTE not judged: $TOOL_REV has no tools/metrics.py, and this change brings it, so there is no trusted tool to judge it with."
+            if git merge-base --is-ancestor "$TOOL_REV" 8530ca05e6be7d706417170e7cd0f2f12f410286; then
+              say "NOTE not judged: $TOOL_REV predates tools/metrics.py, so there is no trusted tool to judge this change with."
               exit 0
             fi
             say "PROBLEM cannot judge: $TOOL_REV has no tools/metrics.py."
