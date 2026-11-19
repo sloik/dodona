@@ -123,6 +123,17 @@
       "mode": "loose-but-valid-json",
       "outcome": "ok",
       "why": "A session reads JSON as JSON: a fraction, a repeated key or deep nesting in a valid message is not malformed there (the strict reading belongs to a check)."
+    },
+    {
+      "mode": "nan-in-an-answer",
+      "outcome": "error",
+      "reason": "malformed",
+      "why": "NaN is not JSON, so a line holding it is not a message, even though a session otherwise reads JSON loosely."
+    },
+    {
+      "mode": "ignores-shutdown",
+      "outcome": "ok",
+      "why": "A provider that answers and then does not exit after shutdown is ended with its process group after a second; its answer stands, and nothing it started is left running."
     }
   ]
 }

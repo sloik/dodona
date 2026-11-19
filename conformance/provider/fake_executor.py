@@ -14,10 +14,17 @@ and reads one report from standard output. How the run ends is taken from DODONA
   must end the check;
 - `leaves-a-child`: starts a process that sleeps, writes its id to DODONA_TEST_PIDFILE, then reports an exited
   run and exits; the host must end every process of the executor's process group or job when it returns;
+- `slow`: as `exited`, but only after three seconds, longer than the host's own deadline in the case that uses it;
+- `report-crlf`, `report-after-blank-line`: an exited report ended by a carriage return and line feed, or
+  after an empty line, which strict reading refuses;
 - anything else: a complete report with that `end`, which the host must treat as a run that did not finish.
 
+Whatever the ending, it runs only in the project's root: started anywhere else, it exits with status 3 and
+prints nothing, so a host that starts it elsewhere ends every check in error.
+
 It appends what it was given to DODONA_EXECUTOR_RECORD, so the judge can count the runs that were
-really started and the keys they were started under, without taking the host's word.
+really started and the keys they were started under, without taking the host's word, and then the
+report it printed, so the judge can compare it with what the host passed back to the provider.
 """
 import hashlib
 import json
@@ -28,6 +35,8 @@ END = os.environ.get("DODONA_EXECUTOR_END", "exited")
 asked = json.loads(sys.stdin.buffer.read().decode("utf-8"))
 with open(os.environ["DODONA_EXECUTOR_RECORD"], "a", encoding="utf-8") as log:
     log.write(json.dumps({"number": asked.get("number"), "run_key": asked.get("run_key"), "run": asked.get("run")}) + "\n")
+if os.path.realpath(os.getcwd()) != os.path.realpath(os.environ["DODONA_EXECUTOR_ROOT"]):
+    sys.exit(3)
 if END == "fails":
     sys.exit(1)
 if END == "silent":
@@ -43,7 +52,7 @@ if True:
     if END == "other-tool" and tools:
         tools[0]["digest"] = "sha256:" + "d" * 64
     platform = {"os": "macos", "arch": "x86_64"} if END == "other-platform" else run.get("platform")
-    report = {"handle": "h", "end": END if END not in ("other-platform", "other-tool", "report-with-a-fraction", "exits-1-with-report", "leaves-a-child") else "exited", "exit_status": 0, "platform": platform, "isolation": "best-effort", "outputs": [],
+    report = {"handle": "h", "end": END if END not in ("other-platform", "other-tool", "report-with-a-fraction", "exits-1-with-report", "leaves-a-child", "slow", "report-crlf", "report-after-blank-line") else "exited", "exit_status": 0, "platform": platform, "isolation": "best-effort", "outputs": [],
               "tools_ran": tools, "captured_output": {"path": "captured.txt", "identity": identity}}
 if END == "leaves-a-child":
     import subprocess
@@ -54,7 +63,13 @@ if END == "leaves-a-child":
 text = json.dumps(report)
 if END == "report-with-a-fraction":
     text = text.replace('"exit_status": 0', '"exit_status": 0.0')  # read strictly, a report like this is no report
-sys.stdout.buffer.write(text.encode("utf-8") + b"\n")
+with open(os.environ["DODONA_EXECUTOR_RECORD"], "a", encoding="utf-8") as log:
+    log.write(json.dumps({"printed": json.loads(text.replace('"exit_status": 0.0', '"exit_status": 0'))}) + "\n")
+if END == "slow":
+    import time
+    time.sleep(3)
+ending = b"\r\n" if END == "report-crlf" else b"\n"
+sys.stdout.buffer.write((b"\n" if END == "report-after-blank-line" else b"") + text.encode("utf-8") + ending)
 if END == "exits-1-with-report":
     sys.stdout.buffer.flush()
     sys.exit(1)

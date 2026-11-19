@@ -35,7 +35,16 @@ def read():
     message = json.loads(line.decode("utf-8")) if line else None
     if isinstance(message, dict):
         body = message.get("body") if isinstance(message.get("body"), dict) else {}
-        note({"got": body.get("op") or message.get("type"), "id": message.get("id"), "check": body.get("check"), "run": body.get("run")})
+        entry = {"got": body.get("op") or message.get("type"), "id": message.get("id"), "check": body.get("check"), "run": body.get("run")}
+        # What the host sent, kept whole where the judge compares it: the start request against what the host
+        # was given, a passed-back report against what the executor printed, and the echo of hello.
+        if body.get("op") == "start":
+            entry["body"] = {k: body.get(k) for k in ("obligation", "inputs", "tools", "platform")}
+        if body.get("op") == "run.result":
+            entry["report"] = body.get("report")
+        if message.get("type") == "hello":
+            entry["echo"] = message.get("echo")
+        note(entry)
     return message
 
 
@@ -119,6 +128,32 @@ def run(body: dict) -> dict:
         described["args"][1] = "-I${tool:checker}/x\u0000"
     if MODE == "wall-ms-huge":
         described["limits"]["wall_ms"] = 2147483648
+    if MODE == "cwd-not-a-string":
+        described["cwd"] = ["work"]
+    if MODE == "limits-not-integers":
+        described["limits"] = {"wall_ms": "1000"}
+    if MODE == "program-not-an-object":
+        described["program"] = "bin/checker"
+    if MODE == "program-tool-not-a-string":
+        described["program"] = {"tool": 7, "path": "bin/checker"}
+    if MODE == "argument-with-a-backslash":
+        described["args"] = ["lib\\rules.jar", "a.txt"]
+    if MODE == "argument-with-a-dollar":
+        described["args"] = ["$HOME", "a.txt"]
+    if MODE == "argument-with-a-percent":
+        described["args"] = ["%USERPROFILE%", "a.txt"]
+    if MODE == "program-tool-not-in-run-tools":
+        described["tools"] = []
+    if MODE == "argument-tool-not-in-run-tools":
+        described["program"] = {"tool": "checker", "path": "bin/checker"}
+        described["tools"] = []
+        described["args"] = ["${tool:checker}/lib/rules.jar", "a.txt"]
+    if MODE == "waits-for-wall-ms":
+        described["limits"] = {"wall_ms": 1000}
+    if MODE == "two-faults-tool-digest-and-unknown":
+        described["tools"] = [{"name": "checker", "digest": "sha256:" + "e" * 64}, {"name": "shell", "digest": "sha256:" + "e" * 64}]
+    if MODE == "two-faults-input-identity-and-unknown":
+        described["inputs"] = [dict(body["inputs"][0], identity="sha256:" + "f" * 64), {"path": "secrets.txt", "identity": "sha256:" + "0" * 64}]
     if MODE == "two-faults-platform-and-tool":
         described["platform"] = {"os": "windows", "arch": "x86_64"}
         described["program"]["tool"] = "shell"
@@ -149,11 +184,15 @@ def main() -> None:
         capabilities[0]["strength"]["rank"] = "certain"
     if MODE == "tools-as-names":
         tools = ["checker"]
+    if MODE == "strength-null":
+        capabilities[0]["strength"] = None
     if MODE == "tool-name-with-a-slash":
         tools = [{"name": "checker", "constraint": "=1"}, {"name": "a/b", "constraint": "*"}]
-    send({"type": "manifest", "echo": hello["echo"] + (" changed" if MODE == "wrong-echo" else ""), "manifest": {
-        "protocol": "0.2", "name": "misbehaving.checker", "version": "0",
-        "capabilities": capabilities, "tools": tools, "trusted_base": []}})
+    manifest = {"protocol": "0.2", "name": "misbehaving.checker", "version": "0",
+                "capabilities": capabilities, "tools": tools, "trusted_base": []}
+    if MODE == "manifest-without-tools":
+        del manifest["tools"]
+    send({"type": "manifest", "echo": hello["echo"] + (" changed" if MODE == "wrong-echo" else ""), "manifest": manifest})
     if MODE == "stops-reading":
         import time
         time.sleep(60)
@@ -233,6 +272,26 @@ def main() -> None:
                 os.symlink(os.getcwd(), os.path.join("work", "via"), target_is_directory=True)
                 data = open("evidence.txt", "rb").read()
                 answer = {"final": dict(passed["final"], attachments=[{"path": "work/via/evidence.txt", "identity": "sha256:" + hashlib.sha256(data).hexdigest()}])}
+            if MODE == "strength-class-not-a-string":
+                answer = {"final": {"verdict": "passed", "strength": {"class": ["test"], "rank": RANK}}}
+            if MODE == "final-unavailable":
+                answer = {"final": {"verdict": "unavailable"}}
+            if MODE == "attachment-path-not-a-string":
+                answer = {"final": dict(passed["final"], attachments=[{"path": ["evidence.txt"], "identity": "sha256:" + "0" * 64}])}
+            if MODE == "attachment-too-big":
+                # One byte over 64 MiB, with its true identity: only the size limit can refuse it.
+                import hashlib
+                size = 64 * 1024 * 1024 + 1
+                with open("big.bin", "wb") as f:
+                    f.truncate(size)
+                digest = hashlib.sha256()
+                for _ in range(size // (1 << 20)):
+                    digest.update(bytes(1 << 20))
+                digest.update(bytes(size % (1 << 20)))
+                answer = {"final": dict(passed["final"], attachments=[{"path": "big.bin", "identity": "sha256:" + digest.hexdigest()}])}
+            if MODE == "two-faults-attachment-identity-and-path":
+                answer = {"final": dict(passed["final"], attachments=[{"path": "evidence.txt", "identity": "sha256:" + "f" * 64},
+                                                                      {"path": "missing.txt", "identity": "sha256:" + "0" * 64}])}
             if MODE == "same-run-twice":
                 answer = {"next": run(body_of_start)} if body["run"] == 1 else passed
             if MODE == "invented-verdict":
@@ -251,6 +310,8 @@ def main() -> None:
                "integer-too-large": '{"type": "result", "id": "%s", "capability": "obligation.check", "body": {"x": 9007199254740992}}',
                "lone-surrogate": '{"type": "result", "id": "%s", "capability": "obligation.check", "body": {"x": "\\ud800"}}',
                "result-without-a-body": '{"type": "result", "id": "%s", "capability": "obligation.check"}',
+               "too-deep": '{"type": "result", "id": "%s", "capability": "obligation.check", "body": {"next": null, "x": ' + '[' * 70 + ']' * 70 + '}}',
+               "nan-in-an-answer": '{"type": "result", "id": "%s", "capability": "obligation.check", "body": {"x": NaN}}',
                "deep-and-duplicate": '{"type": "result", "id": "%s", "capability": "obligation.check", "body": ' + '{"x": ' * 65 + '1' + '}' * 65 + ', "body": {}}'}
         if MODE in raw and body.get("op") == "start":
             sys.stdout.buffer.write((raw[MODE] % request["id"]).encode("utf-8") + b"\n")

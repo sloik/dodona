@@ -161,7 +161,8 @@ class Session:
     def close(self) -> None:
         try:
             self.send({"type": "shutdown"})
-        except Refused:
+            self.tree.proc.wait(timeout=1)  # a provider is given a moment to exit on its own
+        except (Refused, subprocess.TimeoutExpired):
             pass
         self.tree.end()
 
@@ -205,11 +206,15 @@ def half_pair(value) -> bool:
     return False
 
 
+def not_json(text):
+    raise ValueError("malformed")  # NaN and Infinity are not JSON, whatever Python's reader allows
+
+
 def strict_load(raw: bytes):
     """Read one JSON text as the canonical encoding writes it, or raise Refused with the reason."""
     try:
         value = json.loads(raw.decode("utf-8"), object_pairs_hook=no_repeats, parse_float=no_fractions, parse_int=safe_integer,
-                           parse_constant=no_fractions)
+                           parse_constant=not_json)
     except UnicodeDecodeError:
         raise Refused("encoding") from None
     except ValueError as err:
@@ -233,12 +238,12 @@ def manifest_has_its_shape(manifest) -> bool:
             return False
         names.append(item["capability"])
         strength = item.get("strength")
-        if item["capability"] == "obligation.check" and strength is not None:
+        if item["capability"] == "obligation.check" and "strength" in item:  # given as null is given
             if not isinstance(strength, dict) or not isinstance(strength.get("class"), str) or strength.get("rank") not in RANKS:
                 return False
     if len(names) != len(set(names)):
         return False
-    tools = manifest.get("tools", [])
+    tools = manifest.get("tools")  # a manifest without a list of tools is not read as declaring none
     return isinstance(tools, list) and all(isinstance(t, dict) and isinstance(t.get("name"), str) and TOOL_NAME_TEXT.fullmatch(t["name"]) for t in tools)
 
 
@@ -313,11 +318,13 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
         raise Refused("undeclared-tool")
     if any(tool not in known_tools for tool in named):
         raise Refused("tool-not-in-key")  # declared, but not among the tools this check was given
-    for item in run.get("tools", []):
-        if not isinstance(item, dict) or item.get("name") not in known_tools:
-            raise Refused("tool-not-in-key")
-        if item.get("digest") != known_tools.get(item["name"]):
-            raise Refused("tool-digest-mismatch")  # the run would use another tool than the one the result is keyed by
+    if any(tool not in {t.get("name") for t in run.get("tools", [])} for tool in named):
+        raise Refused("tool-not-in-run")  # a tool the run uses is pinned in its own tools, or its digest is never checked
+    # Each rule is checked over every entry before the next rule.
+    if any(not isinstance(item, dict) or item.get("name") not in known_tools for item in run.get("tools", [])):
+        raise Refused("tool-not-in-key")
+    if any(item.get("digest") != known_tools.get(item["name"]) for item in run.get("tools", [])):
+        raise Refused("tool-digest-mismatch")  # the run would use another tool than the one the result is keyed by
     placed = [m for a in run.get("args", []) if isinstance(a, str) for m in TOOL_FILE.findall(a)]
     for path in ([program.get("path", "")] + [f.get("path", "") for f in run.get("inputs", []) + run.get("outputs", [])]
                  + [path for _, path in placed] + ([run["cwd"]] if "cwd" in run else [])):
@@ -338,11 +345,10 @@ def check_run_description(run: dict, manifest: dict, known_inputs: dict[str, str
     taken = {p.lower() for p in inputs | set(known_inputs)}
     if any(f["path"].lower() in taken for f in run["outputs"]):
         raise Refused("output-overwrites-input")  # compared without regard to case: a disk may ignore it
-    for item in run.get("inputs", []):
-        if item["path"] not in known_inputs:
-            raise Refused("input-not-in-key")
-        if known_inputs[item["path"]] is not None and item.get("identity") != known_inputs[item["path"]]:
-            raise Refused("identity-mismatch")
+    if any(item["path"] not in known_inputs for item in run.get("inputs", [])):
+        raise Refused("input-not-in-key")
+    if any(known_inputs[item["path"]] is not None and item.get("identity") != known_inputs[item["path"]] for item in run.get("inputs", [])):
+        raise Refused("identity-mismatch")
     if not isinstance(run.get("args"), list) or not all(isinstance(a, str) and "\x00" not in a for a in run["args"]):
         raise Refused("bad-arguments")
     if named_files is not None and not named_files <= {f.get("path") for f in run.get("inputs", [])}:
@@ -356,9 +362,11 @@ def check_final(final: dict, manifest: dict, capability: str, runs_done: int, ro
     attachments = final.get("attachments", [])
     if not isinstance(attachments, list) or not all(isinstance(a, dict) and isinstance(a.get("path"), str) and isinstance(a.get("identity"), str) for a in attachments):
         raise Refused("bad-final")
+    # Each rule is checked over every attachment before the next rule.
     for item in attachments:
         if pathcheck.check(item["path"].encode("utf-8", errors="surrogatepass")) is not None or not plain_file(root, item["path"]):
             raise Refused("bad-path")
+    for item in attachments:
         rehash(item, root)
     if final.get("verdict") not in ("passed", "failed", "error", "unsupported"):
         raise Refused("bad-verdict")
@@ -713,23 +721,32 @@ def check(args) -> int:
     (conformance/README.md, "Host checks"). The reference for tools/run_check_cases.py.
     """
     global PLATFORM
-    asked = json.loads(sys.stdin.buffer.read().decode("utf-8"))
-    root = pathlib.Path(asked["root"]).resolve()
-    PLATFORM = asked["platform"]
-    check_key = canonical.identity({"obligation": asked["obligation"], "inputs": asked["inputs"]})
+    try:
+        asked = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+    except ValueError:
+        asked = None
+    if not isinstance(asked, dict):
+        print(json.dumps({"outcome": "refused", "reason": "bad-input"}))
+        return 0
 
     def report_for(number, description):
         given = {"number": number, "run_key": run_key(check_key, number, description), "run": description}
-        wall = description.get("limits", {}).get("wall_ms", 0)
+        wall = description.get("limits", {}).get("wall_ms")
+        # At least wall_ms plus 60 seconds, and 24 hours at most; with no wall_ms, the 24 hours.
+        wait = min(wall / 1000 + 60, 86_400) if isinstance(wall, int) else 86_400
         # The executor runs in a process group (Unix) or job (Windows) of its own, and everything in it is
         # ended when it returns, so a run cannot leave work behind it.
         try:
-            tree = provider_host.Tree(asked["executor"])
+            tree = Session._start(asked["executor"], root)  # started in the project's root
         except OSError:
             return {"end": "executor-failed"}
         try:
-            out, _ = tree.proc.communicate(json.dumps(given).encode("utf-8"), timeout=max(600, min(wall, 86_400_000) / 1000 + 60))
-            report = strict_load(out.strip())
+            out, _ = tree.proc.communicate(json.dumps(given).encode("utf-8"), timeout=wait)
+            # The report is read as a message is: its first line, ended by a line feed alone.
+            line = out.split(b"\n", 1)[0]
+            if b"\n" not in out or line.endswith(b"\r") or line.startswith(b"\xef\xbb\xbf"):
+                raise Refused("framing")
+            report = strict_load(line)
         except subprocess.TimeoutExpired:
             return {"end": "timed-out"}
         except (OSError, Refused):
@@ -750,6 +767,9 @@ def check(args) -> int:
     if not shaped:
         print(json.dumps({"outcome": "refused", "reason": "bad-input"}))  # before the provider is started
         return 0
+    root = pathlib.Path(asked["root"]).resolve()
+    PLATFORM = asked["platform"]
+    check_key = canonical.identity({"obligation": asked["obligation"], "inputs": asked["inputs"]})
     named = set(asked["obligation"].get("specified_by", []) + asked["obligation"].get("targets", []))
     if not named <= {f["path"] for f in asked["inputs"]}:
         print(json.dumps({"outcome": "refused", "reason": "unknown-file"}))  # before the provider is started

@@ -43,7 +43,7 @@ More checks run as their own tools in CI, because they need to build or install 
 | `tools/check_examples.py` | The provider guide's examples were valid only because their author said so, and a schema change silently broke one |
 | `tools/kit_adequacy.py` | A kit that no defective kernel fails proves nothing. Each planted defect must be rejected |
 | `tools/path_differential.py` | Two implementations of the path check written from one document could disagree unnoticed |
-| `tools/run_check_cases.py` | The rules a schema cannot express were prose. A checker that breaks each one in turn must be refused by the host, and nothing recorded as passed. It judges any host command, counting runs, run keys and the provider's operations from records the host does not write |
+| `tools/run_check_cases.py` | The rules a schema cannot express were prose. A checker that breaks each one in turn must be refused by the host, and nothing recorded as passed. It judges any host command from what the provider and the executor record: runs, run keys, the start request, the reports passed back, the echo and the closing shutdown. A host written to forge those records is beyond it |
 | `tools/check_transcript.py` | The first real provider sent three kinds of message its own schemas refused, and nothing noticed until a recorded session was validated |
 | `tools/run_ledger_cases.py` | A ledger entry cut short by a crash, or two writers at once, could lose or corrupt a record silently |
 | `tools/run_ledger_cases.py`, again | The ledger judge changed bytes only where the chain of entries would notice, so a reader that compared neither the length nor the checksum passed. Twenty-four whole files now break one thing each |

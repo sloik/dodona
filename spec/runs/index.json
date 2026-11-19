@@ -1216,7 +1216,7 @@
     "spec/kernel/dump-settings.json": "c62119dd04ec92b0efa767512d6443de876be6f45821b929c27795f1c3e994ca",
     "tools/check_states.py": "e1ebe9362ce86ccbf29a0b42e8142142b0be99a70334b3680c8290c0bed0e909"
    },
-   "note": "Both kernels as merged on branch model-repairs for issue 27 agreed with the model on every state that run 9 wrote out: 71,744 of the evidence model and 78,894 of the intent model, no differences. State lists (SHA-256): kernel 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4, intent cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d. Compared by tools/check_states.py on a development machine; CI repeats it on every change to main."
+   "note": "Both kernels as merged on branch kernel-host (decision 0033) agreed with the model on every state that run 9 wrote out: 71,744 of the evidence model and 78,894 of the intent model, no differences. State lists (SHA-256): kernel 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4, intent cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d. Compared by tools/check_states.py on a development machine. The output files hold only the counts, so they do not by themselves show which kernel was compared; the hashes in other_files name the sources, and CI repeats the comparison on every change to main."
   }
  ]
 }

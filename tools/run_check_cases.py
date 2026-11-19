@@ -83,10 +83,14 @@ def judge(case: dict, host: list[str]) -> list[str]:
         obligation = dict(OBLIGATION)
         if case.get("names_a_missing_file"):
             obligation["targets"] = ["a.txt", "b.txt"]
+        if case.get("names_a_missing_spec"):
+            obligation["specified_by"] = ["a.txt", "spec.txt"]
         tools = [dict(t) for t in TOOLS]
         for key, value in case.get("change_input", {}).items():
             # A host input that breaks its own shape: the host must refuse it, not crash.
             target, field = key.split(".")
+            if target == "asked":
+                continue  # applied to the whole input below
             item = {"obligation": obligation, "tool": tools[0], "input": inputs[0]}[target]
             if value is None:
                 item.pop(field, None)
@@ -95,11 +99,19 @@ def judge(case: dict, host: list[str]) -> list[str]:
         asked = {"root": str(project), "provider": [sys.executable, str(KIT / "misbehaving_checker.py")],
                  "obligation": obligation, "inputs": inputs, "tools": tools, "platform": PLATFORM,
                  "executor": [sys.executable, str(KIT / "fake_executor.py")], "deadline_ms": case.get("deadline_ms", 20000)}
+        for key, value in case.get("change_input", {}).items():
+            target, field = key.split(".")
+            if target == "asked":
+                if value is None:
+                    asked.pop(field, None)
+                else:
+                    asked[field] = value
+        sent = json.dumps(asked) if "whole_input" not in case else json.dumps(case["whole_input"])
         env = dict(os.environ, DODONA_CHECKER_MODE=case["mode"], DODONA_TEST_SEEN=str(seen), DODONA_TEST_PIDFILE=str(pidfile),
                    DODONA_EXECUTOR_END=case["run"], DODONA_EXECUTOR_RECORD=str(record), DODONA_EXECUTOR_ROOT=str(project))
         proc = subprocess.Popen(host, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
         try:
-            out, _ = proc.communicate(json.dumps(asked).encode("utf-8"), timeout=120)
+            out, _ = proc.communicate(sent.encode("utf-8"), timeout=120)
         except subprocess.TimeoutExpired:
             proc.kill()
             out = b""
@@ -111,7 +123,9 @@ def judge(case: dict, host: list[str]) -> list[str]:
         time.sleep(0.3)
         got_msgs = [r for r in records(seen) if "got" in r]
         described = [r["described"] for r in records(seen) if "described" in r]
-        started = records(record)
+        given_and_printed = records(record)
+        started = [r for r in given_and_printed if "number" in r]
+        printed = [r["printed"] for r in given_and_printed if "printed" in r]
         leftover = [int(p) for p in pidfile.read_text(encoding="utf-8").split() if p.strip() and alive(int(p))]
     want = {k: case[k] for k in ("outcome", "verdict", "reason") if k in case}
     if not isinstance(answer, dict):
@@ -134,8 +148,21 @@ def judge(case: dict, host: list[str]) -> list[str]:
             problems.append(f"run {n} was given to the executor as number {given.get('number')!r}")
         if given.get("run_key") != canonical.identity({"check": check_key, "run": n, "description": canonical.identity(given.get("run"))}):
             problems.append(f"run {n} was not given the key the contract gives")
+    starts = [m for m in got_msgs if m["got"] == "start"]
+    if starts and starts[0].get("body") != {"obligation": obligation, "inputs": inputs, "tools": tools, "platform": PLATFORM}:
+        problems.append("the start request did not carry the obligation, inputs, tools and platform the host was given")
+    hellos = [m for m in got_msgs if m["got"] == "hello"]
+    echo = hellos[0].get("echo") if hellos else None
+    if hellos and not (isinstance(echo, str) and any(ord(c) > 127 for c in echo) and any(ord(c) < 32 for c in echo)):
+        problems.append("hello's echo did not hold both a non-ASCII and a control character")
+    if case.get("outcome") == "verdict" and got_msgs and got_msgs[-1]["got"] != "shutdown":
+        problems.append("the session did not end with shutdown")
     results = [m for m in got_msgs if m["got"] == "run.result"]
-    if case["run"] in ("exited", "leaves-a-child"):
+    for m in results:
+        n = m.get("run")
+        if not isinstance(n, int) or not 1 <= n <= len(printed) or m.get("report") != printed[n - 1]:
+            problems.append(f"run {n!r} was passed back with a report other than the one the executor printed")
+    if case["run"] in ("exited", "leaves-a-child", "slow"):
         for n in range(1, len(started) + 1):
             if not any(m.get("run") == n and start_ids and m.get("check") == start_ids[0] for m in results):
                 problems.append(f"run {n} exited and was not passed back to the provider under the start request's id")
@@ -159,9 +186,10 @@ def main() -> int:
         return 2
     host = sys.argv[sys.argv.index("--") + 1:]
     spec = json.loads((KIT / "check-cases.json").read_text(encoding="utf-8"))
-    failed = 0
+    failed = skipped = 0
     for case in spec["cases"]:
         if sys.platform in case.get("not_on", []):
+            skipped += 1
             print(f"skip     {case['mode']} ({case['run']}): not on {sys.platform}, where the provider cannot make what the case needs")
             continue
         problems = judge(case, host)
@@ -172,8 +200,11 @@ def main() -> int:
         else:
             print(f"match    {label}")
     total = len(spec["cases"])
-    print(json.dumps({"cases": total, "matched": total - failed, "all_matched": failed == 0 and total > 0}))
-    return 0 if failed == 0 and total else 1
+    judged = total - skipped
+    # A case skipped on this platform is reported as skipped, never as matched.
+    print(json.dumps({"cases": total, "judged": judged, "skipped": skipped, "matched": judged - failed,
+                      "all_matched": failed == 0 and judged > 0}))
+    return 0 if failed == 0 and judged else 1
 
 
 if __name__ == "__main__":

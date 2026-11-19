@@ -106,8 +106,15 @@ def main() -> None:
         time.sleep(600)
     if MODE == "two-answers":
         send(answer)
+    if MODE == "nan-in-an-answer":
+        OUT.write(('{"type": "result", "id": %s, "capability": %s, "body": {"x": NaN}}\n'
+                   % (json.dumps(request.get("id")), json.dumps(request.get("capability")))).encode("utf-8"))
+        OUT.flush()
+        time.sleep(600)
     send(answer)
     read()  # shutdown
+    if MODE == "ignores-shutdown":
+        time.sleep(600)
 
 
 if __name__ == "__main__":

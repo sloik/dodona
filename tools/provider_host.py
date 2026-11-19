@@ -77,6 +77,10 @@ class Tree:
             pass
 
 
+
+def not_json(text):
+    raise ValueError(text)
+
 def read_lines(stream, max_line: int, out: "queue.Queue") -> None:
     """Hand over each line, or a marker, without ever holding more than the limit."""
     buffered = b""
@@ -152,7 +156,7 @@ def session(argv: list[str], deadline_ms: int, max_line: int, max_log: int) -> d
         except UnicodeDecodeError:
             return fail("encoding")
         try:
-            message = json.loads(text)
+            message = json.loads(text, parse_constant=not_json)  # NaN and Infinity are not JSON
         except ValueError:
             return fail("malformed")
         if not isinstance(message, dict) or not isinstance(message.get("type"), str):
@@ -181,13 +185,18 @@ def session(argv: list[str], deadline_ms: int, max_line: int, max_log: int) -> d
         if answer.get("capability") != "decision.index":
             return fail("wrong-capability")
         send({"type": "shutdown"})
-        # Anything more from the provider after its one answer is not ignored.
-        try:
-            kind, _ = lines.get(timeout=max(0.0, min(0.5, ends - time.monotonic())))
+        # The provider is given up to a second to exit; anything more it sends meanwhile is not ignored.
+        # One that does not exit is ended with its process group, and the session's outcome stands.
+        until = min(time.monotonic() + 1.0, ends)
+        while True:
+            try:
+                kind, _ = lines.get(timeout=max(0.0, until - time.monotonic()))
+            except queue.Empty:
+                break
             if kind in ("line", "too-long"):
                 return fail("unexpected")
-        except queue.Empty:
-            pass
+            if kind == "closed":
+                break
         return {"outcome": "ok"}
 
     try:

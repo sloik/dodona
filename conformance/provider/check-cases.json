@@ -1,5 +1,5 @@
 {
-  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. Nothing may be recorded as passed except in the control and in the cases whose outcome is the verdict `passed`. `runs` is how many runs the executor must have been given, no more and no fewer. `deadline_ms`, where given, is the deadline the host is given; `names_a_missing_file` makes the obligation name a file that is not among the inputs. `second_input` gives the check a second input, b.txt; `many_inputs` gives it that many more, so that a request is long; `change_input` breaks one field of the host's own input (null removes it); `not_on` lists platforms where the provider cannot make what the case needs.",
+  "about": "What a host must do when a checking provider breaks a rule that no schema can express. `run` says how the one run ended. `outcome` is `verdict` with the verdict the host records, or `refused` with the reason. Nothing may be recorded as passed except in the control and in the cases whose outcome is the verdict `passed`. `runs` is how many runs the executor must have been given, no more and no fewer. `deadline_ms`, where given, is the deadline the host is given; `names_a_missing_file` makes the obligation name a file that is not among the inputs. `second_input` gives the check a second input, b.txt; `many_inputs` gives it that many more, so that a request is long; `change_input` breaks one field of the host's own input (null removes it); `names_a_missing_spec` makes the obligation's specified_by name a file that is not among the inputs; `change_input` keys of the form `asked.FIELD` change the whole input's field; `whole_input` replaces the whole input; `not_on` lists platforms where the provider cannot make what the case needs.",
   "cases": [
     {
       "mode": "well-behaved",
@@ -811,6 +811,246 @@
       "verdict": "passed",
       "runs": 1,
       "why": "When the executor returns, every process in its process group or job is gone: a run cannot leave work behind it."
+    },
+    {
+      "mode": "cwd-not-a-string",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-description",
+      "runs": 0,
+      "why": "A run's cwd, where given, is a string."
+    },
+    {
+      "mode": "limits-not-integers",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-description",
+      "runs": 0,
+      "why": "A run's limits, where given, are integers; a number written as a string is not one."
+    },
+    {
+      "mode": "program-not-an-object",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-description",
+      "runs": 0,
+      "why": "A run's program is an object naming a tool and a path."
+    },
+    {
+      "mode": "program-tool-not-a-string",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-description",
+      "runs": 0,
+      "why": "The tool a run's program names is a string."
+    },
+    {
+      "mode": "argument-with-a-backslash",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "runs": 0,
+      "why": "A backslash can join a path on Windows, so an argument holding one must be a file of the run's."
+    },
+    {
+      "mode": "argument-with-a-dollar",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "runs": 0,
+      "why": "A dollar sign can start a variable a shell or a tool expands."
+    },
+    {
+      "mode": "argument-with-a-percent",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "runs": 0,
+      "why": "A percent sign can start a variable on Windows."
+    },
+    {
+      "mode": "program-tool-not-in-run-tools",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "tool-not-in-run",
+      "runs": 0,
+      "why": "The tool a run's program names is in the run's own tools, so the executor pins its digest and reports it."
+    },
+    {
+      "mode": "argument-tool-not-in-run-tools",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "tool-not-in-run",
+      "runs": 0,
+      "why": "So is every tool an argument names: a tool missing from the run's tools would run with no digest checked."
+    },
+    {
+      "mode": "waits-for-wall-ms",
+      "run": "slow",
+      "deadline_ms": 1500,
+      "outcome": "verdict",
+      "verdict": "passed",
+      "runs": 1,
+      "why": "A host waits for the executor at least the run's wall_ms plus 60 seconds, however short its own deadline."
+    },
+    {
+      "mode": "two-faults-tool-digest-and-unknown",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "tool-not-in-key",
+      "runs": 0,
+      "why": "Each rule is checked over every entry before the next: an unknown tool is found before another tool's wrong digest."
+    },
+    {
+      "mode": "two-faults-input-identity-and-unknown",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "input-not-in-key",
+      "runs": 0,
+      "why": "The same holds for inputs: an input not in the key is found before another input's wrong identity."
+    },
+    {
+      "mode": "two-faults-attachment-identity-and-path",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "runs": 1,
+      "why": "And for attachments: every path is checked before any identity."
+    },
+    {
+      "mode": "strength-null",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-manifest",
+      "runs": 0,
+      "why": "A strength that is given is an object; null is not one."
+    },
+    {
+      "mode": "manifest-without-tools",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-manifest",
+      "runs": 0,
+      "why": "A manifest's tools is a list; a manifest without one is not read as declaring none."
+    },
+    {
+      "mode": "strength-class-not-a-string",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "strength-class-mismatch",
+      "runs": 1,
+      "why": "A final's strength names its class as the manifest does, a string."
+    },
+    {
+      "mode": "final-unavailable",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-verdict",
+      "runs": 1,
+      "why": "Only the host says a check is unavailable, from the executor's report; a provider cannot."
+    },
+    {
+      "mode": "attachment-path-not-a-string",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-final",
+      "runs": 1,
+      "why": "An attachment is an object with a string path and identity."
+    },
+    {
+      "mode": "attachment-too-big",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "runs": 1,
+      "why": "An attachment holds at most 64 MiB; this one is a byte over, with its true identity."
+    },
+    {
+      "mode": "too-deep",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "too-deep",
+      "runs": 0,
+      "why": "An answer nested deeper than 64 is refused, after it has been read whole."
+    },
+    {
+      "mode": "nan-in-an-answer",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "malformed",
+      "runs": 0,
+      "why": "NaN is not JSON: an answer holding it is not a message."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "report-crlf",
+      "outcome": "verdict",
+      "verdict": "error",
+      "runs": 1,
+      "why": "An executor's report is read as messages are: a carriage return before its line feed means there is no report."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "report-after-blank-line",
+      "outcome": "verdict",
+      "verdict": "error",
+      "runs": 1,
+      "why": "So does an empty line before it: the first line is the report."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "exited",
+      "names_a_missing_spec": true,
+      "outcome": "refused",
+      "reason": "unknown-file",
+      "runs": 0,
+      "why": "The files that specify an obligation are among the inputs too; one that is not is refused before the provider is sent anything."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "exited",
+      "change_input": {
+        "asked.root": 5
+      },
+      "outcome": "refused",
+      "reason": "bad-input",
+      "runs": 0,
+      "why": "The host's own input has its shape: a root that is not a string is refused."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "exited",
+      "change_input": {
+        "asked.deadline_ms": "20000"
+      },
+      "outcome": "refused",
+      "reason": "bad-input",
+      "runs": 0,
+      "why": "A deadline is a positive integer."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "exited",
+      "change_input": {
+        "asked.platform": null
+      },
+      "outcome": "refused",
+      "reason": "bad-input",
+      "runs": 0,
+      "why": "An input without a platform is refused, not given a default."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "exited",
+      "whole_input": [
+        "not",
+        "an",
+        "object"
+      ],
+      "outcome": "refused",
+      "reason": "bad-input",
+      "runs": 0,
+      "why": "An input that is not an object is refused, not crashed on."
     }
   ]
 }
