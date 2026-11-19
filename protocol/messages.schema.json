@@ -974,12 +974,12 @@
         },
         "condition": {
           "type": "string",
-          "description": "Deferred gates only: what is to be observed, in plain words."
+          "description": "Deferred gates only: what is to be observed, in plain words. A deferred gate whose intent gives none is reported as having none; it can still be closed only by an observation."
         },
         "limit_days": {
           "type": "integer",
           "minimum": 1,
-          "description": "Deferred gates only: days after the intent is first reported delivered by which the observation must be made. The kernel derives the due date; no date takes part in identity."
+          "description": "Deferred gates only: days after the intent is first reported delivered by which the observation must be made. The kernel derives the due date; no date takes part in identity. A deferred gate whose intent gives none is reported as having no limit, which is longer than any limit policy allows."
         },
         "not_applicable": {
           "type": "array",
@@ -990,22 +990,18 @@
         }
       },
       "if": {
-        "properties": {
-          "gate": {
-            "const": "deferred"
-          }
-        },
-        "required": [
-          "gate"
-        ]
+        "not": {
+          "properties": {
+            "gate": {
+              "const": "deferred"
+            }
+          },
+          "required": [
+            "gate"
+          ]
+        }
       },
       "then": {
-        "required": [
-          "condition",
-          "limit_days"
-        ]
-      },
-      "else": {
         "not": {
           "anyOf": [
             {
@@ -1029,6 +1025,7 @@
         "name",
         "file",
         "statement",
+        "text",
         "owner",
         "criteria",
         "children",
@@ -1045,6 +1042,10 @@
         },
         "statement": {
           "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "description": "The intent as written, all of it: what an owner confirms. Changing any of it changes the baseline."
         },
         "owner": {
           "type": "object",
@@ -1063,6 +1064,25 @@
               ]
             }
           }
+        },
+        "worker": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "person",
+                "agent"
+              ]
+            }
+          },
+          "description": "Who does the work the intent asks for, when the file says."
         },
         "criteria": {
           "type": "array",
@@ -1221,6 +1241,26 @@
             "$ref": "#/$defs/file_ref"
           },
           "description": "Claimed files, sorted by path."
+        },
+        "obligations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "binding",
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "binding": {
+                "$ref": "common.schema.json#/$defs/name"
+              },
+              "name": {
+                "$ref": "common.schema.json#/$defs/name"
+              }
+            }
+          },
+          "description": "Every obligation the project's bindings enumerated, sorted by binding then name, so the provider can say which obligations check each criterion. Absent or empty when there are none."
         }
       }
     },
