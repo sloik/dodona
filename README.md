@@ -40,8 +40,8 @@ dodona is bootstrapped in six stages ([decision 0011](decisions/0011-self-hostin
 | The owner confirms an intent's criteria and gates, recorded in a ledger in the repository | Done |
 | Checks that already have a current result are reused between CI runs, with the counts shown | Done ([issue 22](https://github.com/sloik/dodona/issues/22)) |
 | The formal models repaired so each property can fail, with planted defects both ways | Done ([issue 27](https://github.com/sloik/dodona/issues/27)) |
-| A kernel hosts providers itself: a provider session and one check to a verdict | Being merged ([decision 0033](decisions/0033-a-kernel-hosts-providers.md), first step) |
-| A kernel runs the whole pipeline and answers one status command an agent can run, replacing the Python helpers | Next (decision 0033, second step) |
+| A kernel hosts providers itself: a provider session and one check to a verdict | Done ([decision 0033](decisions/0033-a-kernel-hosts-providers.md), first step; [PR 36](https://github.com/sloik/dodona/pull/36)) |
+| A kernel runs the whole pipeline and answers one status command an agent can run, replacing the Python helpers | In progress ([decision 0034](decisions/0034-a-kernel-runs-a-project-and-reports-its-status.md), proposed, on branch `kernel-run`) |
 | A second real provider of another kind, a test runner, end to end into the ledger and the status | After that |
 | Checks that documentation follows code, and a metrics ratchet, on every pull request | In review, on their own branches |
 
