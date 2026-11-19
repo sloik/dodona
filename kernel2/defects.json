@@ -1659,6 +1659,55 @@
       "file": "check.js",
       "find": "  if (child.exitCode !== 0 || size > MAX_REPORT_BYTES) return null;",
       "replace": "  if (size > MAX_REPORT_BYTES) return null;"
+    },
+    {
+      "name": "host rule 4: a tool the run does not list may be named",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (toolsNamed(run).some((name) => !tools.some((tool) => tool.name === name))) return 'tool-not-in-run';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: a provider may give the verdict unavailable",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "const VERDICTS = ['passed', 'failed', 'error', 'unsupported'];",
+      "replace": "const VERDICTS = ['passed', 'failed', 'error', 'unsupported', 'unavailable'];"
+    },
+    {
+      "name": "check: the executor is started outside the root",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  const child = processes.start(executor, root);",
+      "replace": "  const child = processes.start(executor, process.cwd());"
+    },
+    {
+      "name": "check: the executor is waited for no longer than the host's deadline",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "timer = setTimeout(() => resolve(true), executorWait(asked.run));",
+      "replace": "timer = setTimeout(() => resolve(true), Math.min(executorWait(asked.run), 2000));"
+    },
+    {
+      "name": "check: a report ended by a carriage return is read",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (line[line.length - 1] === 0x0d || (line.length >= 3",
+      "replace": "  if ((line.length >= 3"
+    },
+    {
+      "name": "check: the report is read from the whole output, not its first line",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  const end = bytes.indexOf(0x0a);\n  if (end <= 0) return null;\n  const line = bytes.subarray(0, end);",
+      "replace": "  const text0 = bytes.toString('latin1').trim();\n  const line = Buffer.from(text0, 'latin1');\n  if (line.length === 0) return null;"
+    },
+    {
+      "name": "session: a provider that ignores shutdown loses its answer",
+      "model_case": "(session)",
+      "file": "session.js",
+      "find": "    if (performance.now() >= graceEnds) return null;",
+      "replace": "    if (performance.now() >= graceEnds) return 'deadline';"
     }
   ]
 }

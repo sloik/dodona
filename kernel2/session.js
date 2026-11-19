@@ -47,8 +47,14 @@ function answerProblem(message) {
   return null;
 }
 
-// Waits after shutdown until the provider exits. Anything more it writes is `unexpected`.
+// After shutdown the provider has up to this long, or until the deadline if that is
+// nearer, to exit. Its answer stands either way; one still running is then ended.
+const SHUTDOWN_GRACE_MS = 1000;
+
+// Waits after shutdown until the provider exits, or its grace is over. Anything more
+// it writes in that time is `unexpected`.
 async function awaitExit(child, wire, until) {
+  const graceEnds = Math.min(until, performance.now() + SHUTDOWN_GRACE_MS);
   for (;;) {
     if (wire.hasMore()) return 'unexpected';
     if (child.hasExited) {
@@ -56,8 +62,8 @@ async function awaitExit(child, wire, until) {
       await wire.change(performance.now() + 100);
       return wire.hasMore() ? 'unexpected' : null;
     }
-    if (performance.now() >= until) return 'deadline';
-    await Promise.race([wire.change(until), child.exited]);
+    if (performance.now() >= graceEnds) return null;
+    await Promise.race([wire.change(graceEnds), child.exited]);
   }
 }
 

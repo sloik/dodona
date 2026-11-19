@@ -119,10 +119,14 @@ function reportEnding(report, run) {
   return null;
 }
 
-// A report read strictly, as messages are read: one line, one object; or null.
+// A report read strictly, as messages are read: the first line, ended by a line feed
+// alone, holding one object; or null. A carriage return before the line feed, an empty
+// first line or no line feed at all is no report.
 function readReport(bytes) {
-  const line = bytes.length > 0 && bytes[bytes.length - 1] === 0x0a ? bytes.subarray(0, bytes.length - 1) : bytes;
-  if (line.includes(0x0a) || line.includes(0x0d) || (line.length >= 3 && line[0] === 0xef && line[1] === 0xbb && line[2] === 0xbf)) return null;
+  const end = bytes.indexOf(0x0a);
+  if (end <= 0) return null;
+  const line = bytes.subarray(0, end);
+  if (line[line.length - 1] === 0x0d || (line.length >= 3 && line[0] === 0xef && line[1] === 0xbb && line[2] === 0xbf)) return null;
   let text;
   try {
     text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(line);

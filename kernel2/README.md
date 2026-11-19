@@ -19,7 +19,7 @@ Each command reads standard input and prints one JSON object, except `session`, 
     node kernel2/dodona-kernel2.js session --deadline-ms N --max-line N --max-log N -- <provider command>
                                                 one provider session (conformance/README.md, "Session")
 
-The provider and the executor are commands the kernel is given; it names no tool. To end every process a provider or an executor started, the kernel starts each in a process group of its own on Linux and macOS and ends the group. On Windows, where Node can make no job object, it reads the process table (`Get-CimInstance Win32_Process`) and ends everything below the command, since a process keeps its parent's id after the parent has exited; if the table cannot be read, the command fails rather than end less.
+The provider and the executor are commands the kernel is given; it names no tool. To end every process a provider or an executor started, the kernel starts each in a process group of its own on Linux and macOS and ends the group. On Windows, where Node can make no job object, it reads the process table (`Get-CimInstance Win32_Process`) before ending anything, ends the tree with `taskkill /T` while the command still holds its id, and then ends what the table showed below it, since a process keeps its parent's id after the parent has exited. A process counts as below another only if it was created after it, so a reused id cannot bring in an unrelated process. If the table cannot be read within 30 seconds, the command fails rather than end less.
 
 ## Judging it
 
@@ -36,7 +36,7 @@ From the repository root:
     python3 tools/run_check_cases.py -- node kernel2/dodona-kernel2.js check
     node kernel2/plant.js
 
-`plant.js` copies the kernel, plants each defect listed in `defects.json` one at a time, and runs every judge (kit, ledger cases, key vectors, attestation and harness checks, encoding and path vectors, provider session and host checks) on the damaged copy; a defect in a host module is put to the two host judges first. The judges are run with `python3`, or `python` on Windows, or what `DODONA_PYTHON` names. A defect is caught if any judge rejects it; a copy that does not load is reported as BROKEN, not caught.
+`plant.js` copies the kernel, plants each defect listed in `defects.json` one at a time, and runs every judge (kit, ledger cases, key vectors, attestation and harness checks, encoding and path vectors, provider session and host checks) on the damaged copy; a defect in a host module is put first to the host judge meant for it (the check judge for `check.js` and `host-rules.js`, the session judge for `session.js`, `wire.js` and `processes.js`), and the first judge that rejects ends its turn. A judge that exits non-zero without reporting a mismatch is named as such and counted apart. The judges are run with `python3`, or `python` on Windows, or what `DODONA_PYTHON` names. A defect is caught if any judge rejects it; a copy that does not load is reported as BROKEN, not caught.
 
 ## Unicode
 

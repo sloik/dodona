@@ -6,7 +6,9 @@
 //     node kernel2/plant.js
 //
 // Per defect it prints
-//   caught  the first judge that rejected the defective copy,
+//   caught  the first judge that rejected the defective copy (judges are tried one at a
+//           time and the first rejection ends the defect's turn); a judge that exited
+//           non-zero without reporting a mismatch is named as such, and counted apart,
 //   MISSED  every judge accepted it, or only the unit tests (node --test) rejected it,
 //   STALE   the text to replace was not found exactly once (nothing planted),
 //   BROKEN  the defective copy does not even load, so nothing was learned.
@@ -38,15 +40,19 @@ const JUDGES = [
   { name: 'run_check_cases', tool: 'run_check_cases.py', args: ['check'] },
 ];
 
-// The modules of the host. A defect planted in one of them is put to the host judges
-// first, because they are the ones meant to catch it and the others are slow; every
-// judge is still run before a defect is called missed.
-const HOST_FILES = new Set(['session.js', 'check.js', 'host-rules.js', 'wire.js', 'processes.js']);
-const HOST_JUDGES = new Set(['run_provider_cases', 'run_check_cases']);
+// Which judges a defect in a host module is put to first: the ones meant to catch it,
+// because the others are slow. Every judge is still run before a defect is called missed.
+const FIRST_JUDGES = {
+  'check.js': ['run_check_cases', 'run_provider_cases'],
+  'host-rules.js': ['run_check_cases', 'run_provider_cases'],
+  'session.js': ['run_provider_cases', 'run_check_cases'],
+  'wire.js': ['run_provider_cases', 'run_check_cases'],
+  'processes.js': ['run_provider_cases', 'run_check_cases'],
+};
 
 function judgesFor(file) {
-  if (!HOST_FILES.has(file)) return JUDGES;
-  return [...JUDGES.filter((judge) => HOST_JUDGES.has(judge.name)), ...JUDGES.filter((judge) => !HOST_JUDGES.has(judge.name))];
+  const first = FIRST_JUDGES[file] || [];
+  return [...first.map((name) => JUDGES.find((judge) => judge.name === name)), ...JUDGES.filter((judge) => !first.includes(judge.name))];
 }
 
 // Does the copy load? Asks it to canonicalise `{}`; that loads every module.
@@ -55,19 +61,22 @@ function loads(copy) {
   return run.status === 0 && run.stdout.includes('"canonical":"{}"');
 }
 
-// The name of the first judge that rejects the copy, or null if all accept it.
+// The first judge that rejects the copy, as { name, mismatch }, or null if all accept it.
+// `mismatch` is false when the judge exited non-zero without reporting a mismatch: it
+// rejected the copy, but not by finding a case it answers wrongly.
 function firstRejection(copy, judges = JUDGES) {
   for (const judge of judges) {
     const run = spawnSync(PYTHON, [path.join('tools', judge.tool), '--', 'node', path.join(copy, 'dodona-kernel2.js'), ...judge.args], {
       cwd: root,
       encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
     });
-    if (run.status !== 0) return judge.name;
+    if (run.status !== 0) return { name: judge.name, mismatch: run.status === 1 && /MISMATCH/.test(run.stdout || ''), status: run.status };
   }
   // Last: the unit tests of the copy, run against the repository's kit files. They are not a judge
   // of the kit, so a defect only they reject is reported as missed by the kit.
   const tests = spawnSync('node', ['--test', path.join(copy, 'test.js')], { env: { ...process.env, DODONA_ROOT: root }, encoding: 'utf8' });
-  if (tests.status !== 0) return UNIT_TESTS;
+  if (tests.status !== 0) return { name: UNIT_TESTS, mismatch: true, status: tests.status };
   return null;
 }
 
@@ -75,11 +84,11 @@ function main() {
   const { defects } = JSON.parse(fs.readFileSync(path.join(__dirname, 'defects.json'), 'utf8'));
   const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'kernel2-plant-'));
   fs.cpSync(__dirname, copy, { recursive: true });
-  const counts = { caught: 0, missed: 0, stale: 0, broken: 0 };
+  const counts = { caught: 0, missed: 0, stale: 0, broken: 0, caught_without_mismatch: 0 };
   try {
     const baseline = firstRejection(copy);
     if (baseline !== null) {
-      console.log(`the unchanged copy is rejected by ${baseline}; nothing was planted`);
+      console.log(`the unchanged copy is rejected by ${baseline.name}; nothing was planted`);
       console.log(JSON.stringify({ defects: defects.length, caught: 0, all_caught: false }));
       process.exitCode = 1;
       return;
@@ -100,10 +109,12 @@ function main() {
         } else {
           const judge = firstRejection(copy, judgesFor(defect.file));
           if (judge === null) verdict = 'MISSED';
-          else if (judge === UNIT_TESTS) verdict = 'MISSED by the kit (only node --test rejects it)';
-          else verdict = `caught (${judge})`;
-          if (judge === null || judge === UNIT_TESTS) counts.missed += 1;
+          else if (judge.name === UNIT_TESTS) verdict = 'MISSED by the kit (only node --test rejects it)';
+          else if (judge.mismatch) verdict = `caught (${judge.name})`;
+          else verdict = `caught (${judge.name} exited ${judge.status} without a mismatch)`;
+          if (judge === null || judge.name === UNIT_TESTS) counts.missed += 1;
           else counts.caught += 1;
+          if (judge !== null && judge.name !== UNIT_TESTS && !judge.mismatch) counts.caught_without_mismatch += 1;
         }
         fs.writeFileSync(file, original);
       }

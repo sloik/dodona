@@ -542,6 +542,7 @@ test('a run that keeps every rule is accepted, and each rule refuses with its re
   assert.equal(hostRules.runProblem(aRun({ args: ['${tool:checker}/a:${tool:shell}/b'] }), aCheck()), 'undeclared-tool');
   assert.equal(hostRules.runProblem(aRun(), aCheck({ declared: new Set(['checker', 'shell']), given: new Map() })), 'tool-not-in-key');
   assert.equal(hostRules.runProblem(aRun({ tools: [{ name: 'checker', digest: 'sha256:x' }] }), aCheck()), 'tool-digest-mismatch');
+  assert.equal(hostRules.runProblem(aRun({ tools: [] }), aCheck()), 'tool-not-in-run');
   assert.equal(hostRules.runProblem(aRun({ program: { tool: 'checker', path: 'bin/../x' } }), aCheck()), 'bad-path');
   assert.equal(hostRules.runProblem(aRun({ cwd: 'CON' }), aCheck()), 'bad-path');
   assert.equal(hostRules.runProblem(aRun({ args: ['-o%TEMP%', 'a.txt'] }), aCheck()), 'bad-path');
@@ -707,6 +708,9 @@ test('a report is read strictly, as one line', () => {
   assert.equal(readReport(Buffer.from('{"end":"exited","exit_status":0.0}\n')), null);
   assert.equal(readReport(Buffer.from('{"end":"exited","end":"exited"}\n')), null);
   assert.equal(readReport(Buffer.from('{"end":"exited"}\r\n')), null);
+  assert.equal(readReport(Buffer.from('{"end":"exited"}')), null);
+  assert.equal(readReport(Buffer.from('\n{"end":"exited"}\n')), null);
+  assert.deepEqual(readReport(Buffer.from('{"end":"exited"}\nanything after\n')), { end: 'exited' });
   assert.equal(readReport(Buffer.from('')), null);
   assert.equal(readReport(Buffer.from('[]')), null);
   assert.equal(executorWait({ limits: { wall_ms: 2147483648 } }), 24 * 60 * 60 * 1000);
@@ -732,7 +736,15 @@ test('an attachment is a regular file reached through no link', { skip: process.
   }
 });
 
-test('the processes below a command are found through parents that have gone', () => {
+test('the processes below a command are found through parents that have gone, never through a reused id', () => {
   const { below } = require('./processes');
-  assert.deepEqual(below([[10, 1], [11, 10], [12, 11], [13, 99]], new Set([10])), [11, 12]);
+  const e = (pid, parent, created) => ({ pid, parent, created: BigInt(created) });
+  const pids = (found) => found.map((entry) => entry.pid);
+  // 10 is the command, started at 100; 11 and 12 below it; 13 belongs to someone else.
+  const table = [e(11, 10, 110), e(12, 11, 120), e(13, 99, 50)];
+  assert.deepEqual(pids(below(table, 10, 100n, true)), [11, 12]);
+  // A process created before the command cannot be below it, whatever parent id it names.
+  assert.deepEqual(pids(below([e(14, 10, 90)], 10, 100n, false)), []);
+  // The command has exited and its id was taken at 200 by 10': what 10' started is not the command's.
+  assert.deepEqual(pids(below([e(10, 5, 200), e(11, 10, 110), e(15, 10, 210), e(16, 15, 220)], 10, 100n, true)), [11]);
 });

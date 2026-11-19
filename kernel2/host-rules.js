@@ -178,6 +178,7 @@ function runProblem(description, check) {
   if (identityOf(run.platform === undefined ? null : run.platform) !== identityOf(check.platform)) return 'platform-mismatch';
   if (toolsNamed(run).some((name) => !check.declared.has(name))) return 'undeclared-tool';
   if (toolsNamed(run).some((name) => !check.given.has(name))) return 'tool-not-in-key';
+  if (toolsNamed(run).some((name) => !tools.some((tool) => tool.name === name))) return 'tool-not-in-run';
   if (tools.some((tool) => !check.given.has(tool.name))) return 'tool-not-in-key';
   if (tools.some((tool) => check.given.get(tool.name) !== tool.digest)) return 'tool-digest-mismatch';
   if (!pathsOf(run).every(passesPathCheck)) return 'bad-path';
