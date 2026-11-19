@@ -25,3 +25,4 @@ dodona is public while it is still a design, on purpose: it is cheapest to chang
 4. Never describe something as verified unless the check ran to completion and the run is recorded.
 5. No shell scripts, absolute paths or platform-specific assumptions.
 6. Whoever does a piece of work does not approve exceptions to how it is judged.
+7. A change to code updates the documents that describe it ([docs/doc-map.toml](docs/doc-map.toml)), or a commit message says why none has to change. A pull request's description says what was verified and what was not. Both are checked ([how](docs/gap-checks.md#a-change-must-bring-its-documents)).

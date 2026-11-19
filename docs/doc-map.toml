@@ -1,0 +1,116 @@
+# Which documents describe which files. Read by tools/check_docs.py; docs/gap-checks.md says how it is used.
+#
+# [[rule]]    A change to a file matching `code` needs a change of substance to one of `docs` in the same
+#             change, or a commit message line `Docs-unchanged: <id>: <reason>`. Name the documents that
+#             would be wrong if the code changed and they did not.
+# [[exempt]]  Files no document has to follow, each with the reason.
+# [[absent]]  Paths that documents name in code type and that are meant not to exist in this repository.
+# [[known]]   Drift a check finds that cannot be fixed now, word for word, with the reason. Each entry
+#             fails once the drift is gone, so it is removed with the fix.
+#
+# Every file that is not Markdown must match exactly one rule or exemption, and every pattern must match
+# a file, so new code cannot arrive unbound. Patterns: `*` within a path segment, `**` across segments,
+# `[0-9]` one of a set. A change is judged by this file as it is on the branch the change goes into.
+
+[[rule]]
+id = "host"
+code = ["tools/host.py", "tools/provider_host.py"]
+docs = ["conformance/README.md", "docs/writing-a-provider.md", "protocol/README.md"]
+why = "The rules a host keeps are written in the kit's 'How a host is judged' and in the protocol a provider is written from."
+
+[[rule]]
+id = "model-runs"
+code = ["tools/check_models.py", "tools/check_states.py", "tools/keep.py", "providers/tlc/*.py",
+        ".github/workflows/models.yml", ".github/site/*"]
+docs = ["spec/README.md", "spec/CLAIMS.md", "README.md"]
+why = "How the models are run, judged and reused, and what the results count for, is told in the models' README, the claims and the README's 'dodona on dodona'."
+
+[[rule]]
+id = "status"
+code = ["tools/status.py", "tools/confirm.py", "tools/intents.py"]
+docs = ["conformance/README.md", "records/README.md", "intents/README.md", "README.md"]
+why = "The status rules, the owner's ledger and how intents are read are described there."
+
+[[rule]]
+id = "harness"
+code = ["tools/attest.py", "tools/harness.py", "tools/run_attest_check.py", "tools/run_harness_check.py",
+        "conformance/harness/*.py"]
+docs = ["conformance/README.md", "spec/CLAIMS.md"]
+why = "What the harness signs and how a kernel grades it is in the kit's Acts scenarios and 'Two kernels compared'."
+
+[[rule]]
+id = "kit-judges"
+code = ["tools/run_kit.py", "tools/run_vectors.py", "tools/run_path_vectors.py", "tools/run_key_vectors.py",
+        "tools/run_ledger_cases.py", "tools/run_input_cases.py", "tools/run_provider_cases.py",
+        "tools/run_check_cases.py", "tools/kernel_differential.py", "tools/path_differential.py",
+        "tools/kit_adequacy.py"]
+docs = ["conformance/README.md", "spec/CLAIMS.md", "docs/gap-checks.md"]
+why = "How a kernel or host is judged is written in the kit's README; what each judge shows is in the claims and the list of checks."
+
+[[rule]]
+id = "kit-data"
+code = ["conformance/kernel/**", "conformance/ledger/*", "conformance/vectors/*", "conformance/provider/*",
+        "tools/gen_kit_vectors.py", "tools/gen_wrong_types.py"]
+docs = ["conformance/README.md", "README.md", "spec/CLAIMS.md"]
+why = "Every scenario tests a rule written in the kit's README, the README counts them, and the claims say what they show."
+
+[[rule]]
+id = "encoding"
+code = ["tools/canonical.py", "tools/pathcheck.py", "tools/tooltree.py", "tools/gen_unicode_tables.py"]
+docs = ["protocol/canonical-encoding.md", "protocol/path-check.md", "protocol/tool-tree-digest.md"]
+why = "These are reference implementations of the rules in those three documents."
+
+[[rule]]
+id = "protocol"
+code = ["protocol/*.schema.json"]
+docs = ["protocol/README.md", "docs/writing-a-provider.md", "protocol/ledger.md", "MODEL.md", "ARCHITECTURE.md"]
+why = "The schemas and the prose of the protocol and the data model describe the same shapes."
+
+[[rule]]
+id = "models"
+code = ["spec/assurance/**", "spec/attempts/**", "spec/decisions/**", "spec/intent/**", "spec/kernel/**",
+        "spec/liveness/**", "spec/planner/**", "spec/platforms/**", "spec/tree/**"]
+docs = ["spec/CLAIMS.md", "spec/README.md"]
+why = "The claims say what each model checks and whether a recorded run of it as it is now exists."
+
+[[rule]]
+id = "configuration"
+code = ["dodona.toml", "policy.toml"]
+docs = ["docs/configuration.md", "MODEL.md", "README.md"]
+why = "The configuration reference describes dodona.toml, and the data model the policy dodona holds itself to."
+
+[[rule]]
+id = "repo-checks"
+code = ["tools/check_repo.py", "tools/check_docs.py", "tools/check_examples.py", "tools/check_transcript.py",
+        ".github/workflows/checks.yml", ".github/workflows/docs.yml", ".github/workflows/oracle-static.yml"]
+docs = ["docs/gap-checks.md", "AGENTS.md", "CONTRIBUTING.md"]
+why = "Every check is listed with the gap behind it, and the rules for contributors say which must pass."
+
+[[exempt]]
+paths = ["kernel/**", "kernel2/**"]
+why = "The kernels are judged by the conformance kit and their planted-defect lists, not by prose, and are kept by their own authors."
+
+[[exempt]]
+paths = ["spec/runs/**"]
+why = "Saved outputs of recorded runs: hashed in spec/runs/index.json and judged against the claims by check_claims_match_runs."
+
+[[exempt]]
+paths = ["LICENSE", ".gitattributes", ".gitignore", "renovate.json"]
+why = "Repository housekeeping that no document describes."
+
+[[exempt]]
+paths = ["docs/doc-map.toml"]
+why = "These rules themselves. A change is judged by the rules on its base, and changes to them are printed for the reviewer."
+
+[[absent]]
+path = "records/owner.ledger"
+why = "Written by tools/confirm.py at the owner's first confirmation; records/README.md says it does not exist until then."
+
+[[absent]]
+path = "tools/widthcheck"
+why = "A path inside the example project of the provider guide, not in this repository."
+
+[[known]]
+check = "docs_usage_matches_the_parser"
+problem = "tools/check_states.py: flag --settings of `check_states.py` is not shown in its usage lines"
+why = "tools/check_states.py is among the files recorded model runs are hashed against (spec/runs/index.json): editing even its docstring was tried, and withdrew claim C37. Show the flag when the models are next run and recorded. Listed by the agent that found it; the owner has not accepted it yet."

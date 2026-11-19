@@ -12,6 +12,11 @@ every case matched.
     python tools/check_models.py --site SITE.json --batch         # send every case as one job, then judge
     python tools/check_models.py --replay DIR                     # read saved outputs again; not proof
 
+Any of them also takes [--report FILE] [--only MODEL]... [--save DIR], and
+--batch takes [--dumps]:
+
+    python tools/check_models.py --site SITE.json --batch --dumps --only kernel --save DIR --report FILE
+
 --runs and --batch judge nothing unless the job ended well, its tools were
 measured, and they are the pinned ones. --replay cannot know any of that: it
 says what the files show, and its report is marked as not proof.

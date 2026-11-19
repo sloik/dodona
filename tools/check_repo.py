@@ -1,5 +1,7 @@
 """Checks of this repository that need no model checker and run on any platform.
 
+    python tools/check_repo.py
+
 Stage-0 helper (decision 0023): disposable, to be replaced by dodona itself.
 Exit status is 0 only if every check passed.
 """
@@ -856,6 +858,14 @@ def gap_provider_cases_match_the_provider() -> None:
         problems.append("conformance/provider/cases.json: a mode is listed twice")
 
 
+def gap_documents_follow_the_code() -> None:
+    """Code changed and the documents describing it did not. The checks live in tools/check_docs.py."""
+    import check_docs
+    repo = check_docs.Repo(ROOT)
+    problems.extend("documents: " + p for p in check_docs.repo_problems(repo))
+    problems.extend("documents: " + p for p in check_docs.self_test(repo))
+
+
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
@@ -868,7 +878,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
-              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown]
+              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown, gap_documents_follow_the_code]
 
 
 class JudgeTests(unittest.TestCase):

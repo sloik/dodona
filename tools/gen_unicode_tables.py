@@ -1,4 +1,9 @@
-"""Generate Unicode 15.1 tables from the official UCD files."""
+"""Generate Unicode 15.1 tables from the official UCD files.
+
+    python tools/gen_unicode_tables.py UCD_DIRECTORY
+
+Reads the UCD files from that directory and writes kernel/src/unicode_tables.rs.
+"""
 import hashlib
 import pathlib
 import sys

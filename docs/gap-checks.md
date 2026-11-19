@@ -35,6 +35,45 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_an_intent_reads_one_way_only` | Intent rows that a person sees but the reader skipped, or gates it misread, let an intent be reported fulfilled with a hard criterion never checked; and results written by hand into the owner's ledger counted as passed. Criteria are now data in the front matter, the table is written from it, and anything else that looks like criteria is refused. A deferred criterion's observation and limit have a column of their own; text that ends in a line feed, holds an emoji code, says nothing or names a field twice is refused (the observation's limit is the one shown first, in a fixed form; other text may mention time, and is not read for a limit); the front matter may hold only the keys allowed (id, title, owner, worker, parent, touches, criteria), an id written as four digits in double quotes that is the file's own number, and a parent written the same way; two intent files with one id are refused, and `tools/status.py` stops on them. The repository checks also require each deferred criterion's observation in its own column and its limit within `policy.toml` |
 | `gap_runner_versions_agree` | An automatic update moved one CI job to a new Ubuntu version and left the others, so steps that run only on the named old version would have skipped without a word. All workflows use one Ubuntu version, and a step limited to a named system must name one that exists. An update that misses a line now fails on its own pull request |
 | `gap_reuse_is_decided_by_a_kernel_and_checked` | Every run started from an empty ledger, so the reuse the design promises was never used. Now it is, and a run that reuses must still fail when any check lacks a passing result for the inputs as they are now |
+| `gap_documents_follow_the_code` | Code changed and the documents describing it did not: usage lines missed flags, the kit's index missed five files, two decision headers lost their owner direction. Runs every check in `tools/check_docs.py` below, and its self-test, which plants a fault for each and requires it to be seen |
+
+## Documents that follow the code
+
+The usual way a document here goes wrong is quiet: code or data changes and the text that describes it does not. `tools/check_docs.py` holds these checks, so `tools/check_repo.py` does not grow further; `gap_documents_follow_the_code` runs them on every platform. Each compares what the code or data says with what the documents say, in both directions where both can be read, and names the file and what to update. When they were first run, the checks of usage lines, the tool list, the decision index and the kit's index found real drift, fixed in the same change; the others found none, and are there so that the next change cannot bring any.
+
+| Check | The gap behind it |
+|---|---|
+| `docs_map_covers_every_file` | New code could arrive that no document is bound to. [doc-map.toml](doc-map.toml) names, for every file that is not Markdown, the documents that describe it or why none does: exactly one entry per file, and every pattern must match something |
+| `docs_usage_matches_the_parser` | Tools gained flags their usage lines did not show (`--policy-ref` in three tools, four flags of `check_models.py`, `--plan`, `--ledger`), and one usage line showed a flag the tool does not have. A tool's flags and subcommands are read from its source without running it; a flag that cannot be read that way fails |
+| `docs_commands_name_real_flags` | A document or workflow could show a tool started with a flag or subcommand it no longer has, or a tool that is gone |
+| `docs_every_tool_is_listed` | Four tools in `tools/` were named in no document at all. [tools/README.md](../tools/README.md) lists every tool with what it is for |
+| `docs_decision_index_matches_the_records` | Two decisions were listed as owner direction in the index while their headers did not say so. The index must match each record's header (title, status, direction), each heading its header, and a decision that amends or supersedes another must be linked from it; what a decision governs and every decision number named anywhere must exist |
+| `docs_links_and_anchors_resolve` | A link to a heading that was renamed points at nothing, and GitHub shows no error for it |
+| `docs_named_paths_exist` | A document can name a file in code type that was moved or deleted. Paths meant not to exist are listed in the map with the reason, and an entry fails once the path exists |
+| `docs_protocol_matches_the_schemas` | A schema, capability, kind of message or error code could be added without the protocol's README or the provider guide knowing |
+| `docs_kit_index_matches_the_kit` | The kit's 'What is here' missed five files, among them the misbehaving checker and the tool-tree vectors. It must list everything in `conformance/`, and every kind of scenario needs its section of rules |
+| `docs_counts_match_the_repository` | The README counts scenarios, vectors and models; a new one would leave the count stale. The models' README must list every model |
+| `docs_every_check_is_listed` | A check whose reason is lost gets deleted by mistake |
+
+Drift a check finds that cannot be fixed now is listed under `[[known]]` in the map, word for word, with the reason, and the entry fails once the drift is gone. One is listed: the usage line of `tools/check_states.py` does not show `--settings`, and that file is hashed by recorded model runs (editing its docstring was tried, and withdrew claim C37), so it can change only with the next recorded run. The entry was made by the agent that found the drift and waits for the owner to accept it.
+
+### A change must bring its documents
+
+`python tools/check_docs.py diff --base REV [--head REV]` judges one change, and CI runs it on every pull request and every push to `main` ([docs.yml](../.github/workflows/docs.yml)). A change to a file under a rule of the map needs a change of substance (more than spacing or line endings) to one of that rule's documents in the same change. If none has to change, a commit message of the change must carry the line
+
+```
+Docs-unchanged: <rule id>: <why no document has to change, in at least six words>
+```
+
+The line goes in a commit message, not the pull request's description, so that it is still there when the change reaches `main`. It is the author's own word, which is `self` in the terms of [decision 0024](../decisions/0024-separation-is-graded-not-enforced.md): the check prints it as that, for whoever reviews the change, and it grants nothing. A waiver must name a rule the map has and that the change triggered, with a reason of at least six words.
+
+A change is judged by the map as it is on its base, so it cannot loosen the rule it is judged by; changes to the map are printed for the reviewer and apply after merge. A new file is judged by the rules it brings. Every file a change adds must be covered. With no usable base (none given, all zeros, history missing), the check says it could not run and exits with 2, which is never a pass.
+
+A pull request's description must also have a `## Verified` section naming what ran to completion and what it gave, and a `## Not verified` section saying what did not run or was not finished ([the template](../.github/pull_request_template.md)). This is rule 4 of [AGENTS.md](../AGENTS.md) applied to the description a reviewer reads first.
+
+### Each check is seen to fail
+
+`python tools/check_docs.py self-test` plants, in a copy of the repository held in memory, a fault each check exists to catch, and requires that check to report it: an undocumented flag and a documented flag removed, a subcommand added, a workflow using a flag the tool does not have, a tool with no row, an index title that differs from its record, an amended decision that does not link back, a renamed heading, a deleted file still named, a schema, capability or message kind the documents do not know, a kit file not indexed, a scenario not counted, a check not listed, and a `[[known]]` entry for drift that does not happen. It requires each check to be clean on the repository as it is first, so a planted fault proves something. Each must be reported for the reason planted, not some other. It then judges made-up changes against the real map (a code change with no document, with an unrelated document, with a short, malformed or misnamed waiver, a waiver for a rule nothing triggered, an exemption added by the change itself, among others), the description rule, and one throwaway repository end to end through git, where a document changed only in its line endings does not count.
 
 More checks run as their own tools in CI, because they need to build or install something:
 

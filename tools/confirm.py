@@ -1,6 +1,10 @@
 """The owner confirms an intent's criteria and gates. Stage-0 helper (decision 0028).
 
-    python tools/confirm.py --intent ID --kernel CMD...
+    python tools/confirm.py --intent ID [--policy-ref REF] [--ledger FILE] --kernel CMD...
+
+--policy-ref names the protected branch the policy is read from (origin/main
+unless given). --ledger is only for trying the command out: a confirmation
+counts only in records/owner.ledger.
 
 Run by the owner of the intent, at a terminal. It shows what is about to be
 confirmed, exactly as a kernel sees it, and asks for the intent's number to be

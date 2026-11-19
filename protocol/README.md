@@ -64,7 +64,7 @@ A **run description** (see [messages.schema.json](messages.schema.json)) names: 
 
 Two documents sit beside the schemas: the [configuration reference](../docs/configuration.md) for `dodona.toml`, and [writing a provider](../docs/writing-a-provider.md), a walkthrough with a worked session whose every JSON line validates against these schemas.
 
-Still to be written: the submission and outcome ledger entries, the canonical encoding with its test vectors, the normative path check with its test vectors, the agent interface beyond `status` (the shapes of `resolve`, `index`, `plan`, `run`, `explain`, `review` and `reproduce`), the file format and location of the lock and the policy, and a conformance kit that judges a provider. The shapes in the new schemas have not been run against a kernel; none exists.
+The [canonical encoding](canonical-encoding.md) and the [path check](path-check.md) are written, with test vectors in the conformance kit. Still to be written: the submission and outcome ledger entries, the agent interface beyond `status` (the shapes of `resolve`, `index`, `plan`, `run`, `explain`, `review` and `reproduce`), the file format and location of the lock and the policy, and a conformance kit that judges a provider. The shapes in the new schemas have not been run against a kernel; none exists.
 
 ## Rules a schema cannot express
 

@@ -1,6 +1,10 @@
 """Report the status of this project from its ledger. Stage-0 helper (decision 0026).
 
-    python tools/status.py --ledger FILE --writer NAME [--json] --kernel CMD...
+    python tools/status.py --ledger FILE --writer NAME [--json] [--policy-ref REF] --kernel CMD...
+
+--ledger may be repeated; the owner's ledger in the repository is always read
+too. --policy-ref names the protected branch the policy is read from
+(origin/main unless given).
 
 It gathers what a kernel needs and judges nothing itself: the intents and
 their criteria from intents/, the bar from policy.toml, the obligations and
