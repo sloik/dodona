@@ -1080,11 +1080,11 @@
       "replace": "if false {"
     },
     {
-      "name": "host rule 6: a tool file may have anything appended",
+      "name": "host rule 5: a tool file may have anything appended",
       "model_case": null,
       "file": "src/host.rs",
-      "find": ".all(|c| c.is_ascii_alphanumeric() || \"._-/\".contains(c))",
-      "replace": ".all(|_| true)"
+      "find": "        && file.split('/').all(|s| {\n            s.chars()\n                .all(|c| c.is_ascii_alphanumeric() || \"._-\".contains(c))\n        })\n",
+      "replace": "\n"
     },
     {
       "name": "host rule 7: an environment allowed",
@@ -1358,6 +1358,34 @@
       "file": "src/session.rs",
       "find": "Ok(outcome(result, bytes, bytes > limits.max_log as u64))",
       "replace": "Ok(outcome(result, bytes, false))"
+    },
+    {
+      "name": "host final: attachment path check removed",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".all(|a| passes(&path_of(a)) && attachment(root, &path_of(a)).is_some())",
+      "replace": ".all(|a| attachment(root, &path_of(a)).is_some())"
+    },
+    {
+      "name": "host final: a link at an inner step followed",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "        if std::fs::symlink_metadata(&at)\n",
+      "replace": "        if at.ends_with(path) && std::fs::symlink_metadata(&at)\n"
+    },
+    {
+      "name": "host executor: its process tree is not ended",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "    tree.end();\n    let out = rx",
+      "replace": "    std::mem::forget(tree);\n    let out = rx"
+    },
+    {
+      "name": "host executor: its exit status ignored",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !status.success() {",
+      "replace": "if false {"
     }
   ]
 }

@@ -132,21 +132,21 @@ fn needs_to_be_a_file(arg: &str) -> bool {
 }
 
 /// Whether an argument is, whole, one file of a tool: `${tool:NAME}/PATH`.
-/// PATH is made of the portable file-name characters and `/` only, so nothing
-/// can be glued on after the file.
+/// What PATH may hold is rule 5's.
 fn whole_tool_file(arg: &str) -> bool {
     let refs = tool_refs(arg);
-    if refs.len() != 1 || !arg.starts_with("${tool:") {
-        return false;
-    }
-    let file = match refs[0].1.strip_prefix('/') {
-        Some(f) => f,
-        None => return false,
-    };
+    refs.len() == 1 && arg.starts_with("${tool:") && refs[0].1.starts_with('/')
+}
+
+/// Rule 5 for the PATH of `${tool:NAME}/PATH`: the path check, and every
+/// segment ASCII letters, digits, `.`, `_` and `-` only, so that nothing can be
+/// carried after the file.
+fn tool_file_passes(file: &str) -> bool {
     passes(file)
-        && file
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "._-/".contains(c))
+        && file.split('/').all(|s| {
+            s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
+        })
 }
 
 /// Rule 2: whether a run description has its shape. `env` is left to rule 7.
@@ -215,15 +215,16 @@ pub fn run_fault(g: &Given, runs: usize, run: &Value) -> Option<&'static str> {
     let words: Vec<&str> = args.iter().copied().filter(|a| !a.contains('\0')).collect();
     let mut paths = vec![program.text("path").unwrap_or_default()];
     paths.extend(inputs.iter().chain(outputs.iter()));
-    for arg in &words {
-        paths.extend(
-            tool_refs(arg)
-                .iter()
-                .filter_map(|(_, after)| after.strip_prefix('/')),
-        );
-    }
+    let tool_files: Vec<&str> = words
+        .iter()
+        .flat_map(|a| tool_refs(a))
+        .filter_map(|(_, after)| after.strip_prefix('/'))
+        .collect();
     paths.extend(run.text("cwd"));
     if !paths.iter().all(|p| passes(p)) {
+        return Some("bad-path");
+    }
+    if !tool_files.iter().all(|f| tool_file_passes(f)) {
         return Some("bad-path");
     }
     // 6. An argument that could name a file is, whole, one of the run's files.
@@ -895,7 +896,10 @@ mod tests {
         assert!(whole_tool_file("${tool:a}/lib/x.jar"));
         assert!(!whole_tool_file("${tool:a}"));
         assert!(!whole_tool_file("-x${tool:a}/y"));
-        assert!(!whole_tool_file("${tool:a}/y=/z"));
+        assert!(tool_file_passes("lib/x-1_2.jar"));
+        assert!(!tool_file_passes("y=/z"));
+        assert!(!tool_file_passes("lib/x\u{e9}.jar"));
+        assert!(!tool_file_passes("../x"));
     }
     #[test]
     fn the_run_key_has_the_number() {
