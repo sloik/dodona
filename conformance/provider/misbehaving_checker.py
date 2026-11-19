@@ -7,6 +7,7 @@ lists the modes with what a host must do about each. These are the rules a
 schema cannot express (protocol/README.md): every message here is well-formed.
 """
 import json
+import os
 import sys
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "well-behaved"
@@ -20,7 +21,13 @@ def send(obj) -> None:
 
 def read():
     line = sys.stdin.buffer.readline()
-    return json.loads(line.decode("utf-8")) if line else None
+    message = json.loads(line.decode("utf-8")) if line else None
+    seen = os.environ.get("DODONA_TEST_SEEN")
+    if seen and isinstance(message, dict):
+        # For the judge only: which operations this provider was asked for, so it need not take the host's word.
+        with open(seen, "a", encoding="utf-8") as log:
+            log.write(json.dumps(message.get("body", {}).get("op") or message.get("type")) + "\n")
+    return message
 
 
 def run(body: dict) -> dict:

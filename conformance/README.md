@@ -274,20 +274,37 @@ Two more things are judged, each by its own tool.
 
 `tools/provider_host.py` is a small reference host, there to show the session rules can be kept on macOS, Linux and Windows. It checks framing, encoding, line length, deadlines and message envelopes, and ends every process the provider started. It does not validate message bodies against the schemas, and it is not part of any kernel yet.
 
-### Rules a schema cannot express
+### Host checks: rules a schema cannot express
 
-`tools/run_check_cases.py` judges `tools/host.py`, the stage-0 program that takes a check from a provider to a verdict ([decision 0026](../decisions/0026-the-first-host-and-status-are-stage-0-helpers.md)). `provider/misbehaving_checker.py` sends only well-formed messages and breaks one rule in each mode: a verdict with no run behind it, more strength than its manifest declares, a tool it never declared, a path that leaves its tool or its working directory, an input that is not in the key. `provider/check-cases.json` lists what the host must do. Nothing may be recorded as passed except in the controls, and where a run would have been dangerous it must not have started.
+`tools/run_check_cases.py -- <host command>` judges any host that takes one check from a provider to a verdict. The reference is `python tools/host.py check` ([decision 0026](../decisions/0026-the-first-host-and-status-are-stage-0-helpers.md)); a kernel that hosts providers is judged the same way ([decision 0033](../decisions/0033-a-kernel-hosts-providers.md)). `provider/misbehaving_checker.py` sends only well-formed messages and breaks one rule in each mode; `provider/check-cases.json` lists what the host must do. The judge stands in for the executor with `provider/fake_executor.py`, and counts the runs started, the keys they were started under and the operations the provider was asked for from records the host does not write.
 
-The rules the host keeps, each with a case that fails when the rule is taken out:
+**The command.** The host is started once per case with one JSON object on standard input and prints one JSON object on standard output:
 
-- A run starts only tools the manifest declares **and** the check was given. A declared tool the check was not given is not in the key of the result: `tool-not-in-key`.
-- Every `${tool:NAME}` in an argument names a tool, with or without a file after it, and every one in an argument is looked at.
-- The `tools` a run description lists are among those the check was given, with the same digests: `tool-digest-mismatch` otherwise.
-- A verdict states the `class` of strength the manifest declares as well as a rank no higher: `strength-class-mismatch` otherwise. The ceiling and the need for a run hold for `failed` as for `passed`.
-- A check may ask for at most 8 runs. The request for a ninth is refused with `too-many-runs` before it starts.
-- An answer carries the id of its request, an argument holds no NUL, and the opening echo comes back unchanged.
+- In: `{"root": DIR, "provider": [argv], "obligation": O, "inputs": [{"path", "identity"}], "tools": [{"name", "version", "digest"}], "platform": P, "executor": [argv], "deadline_ms": N}`. `root` is the directory the provider is started in and paths are relative to. `deadline_ms` bounds each message the host waits for.
+- Out: `{"outcome": "verdict", "verdict": V}`, where V is `passed`, `failed`, `error`, `unsupported` or `unavailable`; or `{"outcome": "refused", "reason": R}` with one of the reasons below. A host may add fields; the judge reads only these.
 
-This judges that one host. No kernel hosts a provider yet.
+**The session.** The host starts the provider, sends `hello` (protocol `0.2`, its limits, and an `echo` string with non-ASCII and control characters), and requires a `manifest` whose `echo` is the same string: `bad-manifest` otherwise. Every message the host receives is read as protocol/README.md says, and every request is answered by a `result` with the same `id` (`wrong-id`) and the same `capability` (`wrong-capability`); an `error` answer is `provider-error`. At the end the host sends `shutdown` and ends every process the provider started.
+
+**The check.** The host sends `obligation.check` with `{"op": "start", "obligation", "inputs", "tools", "platform"}`. Every file the obligation names (`specified_by` and `targets`) must be among `inputs`, or the check is refused with `unknown-file` before anything is sent. Each answer must have exactly one of `next` (a run description) and `final`: `neither-or-both` otherwise.
+
+For each `next`, before anything runs, in this order:
+
+1. More than 8 runs: the request for a ninth is refused, `too-many-runs`.
+2. The run's `platform` is the one the check was asked for: `platform-mismatch`.
+3. The tool its `program` names, and every tool any argument names as `${tool:NAME}` (with or without a file after it, every occurrence), is declared in the manifest (`undeclared-tool`) and is among the tools the check was given (`tool-not-in-key`). Every entry of the run's `tools` is a tool the check was given (`tool-not-in-key`), with the same digest (`tool-digest-mismatch`).
+4. The program's path, every input and output path, every file a `${tool:NAME}/PATH` argument places, and `cwd` pass the path check (protocol/path-check.md): `bad-path`.
+5. Arguments by allowlist: an argument containing any of `/`, `\`, `~`, `@`, `$`, `%`, `..`, or a character outside printable ASCII must be, exactly and whole, one of the run's input paths or one `${tool:NAME}/PATH`: `bad-path`. An argument containing NUL is left to rule 9.
+6. A run sets no environment variables: `env-not-allowed`.
+7. No output has the path of an input: `output-overwrites-input`.
+8. Every input of the run is one of the check's inputs (`input-not-in-key`), with the same identity (`identity-mismatch`).
+9. `args` is a list of strings, none containing NUL: `bad-arguments`.
+10. The run's inputs include every file the obligation names: `missing-input`.
+
+The run is then given to the executor: the host starts the `executor` command once per run with `{"number": N, "run_key": K, "run": <the description>}` on standard input and reads one report from standard output. `N` counts from 1. `K` is the identity of `{"check": C, "run": N, "description": D}`, where C is the identity of `{"obligation": O, "inputs": I}` as the host was given them and D the identity of the description, so each run has its own key and a second run with the same description is never answered from the first. A report whose `end` is not `exited`, or an executor that fails or prints no object, ends the check with the verdict `error` and the provider is not asked to interpret it; `{"end": "unavailable"}` gives the verdict `unavailable`. An exited run is passed back with `{"op": "run.result", "check": <id of the start request>, "run": N, "report": R}`.
+
+For a `final`, in this order: every attachment's path passes the path check (`bad-path`) and its bytes, hashed again under `root`, have the identity it states (`identity-mismatch`); the verdict is one of `passed`, `failed`, `error`, `unsupported` (`bad-verdict`); and a `passed` or `failed` verdict rests on at least one run (`verdict-without-run`), states a strength rank (`documented` < `sampled` < `bounded` < `exhaustive`) no higher than the manifest declares for `obligation.check` (`strength-above-ceiling`), and the same `class` (`strength-class-mismatch`).
+
+Nothing may be reported as passed except in the controls, and where a run would have been dangerous it must not have started.
 
 ## Two kernels compared
 

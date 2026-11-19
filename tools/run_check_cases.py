@@ -1,71 +1,85 @@
-"""Judge tools/host.py against the misbehaving checker. Stage-0 helper (decision 0023).
+"""Judge a host against the misbehaving checker. Stage-0 helper (decision 0023).
 
-    python tools/run_check_cases.py
+    python tools/run_check_cases.py -- <host command>
 
-For each case in conformance/provider/check-cases.json the checker is started
-in one mode and one obligation is taken through the host. The judge stands in
-for the executor, so nothing is really run. Exit status is 0 only if every
+For each case in conformance/provider/check-cases.json the host command is
+started once, with one JSON object on standard input (conformance/README.md,
+"Host checks"):
+
+    {"root": DIR, "provider": [argv], "obligation": {...}, "inputs": [...],
+     "tools": [...], "platform": {...}, "executor": [argv], "deadline_ms": N}
+
+The host must take the one obligation through the provider, send each run to
+the executor command, keep every rule a schema cannot express, and print one
+JSON object: {"outcome": "verdict", "verdict": V} or {"outcome": "refused",
+"reason": R}. The judge stands in for the executor (conformance/provider/
+fake_executor.py), so nothing is really run, and it counts the runs that were
+started, the keys they were started under and the operations the provider was
+asked for from records the host does not write. Exit status is 0 only if every
 case matched.
+
+The reference host is `python tools/host.py check`.
 """
 from __future__ import annotations
 
 import json
 import pathlib
+import subprocess
 import sys
+import tempfile
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import host  # noqa: E402
-
-ROOT = host.ROOT
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+KIT = ROOT / "conformance" / "provider"
 OBLIGATION = {"binding": "b", "name": "o", "kind": "check", "specified_by": ["a.txt"], "targets": ["a.txt"], "expect": "holds", "config": {}}
 INPUTS = [{"path": "a.txt", "identity": "sha256:" + "a" * 64}]  # a name only; the judge stands in for the executor
 TOOLS = [{"name": "checker", "version": "1", "digest": "sha256:" + "c" * 64}]
+PLATFORM = {"os": "linux", "arch": "aarch64", "libc": "gnu"}
 
 
 def main() -> int:
-    spec = json.loads((ROOT / "conformance" / "provider" / "check-cases.json").read_text(encoding="utf-8"))
-    captured = ROOT / "conformance" / "provider" / "check-cases.json"  # any readable file serves as the captured output
+    if "--" not in sys.argv or sys.argv[-1] == "--":
+        print(__doc__)
+        return 2
+    host = sys.argv[sys.argv.index("--") + 1:]
+    spec = json.loads((KIT / "check-cases.json").read_text(encoding="utf-8"))
     failed = 0
     for case in spec["cases"]:
-        seen = {"runs": 0}
-
-        def report_for(number, description, case=case, seen=seen):
-            seen["runs"] += 1
-            if seen["runs"] > 50:
-                raise host.Refused("the-judge-stopped-a-check-that-never-ends")
-            if case["run"] != "exited":
-                return {"end": case["run"]}
-            return {"handle": "h", "end": "exited", "exit_status": 0, "platform": host.PLATFORM, "isolation": "best-effort", "outputs": [],
-                    "tools_ran": [{"name": "checker", "digest": TOOLS[0]["digest"]}],
-                    "captured_output": {"path": captured.relative_to(ROOT).as_posix(), "identity": "sha256:" + "0" * 64}}
-
-        transcript: list = []
-        session = None
-        try:
-            session = host.Session([sys.executable, str(ROOT / "conformance" / "provider" / "misbehaving_checker.py"), case["mode"]], ROOT, transcript, deadline_s=20)
-            got = host.drive_check(session, OBLIGATION, INPUTS, TOOLS, report_for)
-            final = got["final"]
-            verdict = "unavailable" if final.get("reason") == "run-unavailable" else final["verdict"]
-            result = {"outcome": "verdict", "verdict": verdict}
-            seen["keys"] = got.get("run_keys", [])
-        except host.Refused as err:
-            result = {"outcome": "refused", "reason": str(err)}
-        finally:
-            if session is not None:
-                session.close()
-        interpreted = any(m["to"] == "provider" and m["message"].get("body", {}).get("op") == "run.result" for m in transcript)
-        want = {k: case[k] for k in ("outcome", "verdict", "reason") if k in case}
-        problems = []
-        if result != want:
-            problems.append(f"expected {want}, got {result}")
-        if case.get("ran") is False and seen["runs"]:
-            problems.append("the run was started")
-        if "runs" in case and seen["runs"] != case["runs"]:
-            problems.append(f"expected {case['runs']} runs to be started, {seen['runs']} were")
-        if case.get("asked_to_interpret") is False and interpreted:
-            problems.append("the provider was asked to interpret a run that did not exit")
-        if "distinct_run_keys" in case and len(set(seen.get("keys", []))) != case["distinct_run_keys"]:
-            problems.append(f"expected {case['distinct_run_keys']} runs each under its own key, got keys {seen.get('keys')}")
+        with tempfile.TemporaryDirectory() as tmp:
+            record, seen = pathlib.Path(tmp) / "runs", pathlib.Path(tmp) / "seen"
+            record.write_text("", encoding="utf-8")
+            seen.write_text("", encoding="utf-8")
+            asked = {"root": str(ROOT), "provider": [sys.executable, str(KIT / "misbehaving_checker.py"), case["mode"]],
+                     "obligation": OBLIGATION, "inputs": INPUTS, "tools": TOOLS, "platform": PLATFORM,
+                     "executor": [sys.executable, str(KIT / "fake_executor.py"), case["run"], str(record)], "deadline_ms": 20000}
+            problems = []
+            try:
+                done = subprocess.run(host, input=json.dumps(asked).encode("utf-8"), capture_output=True, timeout=120,
+                                      env={**__import__("os").environ, "DODONA_TEST_SEEN": str(seen)})
+                try:
+                    answer = json.loads(done.stdout.decode("utf-8"))
+                except ValueError:
+                    answer = None
+            except subprocess.TimeoutExpired:
+                answer = None
+                problems.append("the host did not return")
+            started = [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines() if line]
+            ops = [json.loads(line) for line in seen.read_text(encoding="utf-8").splitlines() if line]
+            want = {k: case[k] for k in ("outcome", "verdict", "reason") if k in case}
+            got = {k: answer[k] for k in ("outcome", "verdict", "reason") if isinstance(answer, dict) and k in answer}
+            if not isinstance(answer, dict):
+                problems.append("the host printed no JSON object")
+            elif got != want:
+                problems.append(f"expected {want}, got {got}")
+            if case.get("ran") is False and started:
+                problems.append("the run was started")
+            if "runs" in case and len(started) != case["runs"]:
+                problems.append(f"expected {case['runs']} runs to be started, {len(started)} were")
+            if case.get("asked_to_interpret") is False and "run.result" in ops:
+                problems.append("the provider was asked to interpret a run that did not exit")
+            if "distinct_run_keys" in case:
+                keys = [r["run_key"] for r in started]
+                if len(set(keys)) != case["distinct_run_keys"] or None in keys:
+                    problems.append(f"expected {case['distinct_run_keys']} runs each under its own key, the executor was given {keys}")
         label = f"{case['mode']} ({case['run']})"
         if problems:
             failed += 1

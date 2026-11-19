@@ -6,7 +6,7 @@ Stage-0 helper (decision 0023).
 
 Copies kernel/ to a temporary directory, checks that the unchanged copy passes
 the kit, then plants each defect listed in kernel/defects.json, one at a time,
-rebuilds and runs the kit again: the scenarios, the ledger cases, the core-key vectors, the check values made at test time, the reference harness and the strict reading of input. A planted defect counts as caught when the
+rebuilds and runs the kit again: the scenarios, the ledger cases, the core-key vectors, the check values made at test time, the reference harness, the strict reading of input, the provider session and the host checks (decision 0033). A planted defect counts as caught when the
 changed kernel builds and the kit rejects it. A defect that names a case of a
 formal model must be rejected by a scenario that says it covers that case;
 otherwise the scenario's label is wrong. Exit status is 0 only if the
@@ -42,7 +42,8 @@ def passes_kit(kernel_dir: pathlib.Path) -> tuple[bool, list[str]]:
     # The ledger, the core keys and freshly made check values are judged by their own tools.
     for label, tool, extra in (("ledger", "run_ledger_cases.py", []), ("core-key", "run_key_vectors.py", ["key"]),
                                ("attest", "run_attest_check.py", ["scenario"]), ("harness", "run_harness_check.py", ["scenario"]),
-                               ("input", "run_input_cases.py", [])):
+                               ("input", "run_input_cases.py", []), ("session", "run_provider_cases.py", ["session"]),
+                               ("host-check", "run_check_cases.py", ["check"])):
         other = subprocess.run([sys.executable, str(ROOT / "tools" / tool), "--", str(binary)] + extra, capture_output=True, text=True)
         if other.returncode != 0:
             ok = False

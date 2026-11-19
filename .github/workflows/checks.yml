@@ -44,7 +44,7 @@ jobs:
       - name: Judge the reference host with the misbehaving provider
         run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.python }} tools/provider_host.py
       - name: Judge the stage-0 host with a checker that breaks one rule at a time
-        run: ${{ matrix.python }} tools/run_check_cases.py
+        run: ${{ matrix.python }} tools/run_check_cases.py -- ${{ matrix.python }} tools/host.py check
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Kernel unit tests
@@ -72,6 +72,10 @@ jobs:
         run: ${{ matrix.python }} tools/run_input_cases.py -- kernel/target/release/dodona-kernel
       - name: Run the reference harness on a real checker and have the kernel grade what it signs
         run: ${{ matrix.python }} tools/run_harness_check.py -- kernel/target/release/dodona-kernel scenario
+      - name: Judge the kernel as the host of a provider session (decision 0033)
+        run: ${{ matrix.python }} tools/run_provider_cases.py -- kernel/target/release/dodona-kernel session
+      - name: Judge the kernel as the host of a check, against the misbehaving checker (decision 0033)
+        run: ${{ matrix.python }} tools/run_check_cases.py -- kernel/target/release/dodona-kernel check
       - name: Compare the kernel's path check with the reference on random paths
         run: ${{ matrix.python }} tools/path_differential.py -- kernel/target/release/dodona-kernel
       # The second kernel: JavaScript, written without sight of the first.
@@ -93,6 +97,10 @@ jobs:
         run: ${{ matrix.python }} tools/run_input_cases.py -- node kernel2/dodona-kernel2.js
       - name: Run the reference harness and have the second kernel grade what it signs
         run: ${{ matrix.python }} tools/run_harness_check.py -- node kernel2/dodona-kernel2.js scenario
+      - name: Judge the second kernel as the host of a provider session (decision 0033)
+        run: ${{ matrix.python }} tools/run_provider_cases.py -- node kernel2/dodona-kernel2.js session
+      - name: Judge the second kernel as the host of a check, against the misbehaving checker (decision 0033)
+        run: ${{ matrix.python }} tools/run_check_cases.py -- node kernel2/dodona-kernel2.js check
       - name: Compare the two kernels on inputs the kit does not contain
         run: ${{ matrix.python }} tools/kernel_differential.py --rounds 8 --a kernel/target/release/dodona-kernel --b node kernel2/dodona-kernel2.js
 

@@ -597,6 +597,43 @@ def conclude(args) -> int:
     return 0
 
 
+def check(args) -> int:
+    """One obligation through a provider, each run sent to an executor command: the host rules on their own.
+
+    Reads {"root", "provider", "obligation", "inputs", "tools", "platform", "executor", "deadline_ms"} on
+    standard input and prints {"outcome": "verdict", "verdict": V} or {"outcome": "refused", "reason": R}
+    (conformance/README.md, "Host checks"). The reference for tools/run_check_cases.py.
+    """
+    global PLATFORM
+    asked = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+    root = pathlib.Path(asked["root"]).resolve()
+    PLATFORM = asked["platform"]
+    check_key = canonical.identity({"obligation": asked["obligation"], "inputs": asked["inputs"]})
+
+    def report_for(number, description):
+        given = {"number": number, "run_key": run_key(check_key, number, description), "run": description}
+        try:
+            done = subprocess.run(asked["executor"], input=json.dumps(given).encode("utf-8"), capture_output=True, timeout=600)
+            report = json.loads(done.stdout.decode("utf-8"))
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            return {"end": "executor-failed"}
+        return report if done.returncode == 0 and isinstance(report, dict) else {"end": "executor-failed"}
+
+    session = None
+    try:
+        session = Session(asked["provider"], root, [], deadline_s=asked.get("deadline_ms", 60000) / 1000)
+        final = drive_check(session, asked["obligation"], asked["inputs"], asked["tools"], report_for)["final"]
+        verdict = "unavailable" if final.get("reason") == "run-unavailable" else final["verdict"]
+        answer = {"outcome": "verdict", "verdict": verdict}
+    except Refused as err:
+        answer = {"outcome": "refused", "reason": str(err)}
+    finally:
+        if session is not None:
+            session.close()
+    print(json.dumps(answer))
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
@@ -617,8 +654,9 @@ def main() -> int:
     two.add_argument("--ledger", type=pathlib.Path, required=True)
     two.add_argument("--writer", required=True)
     two.add_argument("--kernel", nargs=argparse.REMAINDER, required=True)
+    sub.add_parser("check", help="one obligation through a provider, runs sent to an executor command; reads JSON on standard input")
     args = ap.parse_args()
-    return {"collect": collect, "conclude": conclude, "plan": plan}[args.command](args)
+    return {"collect": collect, "conclude": conclude, "plan": plan, "check": check}[args.command](args)
 
 
 if __name__ == "__main__":
