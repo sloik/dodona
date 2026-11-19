@@ -1,6 +1,6 @@
 # Reviews of the first step of decision 0033: both kernels host providers
 
-Date: 2026-11-19. Each kernel gained a `session` and a `check` command, written by its own author in a fresh context, against a contract and a kit written by someone else ([decision 0033](../../decisions/0033-a-kernel-hosts-providers.md)). The contract went through four rounds. After each round a separate AI agent, in a fresh context, read the contract, the kit, the reference hosts and both kernels and tried to break them. This log records what those readings found and what was done.
+Date: 2026-11-19. Each kernel gained a `session` and a `check` command, written by its own author in a fresh context (with one exposure between the two authors, recorded in the README), against a contract and a kit written by someone else ([decision 0033](../../decisions/0033-a-kernel-hosts-providers.md)). The contract went through five rounds. After each round a separate AI agent, in a fresh context, read the contract, the kit, the reference hosts and both kernels and tried to break them. This log records what those readings found and what was done.
 
 ## What the rounds changed
 
@@ -15,7 +15,7 @@ Date: 2026-11-19. Each kernel gained a `session` and a `check` command, written 
 
 | # | Finding | Done |
 |---|---|---|
-| 1 | The planted-defect jobs would pass CI's time limit, because every judge ran on every defect | `tools/kit_adequacy.py` and `kernel2/plant.js` stop at the first judge that rejects a defect, the judge meant for the defect's file first |
+| 1 | The planted-defect jobs would pass CI's time limit, because every judge ran on every defect | `tools/kit_adequacy.py` and `kernel2/plant.js` stop at the first judge that rejects a defect. The first kernel's tool runs the scenarios first and then the judge meant for the defect's file; the second kernel's tries that judge first |
 | 2 | A host that starts nothing can pass every case by writing the judge's records itself | Not fixable while the host starts the programs that keep the records. README, CLAIMS C13 and the kit now say what the judge shows: a host that skips or changes a step is caught, one written to forge the records is not |
 | 3 | The judge did not check what a host sends | It now checks the start request's body, each report passed back against what the executor printed, the echo of `hello` and the closing `shutdown` |
 | 4 | Contract rules with no case | 29 check cases and 2 session cases added; each goes red on the reference host with its rule removed |
@@ -40,9 +40,9 @@ Asked to report only a path to a wrong pass, hosts disagreeing on text already w
 | 2 | The reference folded non-ASCII case in rule 8 | ASCII letters only; a case with `É.txt` and `é.txt` |
 | 3, 4 | The reference dropped a `tools_ran` entry that is not an object, and crashed on `null` | Both end the check in error; two cases |
 | 5 | The judge looked for the closing `shutdown` only after a verdict, and the reference sent none after a refusal at `hello` | The text says every check whose session opened ends with `shutdown`; the judge checks it; the reference sends it |
-| 6 | The check judge did not check `hello`'s protocol and limits, the requests' capability, or reports type for type; and its slow executor answered too soon to judge the wait | All checked; reports and the start request compared as JSON text; the slow executor answers after 12 s against a `wall_ms` of 10 s |
+| 6 | The check judge did not check `hello`'s protocol and limits, the requests' capability, or reports type for type; and its slow executor answered too soon to judge the wait | All checked; reports, the start request and run numbers compared type for type; the slow executor answers after 12 s against a `wall_ms` of 10 s, which judges the wait only to within two seconds of `wall_ms`, not the full 60-second margin (recorded under "Not yet in the kit") |
 | 7 | The session judge checked nothing the host sends | The provider records every message; `hello`, the request and `shutdown` are compared with the text |
-| 8 | Two cases rested on an order of reasons inside one rule that the text did not give | The text now gives it: each reason over every entry, in the rule's order |
+| 8 | Two cases rested on an order of reasons inside one rule that the text did not give | The text now gives it, clause by clause for rule 4, with a case where two of rule 4's clauses are broken at once |
 | 9, 10 | C20, C21, the run-9 note and a "not yet in the kit" line were stale or overstated | Corrected |
 
 Eleven faults planted in the reference hosts (the four bugs put back, and the mutants the reviewer had shown passing) are each caught by the judges.

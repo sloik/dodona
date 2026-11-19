@@ -158,7 +158,7 @@ def judge(case: dict, host: list[str]) -> list[str]:
     for n, given in enumerate(started, start=1):
         if n > len(described) or given.get("run") != described[n - 1]:
             problems.append(f"run {n} given to the executor is not the run the provider described")
-        if given.get("number") != n:
+        if type(given.get("number")) is not int or given.get("number") != n:
             problems.append(f"run {n} was given to the executor as number {given.get('number')!r}")
         if given.get("run_key") != canonical.identity({"check": check_key, "run": n, "description": canonical.identity(given.get("run"))}):
             problems.append(f"run {n} was not given the key the contract gives")
@@ -182,11 +182,11 @@ def judge(case: dict, host: list[str]) -> list[str]:
     results = [m for m in got_msgs if m["got"] == "run.result"]
     for m in results:
         n = m.get("run")
-        if not isinstance(n, int) or not 1 <= n <= len(printed) or not same(m.get("report"), printed[n - 1]):
+        if type(n) is not int or not 1 <= n <= len(printed) or not same(m.get("report"), printed[n - 1]):
             problems.append(f"run {n!r} was passed back with a report other than the one the executor printed")
     if case["run"] in ("exited", "leaves-a-child", "slow"):
         for n in range(1, len(started) + 1):
-            if not any(m.get("run") == n and start_ids and m.get("check") == start_ids[0] for m in results):
+            if not any(type(m.get("run")) is int and m.get("run") == n and start_ids and m.get("check") == start_ids[0] for m in results):
                 problems.append(f"run {n} exited and was not passed back to the provider under the start request's id")
     elif results:
         problems.append("the provider was asked to interpret a run that did not exit")

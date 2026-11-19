@@ -1093,6 +1093,14 @@
       "verdict": "error",
       "runs": 1,
       "why": "A report whose tools_ran is not a list names no tools, so it is not the run's tools."
+    },
+    {
+      "mode": "two-faults-tool-not-in-run-and-unknown-entry",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "tool-not-in-run",
+      "runs": 0,
+      "why": "Rule 4's clauses in order: the program's tool missing from the run's tools is found before an entry of those tools that is not in the key."
     }
   ]
 }

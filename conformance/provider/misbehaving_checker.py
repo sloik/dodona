@@ -155,6 +155,8 @@ def run(body: dict) -> dict:
         described["limits"] = {"wall_ms": 10000}
     if MODE == "output-differs-in-non-ascii-case":
         described["outputs"] = [{"path": "\u00e9.txt"}]
+    if MODE == "two-faults-tool-not-in-run-and-unknown-entry":
+        described["tools"] = [{"name": "shell", "digest": "sha256:" + "e" * 64}]
     if MODE == "two-faults-tool-digest-and-unknown":
         described["tools"] = [{"name": "checker", "digest": "sha256:" + "e" * 64}, {"name": "shell", "digest": "sha256:" + "e" * 64}]
     if MODE == "two-faults-input-identity-and-unknown":

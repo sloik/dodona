@@ -15,7 +15,8 @@ and reads one report from standard output. How the run ends is taken from DODONA
 - `leaves-a-child`: starts a process that sleeps, writes its id to DODONA_TEST_PIDFILE, then reports an exited
   run and exits; the host must end every process of the executor's process group or job when it returns;
 - `slow`: as `exited`, but only after twelve seconds: longer than the host's own deadline plus the run's
-  `wall_ms` in the case that uses it, so only a host that waits `wall_ms` plus 60 seconds gets the report;
+  `wall_ms` in the case that uses it, so a host that waits less than `wall_ms` plus two seconds misses the
+  report (the full 60-second margin is not judged: it would cost a minute on every run of the kit);
 - `tools-ran-with-a-number`, `tools-ran-null`: an exited report whose `tools_ran` holds a number beside the
   run's tools, or is null;
 - `report-crlf`, `report-after-blank-line`: an exited report ended by a carriage return and line feed, or
