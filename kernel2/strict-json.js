@@ -6,15 +6,22 @@
 // read(text) returns { value } or { refused: reason }. Objects become Map,
 // integers become BigInt, so nothing is rounded on the way in.
 //
+// read(text, { maxDepth: N }) also refuses, as `too-deep`, a value nested more
+// than N objects and arrays deep (the outermost counts as 1). Reading stops at
+// that point, so a deep text cannot exhaust the stack.
+//
 // Syntax is judged first: a text that is not JSON is `not-json` whatever else
 // is wrong with it. Otherwise the first problem found in reading order is the
 // reason.
 
 class Syntax extends Error {}
+class TooDeep extends Error {}
 
 const MAX_SAFE = 9007199254740991n;
 
-function read(text) {
+function read(text, options = {}) {
+  const maxDepth = options.maxDepth === undefined ? Infinity : options.maxDepth;
+  let depth = 0;
   let at = 0;
   let problem = null; // the first semantic problem, in reading order
 
@@ -47,12 +54,19 @@ function read(text) {
     return fail();
   }
 
+  function enter() {
+    depth += 1;
+    if (depth > maxDepth) throw new TooDeep();
+  }
+
   function readObject() {
     at += 1; // {
+    enter();
     const members = new Map();
     skipSpace();
     if (text[at] === '}') {
       at += 1;
+      depth -= 1;
       return members;
     }
     for (;;) {
@@ -70,6 +84,7 @@ function read(text) {
         at += 1;
       } else if (text[at] === '}') {
         at += 1;
+        depth -= 1;
         return members;
       } else {
         fail();
@@ -79,10 +94,12 @@ function read(text) {
 
   function readArray() {
     at += 1; // [
+    enter();
     const items = [];
     skipSpace();
     if (text[at] === ']') {
       at += 1;
+      depth -= 1;
       return items;
     }
     for (;;) {
@@ -92,6 +109,7 @@ function read(text) {
         at += 1;
       } else if (text[at] === ']') {
         at += 1;
+        depth -= 1;
         return items;
       } else {
         fail();
@@ -195,6 +213,7 @@ function read(text) {
     return problem === null ? { value } : { refused: problem };
   } catch (error) {
     if (error instanceof Syntax) return { refused: 'not-json' };
+    if (error instanceof TooDeep) return { refused: 'too-deep' };
     throw error;
   }
 }

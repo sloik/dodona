@@ -21,6 +21,9 @@ const root = path.resolve(__dirname, '..');
 
 const UNIT_TESTS = 'node --test';
 
+// The judges are Python programs. Windows installs Python as `python`, not `python3`.
+const PYTHON = process.env.DODONA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+
 // Each judge: a name, the tool, and the arguments after `node <kernel>`.
 const JUDGES = [
   { name: 'run_kit', tool: 'run_kit.py', args: ['scenario'] },
@@ -31,7 +34,20 @@ const JUDGES = [
   { name: 'run_harness_check', tool: 'run_harness_check.py', args: ['scenario'] },
   { name: 'run_vectors', tool: 'run_vectors.py', args: ['canonical'] },
   { name: 'run_path_vectors', tool: 'run_path_vectors.py', args: ['path', 'path-set'] },
+  { name: 'run_provider_cases', tool: 'run_provider_cases.py', args: ['session'] },
+  { name: 'run_check_cases', tool: 'run_check_cases.py', args: ['check'] },
 ];
+
+// The modules of the host. A defect planted in one of them is put to the host judges
+// first, because they are the ones meant to catch it and the others are slow; every
+// judge is still run before a defect is called missed.
+const HOST_FILES = new Set(['session.js', 'check.js', 'host-rules.js', 'wire.js', 'processes.js']);
+const HOST_JUDGES = new Set(['run_provider_cases', 'run_check_cases']);
+
+function judgesFor(file) {
+  if (!HOST_FILES.has(file)) return JUDGES;
+  return [...JUDGES.filter((judge) => HOST_JUDGES.has(judge.name)), ...JUDGES.filter((judge) => !HOST_JUDGES.has(judge.name))];
+}
 
 // Does the copy load? Asks it to canonicalise `{}`; that loads every module.
 function loads(copy) {
@@ -40,9 +56,9 @@ function loads(copy) {
 }
 
 // The name of the first judge that rejects the copy, or null if all accept it.
-function firstRejection(copy) {
-  for (const judge of JUDGES) {
-    const run = spawnSync('python3', [path.join('tools', judge.tool), '--', 'node', path.join(copy, 'dodona-kernel2.js'), ...judge.args], {
+function firstRejection(copy, judges = JUDGES) {
+  for (const judge of judges) {
+    const run = spawnSync(PYTHON, [path.join('tools', judge.tool), '--', 'node', path.join(copy, 'dodona-kernel2.js'), ...judge.args], {
       cwd: root,
       encoding: 'utf8',
     });
@@ -82,7 +98,7 @@ function main() {
           verdict = 'BROKEN';
           counts.broken += 1;
         } else {
-          const judge = firstRejection(copy);
+          const judge = firstRejection(copy, judgesFor(defect.file));
           if (judge === null) verdict = 'MISSED';
           else if (judge === UNIT_TESTS) verdict = 'MISSED by the kit (only node --test rejects it)';
           else verdict = `caught (${judge})`;

@@ -465,3 +465,197 @@ test('evidence: the reason is the attempt asked for last, not the one that ended
   assert.deepEqual(evidence.runScenario(scenario).map((result) => result.o.reason),
     ['pending', 'pending', 'pending', 'unavailable', 'unavailable', 'pending', 'error']);
 });
+
+// The host: reading provider messages, the rules of a check, and a session and a check
+// held with providers and an executor written here in JavaScript, so no other language
+// is needed to run these tests.
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const { parseLine } = require('./wire');
+const hostRules = require('./host-rules');
+const { parseArguments } = require('./session');
+const { runKey, reportEnding } = require('./check');
+
+const sha = (text) => `sha256:${crypto.createHash('sha256').update(text).digest('hex')}`;
+
+test('strict reading refuses nesting deeper than its limit and accepts it at the limit', () => {
+  assert.deepEqual(strictJson.read('['.repeat(65) + ']'.repeat(65), { maxDepth: 64 }), { refused: 'too-deep' });
+  assert.ok(strictJson.read('['.repeat(64) + ']'.repeat(64), { maxDepth: 64 }).value !== undefined);
+  assert.deepEqual(strictJson.read('['.repeat(100000), { maxDepth: 64 }), { refused: 'too-deep' });
+  assert.ok(strictJson.read('['.repeat(65) + ']'.repeat(65)).value !== undefined);
+});
+
+test('a line is read in the order the contract gives', () => {
+  const line = (text) => Buffer.from(text, 'utf8');
+  assert.deepEqual(parseLine(line('{"type":"x"}\r'), false), { reason: 'framing' });
+  assert.deepEqual(parseLine(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), line('{"type":"x"}')]), false), { reason: 'framing' });
+  assert.deepEqual(parseLine(Buffer.from([0x7b, 0xff, 0x7d]), false), { reason: 'encoding' });
+  assert.deepEqual(parseLine(line('[1]'), false), { reason: 'malformed' });
+  assert.deepEqual(parseLine(line('{"type":1}'), false), { reason: 'malformed' });
+  assert.deepEqual(parseLine(line('not json'), true), { reason: 'malformed' });
+  assert.deepEqual(parseLine(line('{"type":"x","type":"y"}'), true), { reason: 'duplicate-key' });
+  assert.deepEqual(parseLine(line('{"type":"x","n":1.0}'), true), { reason: 'not-an-integer' });
+  assert.deepEqual(parseLine(line(`{"type":"x","v":${'['.repeat(64)}${']'.repeat(64)}}`), true), { reason: 'too-deep' });
+  assert.deepEqual(parseLine(line('{"type":"x","type":"y"}'), false), { message: { type: 'y' } });
+  assert.deepEqual(parseLine(line('{"type":"x","n":7}'), true), { message: { type: 'x', n: 7 } });
+});
+
+const PLATFORM = { os: 'linux', arch: 'aarch64', libc: 'gnu' };
+const A = { path: 'a.txt', identity: sha('a\n') };
+
+function aCheck(changes = {}) {
+  return {
+    platform: PLATFORM, declared: new Set(['checker']), given: new Map([['checker', `sha256:${'c'.repeat(64)}`]]),
+    inputs: new Map([['a.txt', A.identity]]), named: ['a.txt'], runs: 0,
+    ceiling: { class: 'test', rank: 'bounded' }, identityOf: () => null, ...changes,
+  };
+}
+
+function aRun(changes = {}) {
+  return {
+    program: { tool: 'checker', path: 'bin/checker' }, args: ['--lib', '${tool:checker}/lib/rules.jar', 'a.txt'],
+    inputs: [A], outputs: [], limits: { wall_ms: 1000, output_bytes: 1000 }, platform: PLATFORM,
+    tools: [{ name: 'checker', digest: `sha256:${'c'.repeat(64)}` }], cwd: 'work', ...changes,
+  };
+}
+
+test('a run that keeps every rule is accepted, and each rule refuses with its reason', () => {
+  assert.equal(hostRules.runProblem(aRun(), aCheck()), null);
+  assert.equal(hostRules.runProblem(aRun(), aCheck({ runs: 8 })), 'too-many-runs');
+  assert.equal(hostRules.runProblem(aRun(), aCheck({ runs: 7 })), null);
+  assert.equal(hostRules.runProblem(aRun({ platform: { os: 'linux', arch: 'aarch64' } }), aCheck()), 'platform-mismatch');
+  assert.equal(hostRules.runProblem(aRun({ args: ['${tool:checker}/a:${tool:shell}/b'] }), aCheck()), 'undeclared-tool');
+  assert.equal(hostRules.runProblem(aRun(), aCheck({ declared: new Set(['checker', 'shell']), given: new Map() })), 'tool-not-in-key');
+  assert.equal(hostRules.runProblem(aRun({ tools: [{ name: 'checker', digest: 'sha256:x' }] }), aCheck()), 'tool-digest-mismatch');
+  assert.equal(hostRules.runProblem(aRun({ program: { tool: 'checker', path: 'bin/../x' } }), aCheck()), 'bad-path');
+  assert.equal(hostRules.runProblem(aRun({ cwd: 'CON' }), aCheck()), 'bad-path');
+  assert.equal(hostRules.runProblem(aRun({ args: ['-o%TEMP%', 'a.txt'] }), aCheck()), 'bad-path');
+  assert.equal(hostRules.runProblem(aRun({ args: ['${tool:checker}/lib/x=/etc/passwd', 'a.txt'] }), aCheck()), 'bad-path');
+  assert.equal(hostRules.runProblem(aRun({ args: ['café', 'a.txt'] }), aCheck()), 'bad-path');
+  assert.equal(hostRules.runProblem(aRun({ env: { A: 'b' } }), aCheck()), 'env-not-allowed');
+  assert.equal(hostRules.runProblem(aRun({ env: {} }), aCheck()), null);
+  assert.equal(hostRules.runProblem(aRun({ outputs: [{ path: 'a.txt' }] }), aCheck()), 'output-overwrites-input');
+  assert.equal(hostRules.runProblem(aRun({ inputs: [A, { path: 'b.txt', identity: A.identity }] }), aCheck()), 'input-not-in-key');
+  assert.equal(hostRules.runProblem(aRun({ inputs: [{ path: 'a.txt', identity: sha('b') }] }), aCheck()), 'identity-mismatch');
+  assert.equal(hostRules.runProblem(aRun({ args: ['a.txt\u0000x'] }), aCheck()), 'bad-arguments');
+  assert.equal(hostRules.runProblem(aRun({ args: [1] }), aCheck()), 'bad-arguments');
+  assert.equal(hostRules.runProblem(aRun({ inputs: [], args: [] }), aCheck()), 'missing-input');
+});
+
+test('every tool an argument names is found, with or without a file after it', () => {
+  assert.deepEqual(hostRules.toolsNamed({ program: { tool: 'p' }, args: ['${tool:a}', 'x${tool:b}/f:${tool:c}/g', 7] }), ['p', 'a', 'b', 'c']);
+  assert.deepEqual(hostRules.toolsNamed({ program: { tool: 'p' }, args: 'not a list ${tool:a}' }), ['p']);
+});
+
+test('a final is checked in the contract order', () => {
+  const ran = aCheck({ runs: 1 });
+  const passed = { verdict: 'passed', strength: { class: 'test', rank: 'bounded' } };
+  assert.equal(hostRules.finalProblem(passed, ran), null);
+  assert.equal(hostRules.finalProblem({ ...passed, strength: { class: 'test', rank: 'sampled' } }, ran), null);
+  assert.equal(hostRules.finalProblem({ ...passed, attachments: [{ path: '../x', identity: 'sha256:0' }] }, ran), 'bad-path');
+  assert.equal(hostRules.finalProblem({ ...passed, attachments: [{ path: 'e.txt', identity: 'sha256:0' }] }, ran), 'identity-mismatch');
+  assert.equal(hostRules.finalProblem({ ...passed, attachments: [{ path: 'e.txt', identity: 'sha256:0' }] }, aCheck({ runs: 1, identityOf: () => 'sha256:0' })), null);
+  assert.equal(hostRules.finalProblem({ verdict: 'unavailable' }, ran), 'bad-verdict');
+  assert.equal(hostRules.finalProblem({ verdict: 'unsupported' }, aCheck()), null);
+  assert.equal(hostRules.finalProblem({ verdict: 'error' }, aCheck()), null);
+  assert.equal(hostRules.finalProblem(passed, aCheck()), 'verdict-without-run');
+  assert.equal(hostRules.finalProblem({ verdict: 'failed', strength: { class: 'test', rank: 'exhaustive' } }, ran), 'strength-above-ceiling');
+  assert.equal(hostRules.finalProblem({ verdict: 'passed' }, ran), 'strength-above-ceiling');
+  assert.equal(hostRules.finalProblem(passed, aCheck({ runs: 1, ceiling: null })), 'strength-above-ceiling');
+  assert.equal(hostRules.finalProblem({ verdict: 'failed', strength: { class: 'proof', rank: 'bounded' } }, ran), 'strength-class-mismatch');
+});
+
+test('a report ends the check unless the run exited as described', () => {
+  const run = aRun();
+  const report = { end: 'exited', platform: PLATFORM, tools_ran: run.tools };
+  assert.equal(reportEnding(report, run), null);
+  assert.deepEqual(reportEnding(null, run), { outcome: 'verdict', verdict: 'error' });
+  assert.deepEqual(reportEnding({ ...report, end: 'cancelled' }, run), { outcome: 'verdict', verdict: 'error' });
+  assert.deepEqual(reportEnding({ ...report, end: 'unavailable' }, run), { outcome: 'verdict', verdict: 'unavailable' });
+  assert.deepEqual(reportEnding({ ...report, platform: { os: 'linux', arch: 'aarch64' } }, run), { outcome: 'verdict', verdict: 'error' });
+  assert.deepEqual(reportEnding({ ...report, tools_ran: [] }, run), { outcome: 'verdict', verdict: 'error' });
+});
+
+test('each run has its own key, which includes its number', () => {
+  const description = aRun();
+  assert.notEqual(runKey('sha256:c', 1, description), runKey('sha256:c', 2, description));
+  assert.equal(runKey('sha256:c', 1, description), identity.identityOf({ check: 'sha256:c', run: 1, description: identity.identityOf(description) }));
+});
+
+test('the session command takes the limits and the provider as the contract gives them', () => {
+  assert.deepEqual(parseArguments(['--deadline-ms', '5', '--max-line', '6', '--max-log', '7', '--', 'p', '--x']),
+    { deadlineMs: 5, maxLine: 6, maxLog: 7, provider: ['p', '--x'] });
+  assert.equal(parseArguments(['--deadline-ms', '5', '--max-line', '6', '--', 'p']), null);
+  assert.equal(parseArguments(['--deadline-ms', '5', '--max-line', '6', '--max-log', '7', '--']), null);
+});
+
+// A provider and an executor in JavaScript, started with the Node that runs the tests.
+const PROVIDER = `
+const rl = require('node:readline').createInterface({ input: process.stdin });
+const mode = process.argv[1];
+const send = (m, end = '\\n') => process.stdout.write(JSON.stringify(m) + end);
+let start;
+rl.on('line', (text) => {
+  const m = JSON.parse(text);
+  if (m.type === 'hello') {
+    send({ type: 'manifest', echo: m.echo, manifest: { capabilities: [{ capability: 'obligation.check', strength: { class: 'test', rank: 'bounded' } }], tools: [{ name: 'checker' }] } }, mode === 'cr' ? '\\r\\n' : '\\n');
+  } else if (m.type === 'request' && m.capability === 'decision.index') {
+    send({ type: 'result', id: m.id, capability: m.capability, body: { decisions: [] } });
+  } else if (m.type === 'request' && m.body.op === 'start') {
+    start = m.body;
+    send({ type: 'result', id: m.id, capability: m.capability, body: { next: { program: { tool: 'checker', path: 'bin/c' }, args: ['a.txt'],
+      inputs: start.inputs, outputs: [], limits: { wall_ms: 1000, output_bytes: 10 }, platform: start.platform,
+      tools: start.tools.map((t) => ({ name: t.name, digest: t.digest })) } } });
+  } else if (m.type === 'request') {
+    send({ type: 'result', id: m.id, capability: m.capability, body: { final: { verdict: m.body.report.exit_status === 0 ? 'passed' : 'failed', strength: { class: 'test', rank: 'bounded' } } } });
+  } else if (m.type === 'shutdown') {
+    process.exit(0);
+  }
+});`;
+
+const EXECUTOR = `
+let text = '';
+process.stdin.on('data', (d) => { text += d; });
+process.stdin.on('end', () => {
+  const asked = JSON.parse(text);
+  process.stdout.write(JSON.stringify({ handle: 'h', end: 'exited', exit_status: Number(process.argv[1]), platform: asked.run.platform,
+    isolation: 'best-effort', outputs: [], tools_ran: asked.run.tools, captured_output: { path: 'a.txt', identity: 'x' } }) + '\\n');
+});`;
+
+const KERNEL = path.join(__dirname, 'dodona-kernel2.js');
+
+function hostSession(mode) {
+  const run = spawnSync(process.execPath, [KERNEL, 'session', '--deadline-ms', '5000', '--max-line', '65536', '--max-log', '100', '--',
+    process.execPath, '-e', PROVIDER, mode], { encoding: 'utf8' });
+  return JSON.parse(run.stdout);
+}
+
+test('a session with a provider that keeps the protocol is ok, and one carriage return ends it', () => {
+  assert.deepEqual(hostSession('well'), { outcome: 'ok', log_bytes: 0, log_truncated: false });
+  assert.equal(hostSession('cr').reason, 'framing');
+});
+
+function hostCheck(exitStatus, changes = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kernel2-check-'));
+  try {
+    fs.writeFileSync(path.join(root, 'a.txt'), 'a\n');
+    const asked = {
+      root, provider: [process.execPath, '-e', PROVIDER, 'well'], executor: [process.execPath, '-e', EXECUTOR, String(exitStatus)],
+      obligation: { binding: 'b', name: 'o', kind: 'check', specified_by: ['a.txt'], targets: ['a.txt'], expect: 'holds', config: {} },
+      inputs: [A], tools: [{ name: 'checker', version: '1', digest: `sha256:${'c'.repeat(64)}` }], platform: PLATFORM, deadline_ms: 5000, ...changes,
+    };
+    const run = spawnSync(process.execPath, [KERNEL, 'check'], { input: JSON.stringify(asked), encoding: 'utf8' });
+    return JSON.parse(run.stdout);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test('a check is taken through the provider and the executor to the provider\'s verdict', () => {
+  assert.deepEqual(hostCheck(0), { outcome: 'verdict', verdict: 'passed' });
+  assert.deepEqual(hostCheck(1), { outcome: 'verdict', verdict: 'failed' });
+  assert.deepEqual(hostCheck(0, { inputs: [] }), { outcome: 'refused', reason: 'unknown-file' });
+});

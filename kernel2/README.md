@@ -4,17 +4,22 @@ A second dodona kernel, written in JavaScript for Node.js (20 or later) using on
 
 It is an independent implementation: it was written from the project's documents and its conformance kit alone, without reading the first kernel (`kernel/`, in Rust), the reference path check or the model files under `spec/`. If it and the first kernel ever disagree on an input that both pass the kit, the kit is missing a scenario.
 
-It does what the kit can judge: obligation and intent status, the planner, assurance, trees, attempts, platforms, decisions, the canonical encoding and the path check. It is not a usable dodona.
+It does what the kit can judge: obligation and intent status, the planner, assurance, trees, attempts, platforms, decisions, the canonical encoding and the path check, and, as a host, a provider session and one check taken through a provider and an executor to a verdict ([decision 0033](../decisions/0033-a-kernel-hosts-providers.md)). It is not a usable dodona.
 
 ## Running it
 
-Each command reads standard input and prints one JSON object.
+Each command reads standard input and prints one JSON object, except `session`, which reads nothing.
 
     node kernel2/dodona-kernel2.js scenario     one conformance scenario
     node kernel2/dodona-kernel2.js canonical    a JSON text, to its canonical form and hash
     node kernel2/dodona-kernel2.js path         {"hex": "..."} to accepted or refused
     node kernel2/dodona-kernel2.js path-set     {"paths": [...]} to the colliding pairs
     node kernel2/dodona-kernel2.js states       single states, as tools/check_states.py sends them
+    node kernel2/dodona-kernel2.js check        one check, from a provider to a verdict (conformance/README.md, "Host checks")
+    node kernel2/dodona-kernel2.js session --deadline-ms N --max-line N --max-log N -- <provider command>
+                                                one provider session (conformance/README.md, "Session")
+
+The provider and the executor are commands the kernel is given; it names no tool. To end every process a provider started, the kernel starts it in a process group of its own on Linux and macOS, and walks the process table from it down (`ps` there, `Get-CimInstance Win32_Process` on Windows), because a process keeps its parent's id on Windows after the parent has exited.
 
 ## Judging it
 
@@ -27,9 +32,11 @@ From the repository root:
     node --test kernel2/test.js
     node kernel2/test-normalization.js .ucd
     python3 tools/run_attest_check.py -- node kernel2/dodona-kernel2.js scenario
+    python3 tools/run_provider_cases.py -- node kernel2/dodona-kernel2.js session
+    python3 tools/run_check_cases.py -- node kernel2/dodona-kernel2.js check
     node kernel2/plant.js
 
-`plant.js` copies the kernel, plants each defect listed in `defects.json` one at a time, and runs every judge (kit, ledger cases, key vectors, attestation and harness checks, encoding and path vectors) on the damaged copy. A defect is caught if any judge rejects it; a copy that does not load is reported as BROKEN, not caught.
+`plant.js` copies the kernel, plants each defect listed in `defects.json` one at a time, and runs every judge (kit, ledger cases, key vectors, attestation and harness checks, encoding and path vectors, provider session and host checks) on the damaged copy; a defect in a host module is put to the two host judges first. The judges are run with `python3`, or `python` on Windows, or what `DODONA_PYTHON` names. A defect is caught if any judge rejects it; a copy that does not load is reported as BROKEN, not caught.
 
 ## Unicode
 
@@ -41,4 +48,4 @@ The data files are not committed. `test-normalization.js` runs every line of `No
 
 ## Layout
 
-One module per area (`evidence.js`, `intent.js`, `plan.js`, `assurance.js`, `tree.js`, `attempts.js`, `platforms.js`, `decisions.js`, `canonical.js`, `strict-json.js`, `paths.js`, `unicode.js`). The rules are pure functions. Only `dodona-kernel2.js` reads or writes. The `scenario` and `states` commands call the same rule functions.
+One module per area (`evidence.js`, `intent.js`, `plan.js`, `assurance.js`, `tree.js`, `attempts.js`, `platforms.js`, `decisions.js`, `canonical.js`, `strict-json.js`, `paths.js`, `unicode.js`). The host is `session.js` and `check.js`, with `wire.js` (reading messages), `processes.js` (starting and ending commands) and `host-rules.js` (the rules of a check, pure functions). The rules are pure functions. Only `dodona-kernel2.js`, `ledger-file.js` and the host modules read or write. The `scenario` and `states` commands call the same rule functions.
