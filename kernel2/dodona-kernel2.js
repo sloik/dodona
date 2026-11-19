@@ -40,6 +40,16 @@ function readInput(bytes) {
   return plain(read.value);
 }
 
+// The check command's input, or null when it is not JSON at all: the check refuses
+// that, as any input without its shape, with `bad-input`.
+function readCheckInput(bytes) {
+  try {
+    return readInput(bytes);
+  } catch (error) {
+    return null;
+  }
+}
+
 function parseHex(text) {
   if (typeof text !== 'string' || text.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(text)) {
     throw new Error('hex must be an even number of hexadecimal digits');
@@ -62,7 +72,7 @@ const commands = {
   'ledger-append': (bytes) => ledgerFile.append(readInput(bytes)),
   'ledger-read': (bytes) => ledgerFile.read(readInput(bytes)),
   'path-set': (bytes) => ({ collisions: findCollisions(readInput(bytes).paths) }),
-  check: (bytes) => runCheck(readInput(bytes)),
+  check: (bytes) => runCheck(readCheckInput(bytes)),
 };
 
 // Commands that read no standard input, given the rest of the command line.
