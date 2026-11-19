@@ -4,6 +4,7 @@
   "claim": "C9",
   "covers": [
     "planner/mutant_plan_everything",
+    "planner/mutant_plan_nothing",
     "planner/reach_all_current"
   ],
   "why": "With per-definition identity, editing a definition nothing depends on plans nothing, and a tool change plans only what uses the tool.",

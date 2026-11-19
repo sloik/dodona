@@ -6,7 +6,7 @@
     "platforms/mutant_stand_in_unclaimed",
     "platforms/design_not_claimed"
   ],
-  "why": "A record stands in only for a provider that claims its results do not depend on the platform.",
+  "why": "A record stands in only for a provider that claims its results do not depend on the platform: with no claim, a key two platforms agree on still has no status on the third.",
   "stand_in_allowed": true,
   "provider_claims": false,
   "keys": [
@@ -15,7 +15,8 @@
   ],
   "platforms": [
     "p1",
-    "p2"
+    "p2",
+    "p3"
   ],
   "steps": [
     {
@@ -39,6 +40,14 @@
         }
       },
       "expect": {
+        "status": {
+          "k1": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "unknown"
+          }
+        },
+        "stood_in": [],
         "reproducibility": {
           "k1": "agrees"
         }
@@ -56,7 +65,8 @@
         "status": {
           "k2": {
             "p1": "passed",
-            "p2": "unknown"
+            "p2": "unknown",
+            "p3": "unknown"
           }
         },
         "stood_in": []

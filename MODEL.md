@@ -72,7 +72,7 @@ A **check** is one attempt to decide an obligation; it consists of one or more t
 
 A submission with no closing entry is `pending`. Only evidence records are reusable. Outcome entries are what give `unknown` its reason.
 
-**Status is per platform.** Policy names the platforms on which each obligation is required; the default is the platform of the executor bound to it. In the rules below, "the current key" means the core key computed now together with the platform being asked about. A record from a different platform counts only as a *stand-in*: when the provider claims platform independence, the same core key has been checked on at least two platforms with agreeing results, and policy accepts that. A status resting on a stand-in says so.
+**Status is per platform.** Policy names the platforms on which each obligation is required; the default is the platform of the executor bound to it. In the rules below, "the current key" means the core key computed now together with the platform being asked about. A record from a different platform counts only as a *stand-in*: when the provider claims platform independence, the same core key has been checked on at least two platforms with agreeing results and no platform has the other verdict for it, and policy accepts that ([decision 0032](decisions/0032-a-stand-in-is-verified-for-its-own-key-and-any-disagreement-withdraws-it.md)). A status resting on a stand-in says so.
 
 **Obligation status**
 
@@ -127,13 +127,13 @@ Policy sets the floor that an owner's choices cannot go below without it showing
 |---|---|
 | `draft` | Not confirmed by its owner, or changed since it was |
 | `uncovered` | At least one criterion has no obligation |
-| `unguarded` | No hard gate anywhere in the intent or its descendants, or fewer than policy demands. Never becomes delivered |
+| `unguarded` | No hard gate anywhere in the intent or its descendants; or, for the root of a tree, fewer than policy demands counted over the whole tree ([decision 0030](decisions/0030-the-hard-gate-floor-is-counted-over-the-tree.md)). Never becomes delivered |
 | `open` | Covered and guarded; at least one hard gate is not passed, or a hard criterion is below the level policy demands |
 | `delivered` | Every hard gate passed at the demanded level. Reports the open deferred gates |
 | `fulfilled` | Delivered, and every deferred gate closed |
 | `overdue` | Delivered, and a deferred gate passed its limit while open |
 
-A parent needs its children delivered and its own criteria met. Gate counts and scores are totalled over all descendants, so moving a criterion into a child changes nothing in the total.
+A parent needs its children delivered and its own criteria met. Gate counts and scores are totalled over all descendants, so moving a criterion into a child changes nothing in the total. A tree in which any intent is unguarded is itself unguarded.
 
 **The status word is never reported alone.** Every result for an intent leads with the same line, in this order:
 
@@ -200,7 +200,7 @@ Separation is graded for the acts that rest on someone's word:
 
 The result of a check anyone can run again from locked inputs is graded on the evidence scale, not here; saying that it tests the criterion is still an act, and is graded. Separation is a separate axis: it is never multiplied into the evidence level. The kernel works out which acts there must be, and one with no record is at `self`. The headline shows the weakest separation among them, which act that is, and a count of acts at `apart` or better out of the number there must be. Anything resting on an act at `self` is at most `asserted`, whatever floor policy sets.
 
-Trying again is recorded: a checker takes a ticket before each attempt, an attempt with no result counts as a failure, the worst result on an unchanged target counts, and a pass after a failure without a change is flagged and graded no higher than `helper`.
+Trying again is recorded: a checker takes a ticket before each attempt, an attempt with no result counts as a failure, and the worst result on the current target counts. A pass after any earlier attempt along the same line that did not pass is flagged as retried, and the count is shown. A pass after a failure on unchanged work is graded no higher than `helper`. After a change the pass keeps its grade until the line has had as many failures as policy allows, two by default; from then on every retried pass is capped too, because a kernel cannot tell a real fix from a trivial change made to get a fresh try ([decision 0031](decisions/0031-an-agreement-after-a-real-change-keeps-its-grade-up-to-a-limit.md)). The result itself is judged on the current target.
 
 **Amendment.** Any difference from the baseline: a changed criterion, gate, limit, sample size, threshold, link to a check, or child. Granted only by the intent owner, recorded with what changed, why, by whom and at what separation, never erased. An amended criterion is at most `asserted` for the part amended. An amendment takes effect only at or above the separation floor policy sets; `apart` is the recommended floor.
 

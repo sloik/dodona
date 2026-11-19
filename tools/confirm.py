@@ -83,6 +83,19 @@ def main() -> int:
         print(f"  criterion {name}: gate {criterion['gate']}; checked by {checks or 'nothing a kernel can read yet'}")
     if intent["children"]:
         print("  children:", ", ".join(sorted(intent["children"])))
+    # Where the hard gates sit (decision 0030): the floor is counted over the whole tree, so a
+    # child can rest on fewer hard gates of its own than the floor. Shown before the owner agrees.
+    floor = policy.get("gates", {}).get("min_hard", 1)
+    where = status.coverage(status.read_intents([]), floor)
+    mine = where["intents"][args.intent]
+    print(f"  hard gates: {mine['own_hard']} of its own, {mine['subtree_hard']} with what is below it;"
+          f" tree {mine['root']} has {mine['tree_hard']} against a floor of {mine['floor']}")
+    for ident in sorted(i for i, x in where["intents"].items() if x["root"] == mine["root"]):
+        x = where["intents"][ident]
+        if x["floor_met_only_over_tree"] or ident == where["thinnest"][mine["root"]]:
+            print(f"    intent {ident}: {x['own_hard']} hard of its own"
+                  + (", the thinnest in the tree" if ident == where["thinnest"][mine["root"]] else "")
+                  + (f"; below the floor of {x['floor']} on its own, met only over the tree" if x["floor_met_only_over_tree"] else ""))
     print(f"Status now: {report['status']}. Baseline: {report['baseline']}")
     print("Confirming says these criteria and gates are what you meant. It does not say the work is done.")
     if input(f"Type {args.intent} to confirm, anything else to leave it: ").strip() != args.intent:

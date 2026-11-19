@@ -21,25 +21,25 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "four definitions in a chain plus one unrelated in a shared file, two hash values, a compiler and a test runner; every behaviour of at most six steps from one starting state",
+  "bounds": "five definitions, the relation one of two shapes (a chain three steps deep, a diamond), two hash values, a compiler and a test runner; every behaviour of at most six steps",
   "cases": [
     {
       "config": "design_definition.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "With per-definition identity: nothing stale is reused, and nothing current is rerun."
+      "purpose": "With per-definition identity: nothing stale is reused, nothing current is rerun, and everything without a right result is planned, for both shapes of the relation."
     },
     {
       "config": "design_file.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "With file-level fallback identity: nothing stale is reused."
+      "purpose": "With file-level fallback identity: nothing stale is reused, and everything without a right result is planned."
     },
     {
       "config": "file_costs_reruns.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "File-level identity does rerun things that were current: editing an unrelated definition in the same file. That is its only cost.",
+      "purpose": "File-level identity does rerun things that were current: editing an unrelated definition in a shared file.",
       "of": "NoNeedlessRerun"
     },
     {
@@ -53,7 +53,7 @@
       "config": "mutant_direct_deps_only.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: the key follows direct dependencies and not what those depend on in turn.",
+      "purpose": "Planted defect: the key follows direct dependencies and not what those depend on.",
       "of": "NoWrongReuse"
     },
     {
@@ -64,24 +64,38 @@
       "of": "NoWrongReuse"
     },
     {
+      "config": "mutant_closure_two_passes.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the index follows the relation in two passes, one too few for the chain.",
+      "of": "NoWrongReuse"
+    },
+    {
       "config": "mutant_fallback_direct_deps_only.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "The indirect-dependency defect with file-level identity.",
+      "purpose": "Planted defect: the indirect-dependency defect with file-level identity.",
       "of": "NoWrongReuse"
     },
     {
       "config": "mutant_key_omits_producer.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a test's key leaves out the build that produced what it tests, so a compiler change is missed.",
+      "purpose": "Planted defect: a test's key leaves out the build that produced what it tests.",
+      "of": "NoWrongReuse"
+    },
+    {
+      "config": "mutant_build_key_omits_compiler.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a build's key leaves out the compiler, so a repinned compiler reuses the old build.",
       "of": "NoWrongReuse"
     },
     {
       "config": "mutant_test_without_build.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: the test is run before the build is current, on a stale artifact, and its result is filed as current.",
+      "purpose": "Planted defect: the test is run before the build is current, on a stale artifact.",
       "of": "NoWrongReuse"
     },
     {
@@ -90,6 +104,13 @@
       "expect_exit": 12,
       "purpose": "Planted defect: the planner reruns everything.",
       "of": "NoNeedlessRerun"
+    },
+    {
+      "config": "mutant_plan_nothing.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the planner plans nothing, which reuses nothing wrongly and is useless.",
+      "of": "PlanComplete"
     }
   ]
 }

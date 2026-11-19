@@ -1,0 +1,101 @@
+{
+  "kind": "plan",
+  "name": "dependency_three_levels_away",
+  "claim": "C9",
+  "covers": [
+    "planner/mutant_closure_two_passes"
+  ],
+  "why": "A dependency three steps away counts as much as a direct one. An index that follows the relation a fixed number of times misses it.",
+  "granularity": "definition",
+  "definitions": {
+    "d1": {
+      "depends_on": [
+        "d2"
+      ],
+      "file": "f1"
+    },
+    "d2": {
+      "depends_on": [
+        "d3"
+      ],
+      "file": "f2"
+    },
+    "d3": {
+      "depends_on": [
+        "d4"
+      ],
+      "file": "f3"
+    },
+    "d4": {
+      "depends_on": [],
+      "file": "f4"
+    }
+  },
+  "obligations": {
+    "check": {
+      "targets": [
+        "d1"
+      ]
+    }
+  },
+  "start": {
+    "content": {
+      "d1": "a",
+      "d2": "a",
+      "d3": "a",
+      "d4": "a"
+    },
+    "tools": {
+      "compiler": "c1",
+      "runner": "r1"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "run": {
+          "obligation": "check"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d4",
+          "to": "b"
+        }
+      },
+      "expect": {
+        "plan": [
+          "check"
+        ]
+      }
+    },
+    {
+      "do": {
+        "run": {
+          "obligation": "check"
+        }
+      },
+      "expect": {
+        "ran": true,
+        "plan": []
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "definition": "d4",
+          "to": "a"
+        }
+      },
+      "expect": {
+        "plan": []
+      }
+    }
+  ]
+}

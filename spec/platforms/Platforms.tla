@@ -3,107 +3,128 @@
 (* Results on more than one platform (claim C15, decisions 0006 and 0008). *)
 (*                                                                         *)
 (* Two sets of inputs (core keys) and three platforms. A check on one core *)
-(* key and one platform leaves one record. Status is asked for a platform. *)
-(* A platform's own record always decides. Where it has none, a record     *)
-(* from another platform may stand in, but only if the provider claims its *)
-(* results do not depend on the platform, policy allows stand-ins, and the *)
-(* claim has been verified. A status that rests on a stand-in is reported  *)
-(* as one.                                                                 *)
+(* key and one platform leaves a record; checking again may leave a second *)
+(* record with the other verdict, so a platform can disagree with itself.  *)
+(* Status is asked for a key on a platform:                                *)
 (*                                                                         *)
-(* "Verified" here means: some core key has the same verdict on at least   *)
-(* two platforms, and no core key has different verdicts on two. One       *)
-(* agreeing sample is enough in this model. That is a weak notion, and     *)
-(* the claim says so.                                                      *)
+(*   A platform's own records decide: one verdict is that verdict, both    *)
+(*   are a conflict. Where it has none, another platform's verdict may     *)
+(*   stand in, but only if policy allows stand-ins, the provider claims    *)
+(*   its results do not depend on the platform, and the claim is verified  *)
+(*   FOR THAT KEY: the key has one verdict on at least two platforms and   *)
+(*   no platform disagrees about it. A status that rests on a stand-in is  *)
+(*   reported as one.                                                      *)
+(*   Reproducibility of a key differs if it has both verdicts anywhere,    *)
+(*   agrees if at least two platforms have a verdict and all are the same, *)
+(*   and is unknown otherwise.                                             *)
 (*                                                                         *)
-(* Reproducibility of a core key is "failed" if two platforms disagree,    *)
-(* "passed" if at least two have run and all agree, otherwise "unknown".   *)
+(* Two descriptions are kept apart on purpose. The SPECIFICATION is stated *)
+(* over `recs`, every record ever made. The KERNEL works from `store`, the *)
+(* verdicts it has filed for each key and platform, updated one record at  *)
+(* a time. The properties say the kernel's answers, from its store, are    *)
+(* the ones the records call for. A kernel that files a record wrongly, or *)
+(* decides a stand-in by the wrong rule, is caught.                        *)
 (***************************************************************************)
 EXTENDS Naturals, FiniteSets
 
 CONSTANTS StandInAllowed, ProviderClaims, Mutant
 
-VARIABLE rec
+VARIABLES recs, store
 
-Keys  == {"k1", "k2"}
-Plats == {"p1", "p2", "p3"}
+vars == <<recs, store>>
+
+Keys     == {"k1", "k2"}
+Plats    == {"p1", "p2", "p3"}
+Verdicts == {"passed", "failed"}
 
 Mutants == {"none", "always_stand_in", "stand_in_unverified", "stand_in_unclaimed",
             "stand_in_always_passed", "other_overrides_own", "stand_in_not_reported",
-            "one_platform_reproduces", "disagreement_ignored"}
+            "one_platform_reproduces", "disagreement_ignored", "verified_globally",
+            "latest_only_filed", "self_disagreement_ignored"}
 ASSUME Mutant \in Mutants /\ StandInAllowed \in BOOLEAN /\ ProviderClaims \in BOOLEAN
 
-Init == rec = [k \in Keys |-> [p \in Plats |-> "none"]]
+Init ==
+    /\ recs = {}
+    /\ store = [k \in Keys |-> [p \in Plats |-> {}]]
 
+\* A check leaves a record. The planted defect files only the latest verdict for a platform.
 Record(k, p, v) ==
-    /\ rec[k][p] = "none"
-    /\ rec' = [rec EXCEPT ![k][p] = v]
+    /\ [k |-> k, p |-> p, v |-> v] \notin recs
+    /\ recs' = recs \cup {[k |-> k, p |-> p, v |-> v]}
+    /\ store' = [store EXCEPT ![k][p] = IF Mutant = "latest_only_filed" THEN {v} ELSE @ \cup {v}]
 
-Next == \E k \in Keys, p \in Plats, v \in {"passed", "failed"} : Record(k, p, v)
+Next == \E k \in Keys, p \in Plats, v \in Verdicts : Record(k, p, v)
 
-Spec == Init /\ [][Next]_rec
+Spec == Init /\ [][Next]_vars
 ----------------------------------------------------------------------------
-Ran(k)      == {p \in Plats : rec[k][p] # "none"}
-Verdicts(k) == {rec[k][p] : p \in Ran(k)}
-Agree(k)    == Cardinality(Ran(k)) >= 2 /\ Cardinality(Verdicts(k)) = 1
-Disagree(k) == Cardinality(Verdicts(k)) = 2
+(* The specification, from every record. *)
 
-ClaimVerified == (\E k \in Keys : Agree(k)) /\ ~(\E k \in Keys : Disagree(k))
+Own(k, p)        == {r.v : r \in {x \in recs : x.k = k /\ x.p = p}}
+SpecRan(k)       == {p \in Plats : Own(k, p) # {}}
+SpecAll(k)       == UNION {Own(k, p) : p \in Plats}
+SpecVerified(k)  == Cardinality(SpecRan(k)) >= 2 /\ Cardinality(SpecAll(k)) = 1
+SpecMayStand(k)  == StandInAllowed /\ ProviderClaims /\ SpecVerified(k)
 
-MayStandIn ==
-    CASE Mutant \in {"always_stand_in", "other_overrides_own"} -> TRUE
+SpecStatus(k, p) ==
+    IF Own(k, p) = {"passed"} THEN "passed"
+    ELSE IF Own(k, p) = {"failed"} THEN "failed"
+    ELSE IF Own(k, p) = Verdicts THEN "conflict"
+    ELSE IF SpecMayStand(k) THEN CHOOSE v \in SpecAll(k) : TRUE
+    ELSE "unknown"
+SpecStoodIn(k, p) == Own(k, p) = {} /\ SpecMayStand(k)
+SpecRepro(k) ==
+    IF SpecAll(k) = Verdicts THEN "differs"
+    ELSE IF Cardinality(SpecRan(k)) >= 2 THEN "agrees" ELSE "unknown"
+
+(* The kernel, from its store. *)
+
+Ran(k)  == {p \in Plats : store[k][p] # {}}
+All(k)  == UNION {store[k][p] : p \in Plats}
+Agrees(k) == Cardinality(Ran(k)) >= 2 /\ Cardinality(All(k)) = 1
+Verified(k) ==
+    IF Mutant = "verified_globally"
+    THEN (\E j \in Keys : Agrees(j)) /\ ~(\E j \in Keys : Cardinality(All(j)) = 2)
+    ELSE Agrees(k)
+
+MayStandIn(k) ==
+    CASE Mutant = "always_stand_in" -> TRUE
       [] Mutant = "stand_in_unverified" -> StandInAllowed /\ ProviderClaims
-      [] Mutant = "stand_in_unclaimed"  -> StandInAllowed /\ ClaimVerified
-      [] OTHER -> StandInAllowed /\ ProviderClaims /\ ClaimVerified
+      [] Mutant = "stand_in_unclaimed"  -> StandInAllowed /\ Verified(k)
+      [] OTHER -> StandInAllowed /\ ProviderClaims /\ Verified(k)
 
-\* When a stand-in is allowed no two platforms disagree, so every record of a
-\* key has the same verdict and it does not matter which one stands in.
-Borrowed(k) == CHOOSE v \in Verdicts(k) : TRUE
-
-UsesStandIn(k, p) ==
-    IF Mutant = "other_overrides_own"
-    THEN MayStandIn /\ Ran(k) \ {p} # {}
-    ELSE rec[k][p] = "none" /\ MayStandIn /\ Ran(k) # {}
+UsesStandIn(k, p) == store[k][p] = {} /\ MayStandIn(k) /\ Ran(k) # {}
 
 Status(k, p) ==
-    IF UsesStandIn(k, p)
-    THEN (IF Mutant = "stand_in_always_passed" THEN "passed"
-          ELSE IF Mutant = "other_overrides_own" THEN (CHOOSE v \in {rec[k][q] : q \in Ran(k) \ {p}} : TRUE)
-          ELSE Borrowed(k))
-    ELSE IF rec[k][p] # "none" THEN rec[k][p] ELSE "unknown"
+    LET own == store[k][p]
+        other == UNION {store[k][q] : q \in Ran(k) \ {p}}
+    IN IF own # {} /\ Mutant = "other_overrides_own" /\ other # {} THEN CHOOSE v \in other : TRUE
+       ELSE IF own = {"passed"} THEN "passed"
+       ELSE IF own = {"failed"} THEN "failed"
+       ELSE IF own = Verdicts THEN (IF Mutant = "self_disagreement_ignored" THEN "passed" ELSE "conflict")
+       ELSE IF UsesStandIn(k, p) THEN (IF Mutant = "stand_in_always_passed" THEN "passed" ELSE CHOOSE v \in All(k) : TRUE)
+       ELSE "unknown"
 
-\* What the report says about where a status came from.
 ReportedStandIn(k, p) == UsesStandIn(k, p) /\ Mutant # "stand_in_not_reported"
 
 Repro(k) ==
-    IF Disagree(k) THEN (IF Mutant = "disagreement_ignored" THEN "passed" ELSE "failed")
-    ELSE IF Agree(k) THEN "passed"
-    ELSE IF Mutant = "one_platform_reproduces" /\ Ran(k) # {} THEN "passed" ELSE "unknown"
+    IF All(k) = Verdicts THEN (IF Mutant = "disagreement_ignored" THEN "agrees" ELSE "differs")
+    ELSE IF Cardinality(Ran(k)) >= 2 THEN "agrees"
+    ELSE IF Mutant = "one_platform_reproduces" /\ Ran(k) # {} THEN "agrees" ELSE "unknown"
 ----------------------------------------------------------------------------
-TypeOK == rec \in [Keys -> [Plats -> {"none", "passed", "failed"}]]
+TypeOK ==
+    /\ recs \subseteq [k : Keys, p : Plats, v : Verdicts]
+    /\ store \in [Keys -> [Plats -> SUBSET Verdicts]]
 
-\* A platform's own record decides its status.
-OwnRecordDecides ==
-    \A k \in Keys, p \in Plats : rec[k][p] # "none" => Status(k, p) = rec[k][p]
+\* Every status is the one the records call for, and only a stand-in the rule allows is used.
+StatusMatches == \A k \in Keys, p \in Plats : Status(k, p) = SpecStatus(k, p)
 
-\* A status with no record of its own needs a provider's claim, policy's
-\* permission and a verified claim, and it is some other platform's verdict.
-StandInIsEarned ==
-    \A k \in Keys, p \in Plats :
-        (rec[k][p] = "none" /\ Status(k, p) # "unknown") =>
-            /\ StandInAllowed /\ ProviderClaims /\ ClaimVerified
-            /\ \E q \in Ran(k) : Status(k, p) = rec[k][q]
+\* A status that rests on another platform's record is reported as one, and no other is.
+StandInIsReported == \A k \in Keys, p \in Plats : ReportedStandIn(k, p) = SpecStoodIn(k, p)
 
-\* A status that rests on another platform's record is reported as doing so.
-StandInIsReported ==
-    \A k \in Keys, p \in Plats :
-        (rec[k][p] = "none" /\ Status(k, p) # "unknown") => ReportedStandIn(k, p)
+\* Reproducibility is the one the records call for.
+ReproMatches == \A k \in Keys : Repro(k) = SpecRepro(k)
 
-\* Reproducibility passes only with at least two agreeing platforms, and fails
-\* on any disagreement.
-ReproSound ==
-    \A k \in Keys : /\ Repro(k) = "passed" => Agree(k)
-                    /\ Disagree(k) => Repro(k) = "failed"
-
-\* Reachability.
-NeverStoodIn == \A k \in Keys, p \in Plats : ~(rec[k][p] = "none" /\ Status(k, p) # "unknown")
+\* Reachability: expected to be VIOLATED.
+NeverStoodIn == \A k \in Keys, p \in Plats : ~SpecStoodIn(k, p)
+NeverSelfConflict == \A k \in Keys, p \in Plats : SpecStatus(k, p) # "conflict"
 =============================================================================

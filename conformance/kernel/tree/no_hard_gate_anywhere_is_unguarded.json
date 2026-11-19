@@ -3,7 +3,7 @@
   "name": "no_hard_gate_anywhere_is_unguarded",
   "claim": "C34",
   "covers": [],
-  "why": "A tree with no hard gate anywhere is unguarded.",
+  "why": "A tree with no hard gate anywhere is unguarded, and making the root hard is not enough while the child has none.",
   "policy": {
     "min_hard_gates": 1
   },
@@ -28,6 +28,25 @@
       "do": {
         "edit": {
           "node": "root",
+          "to": "hard"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "node": "k1",
           "to": "hard"
         }
       },

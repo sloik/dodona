@@ -3,7 +3,8 @@
   "name": "every_governed_name_is_watched",
   "claim": "C16",
   "covers": [
-    "decisions/mutant_first_name_only"
+    "decisions/mutant_first_name_only",
+    "decisions/mutant_ungoverned_edit_flags"
   ],
   "why": "A decision can govern several names. A change behind any of them flags it, and a review needs all of them to exist.",
   "governs": [

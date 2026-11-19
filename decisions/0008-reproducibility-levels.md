@@ -22,7 +22,7 @@ Configuration states intent; a generated lock pins every provider and tool. A to
 
 The guarantee has three levels, chosen per obligation or build target: `verdict` (default; same verdict everywhere), `evidence` (the provider's declared comparable summary is equal), `artifact` (byte-identical outputs, only where the provider declares it). Asking for a level a provider cannot meet fails at resolve time.
 
-Records with the same core key and different platforms are compared at the chosen level. Disagreement is a failed reproducibility obligation. If only one platform has run, reproducibility is `unknown`. A provider's claim of platform independence never removes the platform from a record; it only lets a record from one platform stand in for another once the claim has been checked on two.
+Records with the same core key and different platforms are compared at the chosen level. Disagreement is a failed reproducibility obligation. If only one platform has run, reproducibility is `unknown`. A provider's claim of platform independence never removes the platform from a record; it only lets a record from one platform stand in for another once the claim has been checked on two. *Made precise by [decision 0032](0032-a-stand-in-is-verified-for-its-own-key-and-any-disagreement-withdraws-it.md): checked on two means the same core key agreeing on at least two platforms, with no platform disagreeing about that key.*
 
 ## Consequences
 

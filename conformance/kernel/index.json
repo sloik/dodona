@@ -21,6 +21,8 @@
     "liveness/mutant_no_resubmit_after_loss": "As above.",
     "liveness/mutant_no_resubmit_after_error": "As for the other liveness cases: the seed has no loop that submits work.",
     "liveness/mutant_resubmits_unsupported": "As above.",
-    "tree/design_floor_two": "A search of the whole state space, not a behaviour."
+    "tree/design_floor_two": "A search of the whole state space, not a behaviour.",
+    "liveness/reach_unsupported": "As for the other liveness cases: the seed has no loop that submits work.",
+    "liveness/mutant_gives_up_on_error": "As for the other liveness cases: the seed has no loop that submits work."
   }
 }

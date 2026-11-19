@@ -5,7 +5,7 @@
   "covers": [
     "tree/mutant_ignores_floor"
   ],
-  "why": "The floor is a number. With a floor of two, one hard gate is not enough.",
+  "why": "The floor is a number, counted over the whole tree. With a floor of two, a root and a child with one hard gate each meet it; once the child's gate is soft the tree has one, which is not enough.",
   "policy": {
     "min_hard_gates": 2
   },

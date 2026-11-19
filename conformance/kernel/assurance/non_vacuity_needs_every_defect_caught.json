@@ -3,8 +3,9 @@
   "name": "non_vacuity_needs_every_defect_caught",
   "claim": "C19",
   "covers": [
-    "assurance/mutant_unknown_defect_counts",
     "assurance/mutant_empty_is_shown",
+    "assurance/mutant_failed_reported_none_planted",
+    "assurance/mutant_unknown_defect_counts",
     "assurance/reach_shown"
   ],
   "why": "A check is shown able to fail only when it has planted defects and every one was caught.",

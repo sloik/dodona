@@ -16,29 +16,32 @@ EXTENDS Naturals
 
 CONSTANT Mutant
 
-VARIABLES ident, recorded, reviewed
+VARIABLES ident, recorded, reviewed, touched, start
 
-vars == <<ident, recorded, reviewed>>
+vars == <<ident, recorded, reviewed, touched, start>>
 
 Names   == {"n1", "n2", "n3"}
 Governs == {"n1", "n2"}
 Idents  == {0, 1, 2}
 
 Mutants == {"none", "identities_without_names", "gone_is_not_flagged", "refresh_on_edit",
-            "first_name_only"}
+            "first_name_only", "ungoverned_edit_flags", "sticky_flag"}
 ASSUME Mutant \in Mutants
 
 Init ==
     /\ ident \in [Names -> {1, 2}]
     /\ recorded = [n \in Governs |-> ident[n]]
     /\ reviewed = [n \in Governs |-> ident[n]]
+    /\ touched = FALSE
+    /\ start = ident
 
 Edit(n, h) ==
     /\ h # ident[n]
     /\ ident' = [ident EXCEPT ![n] = h]
     /\ recorded' = IF Mutant = "refresh_on_edit" /\ n \in Governs
                    THEN [recorded EXCEPT ![n] = h] ELSE recorded
-    /\ UNCHANGED reviewed
+    /\ touched' = (touched \/ n \in Governs)
+    /\ UNCHANGED <<reviewed, start>>
 
 \* The decision is reviewed against what its names are now. Nothing to review
 \* against if a governed name is gone.
@@ -47,6 +50,8 @@ Review ==
     /\ \E n \in Governs : reviewed[n] # ident[n]
     /\ reviewed' = [n \in Governs |-> ident[n]]
     /\ recorded' = [n \in Governs |-> ident[n]]
+    /\ touched' = FALSE
+    /\ start' = ident
     /\ UNCHANGED ident
 
 Next == (\E n \in Names, h \in Idents : Edit(n, h)) \/ Review
@@ -54,6 +59,7 @@ Next == (\E n \in Names, h \in Idents : Edit(n, h)) \/ Review
 Spec == Init /\ [][Next]_vars
 ----------------------------------------------------------------------------
 TypeOK == ident \in [Names -> Idents] /\ recorded \in [Governs -> Idents] /\ reviewed \in [Governs -> Idents]
+          /\ touched \in BOOLEAN
 
 \* Ground truth, from what was reviewed: some governed name no longer has the
 \* content the decision was reviewed against.
@@ -66,6 +72,8 @@ Flag ==
       [] Mutant = "gone_is_not_flagged" ->
             \E n \in Governs : ident[n] # recorded[n] /\ ident[n] # 0
       [] Mutant = "first_name_only" -> ident["n1"] # recorded["n1"]
+      [] Mutant = "ungoverned_edit_flags" -> \E n \in Names : ident[n] # start[n]
+      [] Mutant = "sticky_flag" -> touched
       [] OTHER -> \E n \in Governs : ident[n] # recorded[n]
 
 FlagIsExact == Flag <=> ShouldFlag

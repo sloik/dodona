@@ -27,7 +27,7 @@
       "config": "design.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "Every combination of inputs satisfies the three rules."
+      "purpose": "Every combination of inputs satisfies both properties."
     },
     {
       "config": "reach_proven.cfg",
@@ -75,8 +75,29 @@
       "config": "mutant_always_nothing.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: the shown level is always the lowest, which is safe and useless.",
-      "of": "NotUnderstated"
+      "purpose": "Planted defect: the shown level is always the lowest, which is safe and wrong.",
+      "of": "WeakestLink"
+    },
+    {
+      "config": "mutant_fold_skips_middle.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: going along the chain, the middle link is skipped.",
+      "of": "WeakestLink"
+    },
+    {
+      "config": "mutant_observed_above_sampled.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the kernel's own scale puts observed above sampled.",
+      "of": "WeakestLink"
+    },
+    {
+      "config": "mutant_failed_reported_none_planted.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a check whose planted defect was missed is reported as having none planted.",
+      "of": "NonVacuitySound"
     }
   ]
 }

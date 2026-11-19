@@ -3,6 +3,7 @@
   "name": "compiler_change_reruns_the_test",
   "claim": "C10",
   "covers": [
+    "planner/mutant_build_key_omits_compiler",
     "planner/mutant_key_omits_producer",
     "planner/mutant_test_without_build"
   ],

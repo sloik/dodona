@@ -4,9 +4,10 @@
   "claim": "C15",
   "covers": [
     "platforms/mutant_stand_in_unverified",
-    "platforms/reach_stand_in"
+    "platforms/reach_stand_in",
+    "platforms/mutant_verified_globally"
   ],
-  "why": "A record from another platform stands in only after the claim of platform independence has been verified by two platforms agreeing.",
+  "why": "A record from another platform stands in only for a key whose result two platforms agree on. Another key agreeing verifies nothing about this one.",
   "stand_in_allowed": true,
   "keys": [
     "k1",
@@ -14,8 +15,10 @@
   ],
   "platforms": [
     "p1",
-    "p2"
+    "p2",
+    "p3"
   ],
+  "provider_claims": true,
   "steps": [
     {
       "do": {
@@ -27,13 +30,20 @@
       },
       "expect": {
         "status": {
+          "k1": {
+            "p1": "unknown",
+            "p2": "unknown",
+            "p3": "unknown"
+          },
           "k2": {
             "p1": "passed",
-            "p2": "unknown"
+            "p2": "unknown",
+            "p3": "unknown"
           }
         },
         "stood_in": [],
         "reproducibility": {
+          "k1": "unknown",
           "k2": "unknown"
         }
       }
@@ -48,13 +58,21 @@
       },
       "expect": {
         "status": {
+          "k1": {
+            "p1": "passed",
+            "p2": "unknown",
+            "p3": "unknown"
+          },
           "k2": {
-            "p2": "unknown"
+            "p1": "passed",
+            "p2": "unknown",
+            "p3": "unknown"
           }
         },
         "stood_in": [],
         "reproducibility": {
-          "k1": "unknown"
+          "k1": "unknown",
+          "k2": "unknown"
         }
       }
     },
@@ -68,15 +86,21 @@
       },
       "expect": {
         "status": {
+          "k1": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "passed"
+          },
           "k2": {
             "p1": "passed",
-            "p2": "passed"
+            "p2": "unknown",
+            "p3": "unknown"
           }
         },
         "stood_in": [
           [
-            "k2",
-            "p2"
+            "k1",
+            "p3"
           ]
         ],
         "reproducibility": {
@@ -84,7 +108,43 @@
           "k2": "unknown"
         }
       }
+    },
+    {
+      "do": {
+        "record": {
+          "key": "k2",
+          "platform": "p2",
+          "verdict": "passed"
+        }
+      },
+      "expect": {
+        "status": {
+          "k1": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "passed"
+          },
+          "k2": {
+            "p1": "passed",
+            "p2": "passed",
+            "p3": "passed"
+          }
+        },
+        "stood_in": [
+          [
+            "k1",
+            "p3"
+          ],
+          [
+            "k2",
+            "p3"
+          ]
+        ],
+        "reproducibility": {
+          "k1": "agrees",
+          "k2": "agrees"
+        }
+      }
     }
-  ],
-  "provider_claims": true
+  ]
 }

@@ -21,13 +21,13 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "at most three attempts, two changes of target",
+  "bounds": "at most three attempts and two changes of target, a limit of two refusals; the history of events is kept in full",
   "cases": [
     {
       "config": "design.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "The intended design satisfies every property, for an act that claims a high level."
+      "purpose": "The intended design: the kernel's answers from its records are the ones the history calls for, for an act that claims a high level."
     },
     {
       "config": "design_claims_self.cfg",
@@ -46,15 +46,22 @@
       "config": "reach_shopped.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Shopping is reachable, so the flag is not a dead rule.",
+      "purpose": "Shopping on one target is reachable.",
       "of": "NeverShopped"
     },
     {
       "config": "reach_retried_across_change.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "An agreement after a change of target, following a refusal before it, is reachable: the case the two rules treat differently.",
+      "purpose": "An agreement on a changed target after a refusal on the old one is reachable: retried, not shopped, and below the limit keeps its grade.",
       "of": "NeverRetriedAcrossChange"
+    },
+    {
+      "config": "reach_capped_by_limit.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "An agreement capped by the limit and not by shopping is reachable.",
+      "of": "NeverCappedByLimit"
     },
     {
       "config": "mutant_latest_only.cfg",
@@ -71,32 +78,81 @@
       "of": "WorstCounts"
     },
     {
+      "config": "mutant_close_latest_open.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a close names a ticket and the kernel closes the latest open attempt instead.",
+      "of": "WorstCounts"
+    },
+    {
+      "config": "mutant_filed_at_close.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: an attempt is filed under the target as it is when it closes, not when its ticket was taken.",
+      "of": "WorstCounts"
+    },
+    {
       "config": "mutant_flag_does_not_cap.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: shopping is flagged and the level is not capped.",
-      "of": "ShoppingIsCapped"
+      "purpose": "Planted defect: retrying is flagged and the level is not capped.",
+      "of": "RetryIsCapped"
     },
     {
       "config": "mutant_flag_missed.cfg",
       "expect": "violation",
       "expect_exit": 12,
       "purpose": "Planted defect: shopping is not flagged.",
-      "of": "ShoppingIsCapped"
+      "of": "RetryIsCapped"
+    },
+    {
+      "config": "mutant_cap_on_shopping_only.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: only shopping on the same target is capped, and the limit on refusals along the line is ignored: the data model's old rule.",
+      "of": "RetryIsCapped"
+    },
+    {
+      "config": "mutant_retried_only_on_same_target.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: retrying is reported only on the same target, though the cap still follows the whole line; this isolates the flag.",
+      "of": "RetryIsCapped"
+    },
+    {
+      "config": "mutant_retried_hidden.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: retrying is not reported, though the cap still applies; this isolates the flag.",
+      "of": "RetryIsCapped"
+    },
+    {
+      "config": "mutant_change_hides_history.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a change of target forgets the earlier attempts.",
+      "of": "HistoryIsKept"
     },
     {
       "config": "mutant_cap_raises.cfg",
       "expect": "violation",
       "expect_exit": 12,
       "purpose": "Planted defect: the cap sets the level to helper, which raises an act that claimed less.",
-      "of": "ShoppingIsCapped"
+      "of": "RetryIsCapped"
     },
     {
-      "config": "mutant_change_hides_history.cfg",
+      "config": "mutant_cap_line_wide.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a change of target hides the earlier attempts, so retrying with a trivial change leaves no trace.",
-      "of": "HistoryIsKept"
+      "purpose": "Planted defect: every agreement after a refusal is capped, even after a change of target and below the limit.",
+      "of": "RetryIsCapped"
+    },
+    {
+      "config": "mutant_limit_off_by_one.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the cap starts one refusal later than the limit says.",
+      "of": "RetryIsCapped"
     }
   ]
 }

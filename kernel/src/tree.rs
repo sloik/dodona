@@ -9,26 +9,38 @@ fn status(
     children: &BTreeMap<String, (String, String)>,
     min: i64,
 ) -> &'static str {
-    if !confirmed {
-        "draft"
-    } else if (std::iter::once(root)
+    // The policy's number is counted over the whole tree; each child needs a
+    // hard gate of its own but is not held to that number (decision 0030).
+    let tree_hard = std::iter::once(root)
         .chain(children.values())
         .filter(|(g, _)| g == "hard")
-        .count() as i64)
-        < min
-    {
+        .count() as i64;
+    let child_unguarded = children.values().any(|(g, _)| g != "hard");
+    if !confirmed {
+        "draft"
+    } else if tree_hard < min || child_unguarded {
         "unguarded"
     } else if (root.0 == "hard" && root.1 != "passed")
-        || children.values().any(|(g, s)| g != "hard" || s != "passed")
+        || children.values().any(|(g, s)| g == "hard" && s != "passed")
     {
         "open"
     } else {
         "delivered"
     }
 }
-/// The gate a step gives under `field`, if it is one a tree node can have.
-fn gate<'a>(step: &'a Value, field: &str) -> Option<&'a str> {
-    step.text(field).filter(|g| *g == "hard" || *g == "soft")
+/// The gate a step gives under `field`, as it counts. A string other than
+/// exactly `soft` counts as `hard`: a mistake in writing a gate can only make
+/// delivery harder. A gate that is not a string gives nothing.
+fn gate(step: &Value, field: &str) -> Option<&'static str> {
+    step.text(field).map(counts_as)
+}
+/// What a gate written as `g` counts as.
+fn counts_as(g: &str) -> &'static str {
+    if g == "soft" {
+        "soft"
+    } else {
+        "hard"
+    }
 }
 /// The gate and check of the root or of a child, if that node is there.
 fn node<'a>(
@@ -44,14 +56,14 @@ fn node<'a>(
 }
 pub fn run(input: &Value) -> Vec<Value> {
     let mut root = (
-        input.get("root").get("gate").str().to_owned(),
+        counts_as(input.get("root").get("gate").str()).to_owned(),
         "unknown".to_owned(),
     );
     let mut children: BTreeMap<String, (String, String)> = input
         .get("children")
         .object()
         .iter()
-        .map(|(k, v)| (k.clone(), (v.get("gate").str().into(), "unknown".into())))
+        .map(|(k, v)| (k.clone(), (counts_as(v.get("gate").str()).into(), "unknown".into())))
         .collect();
     let min = input.get("policy").get("min_hard_gates").number().max(1);
     let mut confirmed = false;
@@ -115,9 +127,19 @@ mod tests {
         assert_eq!(status(false, &root, &c, 1), "draft");
         assert_eq!(status(true, &root, &c, 2), "unguarded");
         c.insert("a".into(), ("soft".into(), "passed".into()));
-        assert_eq!(status(true, &root, &c, 1), "open");
+        // A child with no hard gate holds the tree, whatever the count.
+        assert_eq!(status(true, &root, &c, 1), "unguarded");
         c.get_mut("a").unwrap().0 = "hard".into();
         assert_eq!(status(true, &root, &c, 1), "delivered");
+        // The floor is met over the tree; the child is not held to it alone.
+        assert_eq!(status(true, &root, &c, 2), "delivered");
+        assert_eq!(status(true, &root, &c, 3), "unguarded");
+        c.get_mut("a").unwrap().1 = "conflict".into();
+        assert_eq!(status(true, &root, &c, 2), "open");
+        let soft_root = ("soft".to_owned(), "unknown".to_owned());
+        c.get_mut("a").unwrap().1 = "passed".into();
+        assert_eq!(status(true, &soft_root, &c, 1), "delivered");
+        assert_eq!(status(true, &soft_root, &BTreeMap::new(), 1), "unguarded");
         let mut root = root;
         assert!(node(&mut root, &mut c, "root").is_some());
         assert!(node(&mut root, &mut c, "a").is_some());
@@ -128,9 +150,13 @@ mod tests {
                 {"do":{"confirm":{}}},
                 {"do":{"check":{"node":"gone","status":"failed"}}},{"do":{"check":{"node":"a","status":"made-up"}}},
                 {"do":{"edit":{"node":"gone","to":"soft"}}},{"do":{"edit":{"node":"a","to":"deferred"}}},
-                {"do":{"remove":{"child":"gone"}}},{"do":{"add":{"child":"b","gate":"made-up"}}},
+                {"do":{"remove":{"child":"gone"}}},{"do":{"add":{"child":"b","gate":7}}},
                 {"do":{"add":{"child":"root","gate":"hard"}}},{"do":{"add":{"child":7,"gate":"hard"}}},
-                {"do":{"add":{"child":"b","gate":"soft"}}}]}"#,
+                {"do":{"add":{"child":"b","gate":"soft"}}},{"do":{"confirm":{}}},
+                {"do":{"edit":{"node":"b","to":"Hard"}}},{"do":{"confirm":{}}},
+                {"do":{"edit":{"node":"b","to":"deferred"}}},{"do":{"add":{"child":"c","gate":"made-up"}}},
+                {"do":{"confirm":{}}},{"do":{"check":{"node":"b","status":"passed"}}},
+                {"do":{"check":{"node":"c","status":"passed"}}}]}"#,
         )
         .unwrap();
         let got: Vec<String> = run(&input)
@@ -139,5 +165,11 @@ mod tests {
             .collect();
         assert_eq!(got[2..11], ["delivered"; 9]);
         assert_eq!(got[11], "draft");
+        // b is soft, then counts as hard once written `Hard`; `deferred` is no
+        // change from that; a child added as `made-up` counts as hard too.
+        assert_eq!(
+            got[12..],
+            ["unguarded", "draft", "open", "open", "draft", "open", "open", "delivered"]
+        );
     }
 }

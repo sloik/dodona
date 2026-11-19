@@ -3,7 +3,7 @@
   "name": "children_must_all_deliver",
   "claim": "C34",
   "covers": [
-    "tree/mutant_delivered_ignores_children",
+    "tree/mutant_delivered_ignores_child",
     "tree/reach_delivered"
   ],
   "why": "A parent is delivered only when every child is.",

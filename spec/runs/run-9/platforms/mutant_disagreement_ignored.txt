@@ -1,0 +1,37 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 105 and seed -6048079467224083637 with 1 worker on 1 cores with 494MB heap and 64MB offheap memory [pid: 1836864] (Linux 7.0.0-1013-oracle aarch64, Ubuntu 21.0.13.0.3 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /work/platforms/Platforms.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/FiniteSets.tla
+Parsing file /tmp/Sequences.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module Platforms
+Starting... (2026-11-18 18:45:27)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-18 18:45:28.
+Error: Invariant ReproMatches is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ store = [ k1 |-> [p1 |-> {}, p2 |-> {}, p3 |-> {}],
+  k2 |-> [p1 |-> {}, p2 |-> {}, p3 |-> {}] ]
+/\ recs = {}
+
+State 2: <Record line 52, col 5 to line 54, col 97 of module Platforms>
+/\ store = [ k1 |-> [p1 |-> {"passed"}, p2 |-> {}, p3 |-> {}],
+  k2 |-> [p1 |-> {}, p2 |-> {}, p3 |-> {}] ]
+/\ recs = {[k |-> "k1", p |-> "p1", v |-> "passed"]}
+
+State 3: <Record line 52, col 5 to line 54, col 97 of module Platforms>
+/\ store = [ k1 |-> [p1 |-> {"passed", "failed"}, p2 |-> {}, p3 |-> {}],
+  k2 |-> [p1 |-> {}, p2 |-> {}, p3 |-> {}] ]
+/\ recs = { [k |-> "k1", p |-> "p1", v |-> "passed"],
+  [k |-> "k1", p |-> "p1", v |-> "failed"] }
+
+19 states generated, 19 distinct states found, 16 states left on queue.
+The depth of the complete state graph search is 3.
+The average outdegree of the complete state graph is 12 (minimum is 12, the maximum 12 and the 95th percentile is 12).
+Finished in 01s at (2026-11-18 18:45:28)

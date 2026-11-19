@@ -3,9 +3,10 @@
   "name": "a_soft_child_is_never_delivered",
   "claim": "C34",
   "covers": [
+    "tree/mutant_edit_keeps_confirmation",
     "tree/mutant_soft_child_is_delivered"
   ],
-  "why": "Making a child's only criterion soft does not deliver it. A child with no hard gate is never delivered, so its parent is not either.",
+  "why": "Making a child's only criterion soft does not deliver it. A child is an intent and is held to the floor on its own, so with no hard gate it is unguarded, and so is the tree.",
   "policy": {
     "min_hard_gates": 1
   },
@@ -67,7 +68,7 @@
         "confirm": {}
       },
       "expect": {
-        "status": "open"
+        "status": "unguarded"
       }
     },
     {
@@ -78,7 +79,7 @@
         }
       },
       "expect": {
-        "status": "open"
+        "status": "unguarded"
       }
     }
   ]

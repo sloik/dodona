@@ -104,6 +104,61 @@ def check_claims_match_runs() -> None:
             (ROOT / name).exists() and hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == digest
             for name, digest in run.get("other_files", {}).items()
         ) and (ROOT / "spec" / "runs" / run["outputs"]).is_dir()
+    # A run supports claims only if it was recorded against the expected outcomes too, every file
+    # it kept is hashed in the index, and its saved output, judged again by the provider's own
+    # judge, still matches every case listed. A run of the kernel over every state ("kind":
+    # "dump") has no cases; its outputs are hashed, and what they show is judged by the run that
+    # reads them. A run replaced by a later one ("superseded_by") supports nothing.
+    sys.path.insert(0, str(ROOT / "providers" / "tlc"))
+    from judge import judge  # noqa: E402
+
+    needed = {n for run in index["runs"] for n in run.get("needs", [])}
+    for run in index["runs"]:
+        rid = run["id"]
+        if run.get("superseded_by"):
+            current[rid] = False
+            continue
+        if not current[rid] or not (run["claims"] or rid in needed):
+            continue
+        out = ROOT / "spec" / "runs" / run["outputs"]
+
+        def refuse(why: str) -> None:
+            problems.append(f"spec/runs/index.json: run {rid} cannot support its claims: {why}")
+            current[rid] = False
+
+        kept = {f.name for f in out.iterdir() if f.is_file()}
+        digests = run.get("outputs_sha256")
+        if not isinstance(digests, dict) or set(digests) != kept:
+            refuse("the hash of every output file it kept is not listed")
+            continue
+        if any(hashlib.sha256((out / n).read_bytes()).hexdigest() != d for n, d in digests.items()):
+            refuse("an output file is not the one recorded")
+            continue
+        if run.get("kind") == "dump":
+            continue
+        if "expected.json" not in run["files"]:
+            refuse("expected.json is not among the files it was run on")
+            continue
+        cases = json.loads((ROOT / "spec" / run["model"] / "expected.json").read_text(encoding="utf-8"))["cases"]
+        unhashed = [c["config"] for c in cases if c["config"] not in run["files"]]
+        if unhashed:
+            refuse(f"configurations {unhashed} are not among the files it was run on")
+            continue
+        listed = {c["config"].removesuffix(".cfg") + ext for c in cases for ext in (".txt", ".exit")}
+        if kept != listed:
+            refuse(f"its outputs {sorted(kept ^ listed)} do not match the cases in expected.json")
+            continue
+        for case in cases:
+            name = case["config"].removesuffix(".cfg")
+            try:
+                code = int((out / f"{name}.exit").read_text(encoding="ascii").strip())
+            except (ValueError, UnicodeDecodeError):
+                refuse(f"{name}.exit does not hold an exit code")
+                break
+            verdict = judge(case, code, (out / f"{name}.txt").read_text(encoding="utf-8", errors="replace"))
+            if not verdict["match"]:
+                refuse(f"the saved output of {name} shows {verdict['outcome']}, not what expected.json says")
+                break
     supported = set()
     for run in index["runs"]:
         if current[run["id"]] and all(current.get(n) for n in run.get("needs", [])):
@@ -275,6 +330,30 @@ def gap_tool_tree_digest_matches_its_vectors() -> None:
                 problems.append(f"tool-tree vectors: '{item['name']}' must be refused as {item['reason']}, not {err}")
     if len(vectors["accept"]) < 5 or len(vectors["reject"]) < 5:
         problems.append("tool-tree vectors: too few to mean anything")
+
+
+def gap_thin_coverage_is_shown() -> None:
+    """Counting the floor over a whole tree lets a child be delivered with fewer hard gates of its own
+    than policy demands (decision 0030). The owner chose to keep that rule and see where it happens."""
+    import status
+    hard = {"words": "w", "gate": "hard", "checked_by": []}
+    soft = {"words": "w", "gate": "soft", "checked_by": []}
+    tree = {"r": {"children": ["a", "b"], "criteria": {"1": hard, "2": hard}},
+            "a": {"children": [], "criteria": {"1": hard}},
+            "b": {"children": [], "criteria": {"1": hard, "2": hard, "3": soft}}}
+    where = status.coverage(tree, 2)
+    if where["thinnest"] != {"r": "a"}:
+        problems.append(f"status.coverage names {where['thinnest']} as the thinnest intent, not a")
+    flagged = sorted(i for i, x in where["intents"].items() if x["floor_met_only_over_tree"])
+    if flagged != ["a"]:
+        problems.append(f"status.coverage marks {flagged} as meeting the floor only over the tree, not a alone")
+    report = {"project": {"status": "open"}, "obligations": {}, "coverage": where,
+              "intents": {i: {"status": "delivered", "gates": {"hard": 1, "soft": 0, "deferred": 0, "deferred_open": 0},
+                              "score": {"met": 1, "of": 1}, "shown": {}, "exceptions": {},
+                              "separation": {"weakest": "self", "act": "x", "apart_or_better": 0, "of": 0}} for i in tree}}
+    text = status.render(report, False, 0, "")
+    if "thinnest in tree r: intent a" not in text or "met only over tree r" not in text:
+        problems.append("the status report does not show where a tree's hard gates are thin")
 
 
 def gap_every_tool_compiles() -> None:
@@ -670,7 +749,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
-              gap_reuse_is_decided_by_a_kernel_and_checked]
+              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown]
 
 
 class JudgeTests(unittest.TestCase):

@@ -1,0 +1,72 @@
+{
+  "kind": "tree",
+  "name": "the_count_follows_every_change",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_count_kept_on_remove"
+  ],
+  "why": "Removing children takes their hard gates out of their parent's count.",
+  "policy": {
+    "min_hard_gates": 2
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    },
+    "k2": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "remove": {
+          "child": "k2"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "remove": {
+          "child": "k1"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    }
+  ]
+}

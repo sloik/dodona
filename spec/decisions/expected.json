@@ -63,6 +63,20 @@
       "expect_exit": 12,
       "purpose": "Planted defect: only the first governed name is watched.",
       "of": "FlagIsExact"
+    },
+    {
+      "config": "mutant_ungoverned_edit_flags.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a decision is flagged when a name it does not govern changes: the flag says too much.",
+      "of": "FlagIsExact"
+    },
+    {
+      "config": "mutant_sticky_flag.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the flag stays set after the content is changed back, until the next review.",
+      "of": "FlagIsExact"
     }
   ]
 }

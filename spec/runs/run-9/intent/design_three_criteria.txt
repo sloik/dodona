@@ -1,0 +1,33 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 11 and seed -5713457515635522016 with 1 worker on 1 cores with 494MB heap and 64MB offheap memory [pid: 1821929] (Linux 7.0.0-1013-oracle aarch64, Ubuntu 21.0.13.0.3 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /work/intent/MC.tla
+Parsing file /work/intent/IntentGates.tla
+Parsing file /tmp/TLC.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/FiniteSets.tla
+Parsing file /tmp/Sequences.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module IntentGates
+Semantic processing of module TLC
+Semantic processing of module MC
+Starting... (2026-11-18 18:07:35)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-18 18:07:35.
+Progress(5) at 2026-11-18 18:07:38: 90,753 states generated (90,753 s/min), 12,280 distinct states found (12,280 ds/min), 10,740 states left on queue.
+Progress(8) at 2026-11-18 18:08:38: 6,849,730 states generated (6,758,977 s/min), 596,006 distinct states found (583,726 ds/min), 392,428 states left on queue.
+Progress(9) at 2026-11-18 18:09:38: 16,264,159 states generated (9,414,429 s/min), 1,354,639 distinct states found (758,633 ds/min), 689,033 states left on queue.
+Progress(11) at 2026-11-18 18:10:38: 28,927,402 states generated (12,663,243 s/min), 2,186,185 distinct states found (831,546 ds/min), 705,011 states left on queue.
+Progress(13) at 2026-11-18 18:11:38: 45,259,631 states generated (16,332,229 s/min), 2,893,102 distinct states found (706,917 ds/min), 216,013 states left on queue.
+Model checking completed. No error has been found.
+  Estimates of the probability that TLC did not check all reachable states
+  because two distinct states had the same fingerprint:
+  calculated (optimistic):  val = 7.4E-6
+  based on the actual fingerprints:  val = 2.3E-7
+48990988 states generated, 2964114 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 14.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 31 and the 95th percentile is 5).
+Finished in 04min 16s at (2026-11-18 18:11:51)

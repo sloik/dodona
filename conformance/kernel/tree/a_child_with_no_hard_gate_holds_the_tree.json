@@ -1,0 +1,59 @@
+{
+  "kind": "tree",
+  "name": "a_child_with_no_hard_gate_holds_the_tree",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_ignores_floor"
+  ],
+  "why": "A root with enough hard gates does not carry a child with none: every intent in a tree must have a hard gate.",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "soft"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    },
+    {
+      "do": {
+        "remove": {
+          "child": "k1"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    }
+  ]
+}

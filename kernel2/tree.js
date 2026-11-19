@@ -1,24 +1,45 @@
 'use strict';
 // A parent intent with children (conformance/README.md, tree scenarios).
 
-// Tree status. `nodes` is the root and every child as { gate, check };
-// `children` is the children only.
+// Tree status. `root` and each of `children` is { gate, check }.
+// The policy's floor is counted over the whole tree, root and every child, and
+// every child must have a hard gate of its own; a child is not held to the
+// policy's number on its own (decision 0030, decision 0017).
 const vocabulary = require('./vocabulary');
+
+// The gate a string in an `edit` or an `add` counts as: `soft` only if it is exactly
+// `soft`; any other text (`Hard`, `deferred`, ...) counts as `hard`, so a mistake in
+// writing a gate can only make delivery harder. A gate that is not a string is of the
+// wrong type: null, and the step changes nothing.
+function gateCountsAs(gate) {
+  if (!vocabulary.isString(gate)) return null;
+  return gate === 'soft' ? 'soft' : 'hard';
+}
+
+// A starting gate that is not a string makes the scenario invalid: it is refused
+// whole, before any step (conformance/README.md, tree scenarios).
+class InvalidScenario extends Error {}
+
+function validate(scenario) {
+  const starting = [(scenario.root || {}).gate, ...Object.values(scenario.children || {}).map((child) => (child || {}).gate)];
+  if (starting.some((gate) => gateCountsAs(gate) === null)) throw new InvalidScenario('a starting gate in a tree is not a string');
+}
 
 function treeStatus(policy, confirmed, root, children) {
   const nodes = [root, ...children];
   const hard = nodes.filter((node) => node.gate === 'hard');
+  const floor = Math.max(1, policy.min_hard_gates); // a floor below 1 is 1
   if (!confirmed) return 'draft';
-  if (hard.length < policy.min_hard_gates) return 'unguarded';
+  if (hard.length < floor) return 'unguarded';
+  if (children.some((child) => child.gate !== 'hard')) return 'unguarded';
   if (hard.some((node) => node.check !== 'passed')) return 'open';
-  if (children.some((child) => child.gate !== 'hard')) return 'open';
   return 'delivered';
 }
 
 function runScenario(scenario) {
-  const root = { gate: scenario.root.gate, check: 'unknown' };
+  const root = { gate: gateCountsAs(scenario.root.gate), check: 'unknown' };
   const children = new Map();
-  for (const [name, details] of Object.entries(scenario.children)) children.set(name, { gate: details.gate, check: 'unknown' });
+  for (const [name, details] of Object.entries(scenario.children)) children.set(name, { gate: gateCountsAs(details.gate), check: 'unknown' });
   let confirmed = false;
   const nodeNamed = (name) => (name === 'root' ? root : children.get(name));
   const { isString } = vocabulary;
@@ -32,15 +53,17 @@ function runScenario(scenario) {
       if (node && vocabulary.CHECKS.includes(step.check.status)) node.check = step.check.status;
     } else if (step.edit) {
       const node = nodeNamed(step.edit.node);
-      if (node && vocabulary.GATES.includes(step.edit.to) && node.gate !== step.edit.to) {
-        node.gate = step.edit.to;
+      const gate = gateCountsAs(step.edit.to);
+      if (node && gate !== null && node.gate !== gate) {
+        node.gate = gate;
         confirmed = false;
       }
     } else if (step.remove && isString(step.remove.child)) {
       if (children.delete(step.remove.child)) confirmed = false;
     } else if (step.add) {
-      if (isString(step.add.child) && !children.has(step.add.child) && vocabulary.GATES.includes(step.add.gate)) {
-        children.set(step.add.child, { gate: step.add.gate, check: 'unknown' });
+      const gate = gateCountsAs(step.add.gate);
+      if (isString(step.add.child) && !children.has(step.add.child) && gate !== null) {
+        children.set(step.add.child, { gate, check: 'unknown' });
         confirmed = false;
       }
     }
@@ -49,4 +72,4 @@ function runScenario(scenario) {
   return results;
 }
 
-module.exports = { treeStatus, runScenario };
+module.exports = { InvalidScenario, validate, gateCountsAs, treeStatus, runScenario };

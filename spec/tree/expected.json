@@ -21,75 +21,110 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "a root with up to two children, one criterion each, two gate kinds",
+  "bounds": "a root and one child, two criteria each, hard or soft; floors of one and two hard gates; at most six changes of shape or confirmations",
   "cases": [
     {
       "config": "design.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "The intended design satisfies every property with a floor of one hard gate."
+      "purpose": "With a floor of one hard gate, the kernel's confirmation and delivery are the ones the specification calls for."
     },
     {
       "config": "design_floor_two.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "The same with a floor of two hard gates, which only root and child together can meet."
+      "purpose": "The same with a floor of two, which the root's count over the tree must meet."
     },
     {
       "config": "reach_delivered.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "A root with children can be delivered.",
+      "purpose": "A tree with its child is delivered at some point, so the rule is live.",
       "of": "NeverDelivered"
     },
     {
       "config": "reach_delivered_floor_two.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "A tree can be delivered when the floor is met only by counting children.",
+      "purpose": "The same with a floor of two.",
       "of": "NeverDelivered"
     },
     {
       "config": "mutant_remove_keeps_confirmation.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a child is removed and the root stays confirmed, so a failing criterion can be dropped.",
-      "of": "ShapeIsConfirmed"
+      "purpose": "Planted defect: removing the child keeps the confirmation.",
+      "of": "ConfirmationMatches"
     },
     {
       "config": "mutant_add_keeps_confirmation.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a child is added and the root stays confirmed.",
-      "of": "ShapeIsConfirmed"
+      "purpose": "Planted defect: adding the child keeps the confirmation.",
+      "of": "ConfirmationMatches"
     },
     {
-      "config": "mutant_delivered_ignores_children.cfg",
+      "config": "mutant_edit_keeps_confirmation.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: the root is delivered whatever its children are.",
-      "of": "TreeSound"
+      "purpose": "Planted defect: editing a gate keeps the confirmation.",
+      "of": "ConfirmationMatches"
+    },
+    {
+      "config": "mutant_unconfirmed_delivered.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: a tree nobody confirmed is delivered.",
+      "of": "DeliveryMatches"
+    },
+    {
+      "config": "mutant_delivered_ignores_child.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the root is delivered whatever its child is.",
+      "of": "DeliveryMatches"
     },
     {
       "config": "mutant_soft_child_is_delivered.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a child whose only criterion was made soft counts as delivered.",
-      "of": "TreeSound"
+      "purpose": "Planted defect: a child with no hard gate counts as delivered.",
+      "of": "DeliveryMatches"
     },
     {
       "config": "mutant_ignores_floor.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: a tree with no hard gate at all is delivered.",
-      "of": "TreeGuarded"
+      "purpose": "Planted defect: the floor is ignored.",
+      "of": "DeliveryMatches"
+    },
+    {
+      "config": "mutant_floor_applied_to_each_child.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: each child is held to the policy's number on its own count, so moving a criterion into a child can leave the tree unguarded, which decision 0017 rules out.",
+      "of": "DeliveryMatches"
     },
     {
       "config": "mutant_floor_counts_root_only.cfg",
       "expect": "violation",
       "expect_exit": 12,
-      "purpose": "Planted defect: only the root's own gates are counted towards the floor, so a tree that meets a floor of two with a child's gate is never delivered.",
-      "of": "TreeComplete"
+      "purpose": "Planted defect: the root's own gates are counted without its child's, so a hard gate moved into the child leaves the root unguarded.",
+      "of": "DeliveryMatches"
+    },
+    {
+      "config": "mutant_count_kept_on_remove.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: the running count of the root keeps a removed child's hard gates.",
+      "of": "DeliveryMatches"
+    },
+    {
+      "config": "mutant_count_misses_child_edit.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect: editing a child's gate updates the child's count and not the root's.",
+      "of": "DeliveryMatches"
     }
   ]
 }

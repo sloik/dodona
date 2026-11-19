@@ -1,0 +1,102 @@
+{
+  "kind": "attempts",
+  "name": "the_cap_follows_the_limit_on_refusals",
+  "claim": "C35",
+  "covers": [
+    "attempts/mutant_cap_on_shopping_only",
+    "attempts/mutant_limit_off_by_one",
+    "attempts/reach_capped_by_limit"
+  ],
+  "why": "Changing the target each time does not keep a full grade for ever: once the line has as many attempts that did not agree as policy allows, an agreement after them is capped at helper though it was not shopped.",
+  "claims": "apart",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "change_target": {}
+      },
+      "expect": {
+        "result": "none"
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "retried": false,
+        "cap": null,
+        "granted": "apart"
+      }
+    },
+    {
+      "do": {
+        "change_target": {}
+      },
+      "expect": {
+        "result": "none"
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t3"
+        }
+      },
+      "expect": {
+        "attempts": 3
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t3",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "agreed",
+        "shopped": false,
+        "retried": true,
+        "cap": "helper",
+        "attempts": 3,
+        "granted": "helper"
+      }
+    }
+  ]
+}

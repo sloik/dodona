@@ -3,10 +3,9 @@
   "name": "hard_gate_only_in_a_child",
   "claim": "C34",
   "covers": [
-    "tree/mutant_floor_counts_root_only",
-    "tree/reach_delivered_floor_two"
+    "tree/mutant_floor_counts_root_only"
   ],
-  "why": "A hard gate in a child counts towards the tree's total.",
+  "why": "A hard gate in a child counts towards its parent: an intent's gates are counted over it and its descendants, so moving a criterion into a child changes nothing in the parent's count.",
   "policy": {
     "min_hard_gates": 1
   },

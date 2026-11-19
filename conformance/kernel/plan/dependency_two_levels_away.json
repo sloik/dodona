@@ -3,8 +3,7 @@
   "name": "dependency_two_levels_away",
   "claim": "C9",
   "covers": [
-    "planner/mutant_direct_deps_only",
-    "planner/mutant_fallback_direct_deps_only"
+    "planner/mutant_direct_deps_only"
   ],
   "why": "A dependency of a dependency counts. The first version of the kit never had one.",
   "granularity": "definition",

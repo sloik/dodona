@@ -1,0 +1,64 @@
+{
+  "kind": "attempts",
+  "name": "the_named_ticket_is_closed",
+  "claim": "C35",
+  "covers": [
+    "attempts/mutant_close_latest_open"
+  ],
+  "why": "Closing a ticket closes that ticket, not the latest open one.",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": false,
+        "retried": false,
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "shopped": true,
+        "retried": true,
+        "cap": "helper",
+        "attempts": 2
+      }
+    }
+  ]
+}

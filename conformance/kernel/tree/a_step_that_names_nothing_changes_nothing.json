@@ -3,7 +3,7 @@
   "name": "a_step_that_names_nothing_changes_nothing",
   "claim": "C34",
   "covers": [],
-  "why": "A step that names a node or a child the tree does not have, or gives a status or a gate that does not exist, changes nothing: the tree stays confirmed and delivered.",
+  "why": "A step that names something not in the tree, or sets a gate to what it already counts as, changes nothing: the root is hard, so editing it to a gate nobody can read leaves it hard.",
   "policy": {
     "min_hard_gates": 1
   },
@@ -94,6 +94,17 @@
         "edit": {
           "node": "root",
           "to": "optional"
+        }
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "node": "root",
+          "to": "deferred"
         }
       },
       "expect": {

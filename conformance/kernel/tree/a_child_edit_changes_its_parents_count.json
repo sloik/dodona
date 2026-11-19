@@ -1,0 +1,59 @@
+{
+  "kind": "tree",
+  "name": "a_child_edit_changes_its_parents_count",
+  "claim": "C34",
+  "covers": [
+    "tree/mutant_count_misses_child_edit"
+  ],
+  "why": "Editing a child's gate changes what its parent counts, so a parent whose only hard gate was in the child is unguarded once that gate is soft and the child gone.",
+  "policy": {
+    "min_hard_gates": 1
+  },
+  "root": {
+    "gate": "soft"
+  },
+  "children": {
+    "k1": {
+      "gate": "hard"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {
+        "edit": {
+          "node": "k1",
+          "to": "soft"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "remove": {
+          "child": "k1"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "unguarded"
+      }
+    }
+  ]
+}

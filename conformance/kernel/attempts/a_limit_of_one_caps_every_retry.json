@@ -1,0 +1,65 @@
+{
+  "kind": "attempts",
+  "name": "a_limit_of_one_caps_every_retry",
+  "claim": "C35",
+  "covers": [],
+  "why": "Policy may allow no refusal at all: with a limit of one, an agreement after any refusal along the line is capped, even after a change of target.",
+  "claims": "apart",
+  "refusals_before_cap": 1,
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t1",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused"
+      }
+    },
+    {
+      "do": {
+        "change_target": {}
+      },
+      "expect": {
+        "result": "none"
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "agreed",
+        "shopped": false,
+        "retried": true,
+        "cap": "helper",
+        "granted": "helper"
+      }
+    }
+  ]
+}

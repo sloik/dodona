@@ -137,9 +137,32 @@ test('tree status', () => {
   const node = (gate, check) => ({ gate, check });
   assert.equal(tree.treeStatus(policy, true, node('hard', 'passed'), [node('hard', 'passed')]), 'delivered');
   assert.equal(tree.treeStatus(policy, true, node('hard', 'passed'), [node('hard', 'unknown')]), 'open');
-  assert.equal(tree.treeStatus(policy, true, node('hard', 'passed'), [node('soft', 'passed')]), 'open');
+  assert.equal(tree.treeStatus(policy, true, node('hard', 'passed'), [node('soft', 'passed')]), 'unguarded'); // every child needs a hard gate
   assert.equal(tree.treeStatus(policy, false, node('hard', 'passed'), []), 'draft');
   assert.equal(tree.treeStatus(policy, true, node('soft', 'passed'), []), 'unguarded');
+  assert.equal(tree.treeStatus(policy, true, node('soft', 'passed'), [node('hard', 'passed')]), 'delivered');
+  // The floor is counted over the whole tree, not held against each child.
+  const two = { min_hard_gates: 2 };
+  assert.equal(tree.treeStatus(two, true, node('hard', 'passed'), [node('hard', 'passed')]), 'delivered');
+  assert.equal(tree.treeStatus(two, true, node('hard', 'passed'), []), 'unguarded');
+  assert.equal(tree.treeStatus({ min_hard_gates: 0 }, true, node('soft', 'passed'), []), 'unguarded'); // below 1 is 1
+  // A string gate other than exactly hard or soft counts as hard; a gate that is not a string changes nothing.
+  assert.equal(tree.gateCountsAs('soft'), 'soft');
+  assert.equal(tree.gateCountsAs('Hard'), 'hard');
+  assert.equal(tree.gateCountsAs('deferred'), 'hard');
+  assert.equal(tree.gateCountsAs(1), null);
+  const run = (...steps) => tree.runScenario({ policy, root: { gate: 'hard' }, children: {}, steps: [{ do: { confirm: {} } }, ...steps.map((step) => ({ do: step }))] });
+  assert.deepEqual(run({ edit: { node: 'root', to: 'deferred' } }).map((r) => r.status), ['open', 'open']); // already counts as hard
+  assert.deepEqual(run({ edit: { node: 'root', to: 'Soft' } }).map((r) => r.status), ['open', 'open']);
+  assert.deepEqual(run({ add: { child: 'k', gate: 'deferred' } }, { confirm: {} }).map((r) => r.status), ['open', 'draft', 'open']);
+  assert.deepEqual(run({ add: { child: 'k', gate: null } }, { edit: { node: 'root', to: ['soft'] } }).map((r) => r.status), ['open', 'open', 'open']);
+  // Starting gates follow the same rule; one that is not a string makes the scenario invalid.
+  const start = (rootGate, childGate) => ({ kind: 'tree', policy, root: { gate: rootGate }, children: { k: { gate: childGate } }, steps: [{ do: { confirm: {} } }] });
+  const { runScenario } = require('./scenario');
+  assert.deepEqual(runScenario(start('Soft', 'deferred')).results, [{ status: 'open' }]);
+  assert.deepEqual(runScenario(start('hard', 'soft')).results, [{ status: 'unguarded' }]);
+  assert.throws(() => runScenario(start('hard', 1)), tree.InvalidScenario);
+  assert.throws(() => runScenario(start(null, 'hard')), tree.InvalidScenario);
 });
 
 test('attempts: refusal then agreement is shopping', () => {
@@ -153,13 +176,41 @@ test('attempts: refusal then agreement is shopping', () => {
   assert.equal(attempts.grantedLevel('self', true), 'self'); // the cap never raises
 });
 
+test('attempts: a retry after a change keeps its grade up to the limit on refusals', () => {
+  const taken = (...pairs) => pairs.map(([state, target], index) => ({ state, target, ticket: `t${index}` }));
+  const once = taken(['refused', 0], ['agreed', 1]);
+  assert.equal(attempts.notAgreed(once), 1);
+  assert.deepEqual(attempts.judge(once, 1, 'apart', 2),
+    { result: 'agreed', shopped: false, cap: null, attempts: 2, retried: true, granted: 'apart' });
+  assert.deepEqual(attempts.judge(once, 1, 'apart', 1),
+    { result: 'agreed', shopped: false, cap: 'helper', attempts: 2, retried: true, granted: 'helper' });
+  const twice = taken(['refused', 0], ['refused', 1], ['agreed', 2]);
+  assert.equal(attempts.judge(twice, 2, 'apart', 2).cap, 'helper');
+  assert.equal(attempts.judge(twice, 2, 'apart', 3).cap, null);
+  // Not retried: no cap, however many refusals.
+  assert.equal(attempts.judge(taken(['refused', 0], ['refused', 1]), 1, 'apart', 1).cap, null);
+  // An open attempt is not agreed and counts toward the limit.
+  assert.equal(attempts.judge(taken(['open', 0], ['agreed', 1]), 1, 'apart', 1).cap, 'helper');
+  assert.equal(attempts.refusalLimit({}), 2);
+  assert.equal(attempts.refusalLimit({ refusals_before_cap: 3 }), 3);
+  // Any other value makes the scenario invalid, refused whole and not stepped through.
+  const { runScenario } = require('./scenario');
+  for (const wrong of [0, -1, 1.5, '2', null, true, [2]]) {
+    assert.throws(() => runScenario({ kind: 'attempts', refusals_before_cap: wrong, steps: [{ do: { take: { as: 't' } } }] }), attempts.InvalidScenario);
+  }
+});
+
 test('platforms: verified claim, reproducibility', () => {
   const record = (entries) => new Map(Object.entries(entries).map(([key, byPlatform]) => [key,
     new Map(Object.entries(byPlatform).map(([platform, verdicts]) => [platform, new Set(verdicts)]))]));
   const recorded = record({ k1: { p1: ['passed'], p2: ['passed'] }, k2: { p1: ['passed'] } });
-  assert.equal(platforms.claimVerified(recorded, ['k1', 'k2']), true);
-  assert.equal(platforms.claimVerified(record({ k1: { p1: ['passed'], p2: ['failed'] } }), ['k1']), false);
-  assert.equal(platforms.claimVerified(record({ k1: { p1: ['failed'], p2: ['failed'] } }), ['k1']), true);
+  assert.equal(platforms.claimVerified(recorded, 'k1'), true);
+  assert.equal(platforms.claimVerified(recorded, 'k2'), false); // another key agreeing verifies nothing
+  assert.equal(platforms.claimVerified(record({ k1: { p1: ['passed'], p2: ['failed'] } }), 'k1'), false);
+  assert.equal(platforms.claimVerified(record({ k1: { p1: ['failed'], p2: ['failed'] } }), 'k1'), true);
+  assert.equal(platforms.claimVerified(record({ k1: { p1: ['passed', 'failed'], p2: ['passed'], p3: ['passed'] } }), 'k1'), false);
+  // A disagreement on one key does not void another key's claim.
+  assert.equal(platforms.claimVerified(record({ k1: { p1: ['passed'], p2: ['passed'] }, k2: { p1: ['passed'], p2: ['failed'] } }), 'k1'), true);
   assert.equal(platforms.reproducibility(recorded, 'k1'), 'agrees');
   assert.equal(platforms.reproducibility(recorded, 'k2'), 'unknown');
   assert.equal(platforms.reproducibility(record({ k: { p1: ['passed', 'failed'] } }), 'k'), 'differs');
@@ -403,4 +454,14 @@ test('status: an evidence entry with a wrongly typed field is not a record and i
   for (const wrong of [{ platform: true }, { writer: 0 }, { obligation: [] }, { core_key: null }, { preimage: 'x' }]) {
     assert.equal(status.runScenario(scenario(body(wrong))).at(-1).rejected, 0);
   }
+});
+
+test('evidence: the reason is the attempt asked for last, not the one that ended last', () => {
+  const steps = [
+    { submit: { obligation: 'o', as: 'j1' } }, { backend: { to: 'down' } }, { submit: { obligation: 'o', as: 'j2' } },
+    { lose: { run: 'j1' } }, { backend: { to: 'up' } }, { submit: { obligation: 'o', as: 'j3' } }, { lose: { run: 'j3' } },
+  ];
+  const scenario = { obligations: { o: { depends_on: ['d'] } }, start: { definitions: { d: 'a' }, tool: 't', backend: 'up' }, steps: steps.map((step) => ({ do: step })) };
+  assert.deepEqual(evidence.runScenario(scenario).map((result) => result.o.reason),
+    ['pending', 'pending', 'pending', 'unavailable', 'unavailable', 'pending', 'error']);
 });

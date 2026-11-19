@@ -10,20 +10,20 @@ The rewrite fixed what the first review named and left the main weakness in plac
 
 | # | Finding | Done |
 |---|---|---|
-| 1 | Tree: "delivered only when it is confirmed" is checked by no property. A kernel that delivers an unconfirmed tree passes all four | The claim no longer says it. A property and a planted defect are open |
+| 1 | Tree: "delivered only when it is confirmed" is checked by no property. A kernel that delivers an unconfirmed tree passes all four | Done in issue 27: `DeliveryMatches` and the planted defect `unconfirmed_delivered` |
 | 2 | The claims table promised a per-section account of which properties have content, and gave it for one section | Every section now has one |
-| 3 | Planner: for checks and builds, key and truth are the same expression, so the properties cannot fail without a planted defect | Said in the section. A model in which truth is independent of the key is open |
-| 4 | Platforms: "verified" is global in the model and per key in the design text, so one key's agreement lets another key's single record stand in | Said in the section as a contradiction, not a weakness. Open: make it per key or change the design text |
-| 5 | Tree with a floor of two: a child with one hard gate counts as delivered, which the data model appears to forbid | Said in the section. Open: decide whether the floor applies to children |
-| 6 | Attempts: the cap never lowers an accepted agreement; changing the target avoids it. The data model and decision 0024 disagree here | Said in the section and the claim. Open: settle the two texts |
-| 7 | Planner: the defect for a tool change also drops the sources, and its recorded failure is for an edit | Said. A defect that drops only the tool is open |
-| 8 | Attempts: the "retried" half of the history property has no defect | Said. Open |
-| 9 | Platforms: the override defect is two defects at once | Said. Open |
+| 3 | Planner: for checks and builds, key and truth are the same expression, so the properties cannot fail without a planted defect | Partly done in issue 27: the kernel's index now follows the relation in passes while the specification follows it to the end, over two shapes. A test's truth is still read from the store; open on issue 33 |
+| 4 | Platforms: "verified" is global in the model and per key in the design text, so one key's agreement lets another key's single record stand in | Done in issue 27: per key, decision 0032 |
+| 5 | Tree with a floor of two: a child with one hard gate counts as delivered, which the data model appears to forbid | Done in issue 27: counted over the tree, every child needs a hard gate, decision 0030 (owner direction) |
+| 6 | Attempts: the cap never lowers an accepted agreement; changing the target avoids it. The data model and decision 0024 disagree here | Done in issue 27: decision 0031 (owner direction) |
+| 7 | Planner: the defect for a tool change also drops the sources, and its recorded failure is for an edit | Done in issue 27: `build_key_omits_compiler` drops only the tool |
+| 8 | Attempts: the "retried" half of the history property has no defect | Done in issue 27: `retried_hidden` and `retried_only_on_same_target`, isolated from the cap |
+| 9 | Platforms: the override defect is two defects at once | Done in issue 27: `other_overrides_own` changes nothing else |
 | 10 | Planner: the depth bound leaves every behaviour of seven or more steps unexplored; the bounds text miscounted the definitions | The count is corrected. Given finding 3 the bound hides little |
-| 11 | Six wrong behaviours that every property accepts, because properties check one direction only | Listed in the sections. Defects for the other direction are open |
+| 11 | Six wrong behaviours that every property accepts, because properties check one direction only | Done in issue 27: each model's properties now check both directions, with planted defects for each |
 | 12 | Liveness: "every obligation" for a model of one; fairness stronger than the assumption as stated | Reworded |
-| 13 | Platforms: one record per key and platform, so a platform disagreeing with itself cannot occur | Said |
-| 14 | Two headings named "Run 7"; `expected.json` is not among the files a recorded run is tied to, so what a case is expected to show could change under a "checked" status | Heading renamed. The second is open |
+| 13 | Platforms: one record per key and platform, so a platform disagreeing with itself cannot occur | Done in issue 27: a platform can record both verdicts, `a_platform_can_disagree_with_itself` |
+| 14 | Two headings named "Run 7"; `expected.json` is not among the files a recorded run is tied to, so what a case is expected to show could change under a "checked" status | Done in issue 27: a run counts only while `expected.json`, every configuration and every output are hashed and the outputs, judged again, match |
 
 The reviewer also confirmed: no planted defect fails for a type error or an unrelated reason, the settings that switch off deadlock checking hide nothing, and the current model files are the ones the recorded runs name.
 

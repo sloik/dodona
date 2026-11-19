@@ -31,7 +31,7 @@ Every scenario names the claim it bears on and the model cases it covers. Each p
 
 ## How a kernel is judged
 
-`tools/run_kit.py -- <kernel command>` starts the kernel once per scenario, with the scenario as JSON on standard input. The kernel is shown what happens in each step and nothing else: the expected results and the notes about the scenario are removed first. The kernel prints `{"results": [...]}` with one result per step. Every step shown in the tables below is valid at any point of a scenario, in any order and any number of times; where a step has nothing to act on, the section says what happens. In every kind, a step that names something the scenario does not have (a criterion, an obligation, a definition, a run, a child, a ticket, a platform, a key, an intent) changes nothing, and a step whose value is not one the tables allow (a gate, a verdict or a level that does not exist) changes nothing either. A step that carries a value of another type than the tables give (a name that is not a string, a verdict that is a number, a list where a word belongs) changes nothing either, in every kind, as if the value were one the tables do not allow. A kernel answers every step; it never stops on one.
+`tools/run_kit.py -- <kernel command>` starts the kernel once per scenario, with the scenario as JSON on standard input. The kernel is shown what happens in each step and nothing else: the expected results and the notes about the scenario are removed first. The kernel prints `{"results": [...]}` with one result per step. Every step shown in the tables below is valid at any point of a scenario, in any order and any number of times; where a step has nothing to act on, the section says what happens. In every kind, a step that names something the scenario does not have (a criterion, an obligation, a definition, a run, a child, a ticket, a platform, a key, an intent) changes nothing, and a step whose value is not one the tables allow (a gate, a verdict or a level that does not exist) changes nothing either, with one exception: a gate in a tree scenario that is text other than `hard` or `soft` counts as `hard` (see Tree scenarios). A step that carries a value of another type than the tables give (a name that is not a string, a verdict that is a number, a list where a word belongs) changes nothing either, in every kind, as if the value were one the tables do not allow. A kernel answers every step; it never stops on one.
 
 A kernel reads every input as strictly as the [canonical encoding](../protocol/canonical-encoding.md) writes: a key repeated in one object, or a number that is not written as an integer (`1.0`, `1e0`, `10E-1`), makes the whole input refused, and the kernel exits with a status other than 0. Otherwise a record could be signed with one value and read with another. `tools/run_input_cases.py` judges this. A scenario matches when every field its steps expect is present and equal. A crash, a timeout or anything else is a mismatch.
 
@@ -51,7 +51,7 @@ A scenario gives the obligations with what each depends on, the starting content
 The result after each step is an object with one entry per obligation: `{"status": S}` and, when the status is `unknown`, `"reason": R`.
 
 - `status` is `passed`, `failed`, `conflict` or `unknown`, by the rule in [the data model](../MODEL.md#4-status). Only results recorded for the current inputs count: the content of everything the obligation depends on, and the tool.
-- `reason` is `pending` if a run on the current inputs is in flight; otherwise the outcome of the most recent attempt on the current inputs that left no result, `unavailable` or `error`; otherwise `never-run`.
+- `reason` is `pending` if a run on the current inputs is in flight; otherwise the outcome of the most recent attempt on the current inputs that left no result, `unavailable` or `error`, where attempts are ordered by when they were asked for (their `submit`), not by when they ended; otherwise `never-run`. A lost run gives `error`.
 - Recorded results take precedence over a run in flight: an obligation that has passed stays `passed` while it is being checked again.
 - A run is in flight from the `submit` that started it until it is completed or lost. A `complete` or `lose` naming a run that is not in flight changes nothing. A `submit` under a name that is in flight changes nothing, whatever the backend and whichever obligation it asks for: names are shared by all obligations, and no `unavailable` is recorded. Once a run has ended, by a `complete` or a `lose`, its name may be used again.
 
@@ -103,17 +103,17 @@ The result has `"shown"`: the weakest of the three links, on the scale `none`, `
 
 ### Tree scenarios
 
-A scenario gives a `root` and `children`, each with the gate of its one criterion, `hard` or `soft`, and a policy with `min_hard_gates`. There may be no children. Adding a child that is already there, setting a gate to what it already is, or a step that names a child that is not there, changes nothing.
+A scenario gives a `root` and `children`, each with the gate of its one criterion, `hard` or `soft`, and a policy with `min_hard_gates`. There may be no children. Tree scenarios know only those two gates. Any gate that is a string other than exactly `hard` or `soft` (`Hard`, `Soft`, `deferred`, any other text), whether at the start, in an `edit` or in an `add`, counts as `hard` ([decision 0030](../decisions/0030-the-hard-gate-floor-is-counted-over-the-tree.md)): a mistake in writing a gate can only make delivery harder, as with a gate nobody can read in status scenarios. `deferred`, a gate status scenarios do know, is not one here, so it too counts as `hard`. A starting gate that is not a string makes the scenario invalid. A gate that is not a string is a value of the wrong type, and the step changes nothing. Adding a child that is already there, setting a gate to what it already counts as, or a step that names a child that is not there, changes nothing.
 
 | Step | Meaning |
 |---|---|
 | `{"confirm": {}}` | The owner confirms the tree as it stands |
-| `{"check": {"node": N, "status": S}}` | The check behind N's criterion now has status S. N is `root` or a child |
+| `{"check": {"node": N, "status": S}}` | The check behind N's criterion now has status S, one of `unknown`, `passed`, `failed` or `conflict`. N is `root` or a child |
 | `{"edit": {"node": N, "to": G}}` | N's gate is changed directly |
 | `{"remove": {"child": K}}` | Child K is removed |
 | `{"add": {"child": K, "gate": G}}` | Child K is added, its check unknown |
 
-The result has `"status"`, the first of these that applies: `draft` if the owner has not confirmed, or anything was edited, added or removed since; `unguarded` if the whole tree has fewer hard gates than `min_hard_gates`; `open` if any hard gate's check is not `passed`, or any child has no hard gate; otherwise `delivered`.
+The result has `"status"`, the first of these that applies: `draft` if the owner has not confirmed, or anything was edited, added or removed since; `unguarded` if the tree counts fewer hard gates than `min_hard_gates`, or fewer than one, counting the root and every child; or if any child has no hard gate (decision 0030). A child is not held to the policy's number on its own: moving a criterion into a child loses nothing (decision 0017). `open` if any hard gate's check is not `passed`; otherwise `delivered`.
 
 ### Attempts scenarios
 
@@ -123,22 +123,22 @@ The result has `"status"`, the first of these that applies: `draft` if the owner
 | `{"close": {"ticket": T, "result": "agreed" or "refused"}}` | The attempt is closed with that result |
 | `{"change_target": {}}` | The thing being judged changes |
 
-A scenario may give `claims`, the separation level the act claims. Closing a ticket that was never taken, or is already closed, changes nothing. A ticket taken before a change of target can still be closed.
+A scenario may give `claims`, the separation level the act claims, and `refusals_before_cap`, a whole number of at least one, 2 when absent. Any other value of `refusals_before_cap` (zero, a negative number, a fraction, a string) makes the scenario invalid, and the kernel refuses it as it refuses any invalid input: a non-zero exit and no result. Closing a ticket that was never taken, or is already closed, changes nothing. A ticket taken before a change of target can still be closed.
 
-The result has these fields. The first three are worked out from the attempts on the current target, as they stand now, in the order they were taken.
+The result has these fields. Every field is worked out from the attempts as they stand now, in the order they were taken; the first two from those on the current target only. So closing an earlier open attempt as agreed can clear `retried`.
 
 - `"result"`: `none` if there are none; `agreed` if every one is closed as agreed; otherwise `refused`. An open attempt counts as a failure.
 - `"shopped"`: true if some attempt closed as agreed was taken after one that is not agreed.
-- `"cap"`: `helper` when shopped, otherwise null.
+- `"cap"`: `helper` when shopped, or when retried and the line has at least `refusals_before_cap` attempts that are not agreed, otherwise null (decision 0031). A change of target does not reset the count, and an agreement after a change keeps its grade only until that limit: the kernel cannot tell a real fix from a trivial change.
 - `"attempts"`: how many tickets have been taken in all, across changes of target.
 - `"retried"`: true if, among all attempts across changes of target, some attempt closed as agreed was taken after one that is not agreed.
-- `"granted"`, when the scenario gives `claims`: the claimed level, lowered to `helper` if the cap applies and the claim was higher. The cap never raises a level.
+- `"granted"`, when the scenario gives `claims`: the claimed level, lowered to `helper` if `cap` is `helper` and the claim was higher. The cap never raises a level.
 
 ### Platforms scenarios
 
 A scenario gives `keys` (sets of inputs), any number of `platforms`, whether policy allows a record from one platform to stand in for another, `stand_in_allowed`, and whether the provider claims its results do not depend on the platform, `provider_claims`, true when absent. Each step is `{"record": {"key": K, "platform": P, "verdict": "passed" or "failed"}}`. A second record for the same key and platform with the same verdict changes nothing; with the other verdict it makes that platform's own status `conflict`.
 
-- `"status"`, by key then platform: the platform's own verdict if it has one, or `conflict`; otherwise another platform's verdict for the same key, if standing in is allowed, the provider claims platform independence, and the claim is verified; otherwise `unknown`. The claim is verified when some key has the same verdict on at least two platforms, whether passed or failed, and no key has different verdicts anywhere. When a stand-in is allowed all of a key's verdicts are the same, so it does not matter which platform's is taken.
+- `"status"`, by key then platform: the platform's own verdict if it has one, or `conflict`; otherwise another platform's verdict for the same key, if standing in is allowed, the provider claims platform independence, and the claim is verified; otherwise `unknown`. The claim is verified for a key when that key has the same verdict on at least two platforms, whether passed or failed, and no platform, the one asked about included, has recorded the other verdict for that key. Another key agreeing verifies nothing about this one. When a stand-in is allowed all of the key's verdicts are the same, so it does not matter which platform's is taken.
 - `"stood_in"`: the list of `[key, platform]` pairs whose status rests on another platform's record, sorted by key and then platform.
 - `"reproducibility"`, by key: `differs` if the key has both verdicts recorded, on one platform or several; `agrees` if at least two platforms have a verdict and all are the same; otherwise `unknown`.
 

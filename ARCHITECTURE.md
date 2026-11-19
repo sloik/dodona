@@ -128,7 +128,7 @@ Every record carries an **evidence key** ([0006](decisions/0006-evidence-key-and
 
 The kernel computes the key; providers never do. It is fixed at submission from an immutable copy of the inputs, and the result is filed under it even if the project changed during the run. Status is always asked **for a platform**. Policy names the platforms on which an obligation is required; by default it is the platform of the executor bound to it. A record counts towards an obligation's status on a platform only when its core key equals the core key computed now and its platform is that platform. Keeping the platform outside the core key is what lets the kernel pair records from different platforms and compare them.
 
-There is one exception, and it is explicit: where a provider's claim to be platform-independent has been verified, meaning the same core key has been checked on at least two platforms with agreeing results and policy accepts that, a record from another platform may stand in. The status then says so, naming the platform the record came from.
+There is one exception, and it is explicit: where a provider's claim to be platform-independent has been verified, meaning the same core key has been checked on at least two platforms with agreeing results, no platform disagrees about it, and policy accepts that ([decision 0032](decisions/0032-a-stand-in-is-verified-for-its-own-key-and-any-disagreement-withdraws-it.md)), a record from another platform may stand in. The status then says so, naming the platform the record came from.
 
 Every record, including every pass, also carries the exit status and the digest of the raw output it was derived from, so any verdict can be audited later.
 

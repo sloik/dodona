@@ -1,0 +1,86 @@
+{
+  "kind": "attempts",
+  "name": "an_open_attempt_counts_toward_the_limit",
+  "claim": "C35",
+  "covers": [],
+  "why": "An attempt left open is a failure, so it counts toward the limit on refusals as a refused one does.",
+  "claims": "apart",
+  "steps": [
+    {
+      "do": {
+        "take": {
+          "as": "t1"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "change_target": {}
+      },
+      "expect": {
+        "result": "none",
+        "attempts": 1
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t2"
+        }
+      },
+      "expect": {
+        "attempts": 2
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t2",
+          "result": "refused"
+        }
+      },
+      "expect": {
+        "result": "refused",
+        "cap": null
+      }
+    },
+    {
+      "do": {
+        "change_target": {}
+      },
+      "expect": {
+        "result": "none"
+      }
+    },
+    {
+      "do": {
+        "take": {
+          "as": "t3"
+        }
+      },
+      "expect": {
+        "attempts": 3
+      }
+    },
+    {
+      "do": {
+        "close": {
+          "ticket": "t3",
+          "result": "agreed"
+        }
+      },
+      "expect": {
+        "result": "agreed",
+        "shopped": false,
+        "retried": true,
+        "cap": "helper",
+        "attempts": 3,
+        "granted": "helper"
+      }
+    }
+  ]
+}
