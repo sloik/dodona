@@ -10,7 +10,8 @@ pub fn one(v: &Value) -> Value {
         None => json::object(vec![("accepted", Value::Bool(true))]),
     }
 }
-fn check(bytes: &[u8]) -> Option<&'static str> {
+/// The first rule of the path check a path breaks, if it breaks one.
+pub fn check(bytes: &[u8]) -> Option<&'static str> {
     let s = match std::str::from_utf8(bytes) {
         Ok(s) => s,
         Err(_) => return Some("not-utf8"),

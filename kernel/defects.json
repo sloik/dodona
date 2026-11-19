@@ -1001,6 +1001,216 @@
       "file": "src/tree.rs",
       "find": "step.text(field).map(counts_as)",
       "replace": "step.text(field).filter(|g| *g == \"hard\" || *g == \"soft\").map(counts_as)"
+    },
+    {
+      "name": "host check rule 1: a ninth run allowed",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if runs >= MAX_RUNS {",
+      "replace": "if runs > MAX_RUNS {"
+    },
+    {
+      "name": "host check rule 2: platform of a run not compared",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !same(run.opt(\"platform\"), Some(&g.platform)) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host check rule 3: undeclared tool not refused",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if named.iter().any(|t| !g.declared.iter().any(|d| d == t)) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host check rule 3: tool named but not given not refused",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if named.iter().any(|t| !g.tools.iter().any(|(n, _)| n == t)) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host check rule 3: run lists a tool not given",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if run_tools.iter().any(|e| given(e).is_none())",
+      "replace": "if false"
+    },
+    {
+      "name": "host check rule 3: tool digest not compared",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".any(|e| given(e).map(|(_, d)| d.as_str()) != e.text(\"digest\"))",
+      "replace": ".any(|_| false)"
+    },
+    {
+      "name": "host check rule 4: paths of a run not checked",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if paths.iter().any(|p| !p.as_deref().is_some_and(passes)) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host check rule 5: arguments not held to the allowlist",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".any(|a| !a.contains('\\0') && needs_to_be_a_file(a) && !file_arg(a))",
+      "replace": ".any(|_| false)"
+    },
+    {
+      "name": "host check rule 6: environment allowed",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".is_some_and(|e| !matches!(e, Value::Object(o) if o.is_empty()))",
+      "replace": ".is_some_and(|_| false)"
+    },
+    {
+      "name": "host check rule 7: output over an input allowed",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if outputs.iter().any(is_input) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host check rule 8: input not in the key allowed",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if entries.iter().any(|e| keyed(e).is_none()) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host check rule 8: identity of an input not compared",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".any(|e| keyed(e).map(|(_, i)| i.as_str()) != e.text(\"identity\"))",
+      "replace": ".any(|_| false)"
+    },
+    {
+      "name": "host check rule 9: arguments not checked for NUL or type",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !listed || args.iter().any(|a| a.contains('\\0')) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host check rule 10: run need not read what its obligation names",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if g.named().iter().any(|n| !inputs.contains(n)) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host final: attachment path not checked",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".any(|a| !a.text(\"path\").is_some_and(passes))",
+      "replace": ".any(|_| false)"
+    },
+    {
+      "name": "host final: attachment not hashed again",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".any(|a| rehashed(a).is_none() || rehashed(a).as_deref() != a.text(\"identity\"))",
+      "replace": ".any(|_| false)"
+    },
+    {
+      "name": "host final: invented verdict accepted",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !VERDICTS.contains(&verdict) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host final: verdict without a run accepted",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if runs == 0 {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host final: strength above the ceiling accepted",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if stated.is_none() || ceiling.is_none() || stated > ceiling {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host final: strength class not compared",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if strength.and_then(|s| s.text(\"class\")) != Some(class) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host run key leaves out the run's number",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "(\"run\", Value::Number(number as i64)),",
+      "replace": "(\"run\", Value::Number(1)),"
+    },
+    {
+      "name": "host passes a run that did not exit to the provider",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if report.text(\"end\") != Some(\"exited\") {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host does not compare the report's platform",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !same(report.opt(\"platform\"), run.opt(\"platform\")) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host does not compare the report's tools",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "tool_pairs(report.opt(\"tools_ran\")) != tool_pairs(run.opt(\"tools\"))",
+      "replace": "false"
+    },
+    {
+      "name": "host ends only the provider, not what it started",
+      "model_case": null,
+      "file": "src/proc.rs",
+      "find": "kill(-pid, SIGKILL);",
+      "replace": "kill(pid, SIGKILL);"
+    },
+    {
+      "name": "session: carriage return before the line feed accepted",
+      "model_case": null,
+      "file": "src/wire.rs",
+      "find": "line.starts_with(b\"\\xef\\xbb\\xbf\") || line.ends_with(b\"\\r\")",
+      "replace": "line.starts_with(b\"\\xef\\xbb\\xbf\")"
+    },
+    {
+      "name": "session: over-long line held whole",
+      "model_case": null,
+      "file": "src/wire.rs",
+      "find": "if line.len() + part.len() > max {",
+      "replace": "if false {"
+    },
+    {
+      "name": "session: log never marked as cut short",
+      "model_case": null,
+      "file": "src/session.rs",
+      "find": "Ok(outcome(result, bytes, bytes > limits.max_log as u64))",
+      "replace": "Ok(outcome(result, bytes, false))"
+    },
+    {
+      "name": "host check rule 5: a tool file may have anything appended",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".all(|c| c.is_ascii_alphanumeric() || \"._-/\".contains(c))",
+      "replace": ".all(|_| true)"
+    },
+    {
+      "name": "host check: an obligation may name a file not among the inputs",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".any(|n| !g.inputs.iter().any(|(p, _)| p == n))\n    {\n        Outcome::Refused(\"unknown-file\")",
+      "replace": ".any(|_| false)\n    {\n        Outcome::Refused(\"unknown-file\")"
     }
   ]
 }
