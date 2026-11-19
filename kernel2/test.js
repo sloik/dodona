@@ -481,10 +481,13 @@ const { runKey, reportEnding } = require('./check');
 
 const sha = (text) => `sha256:${crypto.createHash('sha256').update(text).digest('hex')}`;
 
-test('strict reading refuses nesting deeper than its limit and accepts it at the limit', () => {
+test('strict reading reads any depth whole, and judges depth after every other problem', () => {
   assert.deepEqual(strictJson.read('['.repeat(65) + ']'.repeat(65), { maxDepth: 64 }), { refused: 'too-deep' });
   assert.ok(strictJson.read('['.repeat(64) + ']'.repeat(64), { maxDepth: 64 }).value !== undefined);
-  assert.deepEqual(strictJson.read('['.repeat(100000), { maxDepth: 64 }), { refused: 'too-deep' });
+  assert.deepEqual(strictJson.read('['.repeat(1000000) + ']'.repeat(1000000), { maxDepth: 64 }), { refused: 'too-deep' });
+  assert.deepEqual(strictJson.read('['.repeat(100000), { maxDepth: 64 }), { refused: 'not-json' });
+  assert.deepEqual(strictJson.read(`{"a":${'['.repeat(70)}${']'.repeat(70)},"a":1}`, { maxDepth: 64 }), { refused: 'duplicate-key' });
+  assert.deepEqual(strictJson.read(`{"a":[[{"b":1.5}]]}`, { maxDepth: 64 }), { refused: 'not-an-integer' });
   assert.ok(strictJson.read('['.repeat(65) + ']'.repeat(65)).value !== undefined);
 });
 
@@ -499,7 +502,11 @@ test('a line is read in the order the contract gives', () => {
   assert.deepEqual(parseLine(line('{"type":"x","type":"y"}'), true), { reason: 'duplicate-key' });
   assert.deepEqual(parseLine(line('{"type":"x","n":1.0}'), true), { reason: 'not-an-integer' });
   assert.deepEqual(parseLine(line(`{"type":"x","v":${'['.repeat(64)}${']'.repeat(64)}}`), true), { reason: 'too-deep' });
-  assert.deepEqual(parseLine(line('{"type":"x","type":"y"}'), false), { message: { type: 'y' } });
+  assert.deepEqual(parseLine(line('{"type":"x","b":{"c":[{"d":1,"d":2}]}}'), true), { reason: 'duplicate-key' });
+  assert.deepEqual(parseLine(line('{"type":"x","n":9007199254740992}'), true), { reason: 'not-an-integer' });
+  assert.deepEqual(parseLine(line('{"type":"x","s":"\\ud800"}'), true), { reason: 'encoding' });
+  assert.deepEqual(parseLine(line(`{"type":"x","v":${'['.repeat(64)}${']'.repeat(64)},"type":"y"}`), true), { reason: 'duplicate-key' });
+  assert.deepEqual(parseLine(line('{"type":"x","type":"y","n":1.5}'), false), { message: { type: 'y', n: 1.5 } });
   assert.deepEqual(parseLine(line('{"type":"x","n":7}'), true), { message: { type: 'x', n: 7 } });
 });
 
@@ -510,7 +517,7 @@ function aCheck(changes = {}) {
   return {
     platform: PLATFORM, declared: new Set(['checker']), given: new Map([['checker', `sha256:${'c'.repeat(64)}`]]),
     inputs: new Map([['a.txt', A.identity]]), named: ['a.txt'], runs: 0,
-    ceiling: { class: 'test', rank: 'bounded' }, identityOf: () => null, ...changes,
+    ceiling: { class: 'test', rank: 'bounded' }, isRegularFile: () => true, identityOf: () => null, ...changes,
   };
 }
 
@@ -526,6 +533,11 @@ test('a run that keeps every rule is accepted, and each rule refuses with its re
   assert.equal(hostRules.runProblem(aRun(), aCheck()), null);
   assert.equal(hostRules.runProblem(aRun(), aCheck({ runs: 8 })), 'too-many-runs');
   assert.equal(hostRules.runProblem(aRun(), aCheck({ runs: 7 })), null);
+  for (const broken of [{ args: 'a.txt' }, { inputs: {} }, { outputs: undefined }, { tools: [{ name: 'checker' }] }, { program: { tool: 'checker' } },
+    { platform: 'linux' }, { cwd: 7 }, { limits: { wall_ms: '1' } }]) {
+    assert.equal(hostRules.runProblem(aRun(broken), aCheck()), 'bad-description', JSON.stringify(broken));
+  }
+  assert.equal(hostRules.runProblem(null, aCheck()), 'bad-description');
   assert.equal(hostRules.runProblem(aRun({ platform: { os: 'linux', arch: 'aarch64' } }), aCheck()), 'platform-mismatch');
   assert.equal(hostRules.runProblem(aRun({ args: ['${tool:checker}/a:${tool:shell}/b'] }), aCheck()), 'undeclared-tool');
   assert.equal(hostRules.runProblem(aRun(), aCheck({ declared: new Set(['checker', 'shell']), given: new Map() })), 'tool-not-in-key');
@@ -536,18 +548,23 @@ test('a run that keeps every rule is accepted, and each rule refuses with its re
   assert.equal(hostRules.runProblem(aRun({ args: ['${tool:checker}/lib/x=/etc/passwd', 'a.txt'] }), aCheck()), 'bad-path');
   assert.equal(hostRules.runProblem(aRun({ args: ['café', 'a.txt'] }), aCheck()), 'bad-path');
   assert.equal(hostRules.runProblem(aRun({ env: { A: 'b' } }), aCheck()), 'env-not-allowed');
-  assert.equal(hostRules.runProblem(aRun({ env: {} }), aCheck()), null);
+  assert.equal(hostRules.runProblem(aRun({ env: {} }), aCheck()), 'env-not-allowed');
+  assert.equal(hostRules.runProblem(aRun({ env: null }), aCheck()), 'env-not-allowed');
   assert.equal(hostRules.runProblem(aRun({ outputs: [{ path: 'a.txt' }] }), aCheck()), 'output-overwrites-input');
+  assert.equal(hostRules.runProblem(aRun({ outputs: [{ path: 'A.Txt' }] }), aCheck()), 'output-overwrites-input');
+  assert.equal(hostRules.runProblem(aRun({ outputs: [{ path: 'B.TXT' }] }), aCheck({ inputs: new Map([['a.txt', A.identity], ['b.txt', A.identity]]) })), 'output-overwrites-input');
+  assert.equal(hostRules.runProblem(aRun({ outputs: [{ path: 'out.txt' }] }), aCheck()), null);
   assert.equal(hostRules.runProblem(aRun({ inputs: [A, { path: 'b.txt', identity: A.identity }] }), aCheck()), 'input-not-in-key');
   assert.equal(hostRules.runProblem(aRun({ inputs: [{ path: 'a.txt', identity: sha('b') }] }), aCheck()), 'identity-mismatch');
   assert.equal(hostRules.runProblem(aRun({ args: ['a.txt\u0000x'] }), aCheck()), 'bad-arguments');
   assert.equal(hostRules.runProblem(aRun({ args: [1] }), aCheck()), 'bad-arguments');
+  assert.equal(hostRules.runProblem(aRun({ args: ['-I${tool:checker}/x\u0000', 'a.txt'] }), aCheck()), 'bad-arguments');
   assert.equal(hostRules.runProblem(aRun({ inputs: [], args: [] }), aCheck()), 'missing-input');
 });
 
 test('every tool an argument names is found, with or without a file after it', () => {
   assert.deepEqual(hostRules.toolsNamed({ program: { tool: 'p' }, args: ['${tool:a}', 'x${tool:b}/f:${tool:c}/g', 7] }), ['p', 'a', 'b', 'c']);
-  assert.deepEqual(hostRules.toolsNamed({ program: { tool: 'p' }, args: 'not a list ${tool:a}' }), ['p']);
+  assert.deepEqual(hostRules.toolsNamed({ program: { tool: 'p' }, args: [] }), ['p']);
 });
 
 test('a final is checked in the contract order', () => {
@@ -555,7 +572,11 @@ test('a final is checked in the contract order', () => {
   const passed = { verdict: 'passed', strength: { class: 'test', rank: 'bounded' } };
   assert.equal(hostRules.finalProblem(passed, ran), null);
   assert.equal(hostRules.finalProblem({ ...passed, strength: { class: 'test', rank: 'sampled' } }, ran), null);
+  assert.equal(hostRules.finalProblem('passed', ran), 'bad-final');
+  assert.equal(hostRules.finalProblem({ ...passed, attachments: { path: 'e.txt' } }, ran), 'bad-final');
+  assert.equal(hostRules.finalProblem({ ...passed, attachments: [{ path: 'e.txt' }] }, ran), 'bad-final');
   assert.equal(hostRules.finalProblem({ ...passed, attachments: [{ path: '../x', identity: 'sha256:0' }] }, ran), 'bad-path');
+  assert.equal(hostRules.finalProblem({ ...passed, attachments: [{ path: 'e.txt', identity: 'sha256:0' }] }, aCheck({ runs: 1, isRegularFile: () => false })), 'bad-path');
   assert.equal(hostRules.finalProblem({ ...passed, attachments: [{ path: 'e.txt', identity: 'sha256:0' }] }, ran), 'identity-mismatch');
   assert.equal(hostRules.finalProblem({ ...passed, attachments: [{ path: 'e.txt', identity: 'sha256:0' }] }, aCheck({ runs: 1, identityOf: () => 'sha256:0' })), null);
   assert.equal(hostRules.finalProblem({ verdict: 'unavailable' }, ran), 'bad-verdict');
@@ -566,6 +587,7 @@ test('a final is checked in the contract order', () => {
   assert.equal(hostRules.finalProblem({ verdict: 'passed' }, ran), 'strength-above-ceiling');
   assert.equal(hostRules.finalProblem(passed, aCheck({ runs: 1, ceiling: null })), 'strength-above-ceiling');
   assert.equal(hostRules.finalProblem({ verdict: 'failed', strength: { class: 'proof', rank: 'bounded' } }, ran), 'strength-class-mismatch');
+  assert.equal(hostRules.finalProblem({ verdict: 'passed', strength: { rank: 'bounded' } }, ran), 'strength-class-mismatch');
 });
 
 test('a report ends the check unless the run exited as described', () => {
@@ -658,4 +680,59 @@ test('a check is taken through the provider and the executor to the provider\'s 
   assert.deepEqual(hostCheck(0), { outcome: 'verdict', verdict: 'passed' });
   assert.deepEqual(hostCheck(1), { outcome: 'verdict', verdict: 'failed' });
   assert.deepEqual(hostCheck(0, { inputs: [] }), { outcome: 'refused', reason: 'unknown-file' });
+});
+
+test('the host\'s own input and a checking manifest have their shapes', () => {
+  const good = { root: 'r', provider: ['p'], executor: ['e'], obligation: { specified_by: ['a'], targets: [] }, inputs: [A],
+    tools: [{ name: 'checker', digest: 'd' }], platform: PLATFORM, deadline_ms: 1 };
+  assert.equal(hostRules.inputProblem(good), null);
+  for (const broken of [{ root: 1 }, { provider: [] }, { executor: [1] }, { obligation: { specified_by: ['a'] } }, { inputs: [{ path: 'a' }] },
+    { tools: [{ name: 'c' }] }, { platform: [] }, { deadline_ms: 0 }, { deadline_ms: 1.5 }]) {
+    assert.equal(hostRules.inputProblem({ ...good, ...broken }), 'bad-input', JSON.stringify(broken));
+  }
+  const manifest = { capabilities: [{ capability: 'obligation.check', strength: { class: 'test', rank: 'bounded' } }], tools: [{ name: 'checker' }] };
+  assert.equal(hostRules.manifestProblem(manifest), null);
+  assert.equal(hostRules.manifestProblem({ ...manifest, capabilities: [{ capability: 'obligation.check' }] }), null);
+  for (const broken of [{ capabilities: {} }, { capabilities: ['obligation.check'] }, { capabilities: [{ capability: 'x' }, { capability: 'x' }] },
+    { capabilities: [{ capability: 'obligation.check', strength: { class: 'test', rank: 'certain' } }] },
+    { capabilities: [{ capability: 'obligation.check', strength: { rank: 'bounded' } }] },
+    { tools: ['checker'] }, { tools: [{ name: 'a/b' }] }, { tools: undefined }]) {
+    assert.equal(hostRules.manifestProblem({ ...manifest, ...broken }), 'bad-manifest', JSON.stringify(broken));
+  }
+});
+
+test('a report is read strictly, as one line', () => {
+  const { readReport, executorWait } = require('./check');
+  assert.deepEqual(readReport(Buffer.from('{"end":"exited","exit_status":0}\n')), { end: 'exited', exit_status: 0 });
+  assert.equal(readReport(Buffer.from('{"end":"exited","exit_status":0.0}\n')), null);
+  assert.equal(readReport(Buffer.from('{"end":"exited","end":"exited"}\n')), null);
+  assert.equal(readReport(Buffer.from('{"end":"exited"}\r\n')), null);
+  assert.equal(readReport(Buffer.from('')), null);
+  assert.equal(readReport(Buffer.from('[]')), null);
+  assert.equal(executorWait({ limits: { wall_ms: 2147483648 } }), 24 * 60 * 60 * 1000);
+  assert.equal(executorWait({ limits: { wall_ms: 1000 } }), 61000);
+  assert.equal(executorWait({}), 24 * 60 * 60 * 1000);
+});
+
+test('an attachment is a regular file reached through no link', { skip: process.platform === 'win32' }, () => {
+  const { isRegularFile } = require('./check');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kernel2-attach-'));
+  try {
+    fs.mkdirSync(path.join(root, 'd'));
+    fs.writeFileSync(path.join(root, 'd', 'f.txt'), 'x');
+    fs.symlinkSync(path.join(root, 'd'), path.join(root, 'link'));
+    fs.symlinkSync(path.join(root, 'd', 'f.txt'), path.join(root, 'flink'));
+    assert.equal(isRegularFile(root, 'd/f.txt'), true);
+    assert.equal(isRegularFile(root, 'link/f.txt'), false);
+    assert.equal(isRegularFile(root, 'flink'), false);
+    assert.equal(isRegularFile(root, 'd'), false);
+    assert.equal(isRegularFile(root, 'missing'), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the processes below a command are found through parents that have gone', () => {
+  const { below } = require('./processes');
+  assert.deepEqual(below([[10, 1], [11, 10], [12, 11], [13, 99]], new Set([10])), [11, 12]);
 });

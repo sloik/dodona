@@ -135,7 +135,7 @@ def judge(case: dict, host: list[str]) -> list[str]:
         if given.get("run_key") != canonical.identity({"check": check_key, "run": n, "description": canonical.identity(given.get("run"))}):
             problems.append(f"run {n} was not given the key the contract gives")
     results = [m for m in got_msgs if m["got"] == "run.result"]
-    if case["run"] == "exited":
+    if case["run"] in ("exited", "leaves-a-child"):
         for n in range(1, len(started) + 1):
             if not any(m.get("run") == n and start_ids and m.get("check") == start_ids[0] for m in results):
                 problems.append(f"run {n} exited and was not passed back to the provider under the start request's id")

@@ -6,22 +6,21 @@
 // read(text) returns { value } or { refused: reason }. Objects become Map,
 // integers become BigInt, so nothing is rounded on the way in.
 //
-// read(text, { maxDepth: N }) also refuses, as `too-deep`, a value nested more
-// than N objects and arrays deep (the outermost counts as 1). Reading stops at
-// that point, so a deep text cannot exhaust the stack.
+// Containers are read with a stack of their own, not by recursion, so a text
+// nested to any depth is read whole. read(text, { maxDepth: N }) also refuses,
+// as `too-deep`, a value nested more than N objects and arrays deep (the
+// outermost counts as 1); depth is judged last, after every other problem.
 //
 // Syntax is judged first: a text that is not JSON is `not-json` whatever else
 // is wrong with it. Otherwise the first problem found in reading order is the
 // reason.
 
 class Syntax extends Error {}
-class TooDeep extends Error {}
 
 const MAX_SAFE = 9007199254740991n;
 
 function read(text, options = {}) {
   const maxDepth = options.maxDepth === undefined ? Infinity : options.maxDepth;
-  let depth = 0;
   let at = 0;
   let problem = null; // the first semantic problem, in reading order
 
@@ -41,11 +40,21 @@ function read(text, options = {}) {
     else fail();
   }
 
-  function readValue() {
+  const OPENED = Symbol('opened'); // a container was opened; its members follow
+  const stack = []; // open containers: { members: Map, key } or { items: [] }
+  let deepest = 0;
+
+  // Starts the value at the reading position: a scalar is read whole and returned;
+  // an object or array is opened, pushed and OPENED returned.
+  function startValue() {
     skipSpace();
     const ch = text[at];
-    if (ch === '{') return readObject();
-    if (ch === '[') return readArray();
+    if (ch === '{' || ch === '[') {
+      at += 1;
+      stack.push(ch === '{' ? { members: new Map(), key: undefined } : { items: [] });
+      if (stack.length > deepest) deepest = stack.length;
+      return OPENED;
+    }
     if (ch === '"') return readString();
     if (ch === 't') return expect('true'), true;
     if (ch === 'f') return expect('false'), false;
@@ -54,63 +63,53 @@ function read(text, options = {}) {
     return fail();
   }
 
-  function enter() {
-    depth += 1;
-    if (depth > maxDepth) throw new TooDeep();
+  // Reads a member's key and colon, then starts its value.
+  function startMember(frame) {
+    skipSpace();
+    if (text[at] !== '"') fail();
+    frame.key = readString();
+    skipSpace();
+    if (text[at] !== ':') fail();
+    at += 1;
+    return startValue();
   }
 
-  function readObject() {
-    at += 1; // {
-    enter();
-    const members = new Map();
-    skipSpace();
-    if (text[at] === '}') {
-      at += 1;
-      depth -= 1;
-      return members;
-    }
+  function close() {
+    const frame = stack.pop();
+    return frame.members !== undefined ? frame.members : frame.items;
+  }
+
+  // Reads one whole value without recursion, so any depth can be read.
+  function readValue() {
+    let value = startValue();
     for (;;) {
-      skipSpace();
-      if (text[at] !== '"') fail();
-      const key = readString();
-      skipSpace();
-      if (text[at] !== ':') fail();
-      at += 1;
-      const value = readValue();
-      if (members.has(key)) note('duplicate-key');
-      members.set(key, value);
-      skipSpace();
-      if (text[at] === ',') {
-        at += 1;
-      } else if (text[at] === '}') {
-        at += 1;
-        depth -= 1;
-        return members;
-      } else {
-        fail();
+      const top = stack[stack.length - 1];
+      if (value === OPENED) {
+        skipSpace();
+        const ending = top.members !== undefined ? '}' : ']';
+        if (text[at] === ending) {
+          at += 1;
+          value = close();
+        } else {
+          value = top.members !== undefined ? startMember(top) : startValue();
+        }
+        continue;
       }
-    }
-  }
-
-  function readArray() {
-    at += 1; // [
-    enter();
-    const items = [];
-    skipSpace();
-    if (text[at] === ']') {
-      at += 1;
-      depth -= 1;
-      return items;
-    }
-    for (;;) {
-      items.push(readValue());
+      if (top === undefined) return value;
+      if (top.members !== undefined) {
+        if (top.members.has(top.key)) note('duplicate-key');
+        top.members.set(top.key, value);
+      } else {
+        top.items.push(value);
+      }
       skipSpace();
+      const ending = top.members !== undefined ? '}' : ']';
       if (text[at] === ',') {
         at += 1;
-      } else if (text[at] === ']') {
+        value = top.members !== undefined ? startMember(top) : startValue();
+      } else if (text[at] === ending) {
         at += 1;
-        depth -= 1;
-        return items;
+        value = close();
       } else {
         fail();
       }
@@ -210,10 +209,10 @@ function read(text, options = {}) {
     const value = readValue();
     skipSpace();
     if (at !== text.length) fail();
+    if (deepest > maxDepth) note('too-deep');
     return problem === null ? { value } : { refused: problem };
   } catch (error) {
     if (error instanceof Syntax) return { refused: 'not-json' };
-    if (error instanceof TooDeep) return { refused: 'too-deep' };
     throw error;
   }
 }

@@ -5,7 +5,8 @@
 //
 // Starts the provider, sends hello, requires the manifest with the echo unchanged,
 // sends one decision.index request, requires its result, sends shutdown, and ends
-// every process the provider started. One deadline covers the whole session.
+// every process in the provider's process group (Unix) or below it (Windows). One
+// deadline covers the whole session, sending as well as waiting.
 
 const processes = require('./processes');
 const { Wire, isObject } = require('./wire');
@@ -61,17 +62,19 @@ async function awaitExit(child, wire, until) {
 }
 
 async function converse(child, wire, options, until) {
-  wire.send({ type: 'hello', protocol: [PROTOCOL], limits: { max_line_bytes: options.maxLine, deadline_ms: options.deadlineMs }, echo: ECHO });
+  const helloSent = await wire.send({ type: 'hello', protocol: [PROTOCOL], limits: { max_line_bytes: options.maxLine, deadline_ms: options.deadlineMs }, echo: ECHO }, until);
+  if (helloSent !== null) return helloSent;
   const opening = await wire.next(until);
   if (opening.reason !== undefined) return opening.reason;
   const badManifest = manifestProblem(opening.message);
   if (badManifest !== null) return badManifest;
-  wire.send({ type: 'request', id: '1', deadline_ms: options.deadlineMs, capability: 'decision.index', body: { files: [] } });
+  const requestSent = await wire.send({ type: 'request', id: '1', deadline_ms: options.deadlineMs, capability: 'decision.index', body: { files: [] } }, until);
+  if (requestSent !== null) return requestSent;
   const answer = await wire.next(until);
   if (answer.reason !== undefined) return answer.reason;
   const badAnswer = answerProblem(answer.message);
   if (badAnswer !== null) return badAnswer;
-  wire.send({ type: 'shutdown' });
+  wire.post({ type: 'shutdown' });
   wire.close();
   return awaitExit(child, wire, until);
 }
@@ -86,7 +89,7 @@ async function runSession(argv) {
   try {
     reason = await converse(child, wire, options, until);
   } finally {
-    wire.send({ type: 'shutdown' });
+    wire.post({ type: 'shutdown' });
     wire.close();
     await processes.endTree(child);
   }

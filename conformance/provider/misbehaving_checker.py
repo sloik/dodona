@@ -222,7 +222,17 @@ def main() -> None:
             if MODE == "lies-about-an-attachment":
                 answer = {"final": dict(passed["final"], attachments=[{"path": "evidence.txt", "identity": "sha256:" + "f" * 64}])}
             if MODE == "attachment-outside":
-                answer = {"final": dict(passed["final"], attachments=[{"path": "../outside.txt", "identity": "sha256:" + "f" * 64}])}
+                # The file exists and the identity is true, so only the path check can refuse it.
+                import hashlib
+                with open(os.path.join(os.path.dirname(os.getcwd()), "outside.txt"), "wb") as f:
+                    f.write(b"outside the project\n")
+                answer = {"final": dict(passed["final"], attachments=[{"path": "../outside.txt", "identity": "sha256:" + hashlib.sha256(b"outside the project\n").hexdigest()}])}
+            if MODE == "attachment-through-a-link":
+                # A link at an inner step that stays inside the project is still a link.
+                import hashlib
+                os.symlink(os.getcwd(), os.path.join("work", "via"), target_is_directory=True)
+                data = open("evidence.txt", "rb").read()
+                answer = {"final": dict(passed["final"], attachments=[{"path": "work/via/evidence.txt", "identity": "sha256:" + hashlib.sha256(data).hexdigest()}])}
             if MODE == "same-run-twice":
                 answer = {"next": run(body_of_start)} if body["run"] == 1 else passed
             if MODE == "invented-verdict":

@@ -10,6 +10,10 @@ and reads one report from standard output. How the run ends is taken from DODONA
 - `other-platform`, `other-tool`: the same, but on another platform, or with another tool digest;
 - `report-with-a-fraction`: an exited report whose exit status is written `0.0`, which strict reading refuses;
 - `fails`: exits with status 1 and prints nothing; `silent`: exits 0 and prints nothing;
+- `exits-1-with-report`: prints a complete exited report and then exits with status 1, so the status alone
+  must end the check;
+- `leaves-a-child`: starts a process that sleeps, writes its id to DODONA_TEST_PIDFILE, then reports an exited
+  run and exits; the host must end every process of the executor's process group or job when it returns;
 - anything else: a complete report with that `end`, which the host must treat as a run that did not finish.
 
 It appends what it was given to DODONA_EXECUTOR_RECORD, so the judge can count the runs that were
@@ -39,9 +43,18 @@ if True:
     if END == "other-tool" and tools:
         tools[0]["digest"] = "sha256:" + "d" * 64
     platform = {"os": "macos", "arch": "x86_64"} if END == "other-platform" else run.get("platform")
-    report = {"handle": "h", "end": END if END not in ("other-platform", "other-tool", "report-with-a-fraction") else "exited", "exit_status": 0, "platform": platform, "isolation": "best-effort", "outputs": [],
+    report = {"handle": "h", "end": END if END not in ("other-platform", "other-tool", "report-with-a-fraction", "exits-1-with-report", "leaves-a-child") else "exited", "exit_status": 0, "platform": platform, "isolation": "best-effort", "outputs": [],
               "tools_ran": tools, "captured_output": {"path": "captured.txt", "identity": identity}}
+if END == "leaves-a-child":
+    import subprocess
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    with open(os.environ["DODONA_TEST_PIDFILE"], "a", encoding="utf-8") as f:
+        f.write(f"{child.pid}\n")
 text = json.dumps(report)
 if END == "report-with-a-fraction":
     text = text.replace('"exit_status": 0', '"exit_status": 0.0')  # read strictly, a report like this is no report
 sys.stdout.buffer.write(text.encode("utf-8") + b"\n")
+if END == "exits-1-with-report":
+    sys.stdout.buffer.flush()
+    sys.exit(1)

@@ -721,15 +721,22 @@ def check(args) -> int:
     def report_for(number, description):
         given = {"number": number, "run_key": run_key(check_key, number, description), "run": description}
         wall = description.get("limits", {}).get("wall_ms", 0)
+        # The executor runs in a process group (Unix) or job (Windows) of its own, and everything in it is
+        # ended when it returns, so a run cannot leave work behind it.
         try:
-            done = subprocess.run(asked["executor"], input=json.dumps(given).encode("utf-8"), capture_output=True,
-                                  timeout=max(600, min(wall, 86_400_000) / 1000 + 60))
-            report = strict_load(done.stdout.strip())
+            tree = provider_host.Tree(asked["executor"])
+        except OSError:
+            return {"end": "executor-failed"}
+        try:
+            out, _ = tree.proc.communicate(json.dumps(given).encode("utf-8"), timeout=max(600, min(wall, 86_400_000) / 1000 + 60))
+            report = strict_load(out.strip())
         except subprocess.TimeoutExpired:
             return {"end": "timed-out"}
         except (OSError, Refused):
             return {"end": "executor-failed"}
-        return report if done.returncode == 0 and isinstance(report, dict) else {"end": "executor-failed"}
+        finally:
+            tree.end()
+        return report if tree.proc.returncode == 0 and isinstance(report, dict) else {"end": "executor-failed"}
 
     def strings(value):
         return isinstance(value, list) and all(isinstance(v, str) for v in value)
