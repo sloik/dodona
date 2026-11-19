@@ -784,6 +784,33 @@
         "input.identity": null
       },
       "why": "An input given to the check without an identity is refused before anything is sent."
+    },
+    {
+      "mode": "attachment-through-a-link",
+      "run": "exited",
+      "outcome": "refused",
+      "reason": "bad-path",
+      "runs": 1,
+      "not_on": [
+        "win32"
+      ],
+      "why": "An attachment is reached without a symbolic link at any step, even an inner one that leads back inside the project."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "exits-1-with-report",
+      "outcome": "verdict",
+      "verdict": "error",
+      "runs": 1,
+      "why": "An executor that exits with a status other than 0 ends the check in error, even when what it printed reads as a good report."
+    },
+    {
+      "mode": "well-behaved",
+      "run": "leaves-a-child",
+      "outcome": "verdict",
+      "verdict": "passed",
+      "runs": 1,
+      "why": "When the executor returns, every process in its process group or job is gone: a run cannot leave work behind it."
     }
   ]
 }
