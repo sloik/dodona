@@ -863,7 +863,7 @@ def gap_documents_follow_the_code() -> None:
     import check_docs
     repo = check_docs.Repo(ROOT)
     problems.extend("documents: " + p for p in check_docs.repo_problems(repo))
-    problems.extend("documents: " + p for p in check_docs.self_test(repo))
+    problems.extend("documents: " + p for p in check_docs.self_test(repo, with_git=False))  # CI runs it whole
 
 
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,

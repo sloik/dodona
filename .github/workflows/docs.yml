@@ -5,6 +5,10 @@ name: Documents follow the code
 # The repository-wide document checks run in checks.yml on every platform; this
 # judges one change, so it needs the history and runs once. It is apart from
 # checks.yml so that editing a description re-runs only this.
+#
+# The change is judged by the base's copy of tools/check_docs.py, checked out
+# beside it, so that a change cannot loosen the checker that judges it. Only
+# the change that first brings the checker is judged by its own copy.
 on:
   push:
     branches: [main]
@@ -15,7 +19,8 @@ permissions:
   contents: read
 concurrency:
   group: docs-${{ github.ref }}
-  cancel-in-progress: true
+  # A push to main is never cancelled unjudged by the next one.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   change:
     runs-on: ubuntu-26.04
@@ -27,20 +32,40 @@ jobs:
           persist-credentials: false
       # Values from the event reach the commands through the environment only.
       # The description is copied from the event file by Python, never through the shell.
-      - name: Judge the pull request against its base
-        if: github.event_name == 'pull_request'
+      - name: Judge the change with the base's checker
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
         run: |
-          python3 -c "import json, os, sys; sys.stdout.write(json.load(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8'))['pull_request'].get('body') or '')" > "$RUNNER_TEMP/pr-body.md"
-          python3 tools/check_docs.py diff --base "$BASE" --head "$HEAD" --pr-body "$RUNNER_TEMP/pr-body.md"
-      - name: Judge the push against what main was before it
-        if: github.event_name == 'push'
-        env:
-          BASE: ${{ github.event.before }}
-          HEAD: ${{ github.sha }}
-        run: python3 tools/check_docs.py diff --base "$BASE" --head "$HEAD"
-      - name: Judge the branch against main
-        if: github.event_name == 'workflow_dispatch'
-        run: python3 tools/check_docs.py diff --base origin/main --head HEAD
+          case "$EVENT" in
+            pull_request) BASE="$PR_BASE"; HEAD="$PR_HEAD" ;;
+            push) BASE="$PUSH_BEFORE"; HEAD="$PUSH_AFTER" ;;
+            *) BASE="$(git rev-parse origin/main)"; HEAD="$(git rev-parse HEAD)" ;;
+          esac
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "The base $BASE is not in the history: main was force-pushed, or the base is unknown. This change cannot be judged here; judge it by hand."
+            exit 1
+          fi
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE"
+          CHECKER="$RUNNER_TEMP/base/tools/check_docs.py"
+          if [ ! -f "$CHECKER" ]; then
+            echo "The base has no tools/check_docs.py: this change brings the checker and is judged by its own copy, which a reviewer must read."
+            CHECKER=tools/check_docs.py
+          fi
+          # An automatic update that only moves pinned actions or runner images is judged by checks.yml alone.
+          # The author is not trusted on its own: the checker reads the change and must find nothing else in it.
+          if [ "$EVENT" = pull_request ] && [ "$PR_AUTHOR" = "renovate[bot]" ] \
+             && python3 "$CHECKER" pins-only --repo . --base "$BASE" --head "$HEAD"; then
+            echo "Not judged for documents: an automatic update of pinned versions only."
+            exit 0
+          fi
+          if [ "$EVENT" = pull_request ]; then
+            python3 -c "import json, os, sys; sys.stdout.write(json.load(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8'))['pull_request'].get('body') or '')" > "$RUNNER_TEMP/pr-body.md"
+            python3 "$CHECKER" diff --repo . --base "$BASE" --head "$HEAD" --pr-body "$RUNNER_TEMP/pr-body.md"
+          else
+            python3 "$CHECKER" diff --repo . --base "$BASE" --head "$HEAD"
+          fi

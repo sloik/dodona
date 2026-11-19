@@ -1,6 +1,6 @@
 # Tools
 
-Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with-disposable-helpers.md)): small programs in Python's standard library, disposable, to be replaced by dodona itself. Each file's docstring shows how it is started, and `tools/check_docs.py` checks that what it shows matches the flags the program defines. [docs/doc-map.toml](../docs/doc-map.toml) says which documents describe each one.
+Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with-disposable-helpers.md)): small Python programs, disposable, to be replaced by dodona itself. All but two use only the standard library: `check_examples.py` and `check_transcript.py` need the `jsonschema` package. Each file's docstring shows how it is started, and `tools/check_docs.py` checks that what it shows matches the flags the program defines. [docs/doc-map.toml](../docs/doc-map.toml) says which documents describe each one.
 
 | Tool | What it is for |
 |---|---|

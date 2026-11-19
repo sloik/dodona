@@ -1,0 +1,6 @@
+# The checker that judges changes, its rules and the workflow that runs it: a change to any of them
+# loosens or tightens how every other change is judged, so the repository owner reviews it.
+/tools/check_docs.py @sloik
+/docs/doc-map.toml @sloik
+/.github/workflows/docs.yml @sloik
+/.github/CODEOWNERS @sloik

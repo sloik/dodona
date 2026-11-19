@@ -41,6 +41,8 @@ jobs:
           persist-credentials: false
       - name: Run repository checks
         run: ${{ matrix.python }} tools/check_repo.py
+      - name: Plant a fault for every document check, and judge a throwaway repository through git
+        run: ${{ matrix.python }} tools/check_docs.py self-test
       - name: Validate schemas, guide examples and policy with a JSON Schema validator
         if: matrix.os == 'ubuntu-26.04'
         run: |

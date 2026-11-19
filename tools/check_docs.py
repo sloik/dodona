@@ -2,7 +2,8 @@
 
     python tools/check_docs.py                                          # every repository-wide check
     python tools/check_docs.py self-test                                # plant a fault for each check; each must fail
-    python tools/check_docs.py diff --base REV [--head REV] [--pr-body FILE]
+    python tools/check_docs.py diff --base REV [--head REV] [--pr-body FILE] [--repo DIR]
+    python tools/check_docs.py pins-only --base REV --head REV [--repo DIR]   # exit 0 if only pinned versions changed
 
 The usual way documents go wrong here is quiet: code changes and the text that
 describes it does not. The repository-wide checks compare what the code and
@@ -18,9 +19,12 @@ the change saying why none is needed:
 
     Docs-unchanged: <rule id>: <why no document has to change, in a sentence>
 
-That line is the author's own word, and it is printed as such for whoever
-reviews the change. A change is judged by the rules on its base, so it cannot
-loosen the rule it is judged by; a new file is judged by the rules it brings.
+Only a line that starts exactly so is a waiver. It is the author's own word,
+and it is printed as such for whoever reviews the change. A change is judged
+by the map on its base, so it cannot loosen the rule it is judged by; a file
+new to the map must be bound by a rule the change brings, and an exemption or
+known drift the change adds fails it. `pins-only` says whether a change
+touches nothing but workflow lines pinning actions and runner images.
 With --pr-body, the description of a pull request must also say what was
 verified and what was not. Without --head, the working tree is judged,
 including files not yet committed.
@@ -36,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import functools
 import json
 import os
 import pathlib
@@ -116,6 +121,7 @@ class Repo:
         return [f for f in self.files if f.endswith(".md")]
 
 
+@functools.lru_cache(maxsize=None)
 def glob_rx(pattern: str) -> re.Pattern:
     """`**` is any run of characters, `*` any run within one path segment, `?` one character, `[0-9]` one of a set."""
     out, i = "", 0
@@ -233,6 +239,11 @@ def front_matter(text: str) -> dict:
 # running it, and the usage lines its docstring shows.
 
 
+@functools.lru_cache(maxsize=None)
+def _parse(source: str) -> ast.Module:
+    return ast.parse(source)
+
+
 class Cli:
     def __init__(self):
         self.flags: dict[str | None, set[str]] = {None: set()}
@@ -241,9 +252,11 @@ class Cli:
         self.runnable = False
 
 
+@functools.lru_cache(maxsize=None)
 def read_cli(source: str) -> Cli:
+    """Cached by the text, as the self-test reads the same sources many times; the result is never changed."""
     cli = Cli()
-    tree = ast.parse(source)
+    tree = _parse(source)
     parsers: dict[str, str] = {}
     loops: dict[str, list[str]] = {}
 
@@ -431,7 +444,7 @@ def docs_usage_matches_the_parser(repo: Repo) -> list[str]:
             problems.append(f"{path}: {why}; write it as a literal so the documents can be checked against it")
         if not cli.runnable:
             continue
-        doc = ast.get_docstring(ast.parse(source)) or ""
+        doc = ast.get_docstring(_parse(source)) or ""
         usage = usage_lines(doc, name)
         if not usage:
             problems.append(f"{path}: it can be run, and its docstring has no line showing how (`python {path} ...`)")
@@ -635,7 +648,8 @@ def docs_named_paths_exist(repo: Repo) -> list[str]:
                 if not PATHLIKE.fullmatch(span):
                     continue
                 own = os.path.normpath(os.path.join(here, span)).replace(os.sep, "/") if here else span
-                if span.split("/")[0] not in tops and not repo.exists(own):
+                file_like = re.search(r"\.(py|md|json|toml|ya?ml|tla|cfg|rs|js)$", span) is not None
+                if span.split("/")[0] not in tops and not repo.exists(own) and not file_like:
                     continue  # not a path in this repository, e.g. `run.poll` or `vendor/family`
                 checked += 1
                 if repo.exists(span) or repo.exists(own):
@@ -825,24 +839,27 @@ def substance(text: str | None) -> str:
     return " ".join((text or "").split())
 
 
-def waivers(messages: list[str]) -> tuple[dict[str, str], list[str]]:
-    found, problems = {}, []
+def waivers(messages: list[str]) -> tuple[dict[str, str], dict[str, str], list[str]]:
+    """Waiver lines: only a line that starts exactly `Docs-unchanged:` is one. Returns the accepted
+    waivers, the refused ones (rule id, why refused) and lines that start so and cannot be read.
+    A refused or unreadable waiver matters only where a rule needs one; history keeps old mistakes."""
+    found, refused, unreadable = {}, {}, []
     for message in messages:
         for line in message.replace("\r\n", "\n").split("\n"):
-            line = line.strip()
-            if not re.match(r"(?i)docs[- _]?unchanged", line):
+            if not line.startswith("Docs-unchanged:"):
                 continue
+            line = line.strip()
             m = WAIVER.fullmatch(line)
             if not m:
-                problems.append(f"waiver line {line!r} is not `Docs-unchanged: <rule id>: <reason>`")
+                unreadable.append(line)
                 continue
             reason = m.group(2).strip()
             if len(reason) < MIN_REASON_CHARS or len(reason.split()) < MIN_REASON_WORDS:
-                problems.append(f"waiver for rule {m.group(1)} gives too short a reason ({reason!r}): "
-                                f"say in at least {MIN_REASON_WORDS} words why no document has to change")
+                refused[m.group(1)] = (f"its reason ({reason!r}) is too short: say in at least {MIN_REASON_WORDS} words "
+                                       "why no document has to change")
                 continue
             found[m.group(1)] = reason
-    return found, problems
+    return found, refused, unreadable
 
 
 def report_problems(body: str) -> list[str]:
@@ -866,16 +883,25 @@ def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], message
     """The rule for a change. `changed` is (status, path) with status A, M or D; `docs_changed` the
     documents whose substance changed. Returns problems and notes. Pure: no git, no files."""
     problems, notes = [], []
-    given, bad = waivers(messages)
-    problems += bad
+    given, refused, unreadable = waivers(messages)
+    for line in unreadable:
+        notes.append(f"ignored: {line!r} starts like a waiver and is not `Docs-unchanged: <rule id>: <reason>`")
     known = {r["id"] for m in (base_map, head_map) if m for r in m["rule"]}
-    for rid in sorted(set(given) - known):
-        problems.append(f"waiver names rule {rid!r}, which {MAP_FILE} does not have")
+    for rid in sorted((set(given) | set(refused)) - known):
+        notes.append(f"ignored: a waiver names rule {rid!r}, which {MAP_FILE} does not have")
+    if base_map is None:
+        notes.append(f"the base has no {MAP_FILE}: this change is judged by the map it brings, which a reviewer must read")
     triggered: dict[str, tuple[dict, list[str]]] = {}
     for status, path in sorted(changed, key=lambda c: c[1]):
         if path.endswith(".md"):
             continue
-        found = (map_entry(base_map, path) if base_map else []) or map_entry(head_map, path)
+        found = map_entry(base_map, path) if base_map else []
+        if not found:
+            found = map_entry(head_map, path)
+            if found and found[0][0] == "exempt" and base_map is not None:
+                problems.append(f"{path}: the base's {MAP_FILE} does not cover it, and this change exempts it. A file "
+                                "new to the map must be bound to a [[rule]]; an exemption is the owner's to merge")
+                continue
         if not found:
             if status == "D":
                 notes.append(f"{path} was deleted and no rule names it")
@@ -895,19 +921,30 @@ def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], message
             notes.append(f"rule {rid}: {shown} changed with no change to {', '.join(entry['docs'])}. "
                          f"Waived on the author's own word, for the reviewer to judge: {given[rid]}")
         else:
+            why = f" The waiver for it was refused: {refused[rid]}." if rid in refused else ""
             problems.append(f"rule {rid}: {shown} changed, and none of {', '.join(entry['docs'])} did. Update the one that "
                             f"describes this change, or, if none needs to, add to a commit message the line "
-                            f"`Docs-unchanged: {rid}: <why, in a sentence>`")
-    for rid in sorted(set(given) & known - set(triggered)):
-        problems.append(f"waiver names rule {rid}, and nothing that rule covers changed")
+                            f"`Docs-unchanged: {rid}: <why, in a sentence>`.{why}")
+    for rid in sorted((set(given) | set(refused)) & known - set(triggered)):
+        notes.append(f"unused: a waiver names rule {rid}, and nothing that rule covers changed")
     if base_map is not None and base_map != head_map:
         for kind in ("rule", "exempt", "absent", "known"):
             before = {json.dumps(e, sort_keys=True) for e in base_map[kind]}
             after = {json.dumps(e, sort_keys=True) for e in head_map[kind]}
+            # What an exemption or known drift excuses is its paths or its problem; rewording its reason is not new.
+            excused = {"exempt": lambda e: {(p,) for p in e.get("paths", [])},
+                       "known": lambda e: {(e.get("check"), e.get("problem"))}}.get(kind)
+            excused_before = set().union(*(excused(e) for e in base_map[kind])) if excused else set()
             for e in sorted(after - before):
-                notes.append(f"{MAP_FILE}: this change adds or alters [[{kind}]] {e}; it applies after merge, review it")
+                if excused and excused(json.loads(e)) - excused_before:
+                    problems.append(f"{MAP_FILE}: this change adds or alters [[{kind}]] {e}. An exemption or known drift "
+                                    "added by the change it excuses is granting yourself an exception (AGENTS.md rule 8): "
+                                    "the owner of the map merges it, over this failure, or in a change of its own")
+                else:
+                    notes.append(f"{MAP_FILE}: this change adds or alters [[{kind}]] {e}; review it")
             for e in sorted(before - after):
-                notes.append(f"{MAP_FILE}: this change removes or alters [[{kind}]] {e}; it applies after merge, review it")
+                notes.append(f"{MAP_FILE}: this change removes or alters [[{kind}]] {e}; "
+                             "files the base's entry covers are still judged by it here")
     for num, governed in sorted((decisions or {}).items()):
         hit = sorted({p for _, p in changed for g in governed if not p.endswith(".md")
                       and (p == g.rstrip("/") or (g.endswith("/") and p.startswith(g)))})
@@ -926,6 +963,28 @@ def git(root: pathlib.Path, *args: str, ok_codes=(0,), env: dict | None = None) 
     return done.stdout
 
 
+PIN_VALUE = r"[\w./@-]+"
+PIN_LINE = re.compile(rf"\s*(-\s+)?(uses:\s*{PIN_VALUE}(\s+#.*)?|runs-on:\s*{PIN_VALUE}|os:\s*{PIN_VALUE}"
+                      rf"|if:\s*matrix\.os\s*==\s*'{PIN_VALUE}')\s*")
+
+
+def pin_lines_only(paths: list[str], patch: str) -> bool:
+    """Whether a change touches only workflow lines that pin an action or a runner image: what an
+    automatic update of pinned versions changes, and nothing a document describes."""
+    if not paths or any(not re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p) for p in paths):
+        return False
+    lines = [line[1:] for line in patch.replace("\r\n", "\n").split("\n")
+             if line[:1] in ("+", "-") and not line.startswith(("+++", "---"))]
+    return bool(lines) and all(PIN_LINE.fullmatch(line) for line in lines)
+
+
+def pins_only(root: pathlib.Path, base: str, head: str, env: dict | None = None) -> bool:
+    merge_base = git(root, "merge-base", base, head, env=env).decode().strip()
+    names = git(root, "diff", "--no-renames", "--name-only", "-z", merge_base, head, env=env).decode("utf-8").split("\0")
+    patch = git(root, "diff", "--no-renames", "-U0", "--no-color", merge_base, head, env=env).decode("utf-8", "replace")
+    return pin_lines_only([n for n in names if n], patch)
+
+
 def diff(root: pathlib.Path, base: str, head: str | None, pr_body: str | None,
          env: dict | None = None) -> tuple[list[str], list[str]]:
     for rev in (base, head):
@@ -936,11 +995,18 @@ def diff(root: pathlib.Path, base: str, head: str | None, pr_body: str | None,
     def git(root, *args):  # noqa: F811 - the module's git, with this call's environment
         return globals()["git"](root, *args, env=env)
 
-    git(root, "rev-parse", "--verify", "--quiet", base + "^{commit}")
-    git(root, "rev-parse", "--verify", "--quiet", head_rev + "^{commit}")
-    merge_base = git(root, "merge-base", base, head_rev).decode().strip()
+    for rev, what in ((base, "base"), (head_rev, "head")):
+        try:
+            git(root, "rev-parse", "--verify", "--quiet", rev + "^{commit}")
+        except CannotRun:
+            raise CannotRun(f"the {what} {rev} is not in this repository's history. If the branch was force-pushed, "
+                            "the commits it replaced are gone and the change cannot be judged: judge it by hand") from None
+    try:
+        merge_base = git(root, "merge-base", base, head_rev).decode().strip()
+    except CannotRun:
+        merge_base = ""
     if not merge_base:
-        raise CannotRun(f"{base} and {head_rev} have no common ancestor")
+        raise CannotRun(f"{base} and {head_rev} have no common ancestor, so there is no change to judge")
     names = git(root, "diff", "--no-renames", "--name-status", "-z", merge_base, *([head] if head else []))
     fields = names.decode("utf-8").split("\0")
     changed = [(fields[i][0], fields[i + 1]) for i in range(0, len(fields) - 1, 2)]
@@ -1034,6 +1100,8 @@ def planted_faults(repo: Repo) -> list[tuple[object, str, dict]]:
          _edit(repo, "ARCHITECTURE.md", "## 6. Reproducibility", "## 6. Reproducing results")),
         (docs_named_paths_exist, "a document naming a file that is gone", {"docs/probe.md": "See `tools/gone_tool.py`.\n"}),
         (docs_named_paths_exist, "an absent path that now exists", {"records/owner.ledger": "x\n"}),
+        (docs_named_paths_exist, "a file under a top-level directory that is gone",
+         {"docs/probe.md": "See `olddir/tool.py`.\n"}),
         (docs_protocol_matches_the_schemas, "a schema the table does not list", {"protocol/new.schema.json": "{}\n"}),
         (docs_protocol_matches_the_schemas, "a capability with no row",
          _edit(repo, "protocol/common.schema.json", '"store.blob"', '"store.blob", "store.list"')),
@@ -1074,6 +1142,7 @@ EXPECTED = {
     "a heading renamed under its links": "#6-reproducibility",
     "a document naming a file that is gone": "names `tools/gone_tool.py`",
     "an absent path that now exists": "records/owner.ledger is listed as absent but now exists",
+    "a file under a top-level directory that is gone": "names `olddir/tool.py`",
     "a schema the table does not list": "does not list protocol/new.schema.json",
     "a capability with no row": "no row for store.list",
     "a message kind with no worked example": "worked example of a 'shutdown' message",
@@ -1098,15 +1167,29 @@ def _diff_cases(doc_map: dict) -> list[tuple[str, str | None, tuple]]:
         ("code changed with its document", None, (host, {host_docs[0]}, [], doc_map, doc_map)),
         ("code changed, an unrelated document", missing, (host, {"CONTRIBUTING.md"}, [], doc_map, doc_map)),
         ("code changed, waived with a reason", None, (host, set(), [f"Fix\n\nDocs-unchanged: host: {reason}\n"], doc_map, doc_map)),
-        ("waived with too short a reason", "too short a reason", (host, set(), ["Docs-unchanged: host: typo"], doc_map, doc_map)),
-        ("waived for a rule that does not exist", "'nosuchrule', which",
+        ("waived with too short a reason", "is too short", (host, set(), ["Docs-unchanged: host: typo"], doc_map, doc_map)),
+        ("waived for a rule that does not exist", None,
          (host, {host_docs[0]}, [f"Docs-unchanged: nosuchrule: {reason}"], doc_map, doc_map)),
-        ("waived for a rule nothing triggered", "rule encoding, and nothing that rule covers changed",
+        ("waived for a rule nothing triggered", None,
          (host, {host_docs[0]}, [f"Docs-unchanged: encoding: {reason}"], doc_map, doc_map)),
-        ("a waiver line written wrongly", "is not `Docs-unchanged: <rule id>: <reason>`",
-         (host, set(), [f"Docs-Unchanged host because {reason}"], doc_map, doc_map)),
+        ("a waiver for a rule that does not exist does not waive another", missing,
+         (host, set(), [f"Docs-unchanged: hosts: {reason}"], doc_map, doc_map)),
+        ("a waiver line written wrongly", missing, (host, set(), [f"Docs-Unchanged host because {reason}"], doc_map, doc_map)),
+        ("a waiver not at the start of its line", missing, (host, set(), [f"see: Docs-unchanged: host: {reason}"], doc_map, doc_map)),
+        ("old mistakes in history, where no waiver is needed", None,
+         ([("M", "README.md")], {"README.md"}, ["Docs-unchanged: host: typo", "Docs unchanged on purpose",
+                                                "Docs-unchanged: host"], doc_map, doc_map)),
         ("a new file no rule covers", "newdir/tool.py: no rule", ([("A", "newdir/tool.py")], set(), [], doc_map, doc_map)),
         ("an exemption added in the same change", missing, (host, set(), [], doc_map, exempting)),
+        ("a new file exempted by the change that adds it", "this change exempts it",
+         ([("A", "newdir/tool.py")], set(), [], doc_map,
+          {**doc_map, "exempt": doc_map["exempt"] + [{"paths": ["newdir/*"], "why": "planted by the self-test"}]})),
+        ("an exemption's reason reworded", None,
+         ([("M", "README.md")], {"README.md"}, [], doc_map,
+          {**doc_map, "exempt": [{**e, "why": e["why"] + " Reworded."} for e in doc_map["exempt"]]})),
+        ("known drift added by the change it excuses", "adds or alters [[known]]",
+         ([("M", "README.md")], {"README.md"}, [], doc_map,
+          {**doc_map, "known": doc_map["known"] + [{"check": "x", "problem": "y", "why": "planted by the self-test"}]})),
         ("a rule of the change applies to a file new to it", "rule probe: newdir/tool.py changed",
          ([("A", "newdir/tool.py")], set(), [], doc_map,
           {**doc_map, "rule": doc_map["rule"] + [{"id": "probe", "code": ["newdir/*.py"], "docs": ["README.md"], "why": "x"}]})),
@@ -1171,11 +1254,43 @@ def _git_case(problems: list[str]) -> None:
                 problems.append("self-test: a base of zeros was judged instead of refused")
             except CannotRun:
                 pass
+            try:
+                judge(root, "1" * 40, "HEAD", None)
+                problems.append("self-test: a base missing from the history (a force-push) was judged instead of refused")
+            except CannotRun as err:
+                if "not in this repository's history" not in str(err):
+                    problems.append(f"self-test: a base missing from the history was refused without saying so: {err}")
+            # A change that moves its own file from a rule to an exemption is still judged by the base's rule.
+            run("checkout", "-q", "-b", "loosen", base)
+            write(MAP_FILE, '[[exempt]]\npaths = ["src/a.py"]\nwhy = "the change exempts its own file"\n')
+            write("src/a.py", "x = 3\n")
+            run("add", "-A")
+            run("commit", "-q", "-m", "exempt a")
+            found, _ = judge(root, base, "HEAD", None)
+            if not any("rule a:" in p for p in found):
+                problems.append(f"self-test: a change was judged by the map it brings, not by its base's: {found}")
+            # Only lines pinning actions and runner images: what an automatic update changes.
+            run("checkout", "-q", "-b", "pins", base)
+            workflow = ".github/workflows/w.yml"
+            write(workflow, "jobs:\n  a:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: a/b@1111 # v1\n      - run: x\n")
+            run("add", "-A")
+            run("commit", "-q", "-m", "workflow")
+            pinned = git(root, "rev-parse", "HEAD", env=env).decode().strip()
+            write(workflow, "jobs:\n  a:\n    runs-on: ubuntu-26.04\n    steps:\n      - uses: a/b@2222 # v2\n      - run: x\n")
+            run("commit", "-q", "-am", "bump")
+            if not pins_only(root, pinned, "HEAD", env=env):
+                problems.append("self-test: a change of pinned versions only was not recognised as one")
+            write(workflow, "jobs:\n  a:\n    runs-on: ubuntu-26.04\n    steps:\n      - uses: a/b@2222 # v2\n      - run: y\n")
+            run("commit", "-q", "-am", "more")
+            if pins_only(root, pinned, "HEAD", env=env):
+                problems.append("self-test: a change of a command was taken for a change of pinned versions")
     except CannotRun as err:
         problems.append(f"self-test: the end-to-end case could not run: {err}")
 
 
-def self_test(repo: Repo | None = None) -> list[str]:
+def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
+    """With with_git False the end-to-end case, which starts git some forty times, is left out:
+    tools/check_repo.py runs the rest, and CI runs the whole self-test as a step of its own."""
     repo = repo or Repo(ROOT)
     problems = []
     for check in CHECKS:
@@ -1213,9 +1328,20 @@ def self_test(repo: Repo | None = None) -> list[str]:
                               ("Fixes a typo.", False)):
         if (not report_problems(body)) != should_pass:
             problems.append(f"self-test: the pull request report rule gave the wrong answer for {body!r}")
+    wf = [".github/workflows/checks.yml"]
+    for paths, patch, want in ((wf, "-      - uses: a/b@1 # v1\n+      - uses: a/b@2 # v2\n", True),
+                               (wf, "-          - os: ubuntu-24.04\n+          - os: ubuntu-26.04\n"
+                                    "-        if: matrix.os == 'ubuntu-24.04'\n+        if: matrix.os == 'ubuntu-26.04'\n", True),
+                               (wf, "-    runs-on: ubuntu-24.04\n+    runs-on: ${{ inputs.os }}\n", False),
+                               (wf, "-        run: python3 tools/check_repo.py\n+        run: true\n", False),
+                               (wf + ["tools/host.py"], "-      - uses: a/b@1\n+      - uses: a/b@2\n", False),
+                               (wf, "", False)):
+        if pin_lines_only(paths, patch) != want:
+            problems.append(f"self-test: pin_lines_only gives {not want} for {paths} {patch!r}")
     if substance("a  b\r\nc\n") != substance("a b\nc") or substance("a b") == substance("a c"):
         problems.append("self-test: the comparison of document substance is wrong")
-    _git_case(problems)
+    if with_git:
+        _git_case(problems)
     return problems
 
 
@@ -1227,13 +1353,29 @@ def main() -> int:
     one.add_argument("--base", required=True, help="the branch or commit the change is to be merged into")
     one.add_argument("--head", help="the commit to judge; the working tree if left out")
     one.add_argument("--pr-body", type=pathlib.Path, help="a file holding the pull request's description")
+    one.add_argument("--repo", type=pathlib.Path, default=ROOT,
+                     help="the repository to judge; by default the one this file is in. CI runs the base's copy of "
+                          "this file on the change, so that a change cannot loosen the checker that judges it")
+    two = sub.add_parser("pins-only")
+    two.add_argument("--base", required=True)
+    two.add_argument("--head", required=True)
+    two.add_argument("--repo", type=pathlib.Path, default=ROOT)
     args = ap.parse_args()
     if args.command == "self-test":
         found, notes = self_test(), []
+    elif args.command == "pins-only":
+        try:
+            only = pins_only(args.repo.resolve(), args.base, args.head)
+        except CannotRun as err:
+            print(f"COULD NOT RUN {err}")
+            return 2
+        print("the change touches only lines pinning actions and runner images" if only
+              else "the change touches more than pinned versions")
+        return 0 if only else 1
     elif args.command == "diff":
         try:
             body = args.pr_body.read_text(encoding="utf-8") if args.pr_body else None
-            found, notes = diff(ROOT, args.base, args.head, body)
+            found, notes = diff(args.repo.resolve(), args.base, args.head, body)
         except (CannotRun, OSError) as err:
             print(f"COULD NOT RUN {err}")
             print("documents and code: not judged")

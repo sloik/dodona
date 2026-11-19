@@ -4,10 +4,10 @@ Only a pass is a pass (AGENTS.md rule 4): name each check that ran to completion
 and what it gave; say what did not run, was cut short or was not finished.
 
 A change to code needs a change to the documents that describe it
-(docs/doc-map.toml). If none has to change, put this line in a commit message,
-not here, so that it survives the merge:
-
-Docs-unchanged: <rule id>: <why no document has to change, in a sentence>
+(docs/doc-map.toml). If none has to change, a commit message (not this
+description, so that it survives the merge) carries a waiver line: the words
+Docs-unchanged, a colon, the rule's id, a colon and the reason, at the start of
+the line. docs/gap-checks.md shows the exact form.
 -->
 
 ## What changes

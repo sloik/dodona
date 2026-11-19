@@ -1,8 +1,8 @@
 # Which documents describe which files. Read by tools/check_docs.py; docs/gap-checks.md says how it is used.
 #
 # [[rule]]    A change to a file matching `code` needs a change of substance to one of `docs` in the same
-#             change, or a commit message line `Docs-unchanged: <id>: <reason>`. Name the documents that
-#             would be wrong if the code changed and they did not.
+#             change, or a commit message line `Docs-unchanged: <id>: <reason>`. Name only the documents
+#             that specifically describe this code: a catch-all document would satisfy every rule.
 # [[exempt]]  Files no document has to follow, each with the reason.
 # [[absent]]  Paths that documents name in code type and that are meant not to exist in this repository.
 # [[known]]   Drift a check finds that cannot be fixed now, word for word, with the reason. Each entry
@@ -10,26 +10,33 @@
 #
 # Every file that is not Markdown must match exactly one rule or exemption, and every pattern must match
 # a file, so new code cannot arrive unbound. Patterns: `*` within a path segment, `**` across segments,
-# `[0-9]` one of a set. A change is judged by this file as it is on the branch the change goes into.
+# `[0-9]` one of a set. A change is judged by this file as it is on the branch the change goes into; a
+# change that adds an [[exempt]] or [[known]] entry fails, so such an entry is the owner's to merge.
 
 [[rule]]
 id = "host"
 code = ["tools/host.py", "tools/provider_host.py"]
-docs = ["conformance/README.md", "docs/writing-a-provider.md", "protocol/README.md"]
-why = "The rules a host keeps are written in the kit's 'How a host is judged' and in the protocol a provider is written from."
+docs = ["protocol/README.md", "docs/writing-a-provider.md"]
+why = "The session rules and the rules a schema cannot express, which these hosts keep, are written in the protocol and the guide a provider is written from."
 
 [[rule]]
 id = "model-runs"
 code = ["tools/check_models.py", "tools/check_states.py", "tools/keep.py", "providers/tlc/*.py",
-        ".github/workflows/models.yml", ".github/site/*"]
-docs = ["spec/README.md", "spec/CLAIMS.md", "README.md"]
-why = "How the models are run, judged and reused, and what the results count for, is told in the models' README, the claims and the README's 'dodona on dodona'."
+        ".github/workflows/models.yml"]
+docs = ["spec/README.md", "spec/CLAIMS.md"]
+why = "How the models are run, judged and reused, and what the results count for, is told in the models' README and the claims."
+
+[[rule]]
+id = "site"
+code = [".github/site/*.py", ".github/site/*.json"]
+docs = [".github/site/README.md"]
+why = "The site binding is described only under .github/ (AGENTS.md rule 9)."
 
 [[rule]]
 id = "status"
 code = ["tools/status.py", "tools/confirm.py", "tools/intents.py"]
-docs = ["conformance/README.md", "records/README.md", "intents/README.md", "README.md"]
-why = "The status rules, the owner's ledger and how intents are read are described there."
+docs = ["records/README.md", "intents/README.md"]
+why = "The owner's ledger that confirm.py writes, and how intents are read and their status reported, are described there."
 
 [[rule]]
 id = "harness"
@@ -51,8 +58,14 @@ why = "How a kernel or host is judged is written in the kit's README; what each 
 id = "kit-data"
 code = ["conformance/kernel/**", "conformance/ledger/*", "conformance/vectors/*", "conformance/provider/*",
         "tools/gen_kit_vectors.py", "tools/gen_wrong_types.py"]
-docs = ["conformance/README.md", "README.md", "spec/CLAIMS.md"]
-why = "Every scenario tests a rule written in the kit's README, the README counts them, and the claims say what they show."
+docs = ["conformance/README.md", "spec/CLAIMS.md"]
+why = "Every scenario tests a rule written in the kit's README, and the claims say what they show. The README's counts are checked on their own."
+
+[[rule]]
+id = "kernel"
+code = ["kernel/**", "kernel2/**"]
+docs = ["kernel/README.md", "kernel2/README.md", "conformance/README.md"]
+why = "Each kernel's README says what it does and how it is built and judged; the kit's README holds the rules both implement."
 
 [[rule]]
 id = "encoding"
@@ -63,8 +76,8 @@ why = "These are reference implementations of the rules in those three documents
 [[rule]]
 id = "protocol"
 code = ["protocol/*.schema.json"]
-docs = ["protocol/README.md", "docs/writing-a-provider.md", "protocol/ledger.md", "MODEL.md", "ARCHITECTURE.md"]
-why = "The schemas and the prose of the protocol and the data model describe the same shapes."
+docs = ["protocol/README.md", "docs/writing-a-provider.md", "protocol/ledger.md"]
+why = "The schemas and the prose of the protocol describe the same shapes."
 
 [[rule]]
 id = "models"
@@ -76,19 +89,16 @@ why = "The claims say what each model checks and whether a recorded run of it as
 [[rule]]
 id = "configuration"
 code = ["dodona.toml", "policy.toml"]
-docs = ["docs/configuration.md", "MODEL.md", "README.md"]
+docs = ["docs/configuration.md", "MODEL.md"]
 why = "The configuration reference describes dodona.toml, and the data model the policy dodona holds itself to."
 
 [[rule]]
 id = "repo-checks"
 code = ["tools/check_repo.py", "tools/check_docs.py", "tools/check_examples.py", "tools/check_transcript.py",
-        ".github/workflows/checks.yml", ".github/workflows/docs.yml", ".github/workflows/oracle-static.yml"]
-docs = ["docs/gap-checks.md", "AGENTS.md", "CONTRIBUTING.md"]
-why = "Every check is listed with the gap behind it, and the rules for contributors say which must pass."
-
-[[exempt]]
-paths = ["kernel/**", "kernel2/**"]
-why = "The kernels are judged by the conformance kit and their planted-defect lists, not by prose, and are kept by their own authors."
+        ".github/workflows/checks.yml", ".github/workflows/docs.yml", ".github/workflows/oracle-static.yml",
+        ".github/CODEOWNERS"]
+docs = ["docs/gap-checks.md"]
+why = "Every check is listed there with the gap behind it, and how the checks run."
 
 [[exempt]]
 paths = ["spec/runs/**"]
@@ -100,7 +110,7 @@ why = "Repository housekeeping that no document describes."
 
 [[exempt]]
 paths = ["docs/doc-map.toml"]
-why = "These rules themselves. A change is judged by the rules on its base, and changes to them are printed for the reviewer."
+why = "These rules themselves. A change is judged by the rules on its base, and an exemption it adds fails it."
 
 [[absent]]
 path = "records/owner.ledger"
