@@ -1,116 +1,116 @@
 name: Metrics
-# How complete and how well checked the project is, in numbers read from its own
-# files (tools/metrics.py, docs/metrics.md), with the change since the last
-# successful run on main. A ratcheted number that went down fails the run unless
-# a commit in the change carries a line
-#   Metrics-down: <metric>: <reason of at least six words>
-# Runs on hosted machines only and executes nothing but the metrics tool.
+# The project in numbers (tools/metrics.py, docs/metrics.md), and a ratchet: a
+# change that takes away a ratcheted item (a scenario, a vector, a planted
+# defect, a claim, a checked mark, a decision record, a gap check, ...) fails.
+# A line "Metrics-down: <metric>: <reason>" in the change's commits is shown
+# with the failure as the author's explanation; it never makes the run pass.
+# Only the owner can merge over a failure. This is a gate only where main
+# requires it (a ruleset or branch protection that lists this job); without
+# that it reports and blocks nothing.
+#
+# How a change is measured. Metrics are a function of the files, so nothing is
+# kept between runs: both sides are measured from git objects every time.
+# - A pull request: from merge-base(main, head) to the pull request's head,
+#   with tools/metrics.py as it is on main now.
+# - A push to main: from the commit before the push to the commit pushed, with
+#   tools/metrics.py as it was before the push, so a change cannot loosen the
+#   tool that judges it.
+# The tool is taken with `git show` into a file outside the working tree and run
+# isolated (-I). It reads both trees with git ls-tree, cat-file and log.
+#
+# Pull requests use pull_request_target, which runs this file as it is on main.
+# That is safe here because nothing from the pull request runs or is checked
+# out: the job checks out main's commit, fetches the pull request's commits as
+# git objects only, and the token can only read contents. No secret is used, and
+# credentials are not kept in the checkout. tools/metrics.py self-test checks
+# this file for each of these properties (workflow_problems) and plants unsafe
+# edits to see the check fail.
+#
+# When the change cannot be judged, the run fails and says why: the base or head
+# is not in the history (a force-push, a new branch), the tool is missing on the
+# trusted revision, or a tree cannot be measured. One case is a note, not a
+# failure: the change that brings the tool, whose base has none (the base is no
+# later than 8530ca0, the last commit of main before the tool, or the head adds
+# the tool on top of the base).
+#
+# The tool's self-test runs on every platform in metrics-self-test.yml.
 on:
   push:
     branches: [main]
-  pull_request:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened]
 permissions:
   contents: read
-  actions: read   # to fetch the metrics kept by the last successful run on main
 concurrency:
-  group: metrics-${{ github.ref }}
-  cancel-in-progress: true
+  # Each push to main is judged on its own and never cancelled; a pull request's
+  # run is replaced by its next one.
+  group: metrics-${{ github.event_name == 'push' && github.sha || github.event.pull_request.number }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 jobs:
-  # The tool's own planted changes, on every platform dodona supports.
-  self-test:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-26
-            python: python3
-          - os: ubuntu-26.04
-            python: python3
-          - os: windows-2025
-            python: python
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Plant changes and require each to be judged right
-        run: ${{ matrix.python }} -I tools/metrics.py self-test
-
-  metrics:
+  # A required check is matched by its name, so the name is distinctive and no other workflow of the
+  # change may define a job with this id or name (checked below, from the change's own workflow files).
+  metrics-main-checker:
+    name: metrics only go up (judged by main)
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
-          # The whole history, so the commit messages since the earlier metrics can be read.
           fetch-depth: 0
-      - name: Measure
-        run: python3 -I tools/metrics.py --json --commit "$(git rev-parse HEAD)" > metrics.json
-      # Kept before comparing: a run that then fails is not successful, and only
-      # a successful run's metrics are ever used as the earlier ones.
-      - name: Keep these metrics for the next run
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: dodona-metrics
-          path: metrics.json
-          if-no-files-found: error
-          retention-days: 90
-      - name: Fetch the metrics kept by the last successful run on main
+          persist-credentials: false
+      # Values from the event reach the commands through the environment only.
+      - name: Judge the change with the trusted copy of the tool
         env:
-          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          MAIN_NOW: ${{ github.sha }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
-          set -euo pipefail
-          mkdir -p earlier
-          # Any failed lookup fails this step. Only these three answers mean there is nothing to compare with.
-          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows" -q '.workflows[] | select(.path == ".github/workflows/metrics.yml") | .id')
-          if [ -z "$id" ]; then
-            echo "this workflow is not on main yet, so no run on main has kept any metrics" > earlier/none.txt; exit 0
-          fi
-          # Only a run that a push to this repository's main started: a pull request, a fork or another
-          # branch cannot be the starting point, whatever its branch is called.
-          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$id/runs?branch=main&event=push&status=success&per_page=1" -q '.workflow_runs[0].id // empty')
-          if [ -z "$last" ]; then
-            echo "no run of this workflow on main has succeeded yet" > earlier/none.txt; exit 0
-          fi
-          origin=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$last" -q '.head_repository.full_name + " " + .event + " " + .head_branch')
-          if [ "$origin" != "$GITHUB_REPOSITORY push main" ]; then
-            echo "::error::run $last is not a push to this repository's main ($origin)"; exit 1
-          fi
-          kept=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$last/artifacts" -q '[.artifacts[] | select(.name == "dodona-metrics" and .expired == false)] | length')
-          if [ "$kept" = "0" ]; then
-            echo "run $last on main kept no metrics, or they have expired" > earlier/none.txt; exit 0
-          fi
-          gh run download "$last" -R "$GITHUB_REPOSITORY" -n dodona-metrics -D earlier
-          echo "$last" > earlier/from-run.txt
-      - name: Compare with the earlier metrics, and write both to the job summary
-        run: |
-          set -euo pipefail
-          python3 -I tools/metrics.py --markdown > table.md
-          if [ -f earlier/none.txt ]; then
-            note="Not compared: $(cat earlier/none.txt). Nothing is judged; the numbers are shown only."
-            { echo "## Metrics"; echo; echo "$note"; echo; cat table.md; } >> "$GITHUB_STEP_SUMMARY"
-            echo "$note"
-            python3 -I tools/metrics.py
-            exit 0
-          fi
-          # Waivers are read from every commit in this change that the earlier metrics did not include,
-          # the same way for a pull request and for a push.
-          base=$(python3 -I -c 'import json, re; c = json.load(open("earlier/metrics.json", encoding="utf-8")).get("commit") or ""; print(c if re.fullmatch("[0-9a-f]{40}", c) else "")')
-          if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
-            git log --format=%B "$base..HEAD" > messages.txt
-            note="Waivers are read from the messages of the commits in \`$base..HEAD\`."
+          set -uo pipefail
+          say() { echo "$1"; printf '%s\n\n' "$1" >> "$GITHUB_STEP_SUMMARY"; }
+          printf '## Metrics\n\n' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$EVENT" = push ]; then
+            TOOL_REV="$PUSH_BEFORE"
+            HEAD="$MAIN_NOW"
           else
-            : > messages.txt
-            note="The commit the earlier metrics were measured on is not in this history, so no waiver can be read: any ratcheted number that went down fails."
+            TOOL_REV="$MAIN_NOW"
+            HEAD="$PR_HEAD"
+            # The pull request's commits, as objects only. Nothing of them is checked out.
+            if ! git fetch --no-tags --quiet "$REPO_URL" "+refs/pull/$PR_NUMBER/head:refs/remotes/pr/head"; then
+              say "PROBLEM cannot judge: the pull request's commits could not be fetched."
+              exit 1
+            fi
           fi
-          set +e
-          python3 -I tools/metrics.py --compare earlier/metrics.json --messages messages.txt --markdown > compare.md 2>&1
-          code=$?
-          set -e
-          { echo "## Metrics"; echo; echo "Compared with run $(cat earlier/from-run.txt) on main. $note"; echo; cat compare.md; } >> "$GITHUB_STEP_SUMMARY"
-          echo "$note"
-          cat compare.md
-          exit $code
+          for rev in "$TOOL_REV" "$HEAD"; do
+            if ! git cat-file -e "$rev^{commit}" 2>/dev/null; then
+              say "PROBLEM cannot judge: $rev is not in the history (main was force-pushed, a branch was created, or the commit is unknown). Judge this change by hand."
+              exit 1
+            fi
+          done
+          if [ "$EVENT" = push ]; then
+            BASE="$PUSH_BEFORE"
+          elif ! BASE=$(git merge-base "$MAIN_NOW" "$HEAD"); then
+            say "PROBLEM cannot judge: the pull request has no common history with main."
+            exit 1
+          fi
+          if ! git cat-file -e "$TOOL_REV:tools/metrics.py" 2>/dev/null; then
+            if git merge-base --is-ancestor "$TOOL_REV" 8530ca0 \
+               || { git cat-file -e "$HEAD:tools/metrics.py" 2>/dev/null && git merge-base --is-ancestor "$TOOL_REV" "$HEAD"; }; then
+              say "NOTE not judged: $TOOL_REV has no tools/metrics.py, and this change brings it, so there is no trusted tool to judge it with."
+              exit 0
+            fi
+            say "PROBLEM cannot judge: $TOOL_REV has no tools/metrics.py."
+            exit 1
+          fi
+          TOOL="$RUNNER_TEMP/metrics.py"
+          git show "$TOOL_REV:tools/metrics.py" > "$TOOL"
+          failed=0
+          python3 -I "$TOOL" jobs --repo . --head "$HEAD" --own .github/workflows/metrics.yml \
+            --name metrics-main-checker --name "metrics only go up (judged by main)" > "$RUNNER_TEMP/jobs.txt" 2>&1 || failed=1
+          python3 -I "$TOOL" --repo . --base "$BASE" --head "$HEAD" --markdown > "$RUNNER_TEMP/compare.md" 2>&1 || failed=1
+          cat "$RUNNER_TEMP/jobs.txt" "$RUNNER_TEMP/compare.md"
+          { echo "Judged by tools/metrics.py as of \`$TOOL_REV\`."; echo; cat "$RUNNER_TEMP/jobs.txt"; echo; cat "$RUNNER_TEMP/compare.md"; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$failed"
