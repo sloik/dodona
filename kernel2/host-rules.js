@@ -17,10 +17,10 @@ const TOOL_NAME = /^[A-Za-z0-9._-]+$/;
 const TOOL_REFERENCE = /\$\{tool:([^}]*)\}/g;
 // An argument that starts with a tool and a file in it: `${tool:NAME}/PATH`.
 const TOOL_FILE_START = /^\$\{tool:[^}]*\}\/(.*)$/s;
-// An argument that is, whole, one file of a tool. The contract does not say which
-// characters PATH may hold beyond the path check; taken narrowly, each of its segments
-// holds letters, digits, `.`, `_` and `-` only, so nothing such as `=/etc/passwd` can
-// be appended to a tool file (check-cases.json, `tool-file-with-a-tail`).
+// Each segment of PATH in `${tool:NAME}/PATH` holds ASCII letters, digits, `.`, `_` and
+// `-` only (rule 5), so nothing such as `=/etc/passwd` can be carried after a tool file.
+const TOOL_FILE_SEGMENT = /^[A-Za-z0-9._-]+$/;
+// An argument that is, whole, one file of a tool (rule 6).
 const WHOLE_TOOL_FILE = /^\$\{tool:[^}]*\}\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
 // Characters that can start or join a path; any of them makes an argument a path.
 const PATH_CHARACTERS = ['/', '\\', '~', '@', '$', '%', '..'];
@@ -120,17 +120,28 @@ function toolsNamed(run) {
   return named;
 }
 
+// The PATH of every `${tool:NAME}/PATH` argument. An argument holding NUL is left to rule 10.
+function toolFiles(run) {
+  const files = [];
+  for (const argument of list(run.args).filter(isString)) {
+    if (argument.includes('\u0000')) continue;
+    const file = TOOL_FILE_START.exec(argument);
+    if (file !== null) files.push(file[1]);
+  }
+  return files;
+}
+
 // Every path rule 5 checks: the program's, each input's and output's, each file a
 // `${tool:NAME}/PATH` argument places, and the starting directory.
 function pathsOf(run) {
   const paths = [objectOr(run.program).path, ...list(run.inputs).map((input) => objectOr(input).path),
-    ...list(run.outputs).map((output) => objectOr(output).path)];
-  for (const argument of list(run.args).filter(isString)) {
-    const file = TOOL_FILE_START.exec(argument);
-    if (file !== null) paths.push(file[1]);
-  }
+    ...list(run.outputs).map((output) => objectOr(output).path), ...toolFiles(run)];
   if ('cwd' in run) paths.push(run.cwd);
   return paths;
+}
+
+function holdsToolFileCharacters(file) {
+  return file.split('/').every((segment) => TOOL_FILE_SEGMENT.test(segment));
 }
 
 function isFreeWord(argument) {
@@ -170,6 +181,7 @@ function runProblem(description, check) {
   if (tools.some((tool) => !check.given.has(tool.name))) return 'tool-not-in-key';
   if (tools.some((tool) => check.given.get(tool.name) !== tool.digest)) return 'tool-digest-mismatch';
   if (!pathsOf(run).every(passesPathCheck)) return 'bad-path';
+  if (!toolFiles(run).every(holdsToolFileCharacters)) return 'bad-path';
   const runInputs = inputs.map((input) => input.path);
   if (!args.every((argument) => argumentAllowed(argument, runInputs))) return 'bad-path';
   if ('env' in run) return 'env-not-allowed';
