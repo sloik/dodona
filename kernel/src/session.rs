@@ -90,17 +90,20 @@ pub fn answer_fault(a: &Value, id: &str, capability: &str) -> Option<&'static st
 }
 
 fn hold(peer: &mut Peer, limits: &Limits, until: Instant) -> Result<(), &'static str> {
-    peer.send(&hello(limits.max_line, limits.deadline_ms))?;
+    peer.send(&hello(limits.max_line, limits.deadline_ms), until)?;
     if !manifest_ok(&peer.read(until)?) {
         return Err("bad-manifest");
     }
-    peer.send(&json::object(vec![
-        ("type", json::string("request")),
-        ("id", json::string("1")),
-        ("deadline_ms", Value::Number(limits.deadline_ms as i64)),
-        ("capability", json::string("decision.index")),
-        ("body", json::object(vec![("files", Value::Array(vec![]))])),
-    ]))?;
+    peer.send(
+        &json::object(vec![
+            ("type", json::string("request")),
+            ("id", json::string("1")),
+            ("deadline_ms", Value::Number(limits.deadline_ms as i64)),
+            ("capability", json::string("decision.index")),
+            ("body", json::object(vec![("files", Value::Array(vec![]))])),
+        ]),
+        until,
+    )?;
     if let Some(fault) = answer_fault(&peer.read(until)?, "1", "decision.index") {
         return Err(fault);
     }

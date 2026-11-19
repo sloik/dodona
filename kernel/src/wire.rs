@@ -6,6 +6,7 @@
 //! counts everything and keeps only up to its cap. The host waits for a line on a
 //! monotonic clock and never on the pipe itself.
 use crate::json::{self, Value};
+use crate::jsonread;
 use crate::proc::Tree;
 use std::io::{Read, Write};
 use std::process::ChildStdin;
@@ -105,50 +106,33 @@ impl Log {
     }
 }
 
-/// The deepest nesting of arrays and objects in a JSON text.
-pub fn depth(text: &[u8]) -> usize {
-    let (mut depth, mut deepest, mut in_string, mut escaped) = (0usize, 0usize, false, false);
-    for &b in text {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if b == b'\\' {
-                escaped = true;
-            } else if b == b'"' {
-                in_string = false;
-            }
-            continue;
-        }
-        match b {
-            b'"' => in_string = true,
-            b'[' | b'{' => {
-                depth += 1;
-                deepest = deepest.max(depth);
-            }
-            b']' | b'}' => depth = depth.saturating_sub(1),
-            _ => {}
-        }
+/// A JSON text read strictly, as the canonical encoding writes it, at any depth
+/// and whole; only then is its depth measured. For a check's messages and an
+/// executor's report.
+pub fn strict(text: &str) -> Result<Value, &'static str> {
+    let (v, depth) = match jsonread::parse(text, true) {
+        Ok(read) => read,
+        Err("invalid-string") => return Err("encoding"),
+        Err(reason @ ("duplicate-key" | "not-an-integer")) => return Err(reason),
+        Err(_) => return Err("malformed"),
+    };
+    if depth > MAX_DEPTH {
+        return Err("too-deep");
     }
-    deepest
+    Ok(v)
 }
 
 /// One line read as a message, or why it is not one. `strict` is the reading
-/// of a check: the canonical encoding's refusals have reasons of their own.
+/// of a check; a session reads any valid JSON.
 pub fn message(line: &[u8], strict: bool) -> Result<Value, &'static str> {
     if line.starts_with(b"\xef\xbb\xbf") || line.ends_with(b"\r") {
         return Err("framing");
     }
-    if std::str::from_utf8(line).is_err() {
-        return Err("encoding");
-    }
-    if depth(line) > MAX_DEPTH {
-        return Err(if strict { "too-deep" } else { "malformed" });
-    }
-    let v = match json::parse(line) {
-        Ok(v) => v,
-        Err("duplicate-key") if strict => return Err("duplicate-key"),
-        Err("not-an-integer") if strict => return Err("not-an-integer"),
-        Err(_) => return Err("malformed"),
+    let text = std::str::from_utf8(line).map_err(|_| "encoding")?;
+    let v = if strict {
+        self::strict(text)?
+    } else {
+        jsonread::parse(text, false).map_err(|_| "malformed")?.0
     };
     match v.opt("type") {
         Some(Value::String(_)) if matches!(v, Value::Object(_)) => Ok(v),
@@ -159,32 +143,69 @@ pub fn message(line: &[u8], strict: bool) -> Result<Value, &'static str> {
 /// A provider started as a tree, with its standard output read as lines.
 pub struct Peer {
     pub tree: Tree,
-    stdin: Option<ChildStdin>,
+    writer: Option<Writer>,
     rx: Receiver<Event>,
     closed: bool,
     strict: bool,
 }
+/// Standard input of the provider, written by a thread of its own, so that a
+/// provider that stops reading cannot hold the host past a deadline.
+struct Writer {
+    tx: mpsc::Sender<Vec<u8>>,
+    written: Receiver<bool>,
+    /// Messages handed to the thread and not yet reported written.
+    behind: usize,
+}
+impl Writer {
+    fn new(mut stdin: ChildStdin) -> Writer {
+        let (tx, rx) = mpsc::channel::<Vec<u8>>();
+        let (done, written) = mpsc::channel();
+        std::thread::spawn(move || {
+            for text in rx {
+                let ok = stdin.write_all(&text).and_then(|_| stdin.flush()).is_ok();
+                if done.send(ok).is_err() || !ok {
+                    return;
+                }
+            }
+        });
+        Writer {
+            tx,
+            written,
+            behind: 0,
+        }
+    }
+}
 impl Peer {
     pub fn new(mut tree: Tree, max_line: usize, strict: bool) -> Peer {
-        let stdin = tree.child.stdin.take();
+        let writer = tree.child.stdin.take().map(Writer::new);
         let stdout = tree.child.stdout.take().expect("standard output is piped");
         Peer {
             tree,
-            stdin,
+            writer,
             rx: lines(stdout, max_line),
             closed: false,
             strict,
         }
     }
-    /// Send one message. A provider that cannot be written to has gone away.
-    pub fn send(&mut self, v: &Value) -> Result<(), &'static str> {
-        let stdin = self.stdin.as_mut().ok_or("closed")?;
+    /// Send one message, written whole no later than `until`. A provider that
+    /// cannot be written to has gone away.
+    pub fn send(&mut self, v: &Value, until: Instant) -> Result<(), &'static str> {
+        let w = self.writer.as_mut().ok_or("closed")?;
         let mut text = json::encode(v).into_bytes();
         text.push(b'\n');
-        stdin
-            .write_all(&text)
-            .and_then(|_| stdin.flush())
-            .map_err(|_| "closed")
+        w.tx.send(text).map_err(|_| "closed")?;
+        w.behind += 1;
+        while w.behind > 0 {
+            match w
+                .written
+                .recv_timeout(until.saturating_duration_since(Instant::now()))
+            {
+                Ok(true) => w.behind -= 1,
+                Ok(false) | Err(RecvTimeoutError::Disconnected) => return Err("closed"),
+                Err(RecvTimeoutError::Timeout) => return Err("deadline"),
+            }
+        }
+        Ok(())
     }
     /// The next event, or None at `until`.
     fn event(&mut self, until: Instant) -> Option<Event> {
@@ -217,7 +238,10 @@ impl Peer {
     /// provider to end, end everything it started, and read what it wrote to the
     /// end. Anything more than nothing is `unexpected`.
     pub fn shutdown(&mut self, until: Instant) -> Result<(), &'static str> {
-        let _ = self.send(&json::object(vec![("type", json::string("shutdown"))]));
+        let _ = self.send(
+            &json::object(vec![("type", json::string("shutdown"))]),
+            until,
+        );
         while !self.tree.exited() {
             if Instant::now() >= until {
                 return Err("deadline");
@@ -238,7 +262,7 @@ impl Peer {
     }
     /// End the provider and everything it started.
     pub fn end(&mut self) {
-        self.stdin = None;
+        self.writer = None;
         self.tree.end();
     }
 }
@@ -262,7 +286,17 @@ mod tests {
         assert_eq!(message(b"not json", false).unwrap_err(), "malformed");
         let dup = b"{\"type\":\"x\",\"type\":\"y\"}";
         assert_eq!(message(dup, true).unwrap_err(), "duplicate-key");
-        assert_eq!(message(dup, false).unwrap_err(), "malformed");
+        // A session reads valid JSON as JSON: the last of a repeated key stands.
+        assert_eq!(message(dup, false).unwrap().text("type"), Some("y"));
+        assert!(message(b"{\"type\":\"x\",\"n\":1.5}", false).is_ok());
+        assert_eq!(
+            message(b"{\"type\":\"x\",\"n\":9007199254740992}", true).unwrap_err(),
+            "not-an-integer"
+        );
+        assert_eq!(
+            message(b"{\"type\":\"x\",\"s\":\"\\ud800\"}", true).unwrap_err(),
+            "encoding"
+        );
         assert_eq!(
             message(b"{\"type\":\"x\",\"n\":1.0}", true).unwrap_err(),
             "not-an-integer"
@@ -277,9 +311,8 @@ mod tests {
         };
         assert!(message(&deep(63), true).is_ok());
         assert_eq!(message(&deep(64), true).unwrap_err(), "too-deep");
-        assert_eq!(message(&deep(64), false).unwrap_err(), "malformed");
-        assert_eq!(depth(br#"{"a":"[[[{"}"#), 1);
-        assert_eq!(depth(br#"{"a":"\"[["}"#), 1);
+        assert!(message(&deep(64), false).is_ok());
+        assert!(message(&deep(100_000), false).is_ok());
         assert!(message(b"{\"type\":\"hello\"}", true).is_ok());
     }
     #[test]
