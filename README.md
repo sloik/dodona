@@ -20,6 +20,35 @@ dodona is a tool an AI agent can ask that question, so nobody has to take the ag
 | **Guarded by** | Automatic checks on every change: a gap that is found becomes a check ([list](docs/gap-checks.md)) |
 | **Wanted** | People and agents to break the design, bring tools and bring use cases: [CONTRIBUTING.md](CONTRIBUTING.md) |
 
+## Roadmap: where we are
+
+dodona is bootstrapped in six stages ([decision 0011](decisions/0011-self-hosting-through-a-verified-seed.md)). Each stage says what it establishes and what it does not.
+
+| Stage | What it means | Where it is |
+|---|---|---|
+| **0. Design and models** | The rules are written down and checked by a model checker before any kernel exists | **Done**, with a caveat: every model ran to its end on the shared queue, but some properties still restate their rule ([claims](spec/CLAIMS.md)) |
+| **1. Conformance kit** | Scenarios, vectors and planted defects that judge any kernel, written apart from the kernels | **Done**, and growing with every round of review ([conformance/](conformance/README.md)) |
+| **2. Seed kernel** | A first kernel that passes the kit | **Done** ([kernel/](kernel/README.md)) |
+| **3. The seed checks dodona** | dodona's own obligations are run, recorded in a ledger and reported on by a kernel | **In progress.** It runs on every change to `main`, but through stage-0 helpers in Python. Next: the kernels run the pipeline and the status command themselves |
+| **4. The seed builds its successor** | A kernel built and checked by dodona, which rebuilds itself | Not started |
+| **5. A second, independent kernel** | Written apart from the first, so a defect must be in both to go unnoticed | **In progress.** It exists, passes the same kit and is compared with the first on every change ([kernel2/](kernel2/README.md)); one exposure between the authors is recorded below |
+
+### Now, in order
+
+| Step | Status |
+|---|---|
+| The owner confirms an intent's criteria and gates, recorded in a ledger in the repository | Done |
+| Checks that already have a current result are reused between CI runs, with the counts shown | Done ([issue 22](https://github.com/sloik/dodona/issues/22)) |
+| The formal models repaired so each property can fail, with planted defects both ways | Done ([issue 27](https://github.com/sloik/dodona/issues/27)) |
+| A kernel hosts providers itself: a provider session and one check to a verdict | Being merged ([decision 0033](decisions/0033-a-kernel-hosts-providers.md), first step) |
+| A kernel runs the whole pipeline and answers one status command an agent can run, replacing the Python helpers | Next (decision 0033, second step) |
+| A second real provider of another kind, a test runner, end to end into the ledger and the status | After that |
+| Checks that documentation follows code, and a metrics ratchet, on every pull request | In review, on their own branches |
+
+### Not planned yet
+
+Intent trees deeper than one level ([issue 32](https://github.com/sloik/dodona/issues/32)), a planner that does not take a test's truth from the build key ([issue 33](https://github.com/sloik/dodona/issues/33)), a harness the working agent cannot reach ([issue 26](https://github.com/sloik/dodona/issues/26)), and stage 4. What each intent asks for is in [intents/](intents/README.md).
+
 ## The chain dodona watches
 
 Work starts as plain words and ends as something running. Meaning can be lost at every step. dodona keeps the steps linked and says how strong each link is.
@@ -160,7 +189,7 @@ flowchart LR
     class S3,S5 now
 ```
 
-The project is between stages. A first seed in Rust and a second in JavaScript pass the same kit. The second was written without sight of the first, from the documents alone. Run on dodona's own repository, the seed reports honestly that nothing is delivered yet. A kernel checking itself adds no trust in itself; that is what the second kernel is for, and the two are compared on every change.
+Where each stage stands is in the [roadmap](#roadmap-where-we-are) above. The project is between stages. A first seed in Rust and a second in JavaScript pass the same kit. The second was written without sight of the first, from the documents alone. Run on dodona's own repository, the seed reports honestly that nothing is delivered yet. A kernel checking itself adds no trust in itself; that is what the second kernel is for, and the two are compared on every change.
 
 What makes a second opinion worth having is a fresh context: an author or a checker that has not seen the work it is judged against, and so cannot lean on it. That is what dodona asks for and grades. A different make of model is not required. Whether to use one is the user's choice, where it raises the odds of catching a shared blind spot. Here, the kit and both kernels were written by the same make of model, each kernel by an agent that never saw the other; the first kernel was begun by a different make. One exception is recorded: while the kernels' hosts were reworked (decision 0033), a scratch folder shared by mistake showed the first kernel's author, after it had written its host, a list of the second kernel's planted defects that quotes lines of that kernel's host code. Two planted defects it added afterwards resemble entries in that list. Each author now has a folder of its own.
 
