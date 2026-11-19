@@ -1,6 +1,8 @@
 """A checking provider that breaks one rule on purpose. Part of the conformance kit.
 
-    python misbehaving_checker.py <mode>
+    python misbehaving_checker.py [<mode>]
+
+The mode is taken from DODONA_CHECKER_MODE, or else from the argument.
 
 It offers `obligation.check` and is otherwise well-behaved. `check-cases.json`
 lists the modes with what a host must do about each. These are the rules a
@@ -10,7 +12,16 @@ import json
 import os
 import sys
 
-MODE = sys.argv[1] if len(sys.argv) > 1 else "well-behaved"
+MODE = os.environ.get("DODONA_CHECKER_MODE") or (sys.argv[1] if len(sys.argv) > 1 else "well-behaved")
+SEEN = os.environ.get("DODONA_TEST_SEEN")
+
+
+def note(entry) -> None:
+    """For the judge only: what this provider was asked and what it described, so the judge need not take
+    the host's word for either."""
+    if SEEN:
+        with open(SEEN, "a", encoding="utf-8") as log:
+            log.write(json.dumps(entry) + "\n")
 RANK = "bounded"
 
 
@@ -22,11 +33,9 @@ def send(obj) -> None:
 def read():
     line = sys.stdin.buffer.readline()
     message = json.loads(line.decode("utf-8")) if line else None
-    seen = os.environ.get("DODONA_TEST_SEEN")
-    if seen and isinstance(message, dict):
-        # For the judge only: which operations this provider was asked for, so it need not take the host's word.
-        with open(seen, "a", encoding="utf-8") as log:
-            log.write(json.dumps(message.get("body", {}).get("op") or message.get("type")) + "\n")
+    if isinstance(message, dict):
+        body = message.get("body") if isinstance(message.get("body"), dict) else {}
+        note({"got": body.get("op") or message.get("type"), "id": message.get("id"), "check": body.get("check"), "run": body.get("run")})
     return message
 
 
@@ -92,10 +101,25 @@ def run(body: dict) -> dict:
         described["platform"] = {"os": "windows", "arch": "x86_64"}
     if MODE == "output-outside":
         described["outputs"] = [{"path": "/tmp/report.txt"}]
+    if MODE == "args-not-a-list":
+        described["args"] = "a.txt"
+    if MODE == "two-faults-platform-and-tool":
+        described["platform"] = {"os": "windows", "arch": "x86_64"}
+        described["program"]["tool"] = "shell"
     return described
 
 
 def main() -> None:
+    pidfile = os.environ.get("DODONA_TEST_PIDFILE")
+    if pidfile:
+        with open(pidfile, "a", encoding="utf-8") as out:
+            out.write(f"{os.getpid()}\n")
+    if MODE == "leaves-a-child":
+        import subprocess
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+        if pidfile:
+            with open(pidfile, "a", encoding="utf-8") as out:
+                out.write(f"{child.pid}\n")
     hello = read()
     tools = [{"name": "checker", "constraint": "=1"}]
     if MODE.startswith("declared-tool-not-given"):
@@ -110,8 +134,15 @@ def main() -> None:
             return
         body = request["body"]
         passed = {"final": {"verdict": "passed", "strength": {"class": "test", "rank": RANK}}}
+        if MODE == "too-slow":
+            import time
+            time.sleep(30)
         if body["op"] == "start":
             answer = {"next": run(body)}
+            if MODE == "final-unsupported":
+                answer = {"final": {"verdict": "unsupported", "reason": "cannot-check-this"}}
+            if MODE == "two-faults-attachment-and-verdict":
+                answer = {"final": {"verdict": "probably-fine", "attachments": [{"path": "../outside.txt", "identity": "sha256:" + "f" * 64}]}}
             if MODE == "verdict-without-run":
                 answer = passed
             if MODE == "next-and-final":
@@ -132,10 +163,18 @@ def main() -> None:
                 answer = {"next": run(body_of_start)}
             if MODE == "eight-runs":
                 answer = {"next": run(body_of_start)} if body["run"] < 8 else passed
+            if MODE == "final-error":
+                answer = {"final": {"verdict": "error", "reason": "checker-crashed"}}
+            if MODE == "failed-another-class":
+                answer = {"final": {"verdict": "failed", "strength": {"class": "proof", "rank": RANK}}}
+            if MODE == "true-attachment":
+                import hashlib
+                data = open("evidence.txt", "rb").read()
+                answer = {"final": dict(passed["final"], attachments=[{"path": "evidence.txt", "identity": "sha256:" + hashlib.sha256(data).hexdigest()}])}
             if MODE == "no-strength":
                 answer = {"final": {"verdict": "passed"}}
             if MODE == "lies-about-an-attachment":
-                answer = {"final": dict(passed["final"], attachments=[{"path": "conformance/provider/check-cases.json", "identity": "sha256:" + "f" * 64}])}
+                answer = {"final": dict(passed["final"], attachments=[{"path": "evidence.txt", "identity": "sha256:" + "f" * 64}])}
             if MODE == "attachment-outside":
                 answer = {"final": dict(passed["final"], attachments=[{"path": "../outside.txt", "identity": "sha256:" + "f" * 64}])}
             if MODE == "same-run-twice":
@@ -151,6 +190,10 @@ def main() -> None:
             message["capability"] = "obligation.enumerate"
         if MODE == "answers-another-request":
             message["id"] = request["id"] + "0"
+        if MODE == "provider-error" and body.get("op") == "start":
+            message = {"type": "error", "id": request["id"], "code": "internal", "message": "no"}
+        if "next" in answer:
+            note({"described": answer["next"]})
         send(message)
 
 

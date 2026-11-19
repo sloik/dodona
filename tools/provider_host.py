@@ -160,22 +160,26 @@ def session(argv: list[str], deadline_ms: int, max_line: int, max_log: int) -> d
         return message
 
     def run() -> dict:
-        if not send({"type": "hello", "protocols": ["0.2"], "limits": {"max_line_bytes": max_line}}):
+        if not send({"type": "hello", "protocol": ["0.2"], "limits": {"max_line_bytes": max_line, "deadline_ms": deadline_ms}, "echo": ECHO}):
             return fail("closed")
         manifest = receive()
         if manifest.get("outcome") == "error":
             return manifest
-        if manifest.get("type") != "manifest":
-            return fail("unexpected")
-        if not send({"type": "request", "id": "1", "capability": "decision.index", "body": {"files": []}}):
+        if manifest.get("type") != "manifest" or manifest.get("echo") != ECHO or not isinstance(manifest.get("manifest"), dict):
+            return fail("bad-manifest")
+        if not send({"type": "request", "id": "1", "deadline_ms": deadline_ms, "capability": "decision.index", "body": {"files": []}}):
             return fail("closed")
         answer = receive()
         if answer.get("outcome") == "error":
             return answer
-        if answer.get("type") not in ("result", "error"):
-            return fail("unexpected")
         if answer.get("id") != "1":
             return fail("wrong-id")
+        if answer.get("type") == "error":
+            return fail("provider-error")
+        if answer.get("type") != "result":
+            return fail("unexpected")
+        if answer.get("capability") != "decision.index":
+            return fail("wrong-capability")
         send({"type": "shutdown"})
         # Anything more from the provider after its one answer is not ignored.
         try:
@@ -194,6 +198,10 @@ def session(argv: list[str], deadline_ms: int, max_line: int, max_log: int) -> d
     result["log_bytes"] = log["bytes"]
     result["log_truncated"] = log["truncated"]
     return result
+
+
+# Sent in hello and expected back unchanged: non-ASCII letters, a symbol and control characters.
+ECHO = "h\u00e9llo \u2603 \u0001\u001f end"
 
 
 def main() -> int:

@@ -85,7 +85,9 @@ class Session:
             answer = self.receive()
             if answer.get("type") != "manifest" or answer.get("echo") != echo:
                 raise Refused("bad-manifest")
-            self.manifest = answer["manifest"]
+            self.manifest = answer.get("manifest")
+            if not isinstance(self.manifest, dict) or not isinstance(self.manifest.get("capabilities"), list):
+                raise Refused("bad-manifest")
         except Refused:
             self.tree.end()  # a session that never opened leaves no provider behind
             raise
@@ -266,14 +268,15 @@ def check_final(final: dict, manifest: dict, capability: str, runs_done: int, ro
     if final["verdict"] in ("passed", "failed"):
         if runs_done == 0:
             raise Refused("verdict-without-run")
-        top, got = ceiling(manifest, capability), final.get("strength", {}).get("rank")
+        strength = final.get("strength")
+        top, got = ceiling(manifest, capability), strength.get("rank") if isinstance(strength, dict) else None
         if got not in RANKS or top is None or RANKS.index(got) > RANKS.index(top):
             raise Refused("strength-above-ceiling")
         if final["strength"].get("class") != declared_strength(manifest, capability).get("class"):
             raise Refused("strength-class-mismatch")  # a test is not a proof, whatever its rank
 
 
-def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], report_for) -> dict:
+def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], report_for, root: pathlib.Path = ROOT) -> dict:
     """Take one obligation through start, runs and final. `report_for(run_number, description)` returns
     the executor's report for a run, or None if there is none yet, in which case the description is returned."""
     known = {f["path"]: f["identity"] for f in inputs}
@@ -288,7 +291,7 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
         if ("next" in body) == ("final" in body):
             raise Refused("neither-or-both")
         if "final" in body:
-            check_final(body["final"], session.manifest, "obligation.check", runs)
+            check_final(body["final"], session.manifest, "obligation.check", runs, root)
             return {"final": body["final"], "runs": runs, "run_keys": keys}
         if runs >= MAX_RUNS:
             raise Refused("too-many-runs")  # refused when the next run is asked for, before it starts
@@ -301,6 +304,12 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
         runs += 1
         if report.get("end") != "exited":
             return {"final": {"verdict": "error", "reason": "run-" + str(report.get("end"))}, "runs": runs}
+        # What the executor says ran must be what was asked for: another platform or another tool is an
+        # error, never a result (protocol/messages.schema.json, run_report).
+        asked_tools = sorted((t.get("name"), t.get("digest")) for t in body["next"].get("tools", []))
+        ran_tools = sorted((t.get("name"), t.get("digest")) for t in report.get("tools_ran", []) if isinstance(t, dict))
+        if report.get("platform") != body["next"].get("platform") or ran_tools != asked_tools:
+            return {"final": {"verdict": "error", "reason": "run-report-mismatch"}, "runs": runs}
         body = session.ask("obligation.check", {"op": "run.result", "check": check_id, "run": runs, "report": report})
 
 
@@ -619,10 +628,14 @@ def check(args) -> int:
             return {"end": "executor-failed"}
         return report if done.returncode == 0 and isinstance(report, dict) else {"end": "executor-failed"}
 
+    named = set(asked["obligation"].get("specified_by", []) + asked["obligation"].get("targets", []))
+    if not named <= {f["path"] for f in asked["inputs"]}:
+        print(json.dumps({"outcome": "refused", "reason": "unknown-file"}))  # before the provider is started
+        return 0
     session = None
     try:
         session = Session(asked["provider"], root, [], deadline_s=asked.get("deadline_ms", 60000) / 1000)
-        final = drive_check(session, asked["obligation"], asked["inputs"], asked["tools"], report_for)["final"]
+        final = drive_check(session, asked["obligation"], asked["inputs"], asked["tools"], report_for, root)["final"]
         verdict = "unavailable" if final.get("reason") == "run-unavailable" else final["verdict"]
         answer = {"outcome": "verdict", "verdict": verdict}
     except Refused as err:

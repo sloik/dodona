@@ -100,6 +100,24 @@
       "outcome": "error",
       "why": "A provider that hangs with a child holding its output open: the host must end the session at the deadline and leave nothing running.",
       "reason": "deadline"
+    },
+    {
+      "mode": "wrong-echo",
+      "outcome": "error",
+      "reason": "bad-manifest",
+      "why": "The manifest must return the hello's echo unchanged: a provider that mangles text it is given is refused before anything is asked of it."
+    },
+    {
+      "mode": "answers-with-an-error",
+      "outcome": "error",
+      "reason": "provider-error",
+      "why": "A request answered with an error is not a result."
+    },
+    {
+      "mode": "answers-another-capability",
+      "outcome": "error",
+      "reason": "wrong-capability",
+      "why": "A result must be for the capability that was asked for."
     }
   ]
 }

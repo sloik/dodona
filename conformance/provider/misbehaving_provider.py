@@ -38,9 +38,10 @@ def read():
     return json.loads(line.decode("utf-8")) if line else None
 
 
-def manifest():
-    return {"type": "manifest", "protocol": "0.2", "name": "misbehaving", "version": "0",
-            "capabilities": [{"capability": "decision.index"}], "trusted_base": []}
+def manifest(echo):
+    return {"type": "manifest", "echo": echo + (" changed" if MODE == "wrong-echo" else ""),
+            "manifest": {"protocol": "0.2", "name": "misbehaving", "version": "0",
+                         "capabilities": [{"capability": "decision.index"}], "tools": [], "trusted_base": []}}
 
 
 def sleeper() -> None:
@@ -51,7 +52,7 @@ def sleeper() -> None:
 
 def main() -> None:
     note_pid(os.getpid())
-    read()  # hello
+    hello = read() or {}
     if MODE == "byte-order-mark":
         OUT.write(b"\xef\xbb\xbf")
     if MODE == "garbage":
@@ -65,13 +66,17 @@ def main() -> None:
         return
     if MODE == "never-answers":
         time.sleep(600)
-    send(manifest(), b"\r\n" if MODE == "carriage-return" else b"\n")
+    send(manifest(hello.get("echo", "")), b"\r\n" if MODE == "carriage-return" else b"\n")
     request = read()
     if request is None:
         return
     answer = {"type": "result", "id": request.get("id"), "capability": request.get("capability"), "body": {"decisions": []}}
     if MODE == "wrong-id":
         answer["id"] = "not-the-id-that-was-asked"
+    if MODE == "answers-with-an-error":
+        answer = {"type": "error", "id": request.get("id"), "code": "internal", "message": "no"}
+    if MODE == "answers-another-capability":
+        answer["capability"] = "obligation.check"
     if MODE == "bad-encoding":
         OUT.write(b'{"type": "result", "id": "\xff\xfe"}\n')
         OUT.flush()
