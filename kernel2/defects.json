@@ -1318,11 +1318,11 @@
       "replace": ""
     },
     {
-      "name": "host rule 6: a tool file may have anything appended",
+      "name": "host rule 5: a tool file's PATH may hold any character",
       "model_case": "(host checks)",
       "file": "host-rules.js",
-      "find": "const WHOLE_TOOL_FILE = /^\\$\\{tool:[^}]*\\}\\/[A-Za-z0-9._-]+(?:\\/[A-Za-z0-9._-]+)*$/;",
-      "replace": "const WHOLE_TOOL_FILE = /^\\$\\{tool:[^}]*\\}\\/.+$/s;"
+      "find": "  if (!toolFiles(run).every(holdsToolFileCharacters)) return 'bad-path';\n",
+      "replace": ""
     },
     {
       "name": "host rule 6: a word may hold characters outside printable ASCII",
@@ -1631,6 +1631,34 @@
       "file": "processes.js",
       "find": "  if (POSIX) {\n    killGroup(pid);\n    kill(pid);",
       "replace": "  if (POSIX) {\n    kill(pid);"
+    },
+    {
+      "name": "final: an attachment's path is not checked",
+      "model_case": "(host checks)",
+      "file": "host-rules.js",
+      "find": "  if (!attachments.every((attachment) => passesPathCheck(attachment.path))) return 'bad-path';\n",
+      "replace": ""
+    },
+    {
+      "name": "final: a link at an inner step of an attachment's path is followed",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "      const status = fs.lstatSync(at);\n",
+      "replace": "      const status = last ? fs.lstatSync(at) : fs.statSync(at);\n"
+    },
+    {
+      "name": "check: the executor's processes are not ended when it returns",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  await processes.endTree(child);\n  if (timedOut) return { end: 'timed-out' };",
+      "replace": "  if (timedOut) {\n    await processes.endTree(child);\n    return { end: 'timed-out' };\n  }"
+    },
+    {
+      "name": "check: the executor's exit status is ignored",
+      "model_case": "(host checks)",
+      "file": "check.js",
+      "find": "  if (child.exitCode !== 0 || size > MAX_REPORT_BYTES) return null;",
+      "replace": "  if (size > MAX_REPORT_BYTES) return null;"
     }
   ]
 }

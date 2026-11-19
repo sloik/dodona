@@ -49,9 +49,9 @@ function isRegularFile(root, relative) {
   try {
     for (let i = 0; i < parts.length; i += 1) {
       at = path.join(at, parts[i]);
+      const last = i === parts.length - 1;
       const status = fs.lstatSync(at);
       if (status.isSymbolicLink()) return false;
-      const last = i === parts.length - 1;
       if (!last && !status.isDirectory()) return false;
       if (last && !(status.isFile() && status.size <= MAX_ATTACHMENT_BYTES)) return false;
     }
