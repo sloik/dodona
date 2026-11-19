@@ -702,6 +702,33 @@ def gap_workflows_are_safe() -> None:
                 problems.append(f"{path.name}: self-hosted job is not restricted to this repository's main branch")
         if "permissions:" not in text:
             problems.append(f"{path.name}: no explicit permissions")
+        problems.extend(f"{path.name}: {p}" for p in pull_request_target_problems(text))
+    # The guard must be seen to fail: each unsafe edit of the workflow that uses pull_request_target is planted.
+    docs = ROOT / ".github" / "workflows" / "docs.yml"
+    text = docs.read_text(encoding="utf-8") if docs.exists() else ""
+    for old, new in (("python3 -I tools/check_docs.py diff", "python3 tools/check_docs.py diff"),
+                     ("fetch-depth: 0", "fetch-depth: 0\n          ref: ${{ github.event.pull_request.head.sha }}"),
+                     ("contents: read", "contents: write"),
+                     ("persist-credentials: false", "persist-credentials: true")):
+        if "pull_request_target" in text and (old not in text or not pull_request_target_problems(text.replace(old, new, 1))):
+            problems.append(f".github/workflows/docs.yml: the pull_request_target guard does not notice {new.strip()!r}")
+
+
+def pull_request_target_problems(text: str) -> list[str]:
+    """pull_request_target runs with the base's workflow and a token; it is safe only while nothing
+    from the pull request is checked out or run, and the token can do no more than read."""
+    if "pull_request_target" not in text:
+        return []
+    found = []
+    if re.search(r"ref:\s*\$\{\{[^}]*(pull_request\.head|head_ref)", text):
+        found.append("checks out the pull request's head under pull_request_target")
+    if re.search(r"^\s+\w[\w-]*:\s*write\b", text, flags=re.M) or "secrets." in text:
+        found.append("gives the token write access, or uses a secret, under pull_request_target")
+    if "persist-credentials: false" not in text:
+        found.append("keeps credentials in the checkout under pull_request_target")
+    if any(re.search(r"\bpython3?(?! -I)\s", line) for line in text.split("\n") if not line.lstrip().startswith("#")):
+        found.append("runs Python without -I under pull_request_target, so a file in the working directory could be imported")
+    return found
 
 
 def gap_every_check_is_listed() -> None:

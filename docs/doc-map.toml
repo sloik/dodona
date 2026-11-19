@@ -11,7 +11,7 @@
 # Every file that is not Markdown must match exactly one rule or exemption, and every pattern must match
 # a file, so new code cannot arrive unbound. Patterns: `*` within a path segment, `**` across segments,
 # `[0-9]` one of a set. A change is judged by this file as it is on the branch the change goes into; a
-# change that adds an [[exempt]] or [[known]] entry fails, so such an entry is the owner's to merge.
+# change that adds an [[exempt]], [[absent]] or [[known]] entry fails, so such an entry is the owner's to add.
 
 [[rule]]
 id = "host"
@@ -42,7 +42,7 @@ why = "The owner's ledger that confirm.py writes, and how intents are read and t
 id = "harness"
 code = ["tools/attest.py", "tools/harness.py", "tools/run_attest_check.py", "tools/run_harness_check.py",
         "conformance/harness/*.py"]
-docs = ["conformance/README.md", "spec/CLAIMS.md"]
+docs = ["conformance/README.md"]
 why = "What the harness signs and how a kernel grades it is in the kit's Acts scenarios and 'Two kernels compared'."
 
 [[rule]]
@@ -51,21 +51,27 @@ code = ["tools/run_kit.py", "tools/run_vectors.py", "tools/run_path_vectors.py",
         "tools/run_ledger_cases.py", "tools/run_input_cases.py", "tools/run_provider_cases.py",
         "tools/run_check_cases.py", "tools/kernel_differential.py", "tools/path_differential.py",
         "tools/kit_adequacy.py"]
-docs = ["conformance/README.md", "spec/CLAIMS.md", "docs/gap-checks.md"]
-why = "How a kernel or host is judged is written in the kit's README; what each judge shows is in the claims and the list of checks."
+docs = ["conformance/README.md", "docs/gap-checks.md"]
+why = "How a kernel or host is judged is written in the kit's README, and the judges that run as their own tools are listed with the gap behind each."
 
 [[rule]]
 id = "kit-data"
 code = ["conformance/kernel/**", "conformance/ledger/*", "conformance/vectors/*", "conformance/provider/*",
         "tools/gen_kit_vectors.py", "tools/gen_wrong_types.py"]
-docs = ["conformance/README.md", "spec/CLAIMS.md"]
-why = "Every scenario tests a rule written in the kit's README, and the claims say what they show. The README's counts are checked on their own."
+docs = ["conformance/README.md"]
+why = "Every scenario, vector and case tests a rule written in the kit's README, which also lists what is in the kit. The README's counts are checked on their own."
 
 [[rule]]
 id = "kernel"
-code = ["kernel/**", "kernel2/**"]
-docs = ["kernel/README.md", "kernel2/README.md", "conformance/README.md"]
-why = "Each kernel's README says what it does and how it is built and judged; the kit's README holds the rules both implement."
+code = ["kernel/**"]
+docs = ["kernel/README.md"]
+why = "The first kernel's README says what it does, how it is built and how it is judged."
+
+[[rule]]
+id = "kernel2"
+code = ["kernel2/**"]
+docs = ["kernel2/README.md"]
+why = "The second kernel's README says what it does, how it is built and how it is judged."
 
 [[rule]]
 id = "encoding"
@@ -101,7 +107,7 @@ docs = ["docs/gap-checks.md"]
 why = "Every check is listed there with the gap behind it, and how the checks run."
 
 [[exempt]]
-paths = ["spec/runs/**"]
+paths = ["spec/runs/**/*.txt", "spec/runs/**/*.exit", "spec/runs/index.json"]
 why = "Saved outputs of recorded runs: hashed in spec/runs/index.json and judged against the claims by check_claims_match_runs."
 
 [[exempt]]

@@ -3,4 +3,6 @@
 /tools/check_docs.py @sloik
 /docs/doc-map.toml @sloik
 /.github/workflows/docs.yml @sloik
+/.github/workflows/checks.yml @sloik
+/tools/check_repo.py @sloik
 /.github/CODEOWNERS @sloik

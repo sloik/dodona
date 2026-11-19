@@ -3,24 +3,32 @@ name: Documents follow the code
 # commit message why none has to (tools/check_docs.py, docs/gap-checks.md). A
 # pull request's description must also say what was verified and what was not.
 # The repository-wide document checks run in checks.yml on every platform; this
-# judges one change, so it needs the history and runs once. It is apart from
-# checks.yml so that editing a description re-runs only this.
+# judges one change. It is a gate only where main requires it (a ruleset or
+# branch protection that lists this job); without that it reports and blocks
+# nothing.
 #
-# The change is judged by the base's copy of tools/check_docs.py, checked out
-# beside it, so that a change cannot loosen the checker that judges it. Only
-# the change that first brings the checker is judged by its own copy.
+# The change is judged by main's copy of this workflow and of the checker, so
+# that a change cannot loosen what judges it. Pull requests use
+# pull_request_target, which runs this file as it is on main. That is safe here
+# because nothing from the pull request runs: the job checks out only the base
+# commit, fetches the pull request's commits as git objects, and the base's
+# checker reads them with git (diff, show, log) without checking them out,
+# importing or executing anything from them. The token can only read contents,
+# no secret is used, and credentials are not kept in the checkout. Every Python
+# runs isolated (-I), so nothing in the working directory is imported.
 on:
   push:
     branches: [main]
-  pull_request:
+  pull_request_target:
+    branches: [main]
     types: [opened, synchronize, reopened, edited]
-  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: docs-${{ github.ref }}
-  # A push to main is never cancelled unjudged by the next one.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Each push to main is judged on its own and never cancelled; a pull request's
+  # run is replaced by its next one.
+  group: docs-${{ github.event_name == 'push' && github.sha || github.event.pull_request.number }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 jobs:
   change:
     runs-on: ubuntu-26.04
@@ -31,41 +39,48 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       # Values from the event reach the commands through the environment only.
-      # The description is copied from the event file by Python, never through the shell.
       - name: Judge the change with the base's checker
         env:
           EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.sha }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
-          case "$EVENT" in
-            pull_request) BASE="$PR_BASE"; HEAD="$PR_HEAD" ;;
-            push) BASE="$PUSH_BEFORE"; HEAD="$PUSH_AFTER" ;;
-            *) BASE="$(git rev-parse origin/main)"; HEAD="$(git rev-parse HEAD)" ;;
-          esac
+          if [ "$EVENT" = push ]; then BASE="$PUSH_BEFORE"; HEAD="$PUSH_AFTER"; else BASE="$PR_BASE"; HEAD="$PR_HEAD"; fi
           if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            echo "The base $BASE is not in the history: main was force-pushed, or the base is unknown. This change cannot be judged here; judge it by hand."
+            echo "PROBLEM cannot judge: the base $BASE is not in the history (main was force-pushed, or the base is unknown). Judge this change by hand."
             exit 1
           fi
-          git worktree add --detach "$RUNNER_TEMP/base" "$BASE"
-          CHECKER="$RUNNER_TEMP/base/tools/check_docs.py"
-          if [ ! -f "$CHECKER" ]; then
-            echo "The base has no tools/check_docs.py: this change brings the checker and is judged by its own copy, which a reviewer must read."
-            CHECKER=tools/check_docs.py
+          git checkout --quiet --detach "$BASE"
+          if [ "$EVENT" = pull_request_target ]; then
+            # The pull request's commits, as objects only. Nothing of them is checked out.
+            git fetch --no-tags --quiet "$REPO_URL" "+refs/pull/$PR_NUMBER/head:refs/remotes/pr/head"
           fi
-          # An automatic update that only moves pinned actions or runner images is judged by checks.yml alone.
-          # The author is not trusted on its own: the checker reads the change and must find nothing else in it.
-          if [ "$EVENT" = pull_request ] && [ "$PR_AUTHOR" = "renovate[bot]" ] \
-             && python3 "$CHECKER" pins-only --repo . --base "$BASE" --head "$HEAD"; then
-            echo "Not judged for documents: an automatic update of pinned versions only."
+          if ! git cat-file -e "$HEAD^{commit}" 2>/dev/null; then
+            echo "PROBLEM cannot judge: the head $HEAD could not be fetched."
+            exit 1
+          fi
+          if [ ! -f tools/check_docs.py ]; then
+            # Only the change that first brings the checker meets a base without one.
+            echo "NOTE not judged: the base has no tools/check_docs.py, so this change, which brings it, has no checker to be judged by."
             exit 0
           fi
-          if [ "$EVENT" = pull_request ]; then
-            python3 -c "import json, os, sys; sys.stdout.write(json.load(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8'))['pull_request'].get('body') or '')" > "$RUNNER_TEMP/pr-body.md"
-            python3 "$CHECKER" diff --repo . --base "$BASE" --head "$HEAD" --pr-body "$RUNNER_TEMP/pr-body.md"
+          # An update that only moves pinned actions or runner images needs no document. The checker reads
+          # the change itself to decide that; for a pull request, it must also come from the update bot.
+          if python3 -I tools/check_docs.py pins-only --repo . --base "$BASE" --head "$HEAD" \
+             && { [ "$EVENT" = push ] || [ "$PR_AUTHOR" = "renovate[bot]" ]; }; then
+            echo "NOTE not judged for documents: the change only moves pinned versions of actions or runner images."
+            exit 0
+          fi
+          if [ "$EVENT" = pull_request_target ]; then
+            cd "$RUNNER_TEMP"
+            python3 -I -c "import json, os, sys; sys.stdout.write(json.load(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8'))['pull_request'].get('body') or '')" > pr-body.md
+            cd "$GITHUB_WORKSPACE"
+            python3 -I tools/check_docs.py diff --repo . --base "$BASE" --head "$HEAD" --pr-body "$RUNNER_TEMP/pr-body.md"
           else
-            python3 "$CHECKER" diff --repo . --base "$BASE" --head "$HEAD"
+            python3 -I tools/check_docs.py diff --repo . --base "$BASE" --head "$HEAD"
           fi
