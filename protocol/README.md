@@ -25,7 +25,7 @@ A message that fails validation, a missing required field, or a mismatched `id` 
 
 | Capability | Request carries | Result carries |
 |---|---|---|
-| `intent.index` | Intent and amendment files | Intents: owner, criteria, gates, children, what each touches; amendments |
+| `intent.index` | Intent and amendment files, and the obligations every binding enumerated | Intents: the whole text, owner, worker, criteria with the obligations that check each, gates, children, what each touches; amendments |
 | `decision.index` | Decision files | Decision nodes: status, governed names, supersedes |
 | `definition.index` | Claimed files | Definitions: name, identity, dependencies, granularity, materialising files |
 | `obligation.enumerate` | A binding and its indexed definitions | Obligations: name, specified-by, targets, kind, expectation, planted-defect link, configuration, the files a check may read |

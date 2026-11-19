@@ -51,6 +51,8 @@ jobs:
         run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.python }} tools/provider_host.py
       - name: Judge the stage-0 host with a checker that breaks one rule at a time
         run: ${{ matrix.python }} tools/run_check_cases.py -- ${{ matrix.python }} tools/host.py check
+      - name: The intents provider answers what the stage-0 helper reads (decision 0034)
+        run: ${{ matrix.python }} tools/check_intents_provider.py
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Kernel unit tests

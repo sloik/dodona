@@ -39,6 +39,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -436,9 +437,40 @@ REFUSED_BY_PROVIDER: list[str] = []
 DECLARED_INPUTS: dict = {}  # obligation name -> the paths its checks may read, as the provider listed them
 
 
+def segment_matches(pattern: str, name: str) -> bool:
+    """One path segment against one pattern segment: `*` is any run of characters, `[a-z]` one character
+    in the range, anything else itself. There is no `?`, no `**`, and no escape."""
+    if not pattern:
+        return not name
+    if pattern[0] == "*":
+        return any(segment_matches(pattern[1:], name[i:]) for i in range(len(name) + 1))
+    if pattern[0] == "[":
+        close = pattern.index("]")
+        low, _, high = pattern[1:close].partition("-")
+        return bool(name) and low <= name[0] <= (high or low) and segment_matches(pattern[close + 1:], name[1:])
+    return bool(name) and name[0] == pattern[0] and segment_matches(pattern[1:], name[1:])
+
+
+def claimed(root: pathlib.Path, patterns: list[str]) -> list[str]:
+    """The regular files under root, by relative path, that one of the patterns matches segment by segment."""
+    found = set()
+    for path in root.rglob("*"):
+        rel = path.relative_to(root).as_posix()
+        if path.is_file() and not path.is_symlink() and ".git" not in rel.split("/")[:1]:
+            parts = rel.split("/")
+            if any(len(p.split("/")) == len(parts) and all(segment_matches(a, b) for a, b in zip(p.split("/"), parts)) for p in patterns):
+                found.add(rel)
+    return sorted(found)
+
+
+def binding(name: str) -> dict:
+    """A binding of the project file, by name."""
+    project = tomllib.loads((ROOT / "dodona.toml").read_text(encoding="utf-8"))
+    return next(b for b in project["binding"] if b["name"] == name)
+
+
 def list_project(session: Session, root: pathlib.Path) -> tuple[list[dict], list[dict]]:
-    files = [file_ref(p, root) for p in sorted((root / "spec").glob("*/*")) if p.suffix in (".tla", ".cfg", ".json") and p.is_file()
-             and p.name not in ("dump-settings.json",)]
+    files = [file_ref(root / p, root) for p in claimed(root, binding("kernel-models")["match"])]
     body = session.ask("obligation.enumerate", {"binding": "kernel-models", "definitions": [], "files": files})
     paths = [f["path"] for f in files]
     DECLARED_INPUTS.clear()
