@@ -15,6 +15,8 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+/// How long a provider has to exit after `shutdown`.
+pub const SHUTDOWN_GRACE: Duration = Duration::from_secs(1);
 /// How deeply a message read strictly may nest.
 pub const MAX_DEPTH: usize = 64;
 /// The opening echo: non-ASCII letters, a character outside the Basic
@@ -242,11 +244,11 @@ impl Peer {
             &json::object(vec![("type", json::string("shutdown"))]),
             until,
         );
-        while !self.tree.exited() {
-            if Instant::now() >= until {
-                return Err("deadline");
-            }
-            match self.event((Instant::now() + Duration::from_millis(10)).min(until)) {
+        // The provider has a second to exit, less if the deadline is nearer; one
+        // still running then is ended with everything it started, its answer standing.
+        let grace = (Instant::now() + SHUTDOWN_GRACE).min(until);
+        while !self.tree.exited() && Instant::now() < grace {
+            match self.event((Instant::now() + Duration::from_millis(10)).min(grace)) {
                 Some(Event::Line(_)) | Some(Event::TooLong) => return Err("unexpected"),
                 Some(Event::Closed) => std::thread::sleep(Duration::from_millis(10)),
                 None => {}

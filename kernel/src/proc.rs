@@ -8,6 +8,26 @@
 use std::io;
 use std::process::{Child, Command};
 
+/// A process that was started but could not be confined to a tree of its own.
+/// It has been ended; a host must not go on as if it had been confined.
+#[derive(Debug)]
+pub struct Unconfined(pub String);
+impl std::fmt::Display for Unconfined {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "a process could not be confined to a tree of its own: {}",
+            self.0
+        )
+    }
+}
+impl std::error::Error for Unconfined {}
+
+/// Whether a failure to start is a failure to confine.
+pub fn unconfined(e: &io::Error) -> bool {
+    e.get_ref().is_some_and(|inner| inner.is::<Unconfined>())
+}
+
 pub struct Tree {
     pub child: Child,
     ended: bool,
@@ -31,13 +51,19 @@ impl Tree {
         {
             use std::os::windows::process::CommandExt;
             command.creation_flags(windows::CREATE_SUSPENDED);
-            let child = command.spawn()?;
-            let job = windows::confine(&child);
-            Ok(Tree {
-                child,
-                ended: false,
-                job,
-            })
+            let mut child = command.spawn()?;
+            match windows::confine(&child) {
+                Ok(job) => Ok(Tree {
+                    child,
+                    ended: false,
+                    job,
+                }),
+                Err(why) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    Err(io::Error::other(Unconfined(why.into())))
+                }
+            }
         }
     }
     /// Whether the root process has ended. What it started may still be running.
@@ -119,14 +145,21 @@ mod windows {
     }
     /// Put a process started suspended in a job of its own, then let it run.
     /// Nothing it starts can escape the job, since it starts nothing before it is in it.
-    pub fn confine(child: &Child) -> Handle {
+    /// Fails, and leaves the process suspended for the caller to end, when the job
+    /// cannot be made, the process cannot be put in it, or it cannot be let run.
+    pub fn confine(child: &Child) -> Result<Handle, &'static str> {
         // SAFETY: every pointer passed is either null or points to memory owned here
         // for the length of the call; every handle opened is closed.
         unsafe {
             let job = CreateJobObjectW(std::ptr::null_mut(), std::ptr::null());
-            if !invalid(job) {
-                AssignProcessToJobObject(job, child.as_raw_handle() as Handle);
+            if invalid(job) {
+                return Err("CreateJobObjectW failed");
             }
+            if AssignProcessToJobObject(job, child.as_raw_handle() as Handle) == 0 {
+                CloseHandle(job);
+                return Err("AssignProcessToJobObject failed");
+            }
+            let mut resumed = 0;
             let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
             if !invalid(snapshot) {
                 let mut entry = ThreadEntry32 {
@@ -143,7 +176,9 @@ mod windows {
                     if entry.owner == child.id() {
                         let thread = OpenThread(THREAD_SUSPEND_RESUME, 0, entry.thread);
                         if !invalid(thread) {
-                            ResumeThread(thread);
+                            if ResumeThread(thread) != u32::MAX {
+                                resumed += 1;
+                            }
                             CloseHandle(thread);
                         }
                     }
@@ -151,7 +186,12 @@ mod windows {
                 }
                 CloseHandle(snapshot);
             }
-            job
+            if resumed == 0 {
+                TerminateJobObject(job, 1);
+                CloseHandle(job);
+                return Err("the process could not be let run");
+            }
+            Ok(job)
         }
     }
     pub fn terminate(job: Handle) {

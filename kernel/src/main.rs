@@ -41,6 +41,8 @@ fn answer(command: &str, input: &[u8]) -> Result<Value, String> {
         Err(reason) if command == "key" => {
             return Ok(json::object(vec![("refused", json::string(reason))]))
         }
+        // A check's input that is not a JSON object is refused as `bad-input`.
+        Err(_) if command == "check" => Value::Null,
         Err(reason) => return Err(format!("the input is not acceptable JSON: {reason}")),
     };
     let kind = || match v.opt("kind") {

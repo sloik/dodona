@@ -1286,15 +1286,15 @@
       "name": "host reads an executor's report loosely",
       "model_case": null,
       "file": "src/host.rs",
-      "find": "match wire::strict(std::str::from_utf8(out.trim_ascii()).ok()?) {",
-      "replace": "match crate::jsonread::parse(std::str::from_utf8(out.trim_ascii()).ok()?, false).map(|r| r.0) {"
+      "find": "match wire::strict(std::str::from_utf8(report_line(&out)?).ok()?) {",
+      "replace": "match crate::jsonread::parse(std::str::from_utf8(report_line(&out)?).ok()?, false).map(|r| r.0) {"
     },
     {
-      "name": "host does not wait for an executor beyond its deadline",
+      "name": "host waits for an executor no longer than its wall_ms",
       "model_case": null,
       "file": "src/host.rs",
-      "find": "            wait + Duration::from_millis(wall),",
-      "replace": "            Duration::from_millis(wall.min(1)),"
+      "find": "(*n).max(0) as u64 + EXECUTOR_GRACE_MS,",
+      "replace": "(*n).max(0) as u64,"
     },
     {
       "name": "host ends only the provider, not what it started",
@@ -1386,6 +1386,132 @@
       "file": "src/host.rs",
       "find": "if !status.success() {",
       "replace": "if false {"
+    },
+    {
+      "name": "host rule 4: a tool not in the run's own tools",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "        .any(|t| !run_tools.iter().any(|e| e.text(\"name\") == Some(t)))\n    {\n        return Some(\"tool-not-in-run\");",
+      "replace": "        .any(|_| false)\n    {\n        return Some(\"tool-not-in-run\");"
+    },
+    {
+      "name": "host rule 4: tools read entry by entry, not rule by rule",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if run_tools.iter().any(|e| given(e).is_none()) {",
+      "replace": "if run_tools.first().is_some_and(|e| given(e).is_none()) {"
+    },
+    {
+      "name": "host rule 9: inputs read entry by entry, not rule by rule",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if entries.iter().any(|e| keyed(e).is_none()) {",
+      "replace": "if entries.first().is_some_and(|e| keyed(e).is_none()) {"
+    },
+    {
+      "name": "host final: attachments read entry by entry, not rule by rule",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".all(|a| passes(&path_of(a)) && attachment(root, &path_of(a)).is_some())",
+      "replace": ".take(1).all(|a| passes(&path_of(a)) && attachment(root, &path_of(a)).is_some())"
+    },
+    {
+      "name": "host final: a provider may give unavailable",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "pub const VERDICTS: [&str; 4] = [\"passed\", \"failed\", \"error\", \"unsupported\"];",
+      "replace": "pub const VERDICTS: [&str; 5] = [\"passed\", \"failed\", \"error\", \"unsupported\", \"unavailable\"];"
+    },
+    {
+      "name": "host manifest: a strength of null read as none",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "let ceiling = match check.and_then(|c| c.opt(\"strength\")) {",
+      "replace": "let ceiling = match check.and_then(|c| c.opt(\"strength\")).filter(|s| !matches!(s, Value::Null)) {"
+    },
+    {
+      "name": "host manifest: tools not required",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !objects_with(manifest.opt(\"tools\"), &[\"name\"])",
+      "replace": "if manifest.opt(\"tools\").is_some() && !objects_with(manifest.opt(\"tools\"), &[\"name\"])"
+    },
+    {
+      "name": "host executor: a report ended by CR LF taken",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "(!line.is_empty() && !line.ends_with(b\"\\r\")).then_some(line)",
+      "replace": "(!line.is_empty()).then_some(line.strip_suffix(b\"\\r\").unwrap_or(line))"
+    },
+    {
+      "name": "host executor: an empty first line skipped",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "    let end = out.iter().position(|b| *b == b'\\n')?;\n",
+      "replace": "    let out = out.strip_prefix(b\"\\n\").unwrap_or(out);\n    let end = out.iter().position(|b| *b == b'\\n')?;\n"
+    },
+    {
+      "name": "session: a provider that ignores shutdown is a deadline",
+      "model_case": null,
+      "file": "src/wire.rs",
+      "find": "        self.end();\n        // Every process is gone",
+      "replace": "        if !self.tree.exited() {\n            return Err(\"deadline\");\n        }\n        self.end();\n        // Every process is gone"
+    },
+    {
+      "name": "session: an answer with another id taken",
+      "model_case": null,
+      "file": "src/session.rs",
+      "find": "if a.text(\"id\") != Some(id) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "session: the echo not compared",
+      "model_case": null,
+      "file": "src/session.rs",
+      "find": "        && m.text(\"echo\") == Some(wire::ECHO)\n",
+      "replace": ""
+    },
+    {
+      "name": "session: an error taken as a result",
+      "model_case": null,
+      "file": "src/session.rs",
+      "find": "Some(\"error\") => return Some(\"provider-error\"),",
+      "replace": "Some(\"error\") => {}"
+    },
+    {
+      "name": "process tree: no group of its own",
+      "model_case": null,
+      "file": "src/proc.rs",
+      "find": "            command.process_group(0);\n",
+      "replace": ""
+    },
+    {
+      "name": "strict reading: a repeated key accepted",
+      "model_case": null,
+      "file": "src/jsonread.rs",
+      "find": "if !keys.insert(key.clone()) && self.strict {",
+      "replace": "if false {"
+    },
+    {
+      "name": "strict reading: half a UTF-16 pair accepted",
+      "model_case": null,
+      "file": "src/jsonread.rs",
+      "find": "        if self.strict {\n",
+      "replace": "        if false {\n"
+    },
+    {
+      "name": "strict reading: depth not measured",
+      "model_case": null,
+      "file": "src/jsonread.rs",
+      "find": "                deepest = deepest.max(stack.len() + 1);\n",
+      "replace": ""
+    },
+    {
+      "name": "strict reading: a fraction accepted",
+      "model_case": null,
+      "file": "src/jsonread.rs",
+      "find": "            integer = false;\n",
+      "replace": "            integer = true;\n"
     }
   ]
 }
