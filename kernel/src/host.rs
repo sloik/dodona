@@ -3,14 +3,15 @@
 //! commands the kernel is given; it names neither.
 //!
 //! The rules are pure functions of what the provider said and what the check was
-//! given, each returning the reason it is broken: `run_fault` for a `next`,
-//! `report_fault` for what an executor reports, `final_verdict` for a `final`.
+//! given, each returning the reason it is broken: `read_input` for the host's own
+//! input, `manifest` for the manifest, `run_fault` for a `next`, `report_fault`
+//! for what an executor reports, `final_verdict` for a `final`.
 use crate::canonical;
 use crate::json::{self, Value};
 use crate::path;
 use crate::proc::Tree;
 use crate::session::{answer_fault, hello};
-use crate::wire::{Log, Peer};
+use crate::wire::{self, Log, Peer};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -24,6 +25,10 @@ pub const MAX_LINE: usize = 1 << 20;
 pub const RANKS: [&str; 4] = ["documented", "sampled", "bounded", "exhaustive"];
 /// The verdicts a provider may give.
 pub const VERDICTS: [&str; 4] = ["passed", "failed", "error", "unsupported"];
+/// The largest attachment the host hashes again.
+pub const MAX_ATTACHMENT: u64 = 64 << 20;
+/// The longest the host waits for an executor beyond its deadline: 24 hours.
+pub const MAX_WALL_MS: u64 = 24 * 60 * 60 * 1000;
 
 /// What the check was given, and what the manifest declared.
 pub struct Given {
@@ -42,12 +47,11 @@ impl Given {
     pub fn named(&self) -> Vec<String> {
         let mut names = Vec::new();
         for field in ["specified_by", "targets"] {
-            if let Some(Value::Array(a)) = self.obligation.opt(field) {
-                names.extend(a.iter().filter_map(|v| match v {
-                    Value::String(s) => Some(s.clone()),
-                    _ => None,
-                }));
-            }
+            names.extend(
+                strings(self.obligation.opt(field))
+                    .into_iter()
+                    .map(str::to_owned),
+            );
         }
         names
     }
@@ -60,6 +64,11 @@ fn same(a: Option<&Value>, b: Option<&Value>) -> bool {
     }
 }
 
+fn is_object(v: Option<&Value>) -> bool {
+    matches!(v, Some(Value::Object(_)))
+}
+
+/// The strings of a list, leaving out anything else in it.
 fn strings(v: Option<&Value>) -> Vec<&str> {
     match v {
         Some(Value::Array(a)) => a
@@ -69,6 +78,26 @@ fn strings(v: Option<&Value>) -> Vec<&str> {
                 _ => None,
             })
             .collect(),
+        _ => vec![],
+    }
+}
+
+/// Whether a value is a list of strings.
+fn all_strings(v: Option<&Value>) -> bool {
+    matches!(v, Some(Value::Array(a)) if a.len() == strings(v).len())
+}
+
+/// Whether a value is a list of objects, each with a string under every field named.
+fn objects_with(v: Option<&Value>, fields: &[&str]) -> bool {
+    matches!(v, Some(Value::Array(a)) if a.iter().all(|e| {
+        matches!(e, Value::Object(_)) && fields.iter().all(|f| e.text(f).is_some())
+    }))
+}
+
+/// The values under one string field of each entry of a list.
+fn field_of<'a>(v: Option<&'a Value>, field: &str) -> Vec<&'a str> {
+    match v {
+        Some(Value::Array(a)) => a.iter().filter_map(|e| e.text(field)).collect(),
         _ => vec![],
     }
 }
@@ -90,18 +119,6 @@ fn tool_refs(arg: &str) -> Vec<(&str, &str)> {
     found
 }
 
-/// The paths of the `{"path": ...}` entries of a list: None if one is not a string.
-fn entry_paths(v: Option<&Value>) -> Option<Vec<String>> {
-    match v {
-        None => Some(vec![]),
-        Some(Value::Array(a)) => a
-            .iter()
-            .map(|e| e.text("path").map(str::to_owned))
-            .collect(),
-        Some(_) => None,
-    }
-}
-
 fn passes(p: &str) -> bool {
     path::check(p.as_bytes()).is_none()
 }
@@ -115,44 +132,64 @@ fn needs_to_be_a_file(arg: &str) -> bool {
 }
 
 /// Whether an argument is, whole, one file of a tool: `${tool:NAME}/PATH`.
-/// PATH is made of the portable file-name characters and `/` only, so nothing
-/// can be glued on after the file.
+/// What PATH may hold is rule 5's.
 fn whole_tool_file(arg: &str) -> bool {
     let refs = tool_refs(arg);
-    if refs.len() != 1 || !arg.starts_with("${tool:") {
-        return false;
-    }
-    let file = match refs[0].1.strip_prefix('/') {
-        Some(f) => f,
-        None => return false,
-    };
+    refs.len() == 1 && arg.starts_with("${tool:") && refs[0].1.starts_with('/')
+}
+
+/// Rule 5 for the PATH of `${tool:NAME}/PATH`: the path check, and every
+/// segment ASCII letters, digits, `.`, `_` and `-` only, so that nothing can be
+/// carried after the file.
+fn tool_file_passes(file: &str) -> bool {
     passes(file)
-        && file
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "._-/".contains(c))
+        && file.split('/').all(|s| {
+            s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
+        })
+}
+
+/// Rule 2: whether a run description has its shape. `env` is left to rule 7.
+pub fn described(run: &Value) -> bool {
+    let program = run.opt("program");
+    let integers = |l: &Value| match l {
+        Value::Object(o) => o.iter().all(|(_, v)| matches!(v, Value::Number(_))),
+        _ => false,
+    };
+    matches!(run, Value::Object(_))
+        && is_object(program)
+        && program.is_some_and(|p| p.text("tool").is_some() && p.text("path").is_some())
+        && matches!(run.opt("args"), Some(Value::Array(_)))
+        && objects_with(run.opt("inputs"), &["path", "identity"])
+        && objects_with(run.opt("outputs"), &["path"])
+        && objects_with(run.opt("tools"), &["name", "digest"])
+        && is_object(run.opt("platform"))
+        && run.opt("cwd").is_none_or(|c| matches!(c, Value::String(_)))
+        && run.opt("limits").is_none_or(integers)
 }
 
 /// Why a run the provider asks for may not start, if it may not. `runs` is how
 /// many runs this check has already started. The rules are kept in their order.
 pub fn run_fault(g: &Given, runs: usize, run: &Value) -> Option<&'static str> {
-    let args = strings(run.opt("args"));
-    let program = run.opt("program");
-    let run_tools: Vec<&Value> = match run.opt("tools") {
-        Some(Value::Array(a)) => a.iter().collect(),
-        _ => vec![],
-    };
-    let inputs = entry_paths(run.opt("inputs"));
-    let outputs = entry_paths(run.opt("outputs"));
     // 1. No more than eight runs.
     if runs >= MAX_RUNS {
         return Some("too-many-runs");
     }
-    // 2. The platform the check was asked for.
+    // 2. The description has its shape.
+    if !described(run) {
+        return Some("bad-description");
+    }
+    let program = run.get("program");
+    let args = strings(run.opt("args"));
+    let inputs = field_of(run.opt("inputs"), "path");
+    let outputs = field_of(run.opt("outputs"), "path");
+    let run_tools = run.get("tools").array();
+    // 3. The platform the check was asked for.
     if !same(run.opt("platform"), Some(&g.platform)) {
         return Some("platform-mismatch");
     }
-    // 3. Every tool named is declared, and given to this check by digest.
-    let mut named = vec![program.and_then(|p| p.text("tool")).unwrap_or("")];
+    // 4. Every tool named is declared, and given to this check by digest.
+    let mut named = vec![program.text("tool").unwrap_or_default()];
     named.extend(args.iter().flat_map(|a| tool_refs(a)).map(|(name, _)| name));
     if named.iter().any(|t| !g.declared.iter().any(|d| d == t)) {
         return Some("undeclared-tool");
@@ -165,9 +202,7 @@ pub fn run_fault(g: &Given, runs: usize, run: &Value) -> Option<&'static str> {
             .iter()
             .find(|(n, _)| Some(n.as_str()) == e.text("name"))
     };
-    if run_tools.iter().any(|e| given(e).is_none())
-        || !matches!(run.opt("tools"), Some(Value::Array(_)))
-    {
+    if run_tools.iter().any(|e| given(e).is_none()) {
         return Some("tool-not-in-key");
     }
     if run_tools
@@ -176,61 +211,42 @@ pub fn run_fault(g: &Given, runs: usize, run: &Value) -> Option<&'static str> {
     {
         return Some("tool-digest-mismatch");
     }
-    // 4. Every path passes the path check.
-    let mut paths: Vec<Option<String>> =
-        vec![program.and_then(|p| p.text("path")).map(str::to_owned)];
-    paths.extend(
-        inputs
-            .clone()
-            .map_or(vec![None], |v| v.into_iter().map(Some).collect()),
-    );
-    paths.extend(
-        outputs
-            .clone()
-            .map_or(vec![None], |v| v.into_iter().map(Some).collect()),
-    );
-    for arg in &args {
-        for (_, after) in tool_refs(arg) {
-            if let Some(file) = after.strip_prefix('/') {
-                paths.push(Some(file.to_owned()));
-            }
-        }
-    }
-    if let Some(cwd) = run.opt("cwd") {
-        paths.push(match cwd {
-            Value::String(s) => Some(s.clone()),
-            _ => None,
-        });
-    }
-    if paths.iter().any(|p| !p.as_deref().is_some_and(passes)) {
-        return Some("bad-path");
-    }
-    let (inputs, outputs) = (inputs.unwrap_or_default(), outputs.unwrap_or_default());
-    // 5. An argument that could name a file is, whole, one of the run's files.
-    let file_arg = |a: &&str| inputs.iter().any(|i| i == *a) || whole_tool_file(a);
-    if args
+    // 5. Every path passes the path check. An argument holding NUL is left to rule 10.
+    let words: Vec<&str> = args.iter().copied().filter(|a| !a.contains('\0')).collect();
+    let mut paths = vec![program.text("path").unwrap_or_default()];
+    paths.extend(inputs.iter().chain(outputs.iter()));
+    let tool_files: Vec<&str> = words
         .iter()
-        .any(|a| !a.contains('\0') && needs_to_be_a_file(a) && !file_arg(a))
-    {
+        .flat_map(|a| tool_refs(a))
+        .filter_map(|(_, after)| after.strip_prefix('/'))
+        .collect();
+    paths.extend(run.text("cwd"));
+    if !paths.iter().all(|p| passes(p)) {
         return Some("bad-path");
     }
-    // 6. No environment.
-    if run
-        .opt("env")
-        .is_some_and(|e| !matches!(e, Value::Object(o) if o.is_empty()))
-    {
+    if !tool_files.iter().all(|f| tool_file_passes(f)) {
+        return Some("bad-path");
+    }
+    // 6. An argument that could name a file is, whole, one of the run's files.
+    let file_arg = |a: &&str| inputs.contains(a) || whole_tool_file(a);
+    if words.iter().any(|a| needs_to_be_a_file(a) && !file_arg(a)) {
+        return Some("bad-path");
+    }
+    // 7. No environment, whatever its value.
+    if run.opt("env").is_some() {
         return Some("env-not-allowed");
     }
-    // 7. No output over an input.
-    let is_input = |p: &String| inputs.contains(p) || g.inputs.iter().any(|(i, _)| i == p);
-    if outputs.iter().any(is_input) {
+    // 8. No output over an input of the run or of the check, whatever the ASCII case.
+    let over = |o: &&str| {
+        let o = o.to_ascii_lowercase();
+        inputs.iter().any(|i| i.to_ascii_lowercase() == o)
+            || g.inputs.iter().any(|(i, _)| i.to_ascii_lowercase() == o)
+    };
+    if outputs.iter().any(over) {
         return Some("output-overwrites-input");
     }
-    // 8. Every input is in the key, with the identity it has there.
-    let entries: Vec<&Value> = match run.opt("inputs") {
-        Some(Value::Array(a)) => a.iter().collect(),
-        _ => vec![],
-    };
+    // 9. Every input is in the key, with the identity it has there.
+    let entries = run.get("inputs").array();
     let keyed = |e: &Value| {
         g.inputs
             .iter()
@@ -245,13 +261,12 @@ pub fn run_fault(g: &Given, runs: usize, run: &Value) -> Option<&'static str> {
     {
         return Some("identity-mismatch");
     }
-    // 9. Arguments are a list of strings with no NUL.
-    let listed = matches!(run.opt("args"), Some(Value::Array(a)) if a.iter().all(|x| matches!(x, Value::String(_))));
-    if !listed || args.iter().any(|a| a.contains('\0')) {
+    // 10. Every argument is a string without NUL.
+    if !all_strings(run.opt("args")) || args.iter().any(|a| a.contains('\0')) {
         return Some("bad-arguments");
     }
-    // 10. The run reads every file its obligation names.
-    if g.named().iter().any(|n| !inputs.contains(n)) {
+    // 11. The run reads every file its obligation names.
+    if g.named().iter().any(|n| !inputs.contains(&n.as_str())) {
         return Some("missing-input");
     }
     None
@@ -310,6 +325,34 @@ pub fn report_fault(run: &Value, report: Option<&Value>) -> Option<&'static str>
     None
 }
 
+/// The bytes of a file under `root`, reached without following a symbolic link
+/// at any step, if it is a regular file of at most `MAX_ATTACHMENT` bytes.
+pub fn attachment(root: &Path, path: &str) -> Option<Vec<u8>> {
+    let mut at = root.to_path_buf();
+    for segment in path.split('/') {
+        at.push(segment);
+        if std::fs::symlink_metadata(&at)
+            .ok()?
+            .file_type()
+            .is_symlink()
+        {
+            return None;
+        }
+    }
+    // No step is a link, so the file's own metadata is the file's.
+    let meta = std::fs::metadata(&at).ok()?;
+    if !meta.file_type().is_file() || meta.len() > MAX_ATTACHMENT {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(&at)
+        .ok()?
+        .take(MAX_ATTACHMENT + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    (bytes.len() as u64 <= MAX_ATTACHMENT).then_some(bytes)
+}
+
 /// The verdict a `final` gives, or why it is refused. `runs` is how many runs exited.
 pub fn final_verdict(
     g: &Given,
@@ -317,24 +360,26 @@ pub fn final_verdict(
     f: &Value,
     root: &Path,
 ) -> Result<String, &'static str> {
-    let attachments: Vec<&Value> = match f.opt("attachments") {
-        None => vec![],
-        Some(Value::Array(a)) => a.iter().collect(),
-        Some(_) => return Err("bad-path"),
-    };
-    if attachments
+    let shaped = matches!(f, Value::Object(_))
+        && f.opt("attachments")
+            .is_none_or(|a| objects_with(Some(a), &["path", "identity"]));
+    if !shaped {
+        return Err("bad-final");
+    }
+    let attachments: &[Value] = f.opt("attachments").map_or(&[], Value::array);
+    let path_of = |a: &Value| a.text("path").unwrap_or_default().to_owned();
+    if !attachments
         .iter()
-        .any(|a| !a.text("path").is_some_and(passes))
+        .all(|a| passes(&path_of(a)) && attachment(root, &path_of(a)).is_some())
     {
         return Err("bad-path");
     }
     let rehashed = |a: &Value| {
-        let bytes = std::fs::read(root.join(a.text("path").unwrap_or_default())).ok()?;
-        Some(format!("sha256:{}", canonical::sha256(&bytes)))
+        attachment(root, &path_of(a)).map(|bytes| format!("sha256:{}", canonical::sha256(&bytes)))
     };
     if attachments
         .iter()
-        .any(|a| rehashed(a).is_none() || rehashed(a).as_deref() != a.text("identity"))
+        .any(|a| rehashed(a).as_deref() != a.text("identity"))
     {
         return Err("identity-mismatch");
     }
@@ -364,30 +409,46 @@ pub fn final_verdict(
 }
 
 /// What the manifest declares: its tools, and the strength of `obligation.check`.
-/// None when it is not an object with a list of capabilities.
+/// None when it does not have the shape the contract gives it.
 pub fn manifest(m: &Value) -> Option<(Vec<String>, Ceiling)> {
     let manifest = m.opt("manifest")?;
-    let capabilities = match manifest.opt("capabilities") {
-        Some(Value::Array(a)) => a,
-        _ => return None,
-    };
-    let declared = match manifest.opt("tools") {
-        Some(Value::Array(a)) => a
-            .iter()
-            .filter_map(|t| t.text("name").map(str::to_owned))
-            .collect(),
-        _ => vec![],
-    };
-    let ceiling = capabilities
+    if !objects_with(manifest.opt("capabilities"), &["capability"]) {
+        return None;
+    }
+    let names = field_of(manifest.opt("capabilities"), "capability");
+    if (1..names.len()).any(|i| names[..i].contains(&names[i])) {
+        return None;
+    }
+    let check = manifest
+        .get("capabilities")
+        .array()
         .iter()
-        .find(|c| c.text("capability") == Some("obligation.check"))
-        .and_then(|c| c.opt("strength"))
-        .and_then(|s| Some((s.text("class")?.to_owned(), s.text("rank")?.to_owned())));
-    Some((declared, ceiling))
+        .find(|c| c.text("capability") == Some("obligation.check"));
+    let ceiling = match check.and_then(|c| c.opt("strength")) {
+        None => None,
+        Some(s) => {
+            let rank = s.text("rank").filter(|r| RANKS.contains(r))?;
+            Some((s.text("class")?.to_owned(), rank.to_owned()))
+        }
+    };
+    let tool_name = |n: &str| {
+        !n.is_empty()
+            && n.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._-".contains(c))
+    };
+    if !objects_with(manifest.opt("tools"), &["name"])
+        || !field_of(manifest.opt("tools"), "name")
+            .into_iter()
+            .all(tool_name)
+    {
+        return None;
+    }
+    let declared = field_of(manifest.opt("tools"), "name");
+    Some((declared.into_iter().map(str::to_owned).collect(), ceiling))
 }
 
-/// Give one run to the executor command and read its report. None when the
-/// executor fails, prints no object, or is not done by `wait`.
+/// Give one run to the executor command and read its report, strictly. None when
+/// the executor fails, prints no object that can be read, or is not done by `wait`.
 fn execute(executor: &[String], root: &Path, asked: &Value, wait: Duration) -> Option<Value> {
     let mut tree = Tree::spawn(
         Command::new(&executor[0])
@@ -406,7 +467,10 @@ fn execute(executor: &[String], root: &Path, asked: &Value, wait: Duration) -> O
         let _ = tx.send(out);
     });
     if let Some(mut stdin) = tree.child.stdin.take() {
-        let _ = stdin.write_all(json::encode(asked).as_bytes());
+        let text = json::encode(asked);
+        std::thread::spawn(move || {
+            let _ = stdin.write_all(text.as_bytes());
+        });
     }
     let until = Instant::now() + wait;
     let status = loop {
@@ -423,7 +487,7 @@ fn execute(executor: &[String], root: &Path, asked: &Value, wait: Duration) -> O
     if !status.success() {
         return None;
     }
-    match json::parse(out.trim_ascii()) {
+    match wire::strict(std::str::from_utf8(out.trim_ascii()).ok()?) {
         Ok(v @ Value::Object(_)) => Some(v),
         _ => None,
     }
@@ -444,64 +508,52 @@ struct Asked {
     deadline_ms: u64,
 }
 
-fn argv(v: Option<&Value>, what: &str) -> Result<Vec<String>, String> {
-    let list = strings(v);
-    match v {
-        Some(Value::Array(a)) if !a.is_empty() && a.len() == list.len() => {
-            Ok(list.into_iter().map(str::to_owned).collect())
-        }
-        _ => Err(format!("`{what}` is not a command: a list of strings")),
+/// The host's own input, if it has the shape the contract gives it.
+fn read_input(v: &Value) -> Option<(Asked, Given)> {
+    let command = |k: &str| {
+        let list = v.opt(k);
+        (all_strings(list) && !strings(list).is_empty()).then(|| {
+            strings(list)
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+    };
+    let pairs = |k: &str, a: &str, b: &str| {
+        objects_with(v.opt(k), &[a, b]).then(|| {
+            v.get(k)
+                .array()
+                .iter()
+                .map(|e| (e.get(a).str().to_owned(), e.get(b).str().to_owned()))
+                .collect::<Vec<_>>()
+        })
+    };
+    let obligation = v.opt("obligation").filter(|o| is_object(Some(o)))?;
+    if !all_strings(obligation.opt("specified_by")) || !all_strings(obligation.opt("targets")) {
+        return None;
     }
-}
-
-fn pairs(v: Option<&Value>, a: &str, b: &str, what: &str) -> Result<Vec<(String, String)>, String> {
-    match v {
-        Some(Value::Array(list)) => list
-            .iter()
-            .map(|e| Some((e.text(a)?.to_owned(), e.text(b)?.to_owned())))
-            .collect::<Option<Vec<_>>>()
-            .ok_or(format!(
-                "an entry of `{what}` has no string `{a}` and `{b}`"
-            )),
-        _ => Err(format!("`{what}` is not a list")),
-    }
-}
-
-fn read_input(v: &Value) -> Result<(Asked, Given), String> {
     let deadline_ms = match v.opt("deadline_ms") {
         Some(Value::Number(n)) if *n > 0 => *n as u64,
-        _ => return Err("`deadline_ms` is not a positive whole number".into()),
+        _ => return None,
     };
-    let obligation = match v.opt("obligation") {
-        Some(o @ Value::Object(_)) => o.clone(),
-        _ => return Err("`obligation` is not an object".into()),
-    };
-    for field in ["specified_by", "targets"] {
-        let list = obligation.opt(field);
-        if !matches!(list, Some(Value::Array(a)) if a.len() == strings(list).len()) {
-            return Err(format!(
-                "the obligation's `{field}` is not a list of strings"
-            ));
-        }
-    }
     let asked = Asked {
-        root: v.text("root").ok_or("`root` is not a string")?.to_owned(),
-        provider: argv(v.opt("provider"), "provider")?,
-        executor: argv(v.opt("executor"), "executor")?,
+        root: v.text("root")?.to_owned(),
+        provider: command("provider")?,
+        executor: command("executor")?,
         obligation: obligation.clone(),
-        inputs: v.opt("inputs").cloned().unwrap_or(Value::Null),
-        tools: v.opt("tools").cloned().unwrap_or(Value::Null),
+        inputs: v.get("inputs").clone(),
+        tools: v.opt("tools")?.clone(),
         deadline_ms,
     };
     let given = Given {
-        obligation,
-        inputs: pairs(v.opt("inputs"), "path", "identity", "inputs")?,
-        tools: pairs(v.opt("tools"), "name", "digest", "tools")?,
-        platform: v.opt("platform").cloned().ok_or("no `platform`")?,
+        obligation: obligation.clone(),
+        inputs: pairs("inputs", "path", "identity")?,
+        tools: pairs("tools", "name", "digest")?,
+        platform: v.opt("platform").filter(|p| is_object(Some(p)))?.clone(),
         declared: vec![],
         ceiling: None,
     };
-    Ok((asked, given))
+    Some((asked, given))
 }
 
 fn request(id: usize, deadline_ms: u64, body: Value) -> Value {
@@ -521,7 +573,7 @@ fn drive(
     runs: &mut usize,
 ) -> Result<Outcome, &'static str> {
     let wait = Duration::from_millis(asked.deadline_ms);
-    peer.send(&hello(MAX_LINE, asked.deadline_ms))?;
+    peer.send(&hello(MAX_LINE, asked.deadline_ms), Instant::now() + wait)?;
     let m = peer.read(Instant::now() + wait)?;
     if !crate::session::manifest_ok(&m) {
         return Err("bad-manifest");
@@ -537,13 +589,19 @@ fn drive(
         ("platform", g.platform.clone()),
     ]);
     let mut id = 1;
-    peer.send(&request(id, asked.deadline_ms, start))?;
+    peer.send(
+        &request(id, asked.deadline_ms, start),
+        Instant::now() + wait,
+    )?;
     loop {
         let answer = peer.read(Instant::now() + wait)?;
         if let Some(fault) = answer_fault(&answer, &id.to_string(), "obligation.check") {
             return Err(fault);
         }
         let body = answer.opt("body");
+        if !is_object(body) {
+            return Err("unexpected");
+        }
         let next = body.and_then(|b| b.opt("next"));
         let fin = body.and_then(|b| b.opt("final"));
         let run = match (next, fin) {
@@ -566,7 +624,7 @@ fn drive(
             ("run", run.clone()),
         ]);
         let wall = match run.opt("limits").and_then(|l| l.opt("wall_ms")) {
-            Some(Value::Number(n)) if *n > 0 => *n as u64,
+            Some(Value::Number(n)) if *n > 0 => (*n as u64).min(MAX_WALL_MS),
             _ => 0,
         };
         let report = execute(
@@ -585,38 +643,25 @@ fn drive(
             ("run", Value::Number(*runs as i64)),
             ("report", report.unwrap_or(Value::Null)),
         ]);
-        peer.send(&request(id, asked.deadline_ms, result))?;
+        peer.send(
+            &request(id, asked.deadline_ms, result),
+            Instant::now() + wait,
+        )?;
     }
 }
 
 pub fn check(v: &Value) -> Result<Value, String> {
-    let (asked, mut g) = read_input(v)?;
     let mut runs = 0;
-    let outcome = if g
-        .named()
-        .iter()
-        .any(|n| !g.inputs.iter().any(|(p, _)| p == n))
-    {
-        Outcome::Refused("unknown-file")
-    } else {
-        match Tree::spawn(
-            Command::new(&asked.provider[0])
-                .args(&asked.provider[1..])
-                .current_dir(&asked.root)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped()),
-        ) {
-            Err(_) => Outcome::Refused("closed"),
-            Ok(mut tree) => {
-                let log = Log::drain(tree.child.stderr.take().expect("piped"), 65536);
-                let mut peer = Peer::new(tree, MAX_LINE, true);
-                let outcome =
-                    drive(&mut peer, &asked, &mut g, &mut runs).unwrap_or_else(Outcome::Refused);
-                let _ = peer.shutdown(Instant::now() + Duration::from_secs(1));
-                peer.end();
-                log.settle();
-                outcome
+    let outcome = match read_input(v) {
+        None => Outcome::Refused("bad-input"),
+        Some((asked, mut g)) => {
+            if g.named()
+                .iter()
+                .any(|n| !g.inputs.iter().any(|(p, _)| p == n))
+            {
+                Outcome::Refused("unknown-file")
+            } else {
+                host(&asked, &mut g, &mut runs)
             }
         }
     };
@@ -633,6 +678,29 @@ pub fn check(v: &Value) -> Result<Value, String> {
             runs,
         ]),
     })
+}
+
+/// Start the provider, take the check through it, and end every process it started.
+fn host(asked: &Asked, g: &mut Given, runs: &mut usize) -> Outcome {
+    let tree = Tree::spawn(
+        Command::new(&asked.provider[0])
+            .args(&asked.provider[1..])
+            .current_dir(&asked.root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped()),
+    );
+    let mut tree = match tree {
+        Ok(t) => t,
+        Err(_) => return Outcome::Refused("closed"),
+    };
+    let log = Log::drain(tree.child.stderr.take().expect("piped"), 65536);
+    let mut peer = Peer::new(tree, MAX_LINE, true);
+    let outcome = drive(&mut peer, asked, g, runs).unwrap_or_else(Outcome::Refused);
+    let _ = peer.shutdown(Instant::now() + Duration::from_secs(1));
+    peer.end();
+    log.settle();
+    outcome
 }
 
 #[cfg(test)]
@@ -682,6 +750,35 @@ mod tests {
         let g = given();
         let fault = |run: &Value| run_fault(&g, 0, run);
         assert_eq!(run_fault(&g, 8, &good()), Some("too-many-runs"));
+        assert_eq!(run_fault(&g, 8, &v("null")), Some("too-many-runs"));
+        for (field, value) in [
+            ("program", r#"{"tool":"checker"}"#),
+            ("program", r#""bin/x""#),
+            ("args", r#""a.txt""#),
+            ("args", "null"),
+            ("inputs", r#"{"path":"a.txt"}"#),
+            ("inputs", r#"[{"path":"a.txt"}]"#),
+            ("outputs", r#"[{"optional":true}]"#),
+            ("outputs", r#"{"path":"x"}"#),
+            ("tools", r#"[{"name":"checker"}]"#),
+            ("platform", r#""linux""#),
+            ("cwd", "1"),
+            ("limits", r#"{"wall_ms":"1"}"#),
+            ("limits", "[]"),
+        ] {
+            assert_eq!(
+                fault(&with(field, value)),
+                Some("bad-description"),
+                "{field}"
+            );
+        }
+        let mut no_tools = good();
+        if let Value::Object(o) = &mut no_tools {
+            o.retain(|(k, _)| k != "tools");
+        }
+        assert_eq!(fault(&no_tools), Some("bad-description"));
+        assert_eq!(fault(&v("null")), Some("bad-description"));
+        assert_eq!(fault(&with("env", "null")), Some("env-not-allowed"));
         assert_eq!(
             fault(&with("platform", r#"{"os":"windows","arch":"x86_64"}"#)),
             Some("platform-mismatch")
@@ -740,7 +837,23 @@ mod tests {
             assert_eq!(fault(&with("args", &args)), Some("bad-path"), "{arg}");
         }
         assert_eq!(fault(&with("env", r#"{"A":"b"}"#)), Some("env-not-allowed"));
-        assert_eq!(fault(&with("env", "{}")), None);
+        assert_eq!(fault(&with("env", "{}")), Some("env-not-allowed"));
+        assert_eq!(fault(&with("env", "[]")), Some("env-not-allowed"));
+        assert_eq!(
+            fault(&with("outputs", r#"[{"path":"A.TXT"}]"#)),
+            Some("output-overwrites-input")
+        );
+        let mut other = given();
+        other.inputs.push(("b.txt".into(), A.into()));
+        assert_eq!(
+            run_fault(&other, 0, &with("outputs", r#"[{"path":"b.txt"}]"#)),
+            Some("output-overwrites-input")
+        );
+        // NUL is rule 10's, even inside what looks like a tool's file.
+        assert_eq!(
+            fault(&with("args", r#"["-I${tool:checker}/x\u0000"]"#)),
+            Some("bad-arguments")
+        );
         assert_eq!(
             fault(&with("outputs", r#"[{"path":"a.txt"}]"#)),
             Some("output-overwrites-input")
@@ -759,7 +872,6 @@ mod tests {
             )),
             Some("identity-mismatch")
         );
-        assert_eq!(fault(&with("args", r#""a.txt""#)), Some("bad-arguments"));
         assert_eq!(
             fault(&with("args", r#"["a.txt\u0000x"]"#)),
             Some("bad-arguments")
@@ -784,7 +896,10 @@ mod tests {
         assert!(whole_tool_file("${tool:a}/lib/x.jar"));
         assert!(!whole_tool_file("${tool:a}"));
         assert!(!whole_tool_file("-x${tool:a}/y"));
-        assert!(!whole_tool_file("${tool:a}/y=/z"));
+        assert!(tool_file_passes("lib/x-1_2.jar"));
+        assert!(!tool_file_passes("y=/z"));
+        assert!(!tool_file_passes("lib/x\u{e9}.jar"));
+        assert!(!tool_file_passes("../x"));
     }
     #[test]
     fn the_run_key_has_the_number() {
@@ -879,6 +994,21 @@ mod tests {
             ),
             Err("bad-path")
         );
+        assert_eq!(f(r#""passed""#, 1), Err("bad-final"));
+        assert_eq!(
+            f(r#"{"verdict":"maybe","attachments":{}}"#, 1),
+            Err("bad-final")
+        );
+        assert_eq!(
+            f(r#"{"verdict":"maybe","attachments":[{"path":"x"}]}"#, 1),
+            Err("bad-final")
+        );
+        assert_eq!(
+            f(r#"{"verdict":"maybe","attachments":["x"]}"#, 1),
+            Err("bad-final")
+        );
+        let no_class = r#"{"verdict":"passed","strength":{"rank":"bounded"}}"#;
+        assert_eq!(f(no_class, 1), Err("strength-class-mismatch"));
         let name = format!("dodona-kernel-test-{}.txt", std::process::id());
         std::fs::write(root.join(&name), b"kept\n").unwrap();
         let id = format!("sha256:{}", canonical::sha256(b"kept\n"));
@@ -890,7 +1020,14 @@ mod tests {
         assert_eq!(f(&att(&id), 1).as_deref(), Ok("passed"));
         assert_eq!(f(&att(A), 1), Err("identity-mismatch"));
         std::fs::remove_file(root.join(&name)).unwrap();
-        assert_eq!(f(&att(&id), 1), Err("identity-mismatch"));
+        // A file that is not there is not a regular file.
+        assert_eq!(f(&att(&id), 1), Err("bad-path"));
+        let dir = format!("dodona-kernel-test-dir-{}", std::process::id());
+        std::fs::create_dir(root.join(&dir)).unwrap();
+        let in_dir =
+            format!(r#"{{"verdict":"error","attachments":[{{"path":"{dir}","identity":"{A}"}}]}}"#);
+        assert_eq!(f(&in_dir, 1), Err("bad-path"));
+        std::fs::remove_dir(root.join(&dir)).unwrap();
         let none = Given {
             ceiling: None,
             ..given()
@@ -912,16 +1049,52 @@ mod tests {
         assert_eq!(ceiling, Some(("test".into(), "bounded".into())));
         assert!(manifest(&v(r#"{"manifest":{}}"#)).is_none());
         assert!(manifest(&v(r#"{"manifest":{"capabilities":{}}}"#)).is_none());
+        let bad = |caps: &str, tools: &str| {
+            let text = format!(r#"{{"manifest":{{"capabilities":{caps},"tools":{tools}}}}}"#);
+            manifest(&v(&text)).is_none()
+        };
+        let check = r#"{"capability":"obligation.check"}"#;
+        assert!(!bad(&format!("[{check}]"), r#"[{"name":"a.b_c-1"}]"#));
+        assert!(bad(&format!("[{check},{check}]"), "[]"));
+        assert!(bad(&format!(r#"[{check},"obligation.check"]"#), "[]"));
+        assert!(bad(r#"[{"capability":1}]"#, "[]"));
+        let strength = |s: &str| format!(r#"[{{"capability":"obligation.check","strength":{s}}}]"#);
+        assert!(bad(&strength(r#"{"class":"test","rank":"certain"}"#), "[]"));
+        assert!(bad(&strength(r#"{"rank":"bounded"}"#), "[]"));
+        assert!(bad(&strength(r#""bounded""#), "[]"));
+        assert!(bad(&format!("[{check}]"), r#"["checker"]"#));
+        assert!(bad(&format!("[{check}]"), r#"[{"name":"a/b"}]"#));
+        assert!(bad(&format!("[{check}]"), r#"[{"name":""}]"#));
+        assert!(bad(&format!("[{check}]"), "{}"));
+        assert!(bad(&format!("[{check}]"), "null"));
     }
     #[test]
     fn input_of_the_wrong_shape_is_not_handled() {
-        assert!(check(&v("{}")).is_err());
+        let reason = |s: &str| check(&v(s)).unwrap().text("reason").map(str::to_owned);
+        assert_eq!(reason("{}").as_deref(), Some("bad-input"));
+        assert_eq!(reason("[]").as_deref(), Some("bad-input"));
         let ok = r#"{"root":".","provider":["p"],"executor":["e"],"obligation":{"specified_by":["a"],"targets":["b"]},
                     "inputs":[{"path":"a","identity":"x"}],"tools":[],"platform":{},"deadline_ms":1}"#;
         // A file the obligation names is not among the inputs: refused before anything starts.
         assert_eq!(check(&v(ok)).unwrap().text("reason"), Some("unknown-file"));
-        assert!(check(&v(&ok.replace(r#""deadline_ms":1"#, r#""deadline_ms":0"#))).is_err());
-        assert!(check(&v(&ok.replace(r#"["p"]"#, "[]"))).is_err());
-        assert!(check(&v(&ok.replace(r#""targets":["b"]"#, r#""targets":"b""#))).is_err());
+        for (from, to) in [
+            (r#""deadline_ms":1"#, r#""deadline_ms":0"#),
+            (r#""deadline_ms":1"#, r#""deadline_ms":"1""#),
+            (r#"["p"]"#, "[]"),
+            (r#"["p"]"#, "[1]"),
+            (r#""root":".""#, r#""root":1"#),
+            (r#""targets":["b"]"#, r#""targets":"b""#),
+            (r#""specified_by":["a"],"#, ""),
+            (r#""identity":"x""#, r#""identity":1"#),
+            (r#""tools":[]"#, r#""tools":[{"name":"t"}]"#),
+            (r#""tools":[]"#, r#""tools":{}"#),
+            (r#""platform":{}"#, r#""platform":"linux""#),
+        ] {
+            assert_eq!(
+                reason(&ok.replace(from, to)).as_deref(),
+                Some("bad-input"),
+                "{to}"
+            );
+        }
     }
 }

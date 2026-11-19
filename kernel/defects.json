@@ -1003,115 +1003,185 @@
       "replace": "step.text(field).filter(|g| *g == \"hard\" || *g == \"soft\").map(counts_as)"
     },
     {
-      "name": "host check rule 1: a ninth run allowed",
+      "name": "host rule 1: a ninth run allowed",
       "model_case": null,
       "file": "src/host.rs",
       "find": "if runs >= MAX_RUNS {",
       "replace": "if runs > MAX_RUNS {"
     },
     {
-      "name": "host check rule 2: platform of a run not compared",
+      "name": "host rule 2: the shape of a description not checked",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !described(run) {",
+      "replace": "if run.opt(\"program\").is_none() {"
+    },
+    {
+      "name": "host rule 2: outputs that are not a list taken as none",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "        && objects_with(run.opt(\"outputs\"), &[\"path\"])\n",
+      "replace": ""
+    },
+    {
+      "name": "host rule 3: platform of a run not compared",
       "model_case": null,
       "file": "src/host.rs",
       "find": "if !same(run.opt(\"platform\"), Some(&g.platform)) {",
       "replace": "if false {"
     },
     {
-      "name": "host check rule 3: undeclared tool not refused",
+      "name": "host rule 4: undeclared tool not refused",
       "model_case": null,
       "file": "src/host.rs",
       "find": "if named.iter().any(|t| !g.declared.iter().any(|d| d == t)) {",
       "replace": "if false {"
     },
     {
-      "name": "host check rule 3: tool named but not given not refused",
+      "name": "host rule 4: tool named but not given not refused",
       "model_case": null,
       "file": "src/host.rs",
       "find": "if named.iter().any(|t| !g.tools.iter().any(|(n, _)| n == t)) {",
       "replace": "if false {"
     },
     {
-      "name": "host check rule 3: run lists a tool not given",
+      "name": "host rule 4: run lists a tool not given",
       "model_case": null,
       "file": "src/host.rs",
-      "find": "if run_tools.iter().any(|e| given(e).is_none())",
-      "replace": "if false"
+      "find": "if run_tools.iter().any(|e| given(e).is_none()) {",
+      "replace": "if false {"
     },
     {
-      "name": "host check rule 3: tool digest not compared",
+      "name": "host rule 4: tool digest not compared",
       "model_case": null,
       "file": "src/host.rs",
       "find": ".any(|e| given(e).map(|(_, d)| d.as_str()) != e.text(\"digest\"))",
       "replace": ".any(|_| false)"
     },
     {
-      "name": "host check rule 4: paths of a run not checked",
+      "name": "host rule 5: paths of a run not checked",
       "model_case": null,
       "file": "src/host.rs",
-      "find": "if paths.iter().any(|p| !p.as_deref().is_some_and(passes)) {",
+      "find": "if !paths.iter().all(|p| passes(p)) {",
       "replace": "if false {"
     },
     {
-      "name": "host check rule 5: arguments not held to the allowlist",
+      "name": "host rule 5: an argument holding NUL is checked as a path",
       "model_case": null,
       "file": "src/host.rs",
-      "find": ".any(|a| !a.contains('\\0') && needs_to_be_a_file(a) && !file_arg(a))",
-      "replace": ".any(|_| false)"
+      "find": ".filter(|a| !a.contains('\\0'))",
+      "replace": ".filter(|_| true)"
     },
     {
-      "name": "host check rule 6: environment allowed",
+      "name": "host rule 6: arguments not held to the allowlist",
       "model_case": null,
       "file": "src/host.rs",
-      "find": ".is_some_and(|e| !matches!(e, Value::Object(o) if o.is_empty()))",
-      "replace": ".is_some_and(|_| false)"
-    },
-    {
-      "name": "host check rule 7: output over an input allowed",
-      "model_case": null,
-      "file": "src/host.rs",
-      "find": "if outputs.iter().any(is_input) {",
+      "find": "if words.iter().any(|a| needs_to_be_a_file(a) && !file_arg(a)) {",
       "replace": "if false {"
     },
     {
-      "name": "host check rule 8: input not in the key allowed",
+      "name": "host rule 5: a tool file may have anything appended",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "        && file.split('/').all(|s| {\n            s.chars()\n                .all(|c| c.is_ascii_alphanumeric() || \"._-\".contains(c))\n        })\n",
+      "replace": "\n"
+    },
+    {
+      "name": "host rule 7: an environment allowed",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if run.opt(\"env\").is_some() {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host rule 7: an env of null allowed",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if run.opt(\"env\").is_some() {",
+      "replace": "if run.opt(\"env\").is_some_and(|e| !matches!(e, Value::Null)) {"
+    },
+    {
+      "name": "host rule 8: output over an input allowed",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if outputs.iter().any(over) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host rule 8: output compared with the case of letters",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "let o = o.to_ascii_lowercase();",
+      "replace": "let o = o.to_string();"
+    },
+    {
+      "name": "host rule 8: output compared with the run's inputs only",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "\n            || g.inputs.iter().any(|(i, _)| i.to_ascii_lowercase() == o)",
+      "replace": ""
+    },
+    {
+      "name": "host rule 9: input not in the key allowed",
       "model_case": null,
       "file": "src/host.rs",
       "find": "if entries.iter().any(|e| keyed(e).is_none()) {",
       "replace": "if false {"
     },
     {
-      "name": "host check rule 8: identity of an input not compared",
+      "name": "host rule 9: identity of an input not compared",
       "model_case": null,
       "file": "src/host.rs",
       "find": ".any(|e| keyed(e).map(|(_, i)| i.as_str()) != e.text(\"identity\"))",
       "replace": ".any(|_| false)"
     },
     {
-      "name": "host check rule 9: arguments not checked for NUL or type",
+      "name": "host rule 10: arguments not checked for NUL or type",
       "model_case": null,
       "file": "src/host.rs",
-      "find": "if !listed || args.iter().any(|a| a.contains('\\0')) {",
+      "find": "if !all_strings(run.opt(\"args\")) || args.iter().any(|a| a.contains('\\0')) {",
       "replace": "if false {"
     },
     {
-      "name": "host check rule 10: run need not read what its obligation names",
+      "name": "host rule 11: run need not read what its obligation names",
       "model_case": null,
       "file": "src/host.rs",
-      "find": "if g.named().iter().any(|n| !inputs.contains(n)) {",
+      "find": "if g.named().iter().any(|n| !inputs.contains(&n.as_str())) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host final: shape not checked",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !shaped {",
       "replace": "if false {"
     },
     {
       "name": "host final: attachment path not checked",
       "model_case": null,
       "file": "src/host.rs",
-      "find": ".any(|a| !a.text(\"path\").is_some_and(passes))",
-      "replace": ".any(|_| false)"
+      "find": ".all(|a| passes(&path_of(a)) && attachment(root, &path_of(a)).is_some())",
+      "replace": ".all(|_| true)"
+    },
+    {
+      "name": "host final: an attachment reached through a link",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "        if std::fs::symlink_metadata(&at)\n            .ok()?\n            .file_type()\n            .is_symlink()\n        {",
+      "replace": "        if false {"
+    },
+    {
+      "name": "host final: an attachment that is not a regular file",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !meta.file_type().is_file() || meta.len() > MAX_ATTACHMENT {",
+      "replace": "if meta.len() > MAX_ATTACHMENT {"
     },
     {
       "name": "host final: attachment not hashed again",
       "model_case": null,
       "file": "src/host.rs",
-      "find": ".any(|a| rehashed(a).is_none() || rehashed(a).as_deref() != a.text(\"identity\"))",
+      "find": ".any(|a| rehashed(a).as_deref() != a.text(\"identity\"))",
       "replace": ".any(|_| false)"
     },
     {
@@ -1143,6 +1213,48 @@
       "replace": "if false {"
     },
     {
+      "name": "host input: an obligation without specified_by taken",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !all_strings(obligation.opt(\"specified_by\")) || !all_strings(obligation.opt(\"targets\")) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host input: an obligation may name a file not among the inputs",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".any(|n| !g.inputs.iter().any(|(p, _)| p == n))\n            {\n                Outcome::Refused(\"unknown-file\")",
+      "replace": ".any(|_| false)\n            {\n                Outcome::Refused(\"unknown-file\")"
+    },
+    {
+      "name": "host manifest: a capability named twice",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if (1..names.len()).any(|i| names[..i].contains(&names[i])) {",
+      "replace": "if false {"
+    },
+    {
+      "name": "host manifest: a ceiling off the scale",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".filter(|r| RANKS.contains(r))",
+      "replace": ""
+    },
+    {
+      "name": "host manifest: a tool name that holds a path",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": ".all(tool_name)",
+      "replace": ".all(|_| true)"
+    },
+    {
+      "name": "host answer: a result without an object body",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !is_object(body) {",
+      "replace": "if false {"
+    },
+    {
       "name": "host run key leaves out the run's number",
       "model_case": null,
       "file": "src/host.rs",
@@ -1171,11 +1283,60 @@
       "replace": "false"
     },
     {
+      "name": "host reads an executor's report loosely",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "match wire::strict(std::str::from_utf8(out.trim_ascii()).ok()?) {",
+      "replace": "match crate::jsonread::parse(std::str::from_utf8(out.trim_ascii()).ok()?, false).map(|r| r.0) {"
+    },
+    {
+      "name": "host does not wait for an executor beyond its deadline",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "            wait + Duration::from_millis(wall),",
+      "replace": "            Duration::from_millis(wall.min(1)),"
+    },
+    {
       "name": "host ends only the provider, not what it started",
       "model_case": null,
       "file": "src/proc.rs",
       "find": "kill(-pid, SIGKILL);",
       "replace": "kill(pid, SIGKILL);"
+    },
+    {
+      "name": "check: repeated key and fraction read as malformed",
+      "model_case": null,
+      "file": "src/wire.rs",
+      "find": "        Err(reason @ (\"duplicate-key\" | \"not-an-integer\")) => return Err(reason),\n",
+      "replace": ""
+    },
+    {
+      "name": "check: half a UTF-16 pair read as malformed",
+      "model_case": null,
+      "file": "src/wire.rs",
+      "find": "        Err(\"invalid-string\") => return Err(\"encoding\"),\n",
+      "replace": ""
+    },
+    {
+      "name": "check: an integer beyond 2^53 - 1 accepted",
+      "model_case": null,
+      "file": "src/jsonread.rs",
+      "find": ".filter(|n| integer && n.unsigned_abs() <= 9007199254740991);",
+      "replace": ".filter(|_| integer);"
+    },
+    {
+      "name": "check: sending has no deadline",
+      "model_case": null,
+      "file": "src/wire.rs",
+      "find": "            match w\n                .written\n                .recv_timeout(until.saturating_duration_since(Instant::now()))\n",
+      "replace": "            match w\n                .written\n                .recv()\n                .map_err(|_| RecvTimeoutError::Disconnected)\n"
+    },
+    {
+      "name": "session: valid JSON read strictly",
+      "model_case": null,
+      "file": "src/wire.rs",
+      "find": "jsonread::parse(text, false).map_err(|_| \"malformed\")?.0",
+      "replace": "jsonread::parse(text, true).map_err(|_| \"malformed\")?.0"
     },
     {
       "name": "session: carriage return before the line feed accepted",
@@ -1199,18 +1360,32 @@
       "replace": "Ok(outcome(result, bytes, false))"
     },
     {
-      "name": "host check rule 5: a tool file may have anything appended",
+      "name": "host final: attachment path check removed",
       "model_case": null,
       "file": "src/host.rs",
-      "find": ".all(|c| c.is_ascii_alphanumeric() || \"._-/\".contains(c))",
-      "replace": ".all(|_| true)"
+      "find": ".all(|a| passes(&path_of(a)) && attachment(root, &path_of(a)).is_some())",
+      "replace": ".all(|a| attachment(root, &path_of(a)).is_some())"
     },
     {
-      "name": "host check: an obligation may name a file not among the inputs",
+      "name": "host final: a link at an inner step followed",
       "model_case": null,
       "file": "src/host.rs",
-      "find": ".any(|n| !g.inputs.iter().any(|(p, _)| p == n))\n    {\n        Outcome::Refused(\"unknown-file\")",
-      "replace": ".any(|_| false)\n    {\n        Outcome::Refused(\"unknown-file\")"
+      "find": "        if std::fs::symlink_metadata(&at)\n",
+      "replace": "        if at.ends_with(path) && std::fs::symlink_metadata(&at)\n"
+    },
+    {
+      "name": "host executor: its process tree is not ended",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "    tree.end();\n    let out = rx",
+      "replace": "    std::mem::forget(tree);\n    let out = rx"
+    },
+    {
+      "name": "host executor: its exit status ignored",
+      "model_case": null,
+      "file": "src/host.rs",
+      "find": "if !status.success() {",
+      "replace": "if false {"
     }
   ]
 }

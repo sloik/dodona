@@ -9,6 +9,7 @@ mod evidence;
 mod host;
 mod intent;
 mod json;
+mod jsonread;
 mod ledger;
 mod path;
 mod plan;
