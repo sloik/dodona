@@ -15,15 +15,21 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    # The name is the system alone, not the runner's version: main's ruleset requires these
+    # checks by name, and a runner bump must not rename a required check.
+    name: checks (${{ matrix.system }})
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-26
+            system: macos
             python: python3
           - os: ubuntu-26.04
+            system: linux
             python: python3
           - os: windows-2025
+            system: windows
             python: python
     runs-on: ${{ matrix.os }}
     # The run itself takes seconds. The allowance is for waiting on a hosted
