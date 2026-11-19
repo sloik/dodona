@@ -1318,11 +1318,11 @@
       "replace": ""
     },
     {
-      "name": "host rule 6: a tool file may have anything appended",
+      "name": "host rule 5: a tool file's PATH may hold any character",
       "model_case": "(host checks)",
       "file": "host-rules.js",
-      "find": "const WHOLE_TOOL_FILE = /^\\$\\{tool:[^}]*\\}\\/[A-Za-z0-9._-]+(?:\\/[A-Za-z0-9._-]+)*$/;",
-      "replace": "const WHOLE_TOOL_FILE = /^\\$\\{tool:[^}]*\\}\\/.+$/s;"
+      "find": "  if (!toolFiles(run).every(holdsToolFileCharacters)) return 'bad-path';\n",
+      "replace": ""
     },
     {
       "name": "host rule 6: a word may hold characters outside printable ASCII",

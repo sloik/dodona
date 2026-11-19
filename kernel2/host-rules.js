@@ -20,8 +20,6 @@ const TOOL_FILE_START = /^\$\{tool:[^}]*\}\/(.*)$/s;
 // Each segment of PATH in `${tool:NAME}/PATH` holds ASCII letters, digits, `.`, `_` and
 // `-` only (rule 5), so nothing such as `=/etc/passwd` can be carried after a tool file.
 const TOOL_FILE_SEGMENT = /^[A-Za-z0-9._-]+$/;
-// An argument that is, whole, one file of a tool (rule 6).
-const WHOLE_TOOL_FILE = /^\$\{tool:[^}]*\}\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
 // Characters that can start or join a path; any of them makes an argument a path.
 const PATH_CHARACTERS = ['/', '\\', '~', '@', '$', '%', '..'];
 
@@ -154,10 +152,12 @@ function isFreeWord(argument) {
 }
 
 // Rule 6: an argument that is not a free word is, whole, one of the run's input paths
-// or one file of a tool. An argument that is not a string, or holds NUL, is left to rule 10.
+// or one file of a tool. What the PATH of a tool file may hold is rule 5's, which every
+// such argument has passed by now. An argument that is not a string, or holds NUL, is
+// left to rule 10.
 function argumentAllowed(argument, inputs) {
   if (!isString(argument) || argument.includes('\u0000')) return true;
-  return isFreeWord(argument) || inputs.includes(argument) || WHOLE_TOOL_FILE.test(argument);
+  return isFreeWord(argument) || inputs.includes(argument) || TOOL_FILE_START.test(argument);
 }
 
 // The check a run belongs to: what it was asked for and what it may use.
