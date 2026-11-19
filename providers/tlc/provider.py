@@ -60,6 +60,8 @@ def enumerate_obligations(body: dict) -> dict:
                     "config": {"root": case.get("model", spec["model"]), "config": case["config"], "folder": folder,
                                "arguments": spec["arguments"], "model": spec["model"],
                                "case": {k: case[k] for k in ("config", "expect", "expect_exit", "of") if k in case}}}
+            # What a check of it may read: every file in the model's folder but the expectations.
+            item["inputs"] = sorted(f["path"] for f in body["files"] if f["path"].startswith(folder + "/") and not f["path"].endswith(".json"))
             if item["expect"] == "violated":
                 item["defect_of"] = f"{short}/{guards[0]['config'][:-4]}"
             obligations.append(item)

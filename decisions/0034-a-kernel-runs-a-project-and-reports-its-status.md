@@ -27,7 +27,7 @@ amends:
 
 ## Decision
 
-- **A provider says what each obligation depends on.** `obligation.enumerate` answers each obligation with `inputs`: the paths of the files a check of it may read. The host takes those files and no others into the check, as it takes them now. A provider that lists too few files gets checks that cannot read what they need. That shows as an error, never as a pass, because a run may read only its declared inputs (host rule 9). The model-checker provider lists exactly the files the helper takes today, so no key changes and no kept result goes stale.
+- **A provider says what each obligation depends on.** `obligation.enumerate` answers each obligation with `inputs`: the paths of the files a check of it may read. The host takes those files and no others into the check, as it takes them now. A provider that lists too few files gets checks that cannot read what they need. That shows as an error, never as a pass, because a run may read only its declared inputs (host rule 9). The model-checker provider lists exactly the files the helper takes today, so every key covers the same files as before. Its code changes, and the key holds a digest of the provider's code, so every kept result is checked again once.
 - **Intents come from a provider too.** `intent.index` is served by a provider that reads `intents/*.md`. The kernel names no file format.
 - **The project file says which provider does what.** `dodona.toml`'s bindings name a provider, the capabilities it serves and the files it claims, as [docs/configuration.md](../docs/configuration.md) describes. A kernel reads the subset the contract lists, and refuses a project file outside it. It does not guess.
 - **Work goes to the site as batches.** The executor is a command the kernel is given. It takes a list of runs and answers a report for each, plus whether the batch as a whole ended. A run with no report, or a batch that did not end, gives `unavailable` or `error`, never a pass. A check that asks for a second run gets it in a later batch, up to the limit of eight runs.
@@ -48,4 +48,4 @@ amends:
 
 - A provider whose checks cannot be described by a fixed list of input files, such as one whose inputs depend on what an earlier run found, shows `inputs` too narrow.
 - A site that cannot answer a batch with a report per run shows the batch interface too narrow.
-- A key that changes for the model-checker provider when it starts listing `inputs` shows the listing is not the set the helper used.
+- A key whose files change for the model-checker provider when it starts listing `inputs` shows the listing is not the set the helper used. Keys that change only by the provider's code digest do not.

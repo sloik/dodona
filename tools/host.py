@@ -433,12 +433,22 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
 # What the provider said it could not make into a check, last time it was asked. A run is not
 # green while this is not empty: a case that cannot be checked is not a case that passed.
 REFUSED_BY_PROVIDER: list[str] = []
+DECLARED_INPUTS: dict = {}  # obligation name -> the paths its checks may read, as the provider listed them
 
 
 def list_project(session: Session, root: pathlib.Path) -> tuple[list[dict], list[dict]]:
     files = [file_ref(p, root) for p in sorted((root / "spec").glob("*/*")) if p.suffix in (".tla", ".cfg", ".json") and p.is_file()
              and p.name not in ("dump-settings.json",)]
     body = session.ask("obligation.enumerate", {"binding": "kernel-models", "definitions": [], "files": files})
+    paths = [f["path"] for f in files]
+    DECLARED_INPUTS.clear()
+    for o in body["obligations"]:
+        # What a check of it may read is the provider's word, held apart from the obligation the check is sent.
+        declared = o.pop("inputs", None)
+        if not isinstance(declared, list) or not all(isinstance(p, str) for p in declared) \
+                or declared != sorted(set(declared)) or not set(declared) <= set(paths):
+            raise Refused("bad-inputs")
+        DECLARED_INPUTS[o.get("name")] = declared
     obligations = [dict(o, binding="kernel-models") for o in body["obligations"]]
     REFUSED_BY_PROVIDER[:] = sorted(r.get("name", "?") for r in body.get("rejected", []))
     names = [o["name"] for o in obligations]
@@ -483,8 +493,9 @@ def provider_code() -> str:
 
 
 def inputs_of(obligation: dict, files: list[dict]) -> list[dict]:
-    folder = obligation["config"]["folder"] + "/"
-    return [f for f in files if f["path"].startswith(folder) and not f["path"].endswith(".json")]
+    """The files the provider said a check of this obligation may read."""
+    wanted = set(DECLARED_INPUTS[obligation["name"]])
+    return [f for f in files if f["path"] in wanted]
 
 
 def collect(args) -> int:

@@ -53,6 +53,7 @@ Obligations are **enumerated by providers**, not invented by the kernel, because
 | `expect` | `holds` or `violated` |
 | `defect_of` | For a planted defect: the obligation whose check it must break |
 | `config` | Bounds, flags, seeds, worker counts and limits |
+| `inputs` | The files a check of it may read. The kernel gives the check these and no others |
 
 **Planted defects are obligations.** An obligation with `expect: violated` passes when the checker finds the violation it names. Its `defect_of` field ties it to the obligation it guards. This is how dodona's own rule, that a check must be shown able to fail, becomes something the kernel tracks instead of a habit.
 

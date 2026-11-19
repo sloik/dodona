@@ -208,7 +208,8 @@
         "specified_by",
         "targets",
         "expect",
-        "config"
+        "config",
+        "inputs"
       ],
       "additionalProperties": false,
       "properties": {
@@ -251,6 +252,14 @@
         "config": {
           "type": "object",
           "description": "Bounds, flags, seeds, worker counts and limits. Provider-defined; integers, strings, booleans, arrays and objects only, no floating point. The kernel hashes it into the core key."
+        },
+        "inputs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common.schema.json#/$defs/relpath"
+          },
+          "description": "The paths of the files a check of this obligation may read, sorted, each one of the files the request listed. The host gives a check these files and no others; a check that needs a file not listed cannot read it, which ends in an error, never a pass."
         }
       },
       "allOf": [
