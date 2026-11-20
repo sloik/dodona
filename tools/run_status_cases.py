@@ -203,7 +203,7 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
         if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
             raise Skip("this system cannot make a folder or file its own user cannot read")
         os.chmod(root / rel, 0)
-    return json.dumps(asked, ensure_ascii=False).encode("utf-8"), root, aux
+    return json.dumps(asked, ensure_ascii=False).encode("utf-8") + case.get("stdin_suffix", "").encode("utf-8"), root, aux
 
 
 def requests(aux: pathlib.Path) -> dict:

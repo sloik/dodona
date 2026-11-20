@@ -58,8 +58,11 @@ def reached_without_link(root: pathlib.Path, rel: str) -> bool:
     here = root
     for part in rel.split("/"):
         here = here / part
-        if here.is_symlink() or host.is_junction(here):
-            return False
+        try:
+            if here.is_symlink() or host.is_junction(here):
+                return False
+        except OSError:
+            return True  # cannot be looked at; what reads the path then finds it unreadable
     return True
 
 
@@ -358,6 +361,13 @@ def ledger_state(root: pathlib.Path, rel: str) -> str:
     return "present"
 
 
+def same_file(a: pathlib.Path, b: pathlib.Path) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
 def read_ledger(root: pathlib.Path, rel: str) -> dict:
     path = root / rel
     state = ledger_state(root, rel)
@@ -365,7 +375,11 @@ def read_ledger(root: pathlib.Path, rel: str) -> dict:
         raise Stop("unreadable-file", f"{rel}: a link to nothing or a folder that cannot be entered on the way")
     if state == "absent":
         return {"entries": [], "torn": False, "absent": True}
-    if not path.is_file():
+    try:
+        regular = path.is_file()
+    except OSError:
+        raise Stop("unreadable-file", rel) from None
+    if not regular:
         raise Stop("corrupt-ledger", f"{rel} is not a file")
     try:
         return ledger.read(path)
@@ -378,17 +392,22 @@ def read_ledger(root: pathlib.Path, rel: str) -> dict:
 def entries_of(root: pathlib.Path, asked: dict) -> tuple[list, dict]:
     owner_rel = asked["owner_ledger"]
     owner = root / owner_rel
-    if not reached_without_link(root, owner_rel) or (owner.exists() and not owner.is_file()):
+    if not reached_without_link(root, owner_rel):
         raise Stop("owner-ledger-link", owner_rel)
-    sources = [(owner_rel, True)] if owner.exists() else []
-    seen = [owner] if owner.exists() else []
+    state = ledger_state(root, owner_rel)
+    if state == "unreadable":
+        raise Stop("unreadable-file", f"{owner_rel}: a folder on its way cannot be entered")
+    if state == "present" and not owner.is_file():
+        raise Stop("owner-ledger-link", owner_rel)
+    sources = [(owner_rel, True)] if state == "present" else []
+    seen = [owner] if state == "present" else []
     # The same file as the owner's ledger, however its path is spelled (case, links, hard links), is not read again.
     for p in asked["ledgers"]:
         # A file already read, the owner's ledger included, however its path is spelt, is not read again.
-        if (root / p).exists() and any(os.path.samefile(root / p, other) for other in seen):
+        if ledger_state(root, p) == "present" and any(same_file(root / p, other) for other in seen):
             continue
         sources.append((p, False))
-        if (root / p).exists():
+        if ledger_state(root, p) == "present":
             seen.append(root / p)
     entries, torn, absent = [], False, []
     for rel, is_owner in sources:
@@ -516,7 +535,10 @@ def main() -> int:
     kernel = sys.argv[sys.argv.index("--kernel") + 1:] if "--kernel" in sys.argv else None
     try:
         raw = sys.stdin.buffer.read()
-        asked = host.strict_load(raw[:-1] if raw.endswith(b"\n") else raw)  # one JSON object, then at most a line feed
+        body = raw[:-1] if raw.endswith(b"\n") else raw  # one JSON object, then at most one line feed, nothing else
+        if not (body.startswith(b"{") and body.endswith(b"}")):
+            raise ValueError("not one JSON object alone")
+        asked = host.strict_load(body)
     except Exception:  # noqa: BLE001 - any input that is not strict JSON is bad input
         asked = None
     try:
