@@ -442,12 +442,14 @@ REFUSED_BY_PROVIDER: list[str] = []
 DECLARED_INPUTS: dict = {}  # obligation name -> the paths its checks may read, as the provider listed them
 
 
-PATTERN_SEGMENT = re.compile(r"(?:[^\[\]\\*]|\*|\[[!-~]-[!-~]\])+")
+RANGE_END = r"[!-.0-9;-Z^-~]"  # printable ASCII but / : [ \\ ]
+PATTERN_SEGMENT = re.compile(rf"(?:[^\[\]\\*:]|\*|\[{RANGE_END}-{RANGE_END}\])+")
 
 
 def pattern_ok(pattern) -> bool:
     """A match pattern as the project file may hold it: a relative path whose segments are not empty, `.` or
-    `..`, hold no backslash, and use `[` only as a range `[a-b]` of two printable ASCII characters, a no later than b."""
+    `..`, hold no backslash or colon, and use `[` only as a range `[a-b]` of two printable ASCII characters other than
+    `/`, `:`, `[`, `\\` and `]`, a no later than b."""
     if not isinstance(pattern, str) or not pattern or pattern.startswith("/"):
         return False
     for seg in pattern.split("/"):

@@ -66,65 +66,24 @@ def reached_without_link(root: pathlib.Path, rel: str) -> bool:
 
 LEVELS = ("self", "helper", "apart", "tested", "cross-make", "credentialed")
 FLOOR_KINDS = ("confirm-baseline", "match-check", "grant-amendment", "close-deferred", "change-policy")
-# A floor policy leaves out is the default of decision 0024, as policy.schema.json gives it.
-FLOOR_DEFAULTS = {"grant-amendment": "apart", "change-policy": "apart", "close-deferred": "helper"}
-POLICY_KEYS = {"policy": None, "reference": None, "platforms": None,
-               "required": {"obligations", "intents", "reproducibility"},
-               "minimum": {"strength_rank", "shown", "non_vacuity", "isolation"},
-               "gates": {"min_hard", "min_hard_percent", "max_deferred_days", "varying"},
-               "accept": {"providers", "executors", "record_origins", "attestors", "platform_independence"},
-               "separation": {"floor"}}
-# What the status rules apply. Anything else policy may hold is named in policy_not_applied, never dropped.
-APPLIED = {"policy", "reference", "required.intents", "gates.min_hard", "separation.floor"}
+POLICY_KEYS = {"required", "min_hard_gates", "floors", "not_applied"}
 
 
 def policy_problem(policy) -> str | None:
-    """Why the policy cannot be read, or None. Every key must be one policy.schema.json has, so a typo is refused
-    rather than ignored; the fields the status rules apply must have their type; a floor names a level on the scale."""
-    if not isinstance(policy, dict):
-        return "the policy is not an object"
-    if not isinstance(policy.get("policy"), str):
-        return "the policy must say its version, a string"
-    for key, value in policy.items():
-        if key not in POLICY_KEYS:
-            return f"policy has no field {key!r}"
-        inner = POLICY_KEYS[key]
-        if inner is not None:
-            if not isinstance(value, dict):
-                return f"policy.{key} is not an object"
-            unknown = sorted(set(value) - inner)
-            if unknown:
-                return f"policy.{key} has no field {unknown[0]!r}"
-    if "reference" in policy and not isinstance(policy["reference"], str):
-        return "policy.reference is not a string"
-    if not strings(policy.get("required", {}).get("intents", [])):
-        return "policy.required.intents is not a list of strings"
-    min_hard = policy.get("gates", {}).get("min_hard", 1)
-    if not (type(min_hard) is int and min_hard >= 0):
-        return "policy.gates.min_hard is not a whole number of at least 0"
-    floor = policy.get("separation", {}).get("floor", {})
-    if not isinstance(floor, dict):
-        return "policy.separation.floor is not an object"
-    for kind, entry in floor.items():
-        if kind not in FLOOR_KINDS:
-            return f"policy.separation.floor has no kind {kind!r}"
-        if not isinstance(entry, dict) or set(entry) - {"level", "source"} or entry.get("level") not in LEVELS \
-                or entry.get("source", "checked") not in ("checked", "attested", "declared"):
-            return f"policy.separation.floor.{kind} is not a level on the scale, with a source where given"
+    """Why the policy, in the form the site hands over, cannot be read; or None. The site has read the full policy,
+    checked it against policy.schema.json, filled in its defaults, and named every field no status rule applies."""
+    if not isinstance(policy, dict) or set(policy) != POLICY_KEYS:
+        return "the policy must be an object holding exactly required, min_hard_gates, floors and not_applied"
+    if not strings(policy["required"]):
+        return "policy.required is not a list of strings"
+    if not (type(policy["min_hard_gates"]) is int and policy["min_hard_gates"] >= 0):
+        return "policy.min_hard_gates is not a whole number of at least 0"
+    floors = policy["floors"]
+    if not isinstance(floors, dict) or not all(k in FLOOR_KINDS and v in LEVELS for k, v in floors.items()):
+        return "policy.floors maps kinds of act to levels on the scale"
+    if not strings(policy["not_applied"]) or policy["not_applied"] != sorted(set(policy["not_applied"]), key=sort_key):
+        return "policy.not_applied is not a sorted list of strings, each once"
     return None
-
-
-def not_applied(policy: dict) -> list[str]:
-    found = []
-    for key, value in policy.items():
-        if isinstance(value, dict) and key != "separation":
-            found += [f"{key}.{k}" for k in value if f"{key}.{k}" not in APPLIED]
-        elif key not in APPLIED and key != "separation":
-            found.append(key)
-    for kind, entry in policy.get("separation", {}).get("floor", {}).items():
-        if "source" in entry:
-            found.append(f"separation.floor.{kind}.source")
-    return sorted(found, key=sort_key)
 
 
 def check_input(asked) -> None:
@@ -144,7 +103,7 @@ def check_input(asked) -> None:
             and type(deadline) is int and deadline > 0
     if not ok:
         raise Stop("bad-input", "the input does not have the shape the contract gives")
-    problem = policy_problem(asked["policy"])
+    problem = policy_problem(asked.get("policy"))
     if problem:
         raise Stop("bad-input", problem)
     root = pathlib.Path(asked["root"])
@@ -228,9 +187,9 @@ def session(root: pathlib.Path, site: dict, binding: dict):
     except OSError as err:
         raise Stop("provider-not-started", f"{binding['provider']}: {err}") from None
     manifest = sess.manifest
-    if not all(isinstance(manifest.get(k), str) for k in ("name", "version", "protocol")):
+    if not all(isinstance(manifest.get(k), str) for k in ("name", "version", "protocol")) or manifest["protocol"] != "0.2":
         sess.close()
-        raise Stop("bad-manifest", "name, version and protocol must be strings")
+        raise Stop("bad-manifest", "name and version must be strings, and protocol the one hello offered, 0.2")
     if manifest["name"] != binding["provider"]:
         sess.close()
         raise Stop("provider-mismatch", f"binding {binding['name']} names {binding['provider']}, the provider says {manifest['name']}")
@@ -245,7 +204,10 @@ def ask(sess, capability: str, body: dict) -> dict:
 
 
 def code_digest(root: pathlib.Path, paths: list[str]) -> str:
-    files = {rel: hashlib.sha256((root / rel).read_bytes()).hexdigest() for rel in paths}
+    try:
+        files = {rel: hashlib.sha256((root / rel).read_bytes()).hexdigest() for rel in paths}
+    except OSError as err:
+        raise Stop("unreadable-file", str(err)) from None
     return canonical.identity(files)[len("sha256:"):][:16]
 
 
@@ -374,6 +336,8 @@ def read_ledger(root: pathlib.Path, rel: str) -> dict:
         return ledger.read(path)
     except ledger.Corrupt as err:
         raise Stop("corrupt-ledger", f"{rel}, line {err.at}") from None
+    except OSError as err:
+        raise Stop("unreadable-file", f"{rel}: {err}") from None
 
 
 def entries_of(root: pathlib.Path, asked: dict) -> tuple[list, dict]:
@@ -382,8 +346,15 @@ def entries_of(root: pathlib.Path, asked: dict) -> tuple[list, dict]:
     if not reached_without_link(root, owner_rel) or (owner.exists() and not owner.is_file()):
         raise Stop("owner-ledger-link", owner_rel)
     sources = [(owner_rel, True)] if owner.exists() else []
+    seen = [owner] if owner.exists() else []
     # The same file as the owner's ledger, however its path is spelled (case, links, hard links), is not read again.
-    sources += [(p, False) for p in asked["ledgers"] if not (owner.exists() and (root / p).exists() and os.path.samefile(root / p, owner))]
+    for p in asked["ledgers"]:
+        # A file already read, the owner's ledger included, however its path is spelt, is not read again.
+        if (root / p).exists() and any(os.path.samefile(root / p, other) for other in seen):
+            continue
+        sources.append((p, False))
+        if (root / p).exists():
+            seen.append(root / p)
     entries, torn = [], False
     for rel, is_owner in sources:
         read = read_ledger(root, rel)
@@ -396,10 +367,8 @@ def entries_of(root: pathlib.Path, asked: dict) -> tuple[list, dict]:
 # Step 9. Policy.
 
 def policy_of(policy: dict) -> dict:
-    floors = dict(FLOOR_DEFAULTS)
-    floors.update({k: v["level"] for k, v in policy.get("separation", {}).get("floor", {}).items()})
-    return {"min_hard_gates": policy.get("gates", {}).get("min_hard", 1), "required": policy.get("required", {}).get("intents", []),
-            "trusted_writers": [], "floors": floors, "attestors": {}, "makes": []}
+    return {"min_hard_gates": policy["min_hard_gates"], "required": policy["required"], "trusted_writers": [],
+            "floors": dict(policy["floors"]), "attestors": {}, "makes": []}
 
 
 # Step 11. Coverage.
@@ -437,13 +406,23 @@ def coverage(intents: dict, floor: int) -> dict:
     return {"intents": out, "thinnest": thinnest}
 
 
+def headline(status: str, not_applied: list) -> str:
+    """The project's status as the command states it: the report's, except that a project policy holds fields no
+    status rule applies cannot be passed or nothing-required, only unknown, since what is not applied could fail it."""
+    return "unknown" if not_applied and status in ("passed", "nothing-required") else status
+
+
 def run(asked) -> dict:
     check_input(asked)
     root = pathlib.Path(asked["root"])
     site = asked["site"]
     if not reached_without_link(root, asked["project"]) or not (root / asked["project"]).is_file():
         raise Stop("bad-project", "the project file is not a regular file reached without a link")
-    project = read_project((root / asked["project"]).read_bytes())
+    try:
+        raw = (root / asked["project"]).read_bytes()
+    except OSError as err:
+        raise Stop("unreadable-file", f"{asked['project']}: {err}") from None
+    project = read_project(raw)
     bindings = project["binding"]
     # Step 3.
     not_served = sorted(({"binding": b["name"], "capability": c} for b in bindings for c in set(b["capabilities"]) if c not in SERVED),
@@ -472,7 +451,7 @@ def run(asked) -> dict:
               "steps": [{"do": {"append": {"kind": e["kind"], "body": e["body"]}}} for e in entries] + [NOTHING]}
     return {"judged": judged, "coverage": coverage(intents, policy["min_hard_gates"]), "policy_source": asked["policy_source"],
             "ledger": ledger_note, "not_served": not_served, "not_checkable": unchecked,
-            "policy_not_applied": not_applied(asked["policy"])}
+            "policy_not_applied": asked["policy"]["not_applied"]}
 
 
 def main() -> int:
@@ -489,6 +468,7 @@ def main() -> int:
     if kernel:
         answer = subprocess.run(kernel + ["scenario"], input=json.dumps(out["judged"]).encode("utf-8"), capture_output=True, check=True)
         out["report"] = json.loads(answer.stdout)["results"][-1]
+        out["project_status"] = headline(out["report"]["project"]["status"], out["policy_not_applied"])
     print(json.dumps(out, ensure_ascii=False, sort_keys=True))
     return 0
 

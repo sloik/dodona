@@ -47,6 +47,7 @@ jobs:
           python3 -m venv .venv-examples
           .venv-examples/bin/python -m pip install --quiet jsonschema==4.26.0
           .venv-examples/bin/python tools/check_examples.py
+          .venv-examples/bin/python tools/policy_input.py --self-test
       - name: Judge the reference host with the misbehaving provider
         run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.python }} tools/provider_host.py
       - name: Judge the stage-0 host with a checker that breaks one rule at a time

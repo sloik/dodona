@@ -42,9 +42,6 @@ class Skip(Exception):
     """A case this system cannot set up, such as one that needs a symbolic link. Never a match."""
 
 
-BEFORE_PROVIDERS = {"bad-input", "bad-project", "no-provider", "overlapping-bindings"}
-
-
 def same(a, b) -> bool:
     """Equal as JSON text, so that 0 and false, or 1 and 1.0, are not taken for each other."""
     return json.dumps(a, sort_keys=True, ensure_ascii=False) == json.dumps(b, sort_keys=True, ensure_ascii=False)
@@ -104,7 +101,14 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
     owner = case.get("owner_ledger")
     if owner is not None:
         (root / "records").mkdir(exist_ok=True)
-        data = ledger_bytes(fill(owner["entries"], preimages)) + owner.get("torn_tail", "").encode("utf-8")
+        if "raw" in owner:
+            data = owner["raw"].encode("utf-8")
+        else:
+            data = ledger_bytes(fill(owner["entries"], preimages)) + owner.get("torn_tail", "").encode("utf-8")
+            if "edit" in owner:  # an entry changed after it was written: its checksum no longer matches
+                data = data.replace(owner["edit"][0].encode("utf-8"), owner["edit"][1].encode("utf-8"), 1)
+            if owner.get("strip_last_newline"):
+                data = data[:-1]
         if owner.get("folder_link"):
             (root / "records").rmdir()
             (root / "records-real").mkdir()
@@ -134,6 +138,13 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
             except (OSError, NotImplementedError):
                 raise Skip("this system cannot make a hard link") from None
             continue
+        if item.get("link_to"):
+            (root / item["link_to"]).write_bytes(ledger_bytes(fill(item["entries"], preimages)))
+            try:
+                os.symlink(root / item["link_to"], path)
+            except (OSError, NotImplementedError):
+                raise Skip("this system cannot make a symbolic link") from None
+            continue
         if item.get("link_to_owner"):
             try:
                 os.symlink(root / "records" / "owner.ledger", path)
@@ -142,10 +153,6 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
             continue
         data = item["raw"].encode("utf-8") if "raw" in item else ledger_bytes(fill(item["entries"], preimages))
         path.write_bytes(data + item.get("torn_tail", "").encode("utf-8"))
-    for rel in case.get("unreadable", []):
-        if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
-            raise Skip("this system cannot make a folder its own user cannot list")
-        os.chmod(root / rel, 0)
     if "raw_input" in case:
         return case["raw_input"].encode("utf-8"), root, aux
     asked = {"root": str(root), "project": "dodona.toml", "site": copy.deepcopy(dict(site, providers=providers, **case.get("site_edit", {}))),
@@ -159,6 +166,10 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
             del here[path[-1]]
         else:
             here[path[-1]] = value
+    for rel in case.get("unreadable", []):
+        if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
+            raise Skip("this system cannot make a folder or file its own user cannot read")
+        os.chmod(root / rel, 0)
     return json.dumps(asked, ensure_ascii=False).encode("utf-8"), root, aux
 
 
@@ -168,7 +179,9 @@ def requests(aux: pathlib.Path) -> dict:
     seen = {}
     for record in sorted(aux.glob("*.record.jsonl")):
         lines = [json.loads(l) for l in record.read_text(encoding="utf-8").splitlines() if l.strip()]
-        seen[record.name] = [{"type": m.get("type"), "capability": m.get("capability"), "body": m.get("body")} for m in lines]
+        # hello as sent, but for its echo, which a host chooses: its protocol and limits are compared.
+        seen[record.name] = [{"type": m.get("type"), "capability": m.get("capability"), "body": m.get("body"),
+                              "protocol": m.get("protocol"), "limits": m.get("limits"), "deadline_ms": m.get("deadline_ms")} for m in lines]
     return seen
 
 
@@ -189,7 +202,7 @@ def run(command: list[str], case: dict, site: dict, preimages: dict, timeout: in
 
 
 def _preimages(case: dict, site: dict) -> dict:
-    bare = dict(case, ledgers=[], owner_ledger=None, input_edit=[])
+    bare = dict(case, ledgers=[], owner_ledger=None, input_edit=[], unreadable=[])
     ref, _, _ = run(REFERENCE, bare, site, {})
     view = (ref or {}).get("judged", {})
     found = {n: o["preimage"] for n, o in view.get("obligations", {}).items()}
@@ -206,16 +219,16 @@ def judge(case: dict, site: dict, command: list[str], kernel: list[str]) -> list
     ref, ref_asked, ref_err = run(REFERENCE, case, site, preimages)
     problems = []
     expect = case["expect"]
-    if got is None:
-        return [f"no JSON answer ({err})"]
+    if not isinstance(got, dict):
+        return [f"no JSON object answered ({err if got is None else type(got).__name__})"]
     if "refused" in expect:
         if (ref or {}).get("refused") != expect["refused"]:
             problems.append(f"the kit is wrong: the reference gives {ref} ({ref_err})")
-        if got.get("refused") != expect["refused"]:
-            problems.append(f"expected refused {expect['refused']}, got {json.dumps(got)[:200]}")
-        # Refused before step 5, nothing after the broken rule is done: no provider is started.
-        if expect["refused"] in BEFORE_PROVIDERS and asked:
-            problems.append(f"a provider was started although the input was refused at {expect['refused']}")
+        if got.get("refused") != expect["refused"] or set(got) != {"refused", "detail"} or not isinstance(got.get("detail"), str):
+            problems.append(f"expected exactly refused {expect['refused']} with a detail, got {json.dumps(got)[:200]}")
+        # Nothing after the broken rule is done: the providers started, and what each was asked, are the reference's.
+        if not same(asked, ref_asked):
+            problems.append(f"refused at {expect['refused']}, but the providers started or asked differ from the reference's")
         return problems
     if "refused" in got:
         return [f"refused {got['refused']} ({got.get('detail')}), expected a report"]
@@ -245,6 +258,12 @@ def judge(case: dict, site: dict, command: list[str], kernel: list[str]) -> list
             problems.append(f"intent {name}: expected {want}")
     if "project" in status and report.get("project", {}).get("status") != status["project"]:
         problems.append(f"project: expected {status['project']}, got {report.get('project')}")
+    if "project_status" in expect and got.get("project_status") != expect["project_status"]:
+        problems.append(f"project_status: expected {expect['project_status']}, got {got.get('project_status')}")
+    if own is not None and got.get("project_status") != (
+            "unknown" if got.get("policy_not_applied") and own.get("project", {}).get("status") in ("passed", "nothing-required")
+            else own.get("project", {}).get("status")):
+        problems.append("project_status is not the report's status as the policy not applied allows it")
     for field in ("not_served", "not_checkable", "ledger", "policy_not_applied"):
         if field in expect and not same(got.get(field), expect[field]):
             problems.append(f"{field}: expected {expect[field]}, got {got.get(field)}")
@@ -350,7 +369,8 @@ def variants(spec: dict) -> list[dict]:
     return out
 
 
-VARIANT_BASES = ("an empty ledger has a report", "a project with two bindings, a tree and tools", "a confirmed intent with its check passed is fulfilled")
+VARIANT_BASES = ("an empty ledger has a report", "a project with two bindings, a tree and tools", "a confirmed intent with its check passed is fulfilled",
+                 "policy no status rule applies keeps the project from passing", "two ledgers are read in order", "an intent tree")
 
 
 def main() -> int:
@@ -367,6 +387,7 @@ def main() -> int:
     if "--" in kernel:
         kernel, command = kernel[:kernel.index("--")], kernel[kernel.index("--") + 1:]
     spec = json.loads(CASES.read_text(encoding="utf-8"))
+    kit_problems = 0
     if args.variants:
         def expected(case):
             pre = _preimages(case, spec["site"]) if "$" in json.dumps(case["ledgers"]) + json.dumps(case.get("owner_ledger")) else {}
@@ -377,6 +398,7 @@ def main() -> int:
             for case, ref, err in pool.map(expected, variants(spec)):
                 if ref is None:
                     print(f"KIT      {case['name']}: the reference gives no answer ({err})")
+                    kit_problems += 1
                     continue
                 case["expect"] = {"refused": ref["refused"]} if "refused" in ref else {}
                 made.append(case)
@@ -387,6 +409,8 @@ def main() -> int:
             return case, judge(case, spec["site"], command, kernel), None
         except Skip as why:
             return case, None, why
+        except Exception as err:  # noqa: BLE001 - a case the judge cannot run is a mismatch, never a crash or a pass
+            return case, [f"the judge could not run this case: {type(err).__name__}: {err}"], None
     matched, skipped = 0, 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
         results = list(pool.map(one, spec["cases"]))
@@ -399,7 +423,7 @@ def main() -> int:
         print(("match    " if not problems else "MISMATCH ") + case["name"] + ("" if not problems else ": " + "; ".join(problems)))
     judged = len(spec["cases"]) - skipped
     print(json.dumps({"cases": len(spec["cases"]), "judged": judged, "skipped": skipped, "matched": matched, "all_matched": matched == judged}))
-    return 0 if matched == judged else 1
+    return 0 if matched == judged and not kit_problems else 1
 
 
 if __name__ == "__main__":

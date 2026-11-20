@@ -3,7 +3,8 @@
     python conformance/project/fixture_provider.py ANSWERS.json RECORD.jsonl
 
 ANSWERS.json holds `manifest` (the manifest to send; its echo is copied from hello unless
-`wrong_echo` is true) and, for each capability, the body to answer with. Every message the host
+`wrong_echo` is true) and, for each capability, the body to answer with; under `raw`, for a
+capability, a line to send as it is instead, with %ID% replaced by the request's id. Every message the host
 sends is appended to RECORD.jsonl, so the judge can see what it was asked. A capability with no
 answer gets an `error`.
 """
@@ -36,7 +37,12 @@ def main() -> int:
             return 0
         elif kind == "request":
             capability = message.get("capability")
-            if capability in answers:
+            raw = answers.get("raw", {}).get(capability)
+            if raw is not None:
+                # Bytes as the case writes them, with the request's id put in: for answers no JSON writer makes.
+                sys.stdout.buffer.write(raw.replace("%ID%", str(message["id"])).encode("utf-8") + b"\n")
+                sys.stdout.buffer.flush()
+            elif capability in answers:
                 send({"type": "result", "id": message["id"], "capability": capability, "body": answers[capability]})
             else:
                 send({"type": "error", "id": message["id"], "code": "unsupported", "detail": "no answer in this case"})
