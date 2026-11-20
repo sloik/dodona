@@ -167,7 +167,8 @@ function siteHasShape(site) {
     && Array.isArray(tools) && tools.every((tool) => ['name', 'version', 'digest'].every((field) => isString(own(tool, field))))
     && isObject(providers) && Object.values(providers).every((provider) => {
       const command = own(provider, 'command');
-      return isStrings(command) && command.length > 0 && isStrings(own(provider, 'code'));
+      // A command none of whose words holds a NUL, which no program's arguments can carry.
+      return isStrings(command) && command.length > 0 && command.every((word) => !word.includes('\u0000')) && isStrings(own(provider, 'code'));
     })
     && Number.isSafeInteger(deadline) && deadline >= 1 && deadline <= MOST_DEADLINE_MS;
 }

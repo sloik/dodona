@@ -2191,6 +2191,13 @@
       "file": "project-status.js",
       "find": "tree_hard: subtreeHard(root),",
       "replace": "tree_hard: subtree,"
+    },
+    {
+      "name": "status step 1: a provider command holding a NUL is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": " && command.every((word) => !word.includes('\\u0000')) && isStrings(own(provider, 'code'));",
+      "replace": " && isStrings(own(provider, 'code'));"
     }
   ]
 }
