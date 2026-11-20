@@ -2,7 +2,7 @@
 
     python tools/check_docs.py                                          # every repository-wide check
     python tools/check_docs.py self-test                                # plant a fault for each check; each must fail
-    python tools/check_docs.py diff --base REV [--head REV] [--pr-body FILE] [--repo DIR]
+    python tools/check_docs.py diff --base REV [--head REV] [--pr-body FILE] [--merged] [--repo DIR]
     python tools/check_docs.py pins-only --base REV --head REV [--merged] [--repo DIR]   # exit 0 if only pinned versions changed
     python tools/check_docs.py jobs --head REV --own WORKFLOW --name NAME... [--repo DIR]   # no other workflow may use these job names
 
@@ -59,7 +59,20 @@ MIN_REASON_CHARS, MIN_REASON_WORDS = 40, 6
 # The files that decide how a change is judged. A change to any of them, or to a [[rule]] of the map,
 # fails the change that makes it: nothing else stops a change from loosening what judges it, as the owner
 # opens the pull requests and a code-owner review therefore never applies.
-JUDGING_FILES = ("tools/check_docs.py", ".github/workflows/docs.yml", ".github/CODEOWNERS")
+JUDGING_FILES = ("tools/check_docs.py", ".github/workflows/docs.yml", ".github/CODEOWNERS", ".github/yaml-reader.txt")
+# Everything under these is run by the judging job (the YAML parser's wheel), so it judges changes too.
+JUDGING_DIRS = (".github/vendor/",)
+
+
+def as_merged(found: list[str], notes: list[str]) -> tuple[list[str], list[str]]:
+    """On main, a change to what judges changes, or an entry granting an exception, was merged by the owner over its
+    failure: that is the owner's act, so it is noted, not failed again. Every other problem still fails."""
+    owned = [p for p in found if JUDGING in p or "granting yourself an exception" in p]
+    return [p for p in found if p not in owned], notes + [f"merged by the owner over its failure: {p}" for p in owned]
+
+
+def is_judging(path: str) -> bool:
+    return path in JUDGING_FILES or path.startswith(JUDGING_DIRS)
 JUDGING = "changes how changes are judged; the owner merges over this failure"
 TOOL_DIRS = ("tools/", "providers/", "conformance/", ".github/site/")
 SKIPPED_PARTS = {".git", "__pycache__", "target", "node_modules"}
@@ -898,7 +911,7 @@ def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], message
         notes.append(f"ignored: a waiver names rule {rid!r}, which {MAP_FILE} does not have")
     if base_map is None:
         notes.append(f"the base has no {MAP_FILE}: this change is judged by the map it brings, which a reviewer must read")
-    for path in sorted({p for _, p in changed} & set(JUDGING_FILES)):
+    for path in sorted(p for p in {p for _, p in changed} if is_judging(p)):
         problems.append(f"{path}: this change {JUDGING}")
     triggered: dict[str, tuple[dict, list[str]]] = {}
     for status, path in sorted(changed, key=lambda c: c[1]):
@@ -1016,7 +1029,7 @@ def pin_lines_only(paths: list[str], patch: str, judging_allowed: bool = False) 
     # Moving a pin of a file that judges changes is a change to how changes are judged: on a pull request it fails
     # like any other, so the owner merges it. Only once on main (judging_allowed) is it taken for a pin update, so a
     # merged update does not turn main red.
-    if not judging_allowed and any(p in JUDGING_FILES for p in paths):
+    if not judging_allowed and any(is_judging(p) for p in paths):
         return False
     hunks: list[tuple[list[str], list[str]]] = []
     with_hunks: set[str] = set()
@@ -1125,9 +1138,14 @@ def job_clashes(workflows: dict[str, str], own: str, names: set[str]) -> list[st
                 raise
             except Exception:  # noqa: BLE001
                 names_of = {"unreadable"}
+            push = events.get("push") if isinstance(events, dict) else None
             if not names_of <= {"pull_request_target", "push"}:
                 found.append(f"{own} as the change has it runs on {sorted(map(str, names_of))}: only pull_request_target and push "
                              "keep the change's own copy from running under its name")
+            elif "push" in names_of and push != {"branches": ["main"]}:
+                # A push to any other branch would run the branch's own copy under the protected name.
+                found.append(f"{own} as the change has it runs on pushes other than to main: a branch's own copy could run "
+                             "under its name")
             continue
         try:
             jobs, writes = workflow_view(text)
@@ -1209,7 +1227,9 @@ def diff(root: pathlib.Path, base: str, head: str | None, pr_body: str | None,
     head_text = at(head, MAP_FILE)
     if head_text is None:
         raise CannotRun(f"{MAP_FILE} does not exist in the change")
-    base_text = at(base, MAP_FILE)
+    # The map as the change found it: its merge-base with the base, so that a change behind main is not blamed
+    # for map entries main has gained since it branched.
+    base_text = at(merge_base, MAP_FILE)
     try:
         head_map = load_map(head_text)
         base_map = load_map(base_text) if base_text is not None else None
@@ -1472,6 +1492,21 @@ def _git_case(problems: list[str]) -> None:
                 if not any("rule a:" in p for p in found):
                     problems.append(f"self-test: a code change whose document was {how} passed as if the document were updated: {found}")
             run("checkout", "-q", "work")
+            # A change behind main is judged against the map it started from: what main's map has gained since is not
+            # its doing.
+            run("checkout", "-q", "-B", "main-moved", base)
+            write(MAP_FILE, (root / MAP_FILE).read_text(encoding="utf-8").replace('why = "the guide describes it"', 'why = "the guide, as main now words it, describes it"'))
+            run("add", "-A")
+            run("commit", "-q", "-m", "main gains a map entry")
+            moved = git(root, "rev-parse", "HEAD", env=env).decode().strip()
+            run("checkout", "-q", "-B", "behind", base)
+            write("README.md", "# Readme\n\nA sentence.\n")
+            run("add", "-A")
+            run("commit", "-q", "-m", "an unrelated document")
+            found, _ = judge(root, moved, "HEAD", "## Verified\n\nself-test ran.\n\n## Not verified\n\nnothing else here.\n")
+            if any(MAP_FILE in p for p in found):
+                problems.append(f"self-test: a change behind main was blamed for main's later map entries: {found}")
+            run("checkout", "-q", "work")
             write("docs/a.md", "# A\n\nx is two.\n")
             found, _ = judge(root, base, None, "## Verified\n\nself-test ran.\n\n## Not verified\n\nnothing else here.\n")
             if found:
@@ -1659,14 +1694,27 @@ def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
                 if kind == "any":
                     break
             # The judging workflow, changed to run on an event that runs the change's own copy.
-        own_changed = {**workflows, own: workflows[own].replace("pull_request_target:", "pull_request:\n  pull_request_target:", 1)}
-        if not any("runs on" in c for c in job_clashes(own_changed, own, names)):
-            problems.append("self-test: the docs workflow changed to run on pull_request was not noticed")
-    # Ordinary text in a run block is not mistaken for anything.
+        own_text = workflows[own]
+        i, j = own_text.index("\non:\n") + 1, own_text.index("\nconcurrency:")
+        for what, triggers in (("on pull_request as well", own_text[i:j].replace("pull_request_target:", "pull_request:\n  pull_request_target:", 1)),
+                               ("as a list holding pull_request", "on: [pull_request, push]\n"),
+                               ("as the one word pull_request", "on: pull_request\n"),
+                               ("on pushes to every branch", "on:\n  push:\n    branches: ['**']\n  pull_request_target:\n    branches: [main]\n"),
+                               ("on every push", "on: [push, pull_request_target]\n")):
+            changed_own = {**workflows, own: own_text[:i] + triggers + own_text[j:]}
+            if not any("runs on" in c for c in job_clashes(changed_own, own, names)):
+                problems.append(f"self-test: the docs workflow changed to run {what} was not noticed")
+        # Ordinary text in a run block is not mistaken for anything.
         calm = {**workflows, ".github/workflows/planted.yml": head + "jobs:\n  other:\n    runs-on: x\n    steps:\n"
                 "      - run: python3 -c \"import sys; print(1, *sys.argv)\"\n      - run: sleep 5 &wait_pid=1\n      - run: 'echo \"!important ? 1: !b\"'\n"}
         if job_clashes(calm, own, names):
             problems.append(f"self-test: ordinary run lines were taken for a clash: {job_clashes(calm, own, names)}")
+    kept, noted = as_merged([f"tools/check_docs.py: this change {JUDGING}", "rule a: code changed, no document did"], [])
+    if kept != ["rule a: code changed, no document did"] or len(noted) != 1:
+        problems.append("self-test: on main, a merged change to what judges changes is not noted, or another problem is dropped with it")
+    for path in (".github/yaml-reader.txt", ".github/vendor/ruamel.yaml-0.18.10-py3-none-any.whl", ".github/vendor/another.whl"):
+        if not is_judging(path):
+            problems.append(f"self-test: {path}, which the judging job runs, is not among what judges changes")
     for raw, shown in (("a\nPROBLEM forged", "a\\nPROBLEM forged"), ("a\r::error::x", "a\\r: :error: :x"), ("a\x1b[2Kb", "a?[2Kb")):
         if printable(raw) != shown:
             problems.append(f"self-test: output text {raw!r} is printed as {printable(raw)!r}, not {shown!r}")
@@ -1691,6 +1739,8 @@ def main() -> int:
     one.add_argument("--base", required=True, help="the branch or commit the change is to be merged into")
     one.add_argument("--head", help="the commit to judge; the working tree if left out")
     one.add_argument("--pr-body", type=pathlib.Path, help="a file holding the pull request's description")
+    one.add_argument("--merged", action="store_true",
+                     help="the change is already on main: changes to what judges changes, which the owner merged, are noted, not failed")
     one.add_argument("--repo", type=pathlib.Path, default=ROOT,
                      help="the repository to judge; by default the one this file is in. CI runs the base's copy of "
                           "this file on the change, so that a change cannot loosen the checker that judges it")
@@ -1735,6 +1785,8 @@ def main() -> int:
         try:
             body = args.pr_body.read_text(encoding="utf-8") if args.pr_body else None
             found, notes = diff(args.repo.resolve(), args.base, args.head, body)
+            if args.merged:
+                found, notes = as_merged(found, notes)
         except (CannotRun, OSError) as err:
             print(f"COULD NOT RUN {err}")
             print("documents and code: not judged")

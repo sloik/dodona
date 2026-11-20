@@ -98,6 +98,6 @@ jobs:
             cd "$GITHUB_WORKSPACE"
             python3 -I tools/check_docs.py diff --repo . --base "$BASE" --head "$HEAD" --pr-body "$RUNNER_TEMP/pr-body.md" || failed=1
           else
-            python3 -I tools/check_docs.py diff --repo . --base "$BASE" --head "$HEAD" || failed=1
+            python3 -I tools/check_docs.py diff --repo . --base "$BASE" --head "$HEAD" --merged || failed=1
           fi
           exit "$failed"
