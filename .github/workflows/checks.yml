@@ -137,5 +137,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The status judge recomputes each report with the other kernel's scenario command, so the second kernel's
+      # defects need the first kernel built (the first kernel's run uses Node, which the runner has).
+      - name: Build the first kernel, whose scenario command the second kernel's status judge uses
+        run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every listed defect and check some judge rejects each
         run: ${{ matrix.run }}
