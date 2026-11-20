@@ -273,7 +273,8 @@ def _parse(source: str) -> ast.Module:
     refused rather than parsed as something it is not; a UTF-8 byte-order mark, which Python reads past, is too."""
     if source.startswith("\ufeff"):
         source = source[1:]
-    for line in source.split("\n")[:2]:
+    # Python finds the encoding line on the first two lines, ended by \n, \r\n or a bare \r alike.
+    for line in source.replace("\r\n", "\n").replace("\r", "\n").split("\n")[:2]:
         found = CODING.match(line)
         if found and found.group(1).lower().replace("_", "-") not in ("utf-8", "utf8"):
             raise SyntaxError(f"declares the encoding {found.group(1)}; a tool is read as UTF-8")
@@ -538,8 +539,13 @@ def docs_commands_name_real_flags(repo: Repo) -> list[str]:
             problems.append(f"{where}:{number}: names {tool}, which does not exist")
             continue
         if tool not in clis:
-            clis[tool] = read_cli(repo.read(tool))
+            try:
+                clis[tool] = read_cli(repo.read(tool))
+            except SyntaxError:
+                clis[tool] = None  # reported by docs_usage_matches_the_parser, which reads every tool
         cli = clis[tool]
+        if cli is None:
+            continue
         rest = re.split(r"[`|;&<>)]|\$\{\{", rest, maxsplit=1)[0]
         first, flags = command_words(rest)
         if cli.subcommands and first and first not in cli.subcommands:
@@ -1141,6 +1147,8 @@ def _writes_status(permissions) -> bool:
 def could_be(written: str, name: str) -> bool:
     """Whether a job name as written could be shown as `name`: exactly, with matrix values GitHub adds after a
     plain name, or, when GitHub computes it, by any text in the places it does not fix."""
+    # Compared without regard to letter case, in case a required check's name is matched that way.
+    written, name = written.casefold(), name.casefold()
     if "${{" not in written:
         return written == name or name.startswith(written + " (")
     parts = re.split(r"\$\{\{.*?\}\}", written, flags=re.S)
@@ -1238,9 +1246,10 @@ class TreeRepo(Repo):
 
 
 def head_workflows(root: pathlib.Path, head: str) -> dict[str, str]:
-    listing = git(root, "ls-tree", "-r", "--name-only", "-z", head, ".github/workflows/").decode("utf-8").split("\0")
+    # Every file whose path is a workflow's in any letter case: a disk or a reader that ignores case may take it for one.
+    listing = git(root, "ls-tree", "-r", "--name-only", "-z", "--full-tree", head).decode("utf-8").split("\0")
     return {p: git(root, "show", f"{head}:{p}").decode("utf-8", "replace") for p in listing
-            if re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p)}
+            if re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p, flags=re.IGNORECASE)}
 
 
 def pins_only(root: pathlib.Path, base: str, head: str, env: dict | None = None, judging_allowed: bool = False) -> bool:
@@ -1358,6 +1367,8 @@ def planted_faults(repo: Repo) -> list[tuple[object, str, dict]]:
          _edit(repo, first_tool, 'two = sub.add_parser("conclude")', 'sub.add_parser("replan")\n    two = sub.add_parser("conclude")')),
         (docs_usage_matches_the_parser, "a tool declaring another encoding",
          {"tools/status.py": "# coding: raw_unicode_escape\n" + repo.read("tools/status.py")}),
+        (docs_usage_matches_the_parser, "an encoding line after a bare carriage return",
+         {"tools/status.py": "\r# coding: raw_unicode_escape\n" + repo.read("tools/status.py")}),
         (docs_usage_matches_the_parser, "a flag built at run time",
          _edit(repo, "tools/status.py", 'ap.add_argument("--json", action="store_true")',
                'ap.add_argument("--" + str(len("json")), action="store_true")')),
@@ -1415,6 +1426,7 @@ EXPECTED = {
     "a new subcommand the usage lines do not show": "subcommand 'replan' is not shown",
     "a flag built at run time": "cannot be read without running the tool",
     "a tool declaring another encoding": "cannot be read as Python is",
+    "an encoding line after a bare carriage return": "cannot be read as Python is",
     "a workflow using a flag the tool does not have": "checks.yml:",
     "a document naming a subcommand the tool does not have": "has no subcommand 'replan'",
     "a document naming a tool that is gone": "names tools/gone_tool.py, which does not exist",
