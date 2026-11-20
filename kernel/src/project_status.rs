@@ -209,7 +209,9 @@ fn policy_problem(p: &Value) -> Option<&'static str> {
     };
     let expected = ["required", "min_hard_gates", "floors", "not_applied"];
     if fields.len() != expected.len() || !expected.iter().all(|k| p.opt(k).is_some()) {
-        return Some("the policy must hold exactly required, min_hard_gates, floors and not_applied");
+        return Some(
+            "the policy must hold exactly required, min_hard_gates, floors and not_applied",
+        );
     }
     if strings(p.opt("required")).is_none() {
         return Some("policy.required is not a list of strings");
@@ -267,12 +269,19 @@ fn read_input(input: &[u8]) -> Step<Input> {
     let tools = match list(site.opt("tools")) {
         Some(t)
             if t.iter().all(|t| {
-                is_object(Some(t)) && ["name", "version", "digest"].iter().all(|k| t.text(k).is_some())
+                is_object(Some(t))
+                    && ["name", "version", "digest"]
+                        .iter()
+                        .all(|k| t.text(k).is_some())
             }) =>
         {
             t
         }
-        _ => return bad("site.tools must be a list of objects with a string name, version and digest"),
+        _ => {
+            return bad(
+                "site.tools must be a list of objects with a string name, version and digest",
+            )
+        }
     };
     let tools = Value::Array(
         tools
@@ -312,9 +321,15 @@ fn read_input(input: &[u8]) -> Step<Input> {
     }
     for (name, _, code) in &providers {
         if sort_set(code.clone()).len() != code.len() {
-            return stop("bad-input", format!("provider {name}: a code path listed twice"));
+            return stop(
+                "bad-input",
+                format!("provider {name}: a code path listed twice"),
+            );
         }
-        if let Some(rel) = code.iter().find(|rel| !relative(rel) || !plain_file(&root, rel)) {
+        if let Some(rel) = code
+            .iter()
+            .find(|rel| !relative(rel) || !plain_file(&root, rel))
+        {
             return stop("bad-input", format!(
                 "provider {name}: code path {rel:?} is not a regular file under root reached without a link"
             ));
@@ -474,7 +489,9 @@ fn read_project(raw: &[u8]) -> Step<Vec<Binding>> {
     for (number, line) in text.split('\n').enumerate() {
         let number = number + 1;
         if line.chars().any(forbidden) {
-            return bad(format!("line {number}: a carriage return, tab or control character"));
+            return bad(format!(
+                "line {number}: a carriage return, tab or control character"
+            ));
         }
         let content = line.trim_start_matches(' ');
         if content.is_empty() || content.starts_with('#') {
@@ -482,12 +499,20 @@ fn read_project(raw: &[u8]) -> Step<Vec<Binding>> {
         }
         match line {
             "[project]" | "[policy]" => {
-                let slot = if line == "[project]" { &mut project } else { &mut policy };
+                let slot = if line == "[project]" {
+                    &mut project
+                } else {
+                    &mut policy
+                };
                 if slot.is_some() {
                     return bad(format!("line {number}: {line} is given twice"));
                 }
                 *slot = Some(Vec::new());
-                here = Here::Single(if line == "[project]" { "project" } else { "policy" });
+                here = Here::Single(if line == "[project]" {
+                    "project"
+                } else {
+                    "policy"
+                });
                 continue;
             }
             "[[binding]]" => {
@@ -509,7 +534,11 @@ fn read_project(raw: &[u8]) -> Step<Vec<Binding>> {
         let value = line[key_end..].strip_prefix(" = ").and_then(toml_value);
         let value = match value {
             Some(v) if !key.is_empty() => v,
-            _ => return bad(format!("line {number}: not in the subset of TOML a kernel reads")),
+            _ => {
+                return bad(format!(
+                    "line {number}: not in the subset of TOML a kernel reads"
+                ))
+            }
         };
         let table = match here {
             Here::Nowhere => None,
@@ -520,7 +549,11 @@ fn read_project(raw: &[u8]) -> Step<Vec<Binding>> {
         };
         match table {
             Some(t) if !t.iter().any(|(k, _)| k == key) => t.push((key.to_owned(), value)),
-            _ => return bad(format!("line {number}: a key before any header, or given twice")),
+            _ => {
+                return bad(format!(
+                    "line {number}: a key before any header, or given twice"
+                ))
+            }
         }
     }
     let mut out: Vec<Binding> = Vec::new();
@@ -575,7 +608,8 @@ struct Found {
 /// no segment `.git`. Entries are told apart by what the listing says of them,
 /// never by following them. A folder that cannot be listed is `unreadable-file`.
 fn regular_files(root: &Path) -> Step<Vec<Found>> {
-    let unreadable = |p: &Path, e: std::io::Error| stop("unreadable-file", format!("{}: {e}", p.display()));
+    let unreadable =
+        |p: &Path, e: std::io::Error| stop("unreadable-file", format!("{}: {e}", p.display()));
     let mut found = Vec::new();
     let mut todo = vec![(root.to_path_buf(), String::new(), true)];
     while let Some((here, rel, utf8)) = todo.pop() {
@@ -655,7 +689,10 @@ fn claimed(files: &[Found], patterns: &[String]) -> Step<Vec<(String, String)>> 
             continue;
         }
         if !f.utf8 {
-            return stop("unreadable-file", format!("{}: a name that is not UTF-8", f.rel));
+            return stop(
+                "unreadable-file",
+                format!("{}: a name that is not UTF-8", f.rel),
+            );
         }
         match fs::read(&f.path) {
             Ok(bytes) => out.push((f.rel.clone(), file_identity(&bytes))),
@@ -669,7 +706,12 @@ fn file_refs(files: &[(String, String)]) -> Value {
     Value::Array(
         files
             .iter()
-            .map(|(p, i)| json::object(vec![("path", json::string(p)), ("identity", json::string(i))]))
+            .map(|(p, i)| {
+                json::object(vec![
+                    ("path", json::string(p)),
+                    ("identity", json::string(i)),
+                ])
+            })
             .collect(),
     )
 }
@@ -703,8 +745,15 @@ impl Session {
             Ok(t) => t,
             // A provider that could not be confined to a tree of its own has been ended.
             Err(e) => {
-                let why = if proc::unconfined(&e) { "not confined" } else { "not started" };
-                return stop("provider-not-started", format!("{}: {why}: {e}", binding.provider));
+                let why = if proc::unconfined(&e) {
+                    "not confined"
+                } else {
+                    "not started"
+                };
+                return stop(
+                    "provider-not-started",
+                    format!("{}: {why}: {e}", binding.provider),
+                );
             }
         };
         let log = match tree.child.stderr.take() {
@@ -783,7 +832,12 @@ impl Session {
 }
 
 /// Ask one binding's provider one thing, and end the session whatever the answer.
-fn consult(input: &Input, binding: &Binding, capability: &str, body: Value) -> Step<(Value, Value)> {
+fn consult(
+    input: &Input,
+    binding: &Binding,
+    capability: &str,
+    body: Value,
+) -> Step<(Value, Value)> {
     let mut s = Session::open(input, binding)?;
     let answer = s.ask(capability, body);
     s.close();
@@ -818,7 +872,8 @@ fn obligation_shaped(o: &Value) -> bool {
         && strings(o.opt("targets")).is_some()
         && o.text("expect").is_some()
         && is_object(o.opt("config"))
-        && o.opt("defect_of").is_none_or(|d| matches!(d, Value::String(_)))
+        && o.opt("defect_of")
+            .is_none_or(|d| matches!(d, Value::String(_)))
         && o.opt("inputs").is_some()
 }
 
@@ -852,7 +907,12 @@ fn obligations(
         let rejected = match answer.opt("rejected") {
             None => &[][..],
             Some(r) => match list(Some(r)) {
-                Some(r) if r.iter().all(|x| is_object(Some(x)) && x.text("name").is_some()) => r,
+                Some(r)
+                    if r.iter()
+                        .all(|x| is_object(Some(x)) && x.text("name").is_some()) =>
+                {
+                    r
+                }
                 _ => return bad("rejected is not a list of objects each with a string name"),
             },
         };
@@ -934,7 +994,10 @@ fn obligations(
                         ("targets", identities("targets")),
                         ("closure", texts(&closure)),
                         ("tools", input.tools.clone()),
-                        ("config", json::string(&canonical::identity(o.get("config")))),
+                        (
+                            "config",
+                            json::string(&canonical::identity(o.get("config"))),
+                        ),
                         ("expect", o.get("expect").clone()),
                     ]),
                 ),
@@ -982,8 +1045,10 @@ fn intent_shaped(i: &Value) -> bool {
         && i.text("text").is_some()
         && person(i.opt("owner"))
         && (i.opt("worker").is_none() || person(i.opt("worker")))
-        && list(i.opt("children"))
-            .is_some_and(|c| c.iter().all(|c| matches!(c, Value::String(s) if !s.is_empty())))
+        && list(i.opt("children")).is_some_and(|c| {
+            c.iter()
+                .all(|c| matches!(c, Value::String(s) if !s.is_empty()))
+        })
         && list(i.opt("criteria")).is_some_and(|c| c.iter().all(criterion_shaped))
 }
 
@@ -1004,7 +1069,12 @@ fn intents(
     let obligations = Value::Array(
         listed
             .iter()
-            .map(|(b, n)| json::object(vec![("binding", json::string(b)), ("name", json::string(n))]))
+            .map(|(b, n)| {
+                json::object(vec![
+                    ("binding", json::string(b)),
+                    ("name", json::string(n)),
+                ])
+            })
             .collect(),
     );
     for binding in listing(bindings, "intent.index") {
@@ -1020,7 +1090,9 @@ fn intents(
         let (answer, _) = consult(input, binding, "intent.index", body)?;
         let rejected = match answer.opt("rejected") {
             None => Some(&[][..]),
-            Some(r) => list(Some(r)).filter(|r| r.iter().all(|x| is_object(Some(x)) && named(x, "path"))),
+            Some(r) => {
+                list(Some(r)).filter(|r| r.iter().all(|x| is_object(Some(x)) && named(x, "path")))
+            }
         };
         let items = list(answer.opt("intents"));
         let (items, rejected) = match (items, rejected) {
@@ -1028,7 +1100,10 @@ fn intents(
             _ => {
                 return stop(
                     "bad-answer",
-                    format!("binding {}: the answer does not have the shape the contract gives", binding.name),
+                    format!(
+                        "binding {}: the answer does not have the shape the contract gives",
+                        binding.name
+                    ),
                 )
             }
         };
@@ -1042,11 +1117,19 @@ fn intents(
     let unread = answers.iter().flat_map(criteria).any(|c| {
         c.opt("limit_days").is_some()
             || c.opt("not_applicable").is_some()
-            || c.get("links").array().iter().any(|l| l.opt("varying").is_some())
+            || c.get("links")
+                .array()
+                .iter()
+                .any(|l| l.opt("varying").is_some())
     });
     // Over the intents of every binding, each rule over every intent before the next.
     for i in &answers {
-        let ids: Vec<&str> = i.get("criteria").array().iter().map(|c| c.get("id").str()).collect();
+        let ids: Vec<&str> = i
+            .get("criteria")
+            .array()
+            .iter()
+            .map(|c| c.get("id").str())
+            .collect();
         if (1..ids.len()).any(|k| ids[..k].contains(&ids[k])) {
             return stop("duplicate-criterion", i.get("name").str().to_owned());
         }
@@ -1058,7 +1141,11 @@ fn intents(
                 if !listed.iter().any(|(lb, lo)| lb == b && lo == o) {
                     return stop(
                         "unknown-link",
-                        format!("{} criterion {}: {b}/{o}", i.get("name").str(), c.get("id").str()),
+                        format!(
+                            "{} criterion {}: {b}/{o}",
+                            i.get("name").str(),
+                            c.get("id").str()
+                        ),
                     );
                 }
             }
@@ -1209,17 +1296,30 @@ fn read_ledger(root: &Path, rel: &str) -> Step<Read> {
         Ok(_) => return stop("corrupt-ledger", format!("{rel} is not a file")),
         Err(e) => return stop("unreadable-file", format!("{rel}: {e}")),
     }
-    let data = match fs::read(&path) {
-        Ok(d) => d,
+    // Read as `ledger-read` reads: strictly, as the ledger format requires.
+    let path_text = match path.to_str() {
+        Some(t) => t,
+        None => {
+            return stop(
+                "unreadable-file",
+                format!("{rel}: a path that is not UTF-8"),
+            )
+        }
+    };
+    let read = match ledger::read(&json::object(vec![("ledger", json::string(path_text))])) {
+        Ok(r) => r,
         Err(e) => return stop("unreadable-file", format!("{rel}: {e}")),
     };
-    match ledger::parse(&data) {
-        Ok(c) => Ok(Read {
-            entries: c.entries,
-            torn: c.torn,
+    match (read.opt("entries"), read.opt("torn"), read.opt("at")) {
+        (Some(Value::Array(entries)), Some(Value::Bool(torn)), _) => Ok(Read {
+            entries: entries.clone(),
+            torn: *torn,
             absent: false,
         }),
-        Err(at) => stop("corrupt-ledger", format!("{rel}, line {at}")),
+        (_, _, at) => stop(
+            "corrupt-ledger",
+            format!("{rel}, line {}", at.map_or_else(String::new, json::encode)),
+        ),
     }
 }
 
@@ -1238,10 +1338,16 @@ fn ledgers(input: &Input) -> Step<Ledgers> {
     }
     let state = ledger_state(root, owner);
     if state == Where::Unreadable {
-        return stop("unreadable-file", format!("{owner}: a folder on its way cannot be entered"));
+        return stop(
+            "unreadable-file",
+            format!("{owner}: a folder on its way cannot be entered"),
+        );
     }
     if state == Where::Present && !fs::metadata(root.join(owner)).is_ok_and(|m| m.is_file()) {
-        return stop("owner-ledger-link", format!("{owner} is not a regular file"));
+        return stop(
+            "owner-ledger-link",
+            format!("{owner} is not a regular file"),
+        );
     }
     let mut sources: Vec<(&str, bool)> = Vec::new();
     let mut seen: Vec<PathBuf> = Vec::new();
@@ -1305,16 +1411,13 @@ fn coverage(intents: &[(String, Value)], floor: i64) -> Value {
         here.to_owned()
     };
     let own = |name: &str| -> i64 {
-        intents
-            .iter()
-            .find(|(n, _)| n == name)
-            .map_or(0, |(_, i)| {
-                i.get("criteria")
-                    .object()
-                    .iter()
-                    .filter(|(_, c)| !matches!(c.text("gate"), Some("soft" | "deferred")))
-                    .count() as i64
-            })
+        intents.iter().find(|(n, _)| n == name).map_or(0, |(_, i)| {
+            i.get("criteria")
+                .object()
+                .iter()
+                .filter(|(_, c)| !matches!(c.text("gate"), Some("soft" | "deferred")))
+                .count() as i64
+        })
     };
     // It and every intent below it, each once and only if defined.
     let below = |name: &str| -> i64 {
@@ -1379,7 +1482,10 @@ fn run(raw: &[u8]) -> Step<Value> {
     let root = &input.root;
     // Step 2.
     if !plain_file(root, &input.project) {
-        return stop("bad-project", "the project file is not a regular file reached without a link");
+        return stop(
+            "bad-project",
+            "the project file is not a regular file reached without a link",
+        );
     }
     let project = match fs::read(root.join(&input.project)) {
         Ok(p) => p,
@@ -1402,7 +1508,10 @@ fn run(raw: &[u8]) -> Step<Value> {
         .iter()
         .filter(|b| SERVED.iter().any(|c| b.serves(c)))
         .collect();
-    if let Some(b) = served.iter().find(|b| input.provider(&b.provider).is_none()) {
+    if let Some(b) = served
+        .iter()
+        .find(|b| input.provider(&b.provider).is_none())
+    {
         return stop("no-provider", format!("binding {}: {}", b.name, b.provider));
     }
     // Step 4. First every served binding's files are claimed, then overlaps are looked for.
@@ -1524,11 +1633,12 @@ fn run(raw: &[u8]) -> Step<Value> {
         .and_then(|p| p.text("status"))
         .unwrap_or("unknown")
         .to_owned();
-    let project_status = if !doubts.is_empty() && matches!(stated.as_str(), "passed" | "nothing-required") {
-        "unknown"
-    } else {
-        stated.as_str()
-    };
+    let project_status =
+        if !doubts.is_empty() && matches!(stated.as_str(), "passed" | "nothing-required") {
+            "unknown"
+        } else {
+            stated.as_str()
+        };
     Ok(json::object(vec![
         ("judged", judged),
         ("report", report),
@@ -1547,7 +1657,10 @@ fn run(raw: &[u8]) -> Step<Value> {
                 not_served
                     .iter()
                     .map(|(b, c)| {
-                        json::object(vec![("binding", json::string(b)), ("capability", json::string(c))])
+                        json::object(vec![
+                            ("binding", json::string(b)),
+                            ("capability", json::string(c)),
+                        ])
                     })
                     .collect(),
             ),
