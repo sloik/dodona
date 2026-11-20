@@ -9415,6 +9415,156 @@
   },
   {
    "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "input_edit": [
+    [
+     [
+      "site",
+      "providers",
+      "t.check",
+      "command"
+     ],
+     [
+      "python3",
+      "a\u0000b"
+     ]
+    ]
+   ],
+   "name": "a provider command holding a NUL",
+   "why": "No program's arguments can carry a NUL: bad-input, never a crash.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
     "dodona.toml": "# a small project\n[project]\nname = \"p\u0001\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
     "m/a.txt": "a\n",
     "m/b.txt": "b\n",

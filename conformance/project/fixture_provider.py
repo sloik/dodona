@@ -5,7 +5,8 @@
 ANSWERS.json holds `manifest` (the manifest to send; its echo is copied from hello unless
 `wrong_echo` is true), `checks` (for obligation.check, per obligation: `verdict`, `runs`, `by_exit` (passed when
 the report's exit status is 0, failed otherwise), `strength_rank`, `no_tools_in_run`, `late_ms`, `edit_input` (a file changed while the check runs), `final_at_start`,
-`strength_class`, `tool_digest`, `missing_input`, `neither_or_both`, `bad_input_identity`, `extra_input`, `run_platform`, `wall_ms`, `wrong_id_at_result`),
+`strength_class`, `tool_digest`, `missing_input`, `neither_or_both`, `break_at_result` (a reason: the answer to a run's
+report breaks the session that way), `bad_input_identity`, `extra_input`, `run_platform`, `wall_ms`, `wrong_id_at_result`),
 and, as before, 
 `wrong_echo` is true) and, for each capability, the body to answer with; under `raw`, for a
 capability, a line to send as it is instead, with %ID% replaced by the request's id; `delay_ms`, a
@@ -87,6 +88,20 @@ def describe_run(script: dict, start: dict) -> dict:
 
 
 CURRENT_ID = [None]
+# The answer to a run's report that breaks the session in each way a host must refuse it, by reason.
+_OK = b'{"type": "result", "id": "%ID%", "capability": "obligation.check", "body": {"final": {"verdict": "error", "reason": "x"}}}'
+BROKEN = {
+    "framing": _OK + b"\r",
+    "too-long": b'{"type": "result", "id": "%ID%", "capability": "obligation.check", "body": {"x": "' + b"a" * 1100000 + b'"}}',
+    "encoding": b'{"type": "result", "id": "%ID%", "capability": "obligation.check", "body": {"x": "\xff"}}',
+    "malformed": b"[1]",
+    "not-an-integer": b'{"type": "result", "id": "%ID%", "capability": "obligation.check", "body": {"x": 1.5}}',
+    "duplicate-key": b'{"type": "result", "type": "result", "id": "%ID%", "capability": "obligation.check", "body": {}}',
+    "too-deep": b'{"type": "result", "id": "%ID%", "capability": "obligation.check", "body": {"x": ' + b"[" * 70 + b"]" * 70 + b"}}",
+    "wrong-capability": b'{"type": "result", "id": "%ID%", "capability": "obligation.enumerate", "body": {}}',
+    "unexpected": b'{"type": "progress", "id": "%ID%", "capability": "obligation.check", "body": {}}',
+    "provider-error": b'{"type": "error", "id": "%ID%", "code": "internal", "detail": "x"}',
+}
 
 
 def main() -> int:
@@ -124,8 +139,15 @@ def main() -> int:
                 body = {"intents": [], "rejected": [], "x": "a" * 1100000}
                 send({"type": "result", "id": message["id"], "capability": capability, "body": body})
             elif capability == "obligation.check" and "checks" in answers:
-                body = check_answer(answers["checks"], message["body"])
                 name = STARTED.get(message["body"].get("check"), [message["body"].get("obligation", {}).get("name")])[0]
+                broken = answers["checks"].get(name, {}).get("break_at_result")
+                if broken and message["body"].get("op") == "run.result":
+                    if broken == "closed":
+                        return 0  # the provider exits instead of answering
+                    sys.stdout.buffer.write(BROKEN[broken].replace(b"%ID%", str(message["id"]).encode("ascii")) + b"\n")
+                    sys.stdout.buffer.flush()
+                    continue
+                body = check_answer(answers["checks"], message["body"])
                 wrong = answers["checks"].get(name, {}).get("wrong_id_at_result") and message["body"].get("op") == "run.result"
                 send({"type": "result", "id": str(message["id"]) + "x" if wrong else message["id"], "capability": capability, "body": body})
             elif capability in answers:

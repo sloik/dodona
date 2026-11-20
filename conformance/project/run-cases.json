@@ -12998,6 +12998,4084 @@
      "refused": 2
     }
    }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o1": {
+        "strength_rank": "sampled"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a sampled final under a bounded ceiling is recorded as it is",
+   "why": "The strength and level recorded are the final's, not the manifest's ceiling.",
+   "expect": {
+    "recorded": {
+     "o1": "passed",
+     "o2": "passed"
+    },
+    "counts": {
+     "obligations": 2,
+     "not_checkable": 0,
+     "reused": 0,
+     "checked": 2,
+     "passed": 2
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o1": {
+        "strength_rank": "documented"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a documented final, recorded as asserted is recorded as it is",
+   "why": "The strength and level recorded are the final's, not the manifest's ceiling.",
+   "expect": {
+    "recorded": {
+     "o1": "passed",
+     "o2": "passed"
+    },
+    "counts": {
+     "obligations": 2,
+     "not_checkable": 0,
+     "reused": 0,
+     "checked": 2,
+     "passed": 2
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "exhaustive"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o1": {
+        "strength_rank": "exhaustive"
+       },
+       "o2": {
+        "strength_rank": "exhaustive"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "an exhaustive final under an exhaustive ceiling",
+   "why": "Recorded as proven, the provider's own word.",
+   "expect": {
+    "recorded": {
+     "o1": "passed",
+     "o2": "passed"
+    },
+    "counts": {
+     "obligations": 2,
+     "not_checkable": 0,
+     "reused": 0,
+     "checked": 2,
+     "passed": 2
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "closed"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by closed after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "closed"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "framing"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by framing after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "framing"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "too-long"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by too-long after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "too-long"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "encoding"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by encoding after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "encoding"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "malformed"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by malformed after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "malformed"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "not-an-integer"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by not-an-integer after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "not-an-integer"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "duplicate-key"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by duplicate-key after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "duplicate-key"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "too-deep"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by too-deep after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "too-deep"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "wrong-capability"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by wrong-capability after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "wrong-capability"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "unexpected"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by unexpected after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "unexpected"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o2": {
+        "break_at_result": "provider-error"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "name": "a session broken by provider-error after another check's verdict",
+   "why": "o1 has its final; o2's answer breaks the session: the whole run is refused and nothing is recorded.",
+   "expect": {
+    "refused": "provider-error"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {}
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "executor": {
+    "mode": "ended-one"
+   },
+   "name": "an answer whose ended is 1, not true, is unavailable",
+   "why": "The executor in mode ended-one.",
+   "expect": {
+    "batches": 1,
+    "recorded": {},
+    "counts": {
+     "obligations": 2,
+     "not_checkable": 0,
+     "reused": 0,
+     "checked": 2,
+     "unavailable": 2
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {}
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "executor": {
+    "mode": "repeated-key"
+   },
+   "name": "an answer with a key twice is unavailable",
+   "why": "The executor in mode repeated-key.",
+   "expect": {
+    "batches": 1,
+    "recorded": {},
+    "counts": {
+     "obligations": 2,
+     "not_checkable": 0,
+     "reused": 0,
+     "checked": 2,
+     "unavailable": 2
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {}
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "executor": {
+    "mode": "no-line-feed"
+   },
+   "name": "an answer not ended by a line feed is unavailable",
+   "why": "The executor in mode no-line-feed.",
+   "expect": {
+    "batches": 1,
+    "recorded": {},
+    "counts": {
+     "obligations": 2,
+     "not_checkable": 0,
+     "reused": 0,
+     "checked": 2,
+     "unavailable": 2
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {}
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "executor": {
+    "mode": "fraction"
+   },
+   "name": "an answer holding a fraction is unavailable",
+   "why": "The executor in mode fraction.",
+   "expect": {
+    "batches": 1,
+    "recorded": {},
+    "counts": {
+     "obligations": 2,
+     "not_checkable": 0,
+     "reused": 0,
+     "checked": 2,
+     "unavailable": 2
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {}
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "executor": {
+    "mode": "wrong-arch"
+   },
+   "name": "a report on another architecture is an error",
+   "why": "The executor in mode wrong-arch.",
+   "expect": {
+    "batches": 1,
+    "recorded": {},
+    "counts": {
+     "obligations": 2,
+     "not_checkable": 0,
+     "reused": 0,
+     "checked": 2,
+     "error": 2
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o1": {
+        "edit_input": "m/b.txt",
+        "verdict": "failed"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "files_change_during_run": true,
+   "name": "a file changed under a failed verdict is not recorded",
+   "why": "o1 fails, but its input changed while it was checked: an error, not a failure under a key it did not see.",
+   "expect": {
+    "recorded": {
+     "o2": "passed"
+    },
+    "counts": {
+     "obligations": 2,
+     "not_checkable": 0,
+     "reused": 0,
+     "checked": 2,
+     "passed": 1,
+     "error": 1
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {
+       "o1": {
+        "edit_input": "code/t.json"
+       }
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "run_input_edit": [
+    [
+     [
+      "transcript"
+     ],
+     "code/t.json"
+    ]
+   ],
+   "name": "a transcript that cannot be written, after verdicts are recorded",
+   "why": "The transcript's path is taken during the run: transcript-not-written, and the verdicts stay recorded.",
+   "expect": {
+    "refused": "transcript-not-written"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n",
+    "l/keep.txt": "k\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {}
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "run_input_edit": [
+    [
+     [
+      "transcript"
+     ],
+     "l/run.ledger.lock"
+    ]
+   ],
+   "name": "a transcript at a ledger's lock",
+   "why": "A transcript never takes the path of a ledger's lock.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/c.txt": "c\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [
+        {
+         "name": "checker",
+         "constraint": "=1"
+        }
+       ],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        },
+        {
+         "name": "o2",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/c.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 2
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/c.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      },
+      "checks": {}
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            },
+            {
+             "binding": "checks",
+             "obligation": "o2"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i1"
+    ],
+    "min_hard_gates": 1,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "absent": true
+    }
+   ],
+   "owner_ledger": null,
+   "run_input_edit": [
+    [
+     [
+      "executor"
+     ],
+     [
+      "python3\u0000x"
+     ]
+    ]
+   ],
+   "name": "an executor command holding a NUL",
+   "why": "No program's arguments can carry a NUL: bad-input, never a crash.",
+   "expect": {
+    "refused": "bad-input"
+   }
   }
  ]
 }

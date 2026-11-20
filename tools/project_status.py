@@ -41,6 +41,11 @@ def strings(value) -> bool:
     return isinstance(value, list) and all(isinstance(x, str) for x in value)
 
 
+def command_ok(value) -> bool:
+    """A command: a non-empty list of strings, none holding a NUL, which no program's arguments can carry."""
+    return strings(value) and bool(value) and all("\x00" not in x for x in value)
+
+
 def sort_key(text: str) -> list[int]:
     """How the canonical encoding sorts keys: by UTF-16 code units."""
     return list(text.encode("utf-16-be"))
@@ -105,7 +110,7 @@ def check_input(asked) -> None:
         ok = isinstance(site.get("writer"), str) and isinstance(site.get("runner"), str) \
             and isinstance(platform, dict) and isinstance(platform.get("os"), str) and isinstance(platform.get("arch"), str) \
             and isinstance(tools, list) and all(isinstance(t, dict) and all(isinstance(t.get(k), str) for k in ("name", "version", "digest")) for t in tools) \
-            and isinstance(providers, dict) and all(isinstance(p, dict) and strings(p.get("command")) and p["command"] and strings(p.get("code"))
+            and isinstance(providers, dict) and all(isinstance(p, dict) and command_ok(p.get("command")) and strings(p.get("code"))
                                                     for p in providers.values()) \
             and type(deadline) is int and 0 < deadline <= 86_400_000
     if not ok:

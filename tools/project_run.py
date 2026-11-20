@@ -50,11 +50,12 @@ def check_run_input(asked) -> None:
     if not ps.relpath_ok(rel) or rel not in listed or (isinstance(owner, str) and same_name(rel, owner)):
         raise Stop("bad-input", "ledger must be a relative path listed among ledgers, and not the owner's ledger")
     executor = asked.get("executor")
-    if not (isinstance(executor, list) and executor and all(isinstance(x, str) for x in executor)):
-        raise Stop("bad-input", "executor must be a non-empty list of strings")
+    if not ps.command_ok(executor):
+        raise Stop("bad-input", "executor must be a non-empty list of strings, none holding a NUL")
     if "transcript" in asked and (not ps.relpath_ok(asked["transcript"])
-                                  or any(isinstance(x, str) and same_name(asked["transcript"], x) for x in [*listed, owner, asked.get("project")])):
-        raise Stop("bad-input", "transcript, where given, is a relative path that is no ledger and not the project file")
+                                  or any(isinstance(x, str) and same_name(asked["transcript"], x)
+                                         for x in [*listed, *[l + ".lock" for l in listed if isinstance(l, str)], owner, asked.get("project")])):
+        raise Stop("bad-input", "transcript, where given, is a relative path that is no ledger, no ledger's lock and not the project file")
     root = pathlib.Path(asked["root"]) if isinstance(asked.get("root"), str) else None
     if root is None or not root.is_dir():
         return

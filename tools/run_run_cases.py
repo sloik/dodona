@@ -94,6 +94,22 @@ def recorded(root: pathlib.Path, rel: str) -> dict:
             if e["kind"] == "evidence" and isinstance(e["body"], dict) and "obligation" in e["body"]}
 
 
+def normal_transcript(kept) -> list:
+    """A transcript with the ids a host chooses taken out, so that two hosts' transcripts can be compared in order."""
+    if not isinstance(kept, list):
+        return [kept]
+    out = []
+    for m in kept:
+        message = dict(m.get("message", {})) if isinstance(m, dict) and isinstance(m.get("message"), dict) else m
+        if isinstance(message, dict):
+            message.pop("id", None)
+            message.pop("echo", None)
+            if isinstance(message.get("body"), dict):
+                message["body"] = {k: v for k, v in message["body"].items() if k != "check"}
+        out.append([m.get("to") if isinstance(m, dict) else None, message])
+    return out
+
+
 def tree_digest(root: pathlib.Path) -> str:
     """Every file under the project root, by path and bytes: a refused run must leave the project as it was."""
     h = hashlib.sha256()
@@ -118,7 +134,9 @@ def run_case(command: list[str], status: list[str], case: dict, site: dict) -> d
         try:
             before = tree_digest(root)
             first, err = call(command, stdin)
-            changed_files = tree_digest(root) != before
+            after_first = tree_digest(root)
+            changed_files = after_first != before
+            locks_left = sorted(p.relative_to(root).as_posix() for p in root.rglob("*.lock"))
             sent = batches(aux)
             records_first = provider_records(aux)
             described_first = sorted(json.dumps(json.loads(l), sort_keys=True) for d in sorted(aux.glob("*.described.jsonl"))
@@ -139,6 +157,7 @@ def run_case(command: list[str], status: list[str], case: dict, site: dict) -> d
             return {"first": first, "err": err, "sent": sent, "after": after, "err_status": err_status, "again": again,
                     "sent_again": sent_again, "recorded": recorded(root, ledger_rel), "asked": rsc.requests(aux),
                     "transcript": transcript, "provider_records": records_first, "changed_files": changed_files,
+                    "after_first": after_first, "locks_left": locks_left,
                     "described": described_first,
                     "ledger_bytes": (root / ledger_rel).read_bytes() if (root / ledger_rel).exists() else b""}
         finally:
@@ -198,8 +217,12 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
             problems.append(f"expected exactly refused {expect['refused']}, got {json.dumps(first)[:200]}")
         if not same(got["sent"], ref["sent"]):
             problems.append("the batches sent before the refusal differ from the reference's")
-        if got["changed_files"]:
-            problems.append("a refused run changed files of the project")
+        # A refusal changes nothing, but for what the text keeps from before it (verdicts recorded before a transcript
+        # that cannot be written, or before the ledgers are read again): exactly what the reference leaves.
+        if got["after_first"] != ref["after_first"]:
+            problems.append("a refused run left the project's files other than the reference leaves them")
+        if got["locks_left"]:
+            problems.append(f"a lock was left behind: {got['locks_left']}")
         if not same(got["asked"], ref["asked"]):
             problems.append("the providers started or asked differ from the reference's")
         return problems
@@ -241,6 +264,8 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
     left = counts["checked"] - counts["passed"] - counts["failed"]
     if not isinstance(again, dict) or again.get("counts", {}).get("checked") != left or (left == 0 and got["sent_again"]):
         problems.append(f"run a second time, it checked {(again or {}).get('counts', {}).get('checked')} obligations, not the {left} left without a recorded verdict")
+    if got["locks_left"]:
+        problems.append(f"a lock was left behind: {got['locks_left']}")
     if "transcript" in json.dumps(case.get("run_input_edit", [])):
         # The transcript of the first run holds what the providers were sent then (the second run appended none to it).
         kept = got["transcript"]
@@ -251,6 +276,8 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
             received = sorted(json.dumps(m, sort_keys=True) for m in got["provider_records"])
             if not sent_to or sent_to != received:
                 problems.append("the transcript's messages to providers are not exactly what the providers received")
+            elif normal_transcript(kept) != normal_transcript(ref["transcript"]):
+                problems.append("the transcript is not the reference's, in order and in both directions (ids aside)")
     # Judged against the reference.
     for field in COMPARED:
         if not same(first.get(field), ref["first"].get(field)):

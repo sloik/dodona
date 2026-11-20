@@ -7,7 +7,8 @@ Reads `{"runs": [{"number", "run_key", "run"}]}` on standard input, appends what
 exited on the run's platform with the run's tools. SCRIPT.json's `mode` breaks that in one way: `not-ended`,
 `exit-1`, `missing-report`, `extra-report`, `repeated-report`, `unavailable`, `crlf`, `wrong-platform`, `exit-status-1`
 (every run exited with status 1), `exit-by-input` (a run reading m/c.txt exited with 1), `timed-out-end`,
-`slow` (answers after six seconds), `tools-ran-empty`, `tools-ran-null-name`, `tools-ran-other-digest`, `non-object-report`, `bom`, `trailing` (a second line after the answer). It runs nothing.
+`slow` (answers after six seconds), `wrong-arch` (the run's OS on another architecture), `fraction` (a report holding
+1.5), `ended-one` (`ended` is 1, not true), `repeated-key` (`ended` given twice), `no-line-feed`, `tools-ran-empty`, `tools-ran-null-name`, `tools-ran-other-digest`, `non-object-report`, `bom`, `trailing` (a second line after the answer). It runs nothing.
 """
 from __future__ import annotations
 
@@ -28,7 +29,8 @@ def main() -> int:
         names = [i["path"] for i in run.get("inputs", [])]
         failing = mode == "exit-status-1" or (mode == "exit-by-input" and "m/c.txt" in names)
         report = {"end": {"unavailable": "unavailable", "timed-out-end": "timed-out"}.get(mode, "exited"), "exit_status": 1 if failing else 0,
-                  "platform": {"os": "other", "arch": "x"} if mode == "wrong-platform" else run["platform"],
+                  "platform": {"os": "other", "arch": "x"} if mode == "wrong-platform" else
+                  dict(run["platform"], arch="other-arch") if mode == "wrong-arch" else run["platform"],
                   "tools_ran": [] if mode == "tools-ran-empty" else
                   [dict(t, name=None) for t in run["tools"]] + run["tools"] if mode == "tools-ran-null-name" else
                   [dict(t, digest="sha256:" + "e" * 64) for t in run["tools"]] if mode == "tools-ran-other-digest" else run["tools"], "isolation": "best-effort", "outputs": []}
@@ -41,13 +43,18 @@ def main() -> int:
         reports.append(reports[0])
     if mode == "non-object-report" and reports:
         reports[0] = {"run_key": reports[0]["run_key"], "report": "exited"}
-    answer = {"ended": mode != "not-ended", "reports": reports}
+    if mode == "fraction" and reports:
+        reports[0]["report"]["duration_s"] = 1.5
+    answer = {"ended": 1 if mode == "ended-one" else mode != "not-ended", "reports": reports}
     if mode == "slow":
         time.sleep(6)  # longer than a host that ignores wall_ms might wait
     line = json.dumps(answer).encode("utf-8")
+    if mode == "repeated-key":
+        line = b'{"ended": false, ' + line[1:]  # "ended" twice: a strict reader refuses the answer
     if mode == "bom":
         line = b"\xef\xbb\xbf" + line
-    sys.stdout.buffer.write(line + (b"\r\n" if mode == "crlf" else b"\n") + (b"anything after the first line\n" if mode == "trailing" else b""))
+    end = b"" if mode == "no-line-feed" else b"\r\n" if mode == "crlf" else b"\n"
+    sys.stdout.buffer.write(line + end + (b"anything after the first line\n" if mode == "trailing" else b""))
     sys.stdout.buffer.flush()
     return 1 if mode == "exit-1" else 0
 
