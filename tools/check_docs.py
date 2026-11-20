@@ -2,7 +2,7 @@
 
     python tools/check_docs.py                                          # every repository-wide check
     python tools/check_docs.py self-test                                # plant a fault for each check; each must fail
-    python tools/check_docs.py whole --repo DIR                         # every repository-wide check, on a copy of the files
+    python tools/check_docs.py whole --head REV [--repo DIR]            # every repository-wide check, on a commit's files
     python tools/check_docs.py diff --base REV [--head REV] [--pr-body FILE] [--merged] [--repo DIR]
     python tools/check_docs.py pins-only --base REV --head REV [--merged] [--repo DIR]   # exit 0 if only pinned versions changed
     python tools/check_docs.py jobs --head REV --own WORKFLOW --name NAME... [--repo DIR]   # no other workflow may use these job names
@@ -1174,6 +1174,55 @@ def job_clashes(workflows: dict[str, str], own: str, names: set[str]) -> list[st
     return found
 
 
+def tree_repo(root: pathlib.Path, head: str) -> Repo:
+    """The files of a commit, read as git objects from the trusted repository at root, never written out: no git
+    runs in a folder the commit controls, so nothing in it (a planted `config`, `HEAD` or hooks) is read as git's
+    own, and `.gitattributes` does not apply (`export-ignore` cannot hide a file). Links and submodules are left
+    out; only regular files are read."""
+    listing = git(root, "ls-tree", "-r", "-z", "--full-tree", head).decode("utf-8").split("\0")
+    blobs = {}
+    for entry in listing:
+        if not entry:
+            continue
+        meta, path = entry.split("\t", 1)
+        mode, kind, sha = meta.split()
+        if kind == "blob" and mode in ("100644", "100755") and not SKIPPED_PARTS & set(path.split("/")):
+            blobs[path] = sha
+    texts = {}
+    if blobs:
+        done = subprocess.run(["git", "cat-file", "--batch"], cwd=root, capture_output=True,
+                              input="".join(sha + "\n" for sha in blobs.values()).encode("ascii"))
+        if done.returncode != 0:
+            raise CannotRun(f"the files of {head} could not be read from git")
+        out, at = done.stdout, 0
+        for path in blobs:
+            header_end = out.index(b"\n", at)
+            size = int(out[at:header_end].split()[2])
+            texts[path] = out[header_end + 1:header_end + 1 + size]
+            at = header_end + 1 + size + 1
+    return TreeRepo(root, sorted(texts), None, {}, texts)
+
+
+class TreeRepo(Repo):
+    """A Repo whose files are a commit's blobs, held in memory and decoded only when read, as a file on disk is."""
+
+    def __init__(self, root, files, overlay, cache, blobs):
+        super().__init__(root, files, overlay, cache)
+        self.blobs = blobs
+
+    def read(self, rel: str) -> str:
+        if rel in self.overlay:
+            return super().read(rel)
+        if rel not in self._cache:
+            if rel not in self.blobs:
+                raise FileNotFoundError(rel)
+            self._cache[rel] = self.blobs[rel].decode("utf-8").replace("\r\n", "\n")
+        return self._cache[rel]
+
+    def changed(self, edits: dict) -> "TreeRepo":
+        return TreeRepo(self.root, self._base, {**self.overlay, **edits}, self._cache, self.blobs)
+
+
 def head_workflows(root: pathlib.Path, head: str) -> dict[str, str]:
     listing = git(root, "ls-tree", "-r", "--name-only", "-z", head, ".github/workflows/").decode("utf-8").split("\0")
     return {p: git(root, "show", f"{head}:{p}").decode("utf-8", "replace") for p in listing
@@ -1612,6 +1661,12 @@ def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
     found, _ = judge_change([("M", "tools/status.py")], set(), [], loose, loose, None, None, doc_map)
     if not any(p.startswith("rule ") for p in found):
         problems.append(f"self-test: a file only main's map binds to a rule passed when its documents did not change ({found})")
+    # And a file bound to one rule where it branched off and to another on main is bound by both.
+    rule = next(r for r in doc_map["rule"] if "tools/status.py" in r.get("code", []))
+    renamed = dict(doc_map, rule=[dict(r, id="an-older-id") if r is rule else r for r in doc_map["rule"]])
+    found, _ = judge_change([("M", "tools/status.py")], set(), [], renamed, renamed, None, None, doc_map)
+    if not any(p.startswith(f"rule {rule['id']}:") for p in found):
+        problems.append(f"self-test: a file main's map binds to another rule than its base's was not bound by main's rule ({found})")
     for body, should_pass in (("## Verified\n\nRan tools/check_repo.py to the end: passed.\n\n## Not verified\n\nThe model checks did not run.\n", True),
                               ("## Verified\n\n<!-- what ran -->\n\n## Not verified\n\nNothing.\n", False),
                               ("## Verified\n\nTODO\n\n## Not verified\n\nThe model checks.\n", False),
@@ -1769,8 +1824,9 @@ def main() -> int:
     three.add_argument("--own", required=True, help="the workflow whose jobs no other may share")
     three.add_argument("--name", action="append", required=True, help="a job id or name it uses (may be repeated)")
     three.add_argument("--repo", type=pathlib.Path, default=ROOT)
-    whole = sub.add_parser("whole", help="the repository-wide checks, over a copy of the files that is only read, never run")
-    whole.add_argument("--repo", type=pathlib.Path, required=True)
+    whole = sub.add_parser("whole", help="the repository-wide checks over a commit's files, read as git objects")
+    whole.add_argument("--head", required=True)
+    whole.add_argument("--repo", type=pathlib.Path, default=ROOT)
     two = sub.add_parser("pins-only")
     two.add_argument("--base", required=True)
     two.add_argument("--head", required=True)
@@ -1814,7 +1870,11 @@ def main() -> int:
             print("documents and code: not judged")
             return 2
     elif args.command == "whole":
-        found, notes = repo_problems(Repo(args.repo.resolve())), []
+        try:
+            found, notes = repo_problems(tree_repo(args.repo.resolve(), args.head)), []
+        except (CannotRun, UnicodeDecodeError) as err:
+            print(f"COULD NOT RUN {err}")
+            return 2
     else:
         found, notes = repo_problems(), []
     for kind, lines in (("NOTE", notes), ("PROBLEM", found)):

@@ -86,13 +86,10 @@ jobs:
           "$RUNNER_TEMP/yaml/bin/python" -I tools/check_docs.py jobs --repo . --head "$HEAD" --own .github/workflows/docs.yml \
             --name documents-main-checker --name "documents follow code (judged by main)" || failed=1
           # The repository-wide checks too, by the base's checker over the files as the change leaves them: checks.yml
-          # runs them as well, but as the change has it, so a change could switch them off there. The files are
-          # taken out of git as data, every link among them removed, and only read: the checker parses code, never
-          # runs it.
-          mkdir "$RUNNER_TEMP/head"
-          git archive "$HEAD" | tar -x -C "$RUNNER_TEMP/head"
-          find "$RUNNER_TEMP/head" -type l -delete
-          "$RUNNER_TEMP/yaml/bin/python" -I tools/check_docs.py whole --repo "$RUNNER_TEMP/head" || failed=1
+          # runs them as well, but as the change has them, so a change could switch them off there. The files are read
+          # as git objects from this checkout, never written out, so no git runs in a folder the change controls and
+          # its .gitattributes cannot hide a file; the checker parses code, never runs it.
+          "$RUNNER_TEMP/yaml/bin/python" -I tools/check_docs.py whole --repo . --head "$HEAD" || failed=1
           # An update that only moves pinned actions or runner images needs no document. The checker reads
           # the change itself to decide that; for a pull request, it must also come from the update bot.
           # Once merged, a pin moved in docs.yml with the others is a pin update; on a pull request it is not.
