@@ -40,19 +40,21 @@ def unclear(text: str) -> str | None:
     return None
 
 
-def read_intents(obligations: list[str]) -> dict:
+def read_intents(obligations: list[str], folder: pathlib.Path | None = None) -> dict:
     """Intents from intents/*.md, read by tools/intents.py: criteria come from the front matter only.
 
     `checks` in each criterion ties it to obligations by name pattern. A
     criterion with none is not covered, whatever its words say.
     """
     intents, parents = {}, {}
-    for path in sorted((ROOT / "intents").glob("[0-9]*.md")):
+    for path in sorted((folder or ROOT / "intents").glob("[0-9]*.md")):
         try:
             fields, items, text = intents_tool.read(path)
         except intents_tool.Unreadable as err:
-            raise SystemExit(f"{path.relative_to(ROOT)} cannot be read one way only: {err}") from None
+            raise SystemExit(f"{path.name} cannot be read one way only: {err}") from None
         ident = fields["id"].strip('"')
+        if ident in intents:
+            raise SystemExit(f"{path.name} has the id {ident} of another intent file; no status is reported")
         criteria = {}
         for item in items:
             names = sorted({n for pattern in item.get("checks", []) for n in obligations if fnmatch.fnmatchcase(n, pattern)})
@@ -64,6 +66,15 @@ def read_intents(obligations: list[str]) -> dict:
         if parent in intents:
             intents[parent]["children"].append(ident)
     return intents
+
+
+def written_criteria(intent_id: str) -> list[dict]:
+    """The criteria of one intent as its front matter gives them, with every field."""
+    for path in sorted((ROOT / "intents").glob("[0-9]*.md")):
+        fields, items, _ = intents_tool.read(path)
+        if fields["id"].strip('"') == intent_id:
+            return items
+    return []
 
 
 def anchored_policy(ref: str) -> tuple[dict, str]:

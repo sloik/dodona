@@ -428,6 +428,125 @@ def gap_an_intent_reads_one_way_only() -> None:
                 problems.append(f"tools/intents.py accepts a gate written {bad}")
             except intents.Unreadable:
                 pass
+        # A deferred gate says what is observed and within how many days (decision 0018); no other gate does.
+        items = json.loads(fields["criteria"])
+        deferred = next(i for i, c in enumerate(items) if c["gate"] == "deferred")
+        other = next(i for i, c in enumerate(items) if c["gate"] != "deferred")
+        for name, change in (("a deferred criterion without its condition", lambda c: c[deferred].pop("condition")),
+                             ("a deferred criterion without its limit", lambda c: c[deferred].pop("limit_days")),
+                             ("a limit of 0 days", lambda c: c[deferred].update(limit_days=0)),
+                             ("a limit written as text", lambda c: c[deferred].update(limit_days="30")),
+                             ("a limit that is true", lambda c: c[deferred].update(limit_days=True)),
+                             ("a condition with markup", lambda c: c[deferred].update(condition="<b>seen</b>")),
+                             ("a condition of spaces", lambda c: c[deferred].update(condition=" ")),
+                             ("a condition with a space at its end", lambda c: c[deferred].update(condition="seen ")),
+                             ("a condition without a word", lambda c: c[deferred].update(condition="1 2")),
+                             ("a note ending in a line feed", lambda c: c[deferred].update(checked_by="seen\n")),
+                             ("words ending in a line feed", lambda c: c[deferred].update(words="seen\n")),
+                             ("an emoji code in a condition", lambda c: c[deferred].update(condition="seen :100: times")),
+                             ("a criterion that is not deferred with a condition", lambda c: c[other].update(condition="seen")),
+                             ("a criterion that is not deferred with a limit", lambda c: c[other].update(limit_days=1)),
+                             ("a soft criterion with a condition and a limit", lambda c: c[other].update(gate="soft", condition="seen", limit_days=1))):
+            changed_items = json.loads(fields["criteria"])
+            change(changed_items)
+            path = pathlib.Path(tmp) / "0001-probe.md"
+            changed = sample.replace(fields["criteria"], json.dumps(changed_items))
+            old_table = changed[changed.index(intents.BEGIN): changed.index(intents.END) + len(intents.END)]
+            try:
+                path.write_text(changed.replace(old_table, intents.table(changed_items)), encoding="utf-8")
+                intents.read(path)
+                problems.append(f"tools/intents.py accepts {name}")
+            except intents.Unreadable:
+                pass
+        # A field named twice in one criterion: json keeps the last, a person may read the first.
+        path = pathlib.Path(tmp) / "0001-probe.md"
+        doubled = fields["criteria"].replace('"gate": "deferred"', '"gate": "hard", "gate": "deferred"', 1)
+        path.write_text(sample.replace(fields["criteria"], doubled), encoding="utf-8")
+        try:
+            intents.read(path)
+            problems.append("tools/intents.py accepts a criterion that names a field twice")
+        except intents.Unreadable:
+            pass
+        # The front matter: keys no reader takes, a key twice, and an id or parent spelled another way.
+        for name, old, new in (("a front-matter key given twice", "\ntitle: ", "\ntitle: Another\ntitle: "),
+                               ("a key no reader takes, named like a criterion's field", "\ntitle: ", "\nlimit_days: 400\ntitle: "),
+                               ("an id in single quotes", 'id: "0001"', "id: '0001'"),
+                               ("an id with a space after it", 'id: "0001"', 'id: "0001" '),
+                               ("an id without quotes", 'id: "0001"', "id: 1"),
+                               ("an id that is not the file's number", 'id: "0001"', 'id: "0009"'),
+                               ("a parent in single quotes", 'parent: ""', "parent: ''")):
+            path.write_text(sample.replace(old, new, 1), encoding="utf-8")
+            try:
+                intents.read(path)
+                problems.append(f"tools/intents.py accepts {name}")
+            except intents.Unreadable:
+                pass
+        # An id of another form in a file named to match it: only the rule on how an id is written refuses it.
+        short = pathlib.Path(tmp) / "1-probe.md"
+        short.write_text(sample.replace('id: "0001"', 'id: "1"', 1), encoding="utf-8")
+        try:
+            intents.read(short)
+            problems.append("tools/intents.py accepts an id that is not four digits")
+        except intents.Unreadable:
+            pass
+        # Plain text that states a deadline of its own, says nothing, or is a time (which must still be read).
+        for name, change, refused in (("words of a space", lambda c: c[deferred].update(words=" "), True),
+                                      ("words with a space at the end", lambda c: c[deferred].update(words="seen "), True),
+                                      ("a note without a word", lambda c: c[deferred].update(checked_by="1 2"), True),
+                                      ("an emoji code followed by a digit", lambda c: c[deferred].update(condition="seen :x:1 times"), True),
+                                      ("words with a number of days, which a hard criterion may state", lambda c: c[other].update(words="Logs are kept for 30 days"), False),
+                                      ("a note holding a time, which is not an emoji", lambda c: c[deferred].update(checked_by="Runs at 02:00:00 in CI"), False)):
+            changed_items = json.loads(fields["criteria"])
+            change(changed_items)
+            changed = sample.replace(fields["criteria"], json.dumps(changed_items))
+            old_table = changed[changed.index(intents.BEGIN): changed.index(intents.END) + len(intents.END)]
+            path.write_text(changed.replace(old_table, intents.table(changed_items)), encoding="utf-8")
+            try:
+                intents.read(path)
+                if refused:
+                    problems.append(f"tools/intents.py accepts {name}")
+            except intents.Unreadable as err:
+                if not refused:
+                    problems.append(f"tools/intents.py refuses {name}: {err}")
+        # Two files with one id: which one counts would depend on the order they are listed in.
+        twin = pathlib.Path(tmp) / "0001-twin.md"
+        twin.write_text(sample, encoding="utf-8")
+        path.write_text(sample, encoding="utf-8")
+        if not intents.check_all([path, twin]):
+            problems.append("tools/intents.py accepts two intent files with one id")
+    # What the owner confirms shows each deferred criterion's observation and limit, in its own column, and the
+    # limit is one policy allows.
+    import tomllib
+    longest = tomllib.loads((ROOT / "policy.toml").read_text(encoding="utf-8")).get("gates", {}).get("max_deferred_days")
+    for path in sorted((ROOT / "intents").glob("[0-9]*.md")):
+        try:
+            _, items, text = intents.read(path)
+        except intents.Unreadable:
+            continue
+        for c in items:
+            if c["gate"] != "deferred":
+                continue
+            row = f"| {c['id']} | {c['words']} | deferred | {intents.shown_checks(c)} | within {c['limit_days']} days of delivery: {c['condition']} |"
+            if row not in text:
+                problems.append(f"{path.name}: criterion {c['id']}'s observation and limit are not shown in a column of their own")
+            if isinstance(longest, int) and c["limit_days"] > longest:
+                problems.append(f"{path.name}: criterion {c['id']} has a limit of {c['limit_days']} days; policy.toml allows at most {longest}")
+    import confirm
+    shown = "\n".join(confirm.observation_lines({"gate": "deferred", "condition": "seen on a probe", "limit_days": 120},
+                                                {"gates": {"max_deferred_days": 90}}))
+    if "seen on a probe" not in shown or "120" not in shown or "longer than policy allows" not in shown:
+        problems.append("tools/confirm.py must show each deferred criterion's observation and limit, and warn of a limit above policy, "
+                        f"before the owner agrees: {shown!r}")
+    import status
+    with tempfile.TemporaryDirectory() as tmp:
+        sample = sorted((ROOT / "intents").glob("[0-9]*.md"))[0]
+        for name in (sample.name, sample.name[:5] + "twin.md"):
+            (pathlib.Path(tmp) / name).write_text(sample.read_text(encoding="utf-8"), encoding="utf-8")
+        try:
+            status.read_intents([], pathlib.Path(tmp))
+            problems.append("tools/status.py reports a status when two intent files have one id")
+        except SystemExit:
+            pass
     source = (ROOT / "tools" / "status.py").read_text(encoding="utf-8")
     if 'e.get("kind") == "act"' not in source or "OWNER_LEDGER.resolve()" not in source:
         problems.append("tools/status.py must read only acts from the owner's ledger, and compare ledger paths after resolving them")

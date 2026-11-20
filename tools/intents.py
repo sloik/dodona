@@ -7,6 +7,9 @@ An intent's criteria are data, kept in its front matter as one JSON line:
 
     criteria: [{"id": "1", "words": "...", "gate": "hard", "checks": ["*/design*"], "checked_by": "..."}]
 
+A deferred criterion also says what is to be observed and within how many days of delivery
+(decision 0018): "condition" and "limit_days". No other criterion has them.
+
 That line is the only thing a reader takes the criteria from. The table under
 "## Criteria" is written from it by this tool, so what a person sees on
 GitHub is what is read. A file is refused when anything else in it could be
@@ -25,14 +28,17 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GATES = ("hard", "soft", "deferred")
 # What a criterion's words and note may hold: plain text that Markdown and HTML render as itself.
-PLAIN = re.compile(r"^[A-Za-z0-9 .,;:'()/+?%-]+$")
+PLAIN = re.compile(r"[A-Za-z0-9 .,;:'()/+?%-]+")
 # What a pattern naming checks may hold.
-PATTERN = re.compile(r"^[A-Za-z0-9_*?/.-]+$")
+PATTERN = re.compile(r"[A-Za-z0-9_*?/.-]+")
 # Characters that make Markdown or HTML render something other than the text: tags, entities,
 # tables, emphasis, code, links, escapes. None may appear outside the written table.
 MARKUP = set("<>&|*_`[]\\")
 BEGIN = "<!-- criteria: written by tools/intents.py from the front matter; do not edit -->"
 END = "<!-- end of criteria -->"
+
+
+KEYS = {"id", "title", "owner", "worker", "parent", "touches", "criteria"}
 
 
 class Unreadable(Exception):
@@ -62,34 +68,70 @@ def front(text: str) -> tuple[dict, str]:
         if key != "criteria" and not re.fullmatch(r"[A-Za-z0-9 .,;:'\"()/+?%-]*", value):
             raise Unreadable(f"the front-matter value of {key!r} is not plain text")
         fields[key] = value
+    # Only the keys a reader takes. Any other would show on GitHub's front-matter table and be read by nobody,
+    # so a key named like a field of a criterion could pass for one.
+    unknown = sorted(set(fields) - KEYS)
+    if unknown:
+        raise Unreadable(f"the front matter has keys no reader takes: {', '.join(unknown)}")
+    # An id and a parent are written one way only, so two spellings of one id cannot pass for two intents.
+    if not re.fullmatch(r'"[0-9]{4}"', fields.get("id", "")):
+        raise Unreadable('the id must be written as four digits in double quotes, such as id: "0004"')
+    if not re.fullmatch(r'"([0-9]{4})?"', fields.get("parent", '""')):
+        raise Unreadable('the parent must be written as four digits in double quotes, or as ""')
     return fields, body
+
+
+# GitHub shows :name: as an emoji, so plain text may not hold one. A time such as 02:00:00 is not one.
+EMOJI = re.compile(r"(?<![0-9]):[A-Za-z0-9_+-]+:")
+
+
+def plain(text) -> bool:
+    """Text that Markdown and HTML render as itself: allowed characters only, the whole of it (no line feed slips
+    past the end), and no emoji code."""
+    return isinstance(text, str) and PLAIN.fullmatch(text) is not None and not EMOJI.search(text) \
+        and text == text.strip() and any(ch.isalpha() for ch in text)
+
+
+def no_repeats(pairs: list) -> dict:
+    keys = [k for k, _ in pairs]
+    if len(keys) != len(set(keys)):
+        raise Unreadable("the criteria line names a field twice in one criterion")
+    return dict(pairs)
 
 
 def criteria_of(fields: dict) -> list[dict]:
     try:
-        items = json.loads(fields.get("criteria", "[]"))
+        items = json.loads(fields.get("criteria", "[]"), object_pairs_hook=no_repeats)
     except ValueError as err:
         raise Unreadable(f"the criteria line is not JSON: {err}") from None
     if not isinstance(items, list) or not items:
         raise Unreadable("the criteria line must be a list with at least one criterion")
     seen = set()
     for item in items:
-        if not isinstance(item, dict) or set(item) - {"id", "words", "gate", "checks", "checked_by"}:
-            raise Unreadable("each criterion has only id, words, gate, checks and checked_by")
+        if not isinstance(item, dict) or set(item) - {"id", "words", "gate", "checks", "checked_by", "condition", "limit_days"}:
+            raise Unreadable("each criterion has only id, words, gate, checks, checked_by, condition and limit_days")
         ident, words, gate = item.get("id"), item.get("words"), item.get("gate")
         if not (isinstance(ident, str) and ident.isascii() and ident.isdigit()) or ident in seen:
             raise Unreadable(f"criterion id {ident!r} is not a new number written in plain digits")
         seen.add(ident)
         if gate not in GATES:
             raise Unreadable(f"criterion {ident} has gate {gate!r}; it must be exactly hard, soft or deferred")
-        if not isinstance(words, str) or not PLAIN.match(words):
+        if not plain(words):
             raise Unreadable(f"criterion {ident}: its words must be plain text (letters, digits, spaces, . , ; : ' ( ) / + ? % -)")
         checks = item.get("checks", [])
-        if not isinstance(checks, list) or not all(isinstance(c, str) and PATTERN.match(c) for c in checks):
+        if not isinstance(checks, list) or not all(isinstance(c, str) and PATTERN.fullmatch(c) for c in checks):
             raise Unreadable(f"criterion {ident}: checks must be a list of name patterns")
         note = item.get("checked_by", "")
-        if not isinstance(note, str) or (note and not PLAIN.match(note)):
+        if not isinstance(note, str) or (note and not plain(note)):
             raise Unreadable(f"criterion {ident}: checked_by must be plain text")
+        if gate == "deferred":
+            condition, days = item.get("condition"), item.get("limit_days")
+            if not plain(condition) or condition != condition.strip() or not any(ch.isalpha() for ch in condition):
+                raise Unreadable(f"criterion {ident} is deferred: its condition, what is to be observed, must be given in plain text, with words, and no space at either end")
+            if type(days) is not int or days < 1:
+                raise Unreadable(f"criterion {ident} is deferred: limit_days must be a whole number of days, at least 1")
+        elif "condition" in item or "limit_days" in item:
+            raise Unreadable(f"criterion {ident} is not deferred, so it has no condition or limit_days")
     return items
 
 
@@ -100,9 +142,17 @@ def shown_checks(item: dict) -> str:
     return cell + (f". {item['checked_by']}" if item.get("checked_by") else "")
 
 
+def shown_observation(item: dict) -> str:
+    """The Observed cell of a deferred criterion: the limit first, in a fixed form, then what is to be observed.
+    It has a column of its own, so nothing in the note can be taken for it."""
+    if item.get("gate") != "deferred":
+        return ""
+    return f"within {item.get('limit_days')} days of delivery: {item.get('condition')}"
+
+
 def table(items: list[dict]) -> str:
-    rows = ["| # | Criterion | Gate | Checked by |", "|---|---|---|---|"]
-    rows += [f"| {c['id']} | {c['words']} | {c['gate']} | {shown_checks(c)} |" for c in items]
+    rows = ["| # | Criterion | Gate | Checked by | Observed after delivery |", "|---|---|---|---|---|"]
+    rows += [f"| {c['id']} | {c['words']} | {c['gate']} | {shown_checks(c)} | {shown_observation(c)} |" for c in items]
     return "\n".join([BEGIN] + rows + [END])
 
 
@@ -110,6 +160,8 @@ def read(path: pathlib.Path) -> tuple[dict, list[dict], str]:
     """The front matter, the criteria, and the whole text; or Unreadable."""
     text = path.read_text(encoding="utf-8")
     fields, body = front(text)
+    if not path.name.startswith(fields["id"].strip('"') + "-"):
+        raise Unreadable(f"its id {fields['id']} is not the number its file name starts with")
     items = criteria_of(fields)
     if body.count(BEGIN) != 1 or body.count(END) != 1:
         raise Unreadable("the body must hold the written criteria table exactly once")
@@ -146,17 +198,29 @@ def write(path: pathlib.Path) -> bool:
 
 def main() -> int:
     paths = sorted((ROOT / "intents").glob("[0-9]*.md"))
-    failed = 0
+    problems = check_all(paths, "--write" in sys.argv)
+    for problem in problems:
+        print(problem)
+    print(json.dumps({"intents": len(paths), "readable": len(paths) - len(problems)}))
+    return 1 if problems else 0
+
+
+def check_all(paths: list[pathlib.Path], rewrite: bool = False) -> list[str]:
+    """Why each of these intent files cannot be read one way only; empty when all can. Two files with one id
+    cannot: which of them a reader takes would depend on the order it lists them in."""
+    problems, seen = [], {}
     for path in paths:
         try:
-            if "--write" in sys.argv:
+            if rewrite:
                 write(path)
-            read(path)
+            fields, _, _ = read(path)
+            ident = fields.get("id", "").strip('"')
+            if ident in seen:
+                raise Unreadable(f"its id {ident} is also the id of {seen[ident]}")
+            seen[ident] = path.name
         except Unreadable as err:
-            failed += 1
-            print(f"{path.relative_to(ROOT)} cannot be read one way only: {err}")
-    print(json.dumps({"intents": len(paths), "readable": len(paths) - failed}))
-    return 1 if failed else 0
+            problems.append(f"{path.name} cannot be read one way only: {err}")
+    return problems
 
 
 if __name__ == "__main__":

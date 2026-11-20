@@ -42,6 +42,17 @@ def record(intent_id: str, intent: dict, baseline: str) -> dict:
             "worker": {"id": intent["worker"], "session": "not-recorded"}}
 
 
+def observation_lines(criterion: dict, policy: dict) -> list[str]:
+    """What the owner is shown of a deferred criterion's observation and limit before agreeing."""
+    if criterion.get("gate") != "deferred":
+        return []
+    lines = [f"    observed after delivery, within {criterion.get('limit_days')} days: {criterion.get('condition')}"]
+    longest = policy.get("gates", {}).get("max_deferred_days")
+    if isinstance(longest, int) and isinstance(criterion.get("limit_days"), int) and criterion["limit_days"] > longest:
+        lines.append(f"    its limit is longer than policy allows ({longest} days)")
+    return lines
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--intent", required=True)
@@ -78,9 +89,12 @@ def main() -> int:
         return 1
     print(f"Intent {args.intent}, owned by {intent['owner']}; the work is done by {intent['worker']}.")
     print(note)
+    written = {c["id"]: c for c in status.written_criteria(args.intent)}
     for name, criterion in sorted(intent["criteria"].items()):
         checks = ", ".join(criterion["checked_by"][:3]) + (f" and {len(criterion['checked_by']) - 3} more" if len(criterion["checked_by"]) > 3 else "")
         print(f"  criterion {name}: gate {criterion['gate']}; checked by {checks or 'nothing a kernel can read yet'}")
+        for line in observation_lines(dict(written.get(name, {}), gate=criterion["gate"]), policy):
+            print(line)
     if intent["children"]:
         print("  children:", ", ".join(sorted(intent["children"])))
     # Where the hard gates sit (decision 0030): the floor is counted over the whole tree, so a
