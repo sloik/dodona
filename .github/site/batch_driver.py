@@ -16,6 +16,7 @@ status 78 before reading anything.
 """
 import hashlib
 import json
+import re
 import pathlib
 import shutil
 import subprocess
@@ -62,6 +63,17 @@ def main() -> int:
         except OSError:
             measured[path] = None
     (out / "measured.json").write_text(json.dumps(measured, indent=1), encoding="utf-8")
+    # The version of each program pinned by a floor, as the program states it (`java -version` prints
+    # `version "21.0.13"` on its first line). Unreadable is null, which never meets a floor.
+    versions = {}
+    for path in manifest.get("versions", []):
+        try:
+            said = subprocess.run([path, "-version"], capture_output=True, timeout=60)
+            found = re.search(rb'version "([0-9]+(?:\.[0-9]+)*)', said.stderr + said.stdout)
+            versions[path] = found.group(1).decode("ascii") if found else None
+        except (OSError, subprocess.TimeoutExpired):
+            versions[path] = None
+    (out / "versions.json").write_text(json.dumps(versions, indent=1), encoding="utf-8")
     for case in manifest["cases"]:
         target = out / case["name"]
         target.parent.mkdir(parents=True, exist_ok=True)

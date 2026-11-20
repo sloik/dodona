@@ -871,6 +871,40 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown]
 
 
+class ToolPinTests(unittest.TestCase):
+    """A tool pinned by a floor (the queue's Java) is accepted at that version or later, and only then."""
+
+    pinned = {"java": {"name": "java", "file": "java/bin/java", "floor": "21.0.13", "sha256": None},
+              "tla2tools": {"name": "tla2tools", "file": "t.jar", "sha256": "ab"}}
+    measured = {"java/bin/java": "any", "t.jar": "ab"}
+
+    def faults(self, version, measured=None):
+        import host
+        return host.tool_faults(self.pinned, measured or self.measured, {} if version is None else {"java/bin/java": version})
+
+    def test_the_floor_and_later_are_accepted(self):
+        for version in ("21.0.13", "21.0.13.1", "21.1", "22"):
+            self.assertEqual(self.faults(version), ([], []), version)
+
+    def test_below_the_floor_is_a_mismatch(self):
+        self.assertEqual(self.faults("21.0.12"), ([], ["java"]))
+
+    def test_an_unreadable_or_missing_version_is_a_mismatch(self):
+        for version in ("garbage", "", None):
+            self.assertEqual(self.faults(version), ([], ["java"]), version)
+
+    def test_an_exact_pin_still_compares_its_digest(self):
+        self.assertEqual(self.faults("21.0.13", {"java/bin/java": "any", "t.jar": "other"}), ([], ["tla2tools"]))
+
+    def test_an_unmeasured_tool_is_unmeasured(self):
+        self.assertEqual(self.faults("21.0.13", {"t.jar": "ab"})[0], ["java"])
+
+    def test_the_key_holds_the_floor_not_the_build(self):
+        import host
+        self.assertEqual(host.floor_digest(self.pinned["java"]), host.floor_digest(dict(self.pinned["java"], sha256="x")))
+        self.assertNotEqual(host.floor_digest(self.pinned["java"]), host.floor_digest(dict(self.pinned["java"], floor="21.0.14")))
+
+
 class JudgeTests(unittest.TestCase):
     """The judge must never turn an unfinished or wrong run into a match."""
 
@@ -932,6 +966,7 @@ def main() -> int:
                   check_indexes] + GAP_CHECKS:
         check()
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(JudgeTests)
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ToolPinTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
         print("PROBLEM", line)

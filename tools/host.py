@@ -563,12 +563,42 @@ def list_project(session: Session, root: pathlib.Path) -> tuple[list[dict], list
     return obligations, files
 
 
+def floor_digest(tool: dict) -> str:
+    """The digest a result's key holds for a tool accepted from a floor version on: the floor itself, so that a newer
+    build does not make results stale, and a change of floor does."""
+    return hashlib.sha256(f"{tool['name']}>={tool['floor']}".encode("utf-8")).hexdigest()
+
+
+def version_tuple(text) -> tuple | None:
+    found = re.fullmatch(r"([0-9]+(?:\.[0-9]+)*)", text or "")
+    return tuple(int(x) for x in found.group(1).split(".")) if found else None
+
+
 def lock_tools() -> tuple[list[dict], dict]:
     """The tools as this site's pins give them (not yet a lock: decision 0026). A tool that is not pinned yet has a digest of zeros,
-    which no measurement can equal, so nothing recorded in that state counts later."""
+    which no measurement can equal, so nothing recorded in that state counts later. A tool pinned by a floor version has the
+    floor's digest."""
     lock = json.loads((ROOT / ".github" / "site" / "pins.json").read_text(encoding="utf-8"))
     pinned = {t["name"]: t for t in lock["tools"]}
-    return [{"name": n, "version": pinned[n]["version"], "digest": "sha256:" + (pinned[n]["sha256"] or "0" * 64)} for n in sorted(pinned)], pinned
+    return [{"name": n, "version": pinned[n]["version"],
+             "digest": "sha256:" + (floor_digest(pinned[n]) if pinned[n].get("floor") else (pinned[n]["sha256"] or "0" * 64))}
+            for n in sorted(pinned)], pinned
+
+
+def tool_faults(pinned: dict, measured: dict, versions: dict) -> tuple[list, list]:
+    """The tools not measured, and those measured to be other than pinned: for a floor, a version that cannot be read or is
+    below the floor. Neither ever lets a run become a verdict."""
+    unmeasured = [n for n in sorted(pinned) if not measured.get(pinned[n]["file"])]
+    mismatched = []
+    for n in sorted(pinned):
+        tool = pinned[n]
+        if tool.get("floor"):
+            seen, floor = version_tuple(versions.get(tool["file"])), version_tuple(tool["floor"])
+            if seen is None or floor is None or seen < floor:
+                mismatched.append(n)
+        elif tool["sha256"] is not None and measured.get(tool["file"]) != tool["sha256"]:
+            mismatched.append(n)
+    return unmeasured, mismatched
 
 
 def preimage(obligation: dict, inputs: list[dict], tools: list[dict], manifest: dict) -> dict:
@@ -648,13 +678,13 @@ def collect(args) -> int:
     if not cases:
         # Everything has a current result. Nothing is sent, and nothing new will be recorded.
         print("nothing to run: every check has a current result")
-        job = {"reachable": True, "complete": True, "exit": None, "measured": {}, "fetched": None}
+        job = {"reachable": True, "complete": True, "exit": None, "measured": {}, "versions": {}, "fetched": None}
     else:
         job = send_job(site, bundle, cases)
     reachable, complete, measured = job["reachable"], job["complete"], job["measured"]
     if reachable and job["fetched"] is not None:
         shutil.copytree(job["fetched"], out / "outputs", dirs_exist_ok=True)
-    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "complete": complete, "queue_exit": job["exit"], "sent": len(cases), "plan": chosen, "pending": pending, "measured": measured,
+    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "complete": complete, "queue_exit": job["exit"], "sent": len(cases), "plan": chosen, "pending": pending, "measured": measured, "versions": job["versions"],
                                                "executor": site.get("executor_name", "site")}, indent=1) + "\n", encoding="utf-8")
     (out / "transcript-collect.json").write_text(json.dumps(transcript, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({"obligations": len(pending), "reachable": reachable, "complete": complete}))
@@ -672,7 +702,10 @@ def send_job(site: dict, bundle: pathlib.Path, cases: list[dict]) -> dict:
     where = site["tool_files"]
     dest = bundle.parent / "fetched"
     shutil.copy(ROOT / ".github" / "site" / "batch_driver.py", bundle / "batch_driver.py")
-    (bundle / "manifest.json").write_text(json.dumps({"out": "out", "cases": cases, "measure": sorted(set(where.values()))}, indent=1), encoding="utf-8")
+    _, pinned = lock_tools()
+    versions = sorted({where[tool["file"]] for tool in pinned.values() if tool.get("floor") and tool["file"] in where})
+    (bundle / "manifest.json").write_text(json.dumps({"out": "out", "cases": cases, "measure": sorted(set(where.values())), "versions": versions},
+                                                     indent=1), encoding="utf-8")
     values = {"source": str(bundle), "dest": str(dest), "timeout": str(site.get("batch_timeout_seconds", 3600))}
     print(f"sending {len(cases)} runs to the executor as one job", flush=True)
     try:
@@ -685,6 +718,7 @@ def send_job(site: dict, bundle: pathlib.Path, cases: list[dict]) -> dict:
     if not reachable:
         print("the executor returned nothing:", said)
     seen = json.loads((fetched / "measured.json").read_text(encoding="utf-8")) if (fetched / "measured.json").exists() else {}
+    seen_versions = json.loads((fetched / "versions.json").read_text(encoding="utf-8")) if (fetched / "versions.json").exists() else {}
     marker = fetched / "complete.json"
     marked = marker.exists() and json.loads(marker.read_text(encoding="utf-8")).get("cases") == [c["name"] for c in cases]
     complete = bool(reachable and code == 0 and marked)
@@ -692,15 +726,14 @@ def send_job(site: dict, bundle: pathlib.Path, cases: list[dict]) -> dict:
         print(f"the job did not end well (the executor's client exited with {code}; end marker {'present' if marked else 'missing'}); "
               "nothing from it will be taken as a result")
     return {"reachable": bool(reachable), "complete": complete, "exit": code, "fetched": fetched,
-            "measured": {name: seen.get(path) for name, path in where.items()}}
+            "measured": {name: seen.get(path) for name, path in where.items()},
+            "versions": {name: seen_versions.get(path) for name, path in where.items() if path in seen_versions}}
 
 
 def job_fault(runs: dict) -> str | None:
     """Why nothing from this job may be judged, measured against this site's pins; None if it may."""
     _, pinned = lock_tools()
-    measured = runs.get("measured", {})
-    unmeasured = [n for n in sorted(pinned) if not measured.get(pinned[n]["file"])]
-    mismatched = [n for n in sorted(pinned) if pinned[n]["sha256"] is not None and measured.get(pinned[n]["file"]) != pinned[n]["sha256"]]
+    unmeasured, mismatched = tool_faults(pinned, runs.get("measured", {}), runs.get("versions", {}))
     return proves_nothing(runs, unmeasured, mismatched)
 
 
@@ -776,10 +809,11 @@ def conclude(args) -> int:
     transcript: list = []
     tools, pinned = lock_tools()
     measured = runs["measured"]
-    unmeasured = [n for n in sorted(pinned) if not measured.get(pinned[n]["file"])]
-    ran = [{"name": n, "digest": "sha256:" + (measured.get(pinned[n]["file"]) or "0" * 64)} for n in sorted(pinned)]
-    unpinned = [n for n in sorted(pinned) if pinned[n]["sha256"] is None]
-    mismatched = [n for n in sorted(pinned) if pinned[n]["sha256"] is not None and measured.get(pinned[n]["file"]) != pinned[n]["sha256"]]
+    unmeasured, mismatched = tool_faults(pinned, measured, runs.get("versions", {}))
+    # The key is made from what was measured to have run; for a floor tool, from its floor, once its version is checked.
+    ran = [{"name": n, "digest": "sha256:" + (floor_digest(pinned[n]) if pinned[n].get("floor") else (measured.get(pinned[n]["file"]) or "0" * 64))}
+           for n in sorted(pinned)]
+    unpinned = [n for n in sorted(pinned) if pinned[n]["sha256"] is None and not pinned[n].get("floor")]
     session = Session([sys.executable, str(ROOT / "providers" / "tlc" / "provider.py")], ROOT, transcript)
     counts = {"passed": 0, "failed": 0, "error": 0, "unavailable": 0, "unsupported": 0, "refused": 0, "reused": 0}
     try:
