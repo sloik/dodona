@@ -7,6 +7,9 @@ An intent's criteria are data, kept in its front matter as one JSON line:
 
     criteria: [{"id": "1", "words": "...", "gate": "hard", "checks": ["*/design*"], "checked_by": "..."}]
 
+A deferred criterion also says what is to be observed and within how many days of delivery
+(decision 0018): "condition" and "limit_days". No other criterion has them.
+
 That line is the only thing a reader takes the criteria from. The table under
 "## Criteria" is written from it by this tool, so what a person sees on
 GitHub is what is read. A file is refused when anything else in it could be
@@ -74,8 +77,8 @@ def criteria_of(fields: dict) -> list[dict]:
         raise Unreadable("the criteria line must be a list with at least one criterion")
     seen = set()
     for item in items:
-        if not isinstance(item, dict) or set(item) - {"id", "words", "gate", "checks", "checked_by"}:
-            raise Unreadable("each criterion has only id, words, gate, checks and checked_by")
+        if not isinstance(item, dict) or set(item) - {"id", "words", "gate", "checks", "checked_by", "condition", "limit_days"}:
+            raise Unreadable("each criterion has only id, words, gate, checks, checked_by, condition and limit_days")
         ident, words, gate = item.get("id"), item.get("words"), item.get("gate")
         if not (isinstance(ident, str) and ident.isascii() and ident.isdigit()) or ident in seen:
             raise Unreadable(f"criterion id {ident!r} is not a new number written in plain digits")
@@ -90,6 +93,14 @@ def criteria_of(fields: dict) -> list[dict]:
         note = item.get("checked_by", "")
         if not isinstance(note, str) or (note and not PLAIN.match(note)):
             raise Unreadable(f"criterion {ident}: checked_by must be plain text")
+        if gate == "deferred":
+            condition, days = item.get("condition"), item.get("limit_days")
+            if not isinstance(condition, str) or not PLAIN.match(condition):
+                raise Unreadable(f"criterion {ident} is deferred: its condition, what is to be observed, must be given in plain text")
+            if type(days) is not int or days < 1:
+                raise Unreadable(f"criterion {ident} is deferred: limit_days must be a whole number of days, at least 1")
+        elif "condition" in item or "limit_days" in item:
+            raise Unreadable(f"criterion {ident} is not deferred, so it has no condition or limit_days")
     return items
 
 
@@ -97,7 +108,10 @@ def shown_checks(item: dict) -> str:
     """The Checked by cell: exactly the patterns that are read, then the note, which is only a note."""
     patterns = item.get("checks", [])
     cell = ("checks named " + ", ".join(f"`{p}`" for p in patterns)) if patterns else "nothing a kernel reads yet"
-    return cell + (f". {item['checked_by']}" if item.get("checked_by") else "")
+    cell += f". {item['checked_by']}" if item.get("checked_by") else ""
+    if item.get("gate") == "deferred":
+        cell += f". Observed: {item.get('condition')}, within {item.get('limit_days')} days of delivery"
+    return cell
 
 
 def table(items: list[dict]) -> str:
