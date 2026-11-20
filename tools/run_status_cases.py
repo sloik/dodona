@@ -429,6 +429,9 @@ VARIANT_BASES = ("an empty ledger has a report", "a project with two bindings, a
 
 
 def main() -> int:
+    # Case names hold characters a Windows console cannot show; they are printed escaped rather than crash the judge.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--kernel", nargs="+", required=True, help="a kernel command whose `scenario` recomputes the report")
     ap.add_argument("--variants", action="store_true",

@@ -224,6 +224,12 @@ def run(asked) -> dict:
     return out
 
 
+def emit(value: dict) -> None:
+    """One JSON object, as UTF-8 bytes whatever the console's encoding (Windows' is not UTF-8), and a line feed."""
+    sys.stdout.buffer.write(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8") + b"\n")
+    sys.stdout.buffer.flush()
+
+
 def main() -> int:
     kernel = sys.argv[sys.argv.index("--kernel") + 1:] if "--kernel" in sys.argv else None
     try:
@@ -237,13 +243,13 @@ def main() -> int:
     try:
         out = run(asked)
     except Stop as stop:
-        print(json.dumps({"refused": stop.reason, "detail": stop.detail}, ensure_ascii=False))
+        emit({"refused": stop.reason, "detail": stop.detail})
         return 0
     if kernel:
         answer = subprocess.run(kernel + ["scenario"], input=json.dumps(out["judged"]).encode("utf-8"), capture_output=True, check=True)
         out["report"] = json.loads(answer.stdout)["results"][-1]
         out["project_status"] = ps.headline(out["report"]["project"]["status"], out["project_doubts"])
-    print(json.dumps(out, ensure_ascii=False, sort_keys=True))
+    emit(out)
     return 0
 
 

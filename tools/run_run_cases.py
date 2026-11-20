@@ -185,6 +185,9 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
 
 
 def main() -> int:
+    # Case names hold characters a Windows console cannot show; they are printed escaped rather than crash the judge.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--kernel", nargs="+", required=True)
     ap.add_argument("--status", required=True, help="the status command of the same kernel, as one string split as a shell would")
