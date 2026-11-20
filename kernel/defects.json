@@ -1556,6 +1556,13 @@
       "replace": "        if sort_set(code.clone()).len() > code.len() {\n"
     },
     {
+      "name": "status step 1: a provider command holding a NUL is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                    .filter(|c| !c.is_empty() && !c.iter().any(|a| a.contains('\\0')));\n",
+      "replace": "                    .filter(|c| !c.is_empty());\n"
+    },
+    {
       "name": "status step 2: control characters other than NUL are taken",
       "model_case": null,
       "file": "src/project_status.rs",
@@ -1743,6 +1750,13 @@
       "file": "src/project_status.rs",
       "find": "                            json::string(&canonical::identity(o.get(\"config\"))),\n",
       "replace": "                            json::string(&canonical::identity(&Value::Null)),\n"
+    },
+    {
+      "name": "status step 6: the key holds every site tool, named by the manifest or not",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                .filter(|t| t.text(\"name\").is_some_and(|n| named_tools.contains(&n)))\n",
+      "replace": "                .filter(|t| t.text(\"name\").is_some())\n"
     },
     {
       "name": "status step 7: a rejected intent file is ignored",

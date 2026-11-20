@@ -298,7 +298,9 @@ fn read_input(input: &[u8]) -> Step<Input> {
     match site.opt("providers") {
         Some(Value::Object(ps)) => {
             for (name, p) in ps {
-                let command = strings(p.opt("command")).filter(|c| !c.is_empty());
+                // No argument a program is given can hold a NUL.
+                let command = strings(p.opt("command"))
+                    .filter(|c| !c.is_empty() && !c.iter().any(|a| a.contains('\0')));
                 match (is_object(Some(p)), command, strings(p.opt("code"))) {
                     (true, Some(command), Some(code)) => providers.push((name.clone(), command, code)),
                     _ => return stop("bad-input", format!("provider {name}: needs a non-empty list of strings command and a list of strings code")),
@@ -938,6 +940,21 @@ fn obligations(
             }
         }
         let provider = input.provider(&binding.provider).map_or("", |p| &p.code);
+        // The site's tools that the provider's manifest names, in the site's order.
+        let named_tools: Vec<&str> = list(manifest.opt("tools"))
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|t| t.text("name"))
+            .collect();
+        let tools = Value::Array(
+            input
+                .tools
+                .array()
+                .iter()
+                .filter(|t| t.text("name").is_some_and(|n| named_tools.contains(&n)))
+                .cloned()
+                .collect(),
+        );
         let version = format!(
             "{}+{}+{}",
             manifest.get("version").str(),
@@ -993,7 +1010,7 @@ fn obligations(
                         ("specified_by", identities("specified_by")),
                         ("targets", identities("targets")),
                         ("closure", texts(&closure)),
-                        ("tools", input.tools.clone()),
+                        ("tools", tools.clone()),
                         (
                             "config",
                             json::string(&canonical::identity(o.get("config"))),
