@@ -1011,8 +1011,8 @@ def pin_lines_only(paths: list[str], patch: str) -> bool:
     """Whether a change only moves pinned versions in workflows: what an automatic update of pinned
     versions changes, and nothing a document describes. Each removed line must be replaced, in the same
     place, by one line pinning the same thing at another version; no line is only added or only removed."""
-    if not paths or any(not re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p) or p in JUDGING_FILES for p in paths):
-        return False  # a judging file never changes without the owner, not even its pins
+    if not paths or any(not re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p) for p in paths):
+        return False
     hunks: list[tuple[list[str], list[str]]] = []
     with_hunks: set[str] = set()
     current = None
@@ -1050,11 +1050,14 @@ def workflow_jobs(text: str) -> set[str]:
     check is matched by name, so these are what another workflow could take over. A name GitHub would
     compute (one holding `${{`) or one written as a block (`>` or `|`) is kept as written, so that
     job_clashes can treat it as able to be anything its fixed parts allow."""
-    found, inside, job_indent, key_indent = set(), False, None, None
+    found, inside, job_indent, key_indent, pending = set(), False, None, None, None
     for line in text.replace("\r\n", "\n").split("\n"):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         indent = len(line) - len(line.lstrip())
+        if pending is not None and (indent == 0 or not inside):
+            found.add(pending)
+            pending = None
         if indent == 0:
             inside = re.fullmatch(r"([\"']?)jobs\1\s*:\s*(#.*)?", line.rstrip()) is not None
             job_indent = key_indent = None
@@ -1071,12 +1074,21 @@ def workflow_jobs(text: str) -> set[str]:
             continue
         if key_indent is None:
             key_indent = indent
-        m = re.fullmatch(r"\s*([\"']?)name\1\s*:\s*(.*?)\s*(#[^\"']*)?", line)
+        if pending is not None:
+            # A plain or quoted name may go on over the next, deeper lines: it cannot be read here.
+            found.add(">" if indent > key_indent and not re.match(r"\s*[\w\"'-]+\s*:", line) else pending)
+            pending = None
+        m = re.fullmatch(r"\s*([\"']?)name\1\s*:\s*(.*)", line)
         if indent == key_indent and m:
-            value = m.group(2)
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-                value = value[1:-1]
-            found.add(value)
+            value = m.group(2).strip()
+            if value[:1] in ("\"", "'"):
+                end = value.find(value[0], 1)
+                value = value[1:end] if end > 0 else ">"
+            else:
+                value = re.split(r"\s#", value, maxsplit=1)[0].strip()
+            pending = value
+    if pending is not None:
+        found.add(pending)
     return found
 
 
@@ -1086,12 +1098,15 @@ def could_be(written: str, name: str) -> bool:
     if written.startswith((">", "|")):
         return True
     if "${{" not in written:
-        return written == name
+        # GitHub adds a matrix job's values after a plain name, in brackets.
+        return written == name or name.startswith(written + " (")
     parts = re.split(r"\$\{\{.*?\}\}", written)
     return re.fullmatch(".*".join(re.escape(p) for p in parts), name, flags=re.S) is not None
 
 
-WRITES_STATUS = re.compile(r"\b(checks|statuses)\s*:\s*write\b|\bwrite-all\b")
+WRITES_STATUS = re.compile(r"""\b(checks|statuses)["']?\s*:\s*["']?write\b|\bwrite-all\b""")
+# YAML this check does not read: anchors, aliases, tags and merge keys can carry a name or a permission anywhere.
+UNREAD_YAML = re.compile(r"""(^|[\s\[{,:-])&[\w-]+|(:|-|\[|\{|,)\s*\*[\w-]+|!!|(:\s*)![\w]|<<\s*:""", re.M)
 
 
 def job_clashes(workflows: dict[str, str], own: str, names: set[str]) -> list[str]:
@@ -1109,6 +1124,9 @@ def job_clashes(workflows: dict[str, str], own: str, names: set[str]) -> list[st
                                  "a required check of that name could be passed by it")
         if WRITES_STATUS.search(text):
             found.append(f"{path} gives its token permission to post checks or statuses: it could post one named as {own}'s job")
+        if UNREAD_YAML.search(text):
+            found.append(f"{path} uses YAML anchors, aliases, tags or merge keys, which this check does not read: "
+                         "a job name or a permission could hide in them")
     return found
 
 
@@ -1162,8 +1180,16 @@ def diff(root: pathlib.Path, base: str, head: str | None, pr_body: str | None,
         return out.stdout.decode("utf-8", "replace") if out.returncode == 0 else None
 
     # A document deleted or renamed away is not a document brought up to date: it must still be there.
-    docs_changed = {p for _, p in changed if p.endswith(".md") and at(head, p) is not None
-                    and substance(at(merge_base, p)) != substance(at(head, p))}
+    def regular_at_head(path: str) -> bool:
+        if head is None:
+            p = root / path
+            return p.is_file() and not p.is_symlink()
+        listed = git(root, "ls-tree", head_rev, "--", path).decode("utf-8", "replace").split()
+        return bool(listed) and listed[0] in ("100644", "100755")
+
+    # A document deleted, renamed away, emptied or replaced by a link is not a document brought up to date.
+    docs_changed = {p for _, p in changed if p.endswith(".md") and at(head, p) is not None and regular_at_head(p)
+                    and substance(at(head, p)).strip() and substance(at(merge_base, p)) != substance(at(head, p))}
     log = git(root, "log", "--format=%B%x00", f"{merge_base}..{head_rev}").decode("utf-8", "replace")
     messages = [m for m in log.split("\0") if m.strip()]
     head_text = at(head, MAP_FILE)
@@ -1415,6 +1441,22 @@ def _git_case(problems: list[str]) -> None:
             found, _ = judge(root, base, "HEAD", None)
             if not any("rule a:" in p for p in found):
                 problems.append(f"self-test: a code change whose document was deleted passed as if the document were updated: {found}")
+            for how in ("emptied", "replaced by a link"):
+                run("checkout", "-q", "-B", "gone", base)
+                write("src/a.py", "x = 4\n")
+                (root / "docs" / "a.md").unlink()
+                if how == "emptied":
+                    write("docs/a.md", "")
+                else:
+                    try:
+                        os.symlink("../README", root / "docs" / "a.md")
+                    except (OSError, NotImplementedError):
+                        continue  # this system cannot make links; the emptied case still runs
+                run("add", "-A")
+                run("commit", "-q", "-m", f"change x, guide {how}")
+                found, _ = judge(root, base, "HEAD", None)
+                if not any("rule a:" in p for p in found):
+                    problems.append(f"self-test: a code change whose document was {how} passed as if the document were updated: {found}")
             run("checkout", "-q", "work")
             write("docs/a.md", "# A\n\nx is two.\n")
             found, _ = judge(root, base, None, "## Verified\n\nself-test ran.\n\n## Not verified\n\nnothing else here.\n")
@@ -1543,7 +1585,8 @@ def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
             ("a file outside the workflows", wf + ["tools/host.py"], h(bump), False),
             ("a ref that is a branch, which can move", wf, h("@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+      - uses: a/b@main\n"), False),
             ("a short commit", wf, h("@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+      - uses: a/b@2222 # v2\n"), False),
-            ("a pin in the docs workflow itself", [".github/workflows/docs.yml"], h(bump, ".github/workflows/docs.yml"), False),
+            ("a pin in the docs workflow too, as one update moves every copy", wf + [".github/workflows/docs.yml"],
+             h(bump) + h(bump, ".github/workflows/docs.yml"), True),
             ("nothing", wf, "", False)):
         if pin_lines_only(paths, patch) != want:
             problems.append(f"self-test: pin_lines_only takes {what} for {'a' if not want else 'no'} change of pinned versions only")
@@ -1559,10 +1602,15 @@ def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
                        ("a name GitHub computes", lambda s, n: s.replace("  checks:\n", "  checks:\n    name: ${{ 'x' }}\n", 1)),
                        ("a name with a matrix value in it", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n.split(' ')[0]} ${{{{ matrix.w }}}}\n", 1)),
                        ("a name written as a block", lambda s, n: s.replace("  checks:\n", "  checks:\n    name: >-\n      x\n", 1)),
-                       ("a token that can post statuses", lambda s, n: s.replace("jobs:\n", "permissions:\n  statuses: write\njobs:\n", 1))):
+                       ("a token that can post statuses", lambda s, n: s.replace("jobs:\n", "permissions:\n  statuses: write\njobs:\n", 1)),
+                       ("a quoted permission to post checks", lambda s, n: s.replace("  checks:\n", "  checks:\n    permissions:\n      checks: 'write'\n", 1)),
+                       ("a name over two lines", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n[:9]}\n      {n[9:]}\n", 1)),
+                       ("a name with a comment holding a quote", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n} # it's\n", 1)),
+                       ("a plain name GitHub extends with matrix values", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n.split(' (')[0]}\n", 1)),
+                       ("a name from an anchor", lambda s, n: s.replace("  checks:\n", f"  checks:\n    env:\n      N: &n x\n    name: *n\n", 1))):
         for name in sorted(names):
             if " " in name and what.endswith("id") or " " not in name and what.endswith("name") \
-                    or " " not in name and what.startswith(("the same name", "a name with")):
+                    or " " not in name and what.startswith(("the same name", "a name", "a plain name")):
                 continue
             planted = {**workflows, ".github/workflows/checks.yml": edit(workflows[".github/workflows/checks.yml"], name)}
             if not job_clashes(planted, own, names):
