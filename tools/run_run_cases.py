@@ -121,6 +121,8 @@ def run_case(command: list[str], status: list[str], case: dict, site: dict) -> d
             changed_files = tree_digest(root) != before
             sent = batches(aux)
             records_first = provider_records(aux)
+            described_first = sorted(json.dumps(json.loads(l), sort_keys=True) for d in sorted(aux.glob("*.described.jsonl"))
+                                     for l in d.read_text(encoding="utf-8").splitlines() if l.strip())
             transcript_rel = json.loads(stdin).get("transcript")
             transcript = None
             if transcript_rel:
@@ -137,6 +139,7 @@ def run_case(command: list[str], status: list[str], case: dict, site: dict) -> d
             return {"first": first, "err": err, "sent": sent, "after": after, "err_status": err_status, "again": again,
                     "sent_again": sent_again, "recorded": recorded(root, ledger_rel), "asked": rsc.requests(aux),
                     "transcript": transcript, "provider_records": records_first, "changed_files": changed_files,
+                    "described": described_first,
                     "ledger_bytes": (root / ledger_rel).read_bytes() if (root / ledger_rel).exists() else b""}
         finally:
             for rel in list(case.get("unreadable", [])) + list(case.get("unreadable_mode", {})):
@@ -144,6 +147,19 @@ def run_case(command: list[str], status: list[str], case: dict, site: dict) -> d
                     os.chmod(root / rel, 0o755)
                 except OSError:
                     pass
+
+
+def described_problems(got: dict) -> list[str]:
+    """Every run sent to the executor must be a run its provider described, as described: a command may not change
+    a run (its program, arguments, inputs, tools or limits) between the provider and the executor."""
+    left = list(got.get("described", []))
+    for batch in got["sent"]:
+        for item in batch.get("runs", []):
+            text = json.dumps(item.get("run"), sort_keys=True)
+            if text not in left:
+                return [f"run {item.get('number')} sent to the executor is not a run its provider described"]
+            left.remove(text)
+    return []
 
 
 def run_key_problems(got: dict) -> list[str]:
@@ -205,6 +221,7 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
         if len(got["sent"]) != expect["batches"]:
             problems.append(f"expected {expect['batches']} batches sent to the executor, got {len(got['sent'])} ({shape})")
     problems += run_key_problems(got)
+    problems += described_problems(got)
     if "recorded" in expect and not same(got["recorded"], expect["recorded"]):
         problems.append(f"recorded: expected {expect['recorded']}, got {got['recorded']}")
     after = got["after"]
@@ -212,7 +229,11 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
         problems.append(f"the status command straight after did not report ({got['err_status'] or after})")
     else:
         mine = {k: v for k, v in first.items() if k != "counts"}
-        if not same(mine, after):
+        if case.get("files_change_during_run"):
+            # The project's files changed under the run, so the status straight after keys them anew and cannot
+            # equal the run's view; what the run withheld is judged by the case's own "recorded".
+            pass
+        elif not same(mine, after):
             differ = sorted(k for k in set(mine) | set(after) if not same(mine.get(k), after.get(k)))
             problems.append(f"the report differs from what the status command reports straight after, in {differ}")
     again = got["again"]

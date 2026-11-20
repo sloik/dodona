@@ -445,9 +445,10 @@ def check_steps(session: Session, obligation: dict, inputs: list[dict], tools: l
                     "unavailable": report.get("end") == "unavailable"}
         # What the executor says ran must be what was asked for: another platform or another tool is an
         # error, never a result (protocol/messages.schema.json, run_report).
-        asked_tools = sorted((t.get("name"), t.get("digest")) for t in body["next"].get("tools", []))
+        # Compared as JSON text, so that names of any type sort without failing.
+        asked_tools = sorted(json.dumps([t.get("name"), t.get("digest")]) for t in body["next"].get("tools", []))
         ran = report.get("tools_ran")
-        ran_tools = (sorted((t.get("name"), t.get("digest")) for t in ran)
+        ran_tools = (sorted(json.dumps([t.get("name"), t.get("digest")]) for t in ran)
                      if isinstance(ran, list) and all(isinstance(t, dict) for t in ran) else None)
         if report.get("platform") != body["next"].get("platform") or ran_tools != asked_tools:
             return {"final": {"verdict": "error", "reason": "run-report-mismatch"}, "runs": runs, "run_keys": keys}

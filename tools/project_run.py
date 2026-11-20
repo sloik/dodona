@@ -38,12 +38,14 @@ def check_run_input(asked) -> None:
     if not isinstance(asked, dict):
         return  # the status command's own check refuses it
     rel, owner = asked.get("ledger"), asked.get("owner_ledger")
-    if not ps.relpath_ok(rel) or rel not in (asked.get("ledgers") or []) or rel == owner:
+    listed = asked.get("ledgers") if isinstance(asked.get("ledgers"), list) else []
+    # Compared without case too: on a disk that ignores case, Records/owner.ledger is the owner's ledger.
+    if not ps.relpath_ok(rel) or rel not in listed or (isinstance(owner, str) and rel.casefold() == owner.casefold()):
         raise Stop("bad-input", "ledger must be a relative path listed among ledgers, and not the owner's ledger")
     executor = asked.get("executor")
     if not (isinstance(executor, list) and executor and all(isinstance(x, str) for x in executor)):
         raise Stop("bad-input", "executor must be a non-empty list of strings")
-    if "transcript" in asked and (not ps.relpath_ok(asked["transcript"]) or asked["transcript"] in (asked.get("ledgers") or [])
+    if "transcript" in asked and (not ps.relpath_ok(asked["transcript"]) or asked["transcript"] in listed
                                   or asked["transcript"] in (owner, asked.get("project"))):
         raise Stop("bad-input", "transcript, where given, is a relative path that is no ledger and not the project file")
     root = pathlib.Path(asked["root"]) if isinstance(asked.get("root"), str) else None
@@ -54,8 +56,12 @@ def check_run_input(asked) -> None:
     if isinstance(owner, str) and ps.relpath_ok(owner) and ps.ledger_state(root, rel) == "present" \
             and ps.ledger_state(root, owner) == "present" and ps.same_file(root / rel, root / owner):
         raise Stop("bad-input", "ledger is the owner's ledger")
-    if "transcript" in asked and os.path.lexists(root / asked["transcript"]):
-        raise Stop("bad-input", "transcript names a path that already exists: a run writes only a new file")
+    if "transcript" in asked:
+        where = root / asked["transcript"]
+        parent = asked["transcript"].rpartition("/")[0]
+        if os.path.lexists(where) or not ps.reached_without_link(root, asked["transcript"]) \
+                or not (parent == "" or (where.parent.is_dir() and not where.parent.is_symlink())):
+            raise Stop("bad-input", "transcript must be a new file in a folder that is there, reached without a link")
 
 
 def counts_for(entries: list[dict], name: str, preimage: dict, writer: str, platform: str) -> bool:
@@ -238,10 +244,16 @@ def run_with_sessions(asked) -> dict:
             continue
         verdict = "unavailable" if got.get("unavailable") else got["final"]["verdict"]
         counts[verdict] += 1
+        if verdict in ("passed", "failed") and not inputs_unchanged(root, ps.ENUMERATED[name]["inputs"]):
+            counts[verdict] -= 1
+            verdict = "error"  # a file changed while it was checked: the verdict is not of the files keyed
+            counts[verdict] += 1
         if verdict in ("passed", "failed"):
             preimage = judged["obligations"][name]["preimage"]
+            strength = got["final"]["strength"]
             bodies.append({"obligation": name, "preimage": preimage, "core_key": canonical.identity(preimage),
-                           "platform": platform, "verdict": verdict, "writer": writer})
+                           "platform": platform, "verdict": verdict, "writer": writer, "strength": strength,
+                           "level": host.LEVEL_OF_RANK.get(strength.get("rank"), "asserted")})
     if bodies:
         append(root, asked["ledger"], bodies)
     # Step 14: the ledgers read again, the status view made from them.
@@ -251,6 +263,18 @@ def run_with_sessions(asked) -> dict:
     out["project_doubts"] = ps.doubts(out, absent)
     out["counts"] = counts
     return out
+
+
+def inputs_unchanged(root: pathlib.Path, inputs: list[dict]) -> bool:
+    """Each input file read again just before recording, and still the identity it was keyed with."""
+    for item in inputs:
+        try:
+            data = (root / item["path"]).read_bytes()
+        except OSError:
+            return False
+        if "sha256:" + hashlib.sha256(data).hexdigest() != item["identity"]:
+            return False
+    return True
 
 
 def advance(name, step, steps, waiting, finals, gen) -> None:
@@ -272,7 +296,6 @@ def keep_transcript(asked) -> None:
     new file when the input asks for one and the run reported."""
     path = pathlib.Path(asked["root"]) / asked["transcript"]
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "x", encoding="utf-8") as f:  # never over a file that is there
             f.write(json.dumps(ps.TRANSCRIPT, ensure_ascii=False, indent=1) + "\n")
     except OSError:
