@@ -30,8 +30,9 @@ concurrency:
   group: docs-${{ github.event_name == 'push' && github.sha || github.event.pull_request.number }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 jobs:
-  # A required check is matched by its name, so the name is distinctive and no other workflow of the
-  # change may define a job with this id or name (checked below, from the change's own workflow files).
+  # A required check is matched by its name, so the name is distinctive, and no other workflow of the
+  # change may define a job that could be shown under this id or name, or give its token permission to
+  # post checks or statuses (checked below, from the change's own workflow files).
   documents-main-checker:
     name: documents follow code (judged by main)
     runs-on: ubuntu-26.04

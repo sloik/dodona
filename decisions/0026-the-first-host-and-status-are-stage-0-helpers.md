@@ -35,7 +35,7 @@ A kernel could work out status from a scenario, and a model checker ran in CI, b
 
 **Protocol changes this forced.** A run description may give the directory a program starts in, and may name a file of a tool in an argument as `${tool:NAME}/PATH`; a tool tree need not be placed in the working directory; a check request carries the link from a planted defect to what it must break. Three rules were added to those a schema cannot express, each with a case in `conformance/provider/check-cases.json`.
 
-*Amended by [decision 0033](0033-a-kernel-hosts-providers.md): a kernel takes over hosting providers and the status command from these helpers, which stay as references the kit is checked against.*
+*Amended by [decision 0033](0033-a-kernel-hosts-providers.md), proposed: a kernel is to take over hosting providers and the status command from these helpers. Until its second step, CI still runs `tools/host.py` and `tools/status.py`. `tools/host.py check` stays as a reference the kit is checked against.*
 
 ## Consequences
 

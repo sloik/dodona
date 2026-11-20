@@ -1000,7 +1000,9 @@ def _same_pin(old: str, new: str) -> bool:
     system with only its version changed."""
     a, b = USES_LINE.fullmatch(old), USES_LINE.fullmatch(new)
     if a and b:
-        return a.group(1) == b.group(1) and a.group(2) == b.group(2) and not a.group(2).startswith(".")
+        # The new version is a full commit, never a branch or tag that can move after review.
+        return a.group(1) == b.group(1) and a.group(2) == b.group(2) and not a.group(2).startswith(".") \
+            and re.fullmatch(r"[0-9a-f]{40}", b.group(3)) is not None
     a, b = RUNNER_LINE.fullmatch(old), RUNNER_LINE.fullmatch(new)
     return bool(a and b) and (a.group(1), a.group(2), a.group(4)) == (b.group(1), b.group(2), b.group(4))
 
@@ -1009,8 +1011,8 @@ def pin_lines_only(paths: list[str], patch: str) -> bool:
     """Whether a change only moves pinned versions in workflows: what an automatic update of pinned
     versions changes, and nothing a document describes. Each removed line must be replaced, in the same
     place, by one line pinning the same thing at another version; no line is only added or only removed."""
-    if not paths or any(not re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p) for p in paths):
-        return False
+    if not paths or any(not re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p) or p in JUDGING_FILES for p in paths):
+        return False  # a judging file never changes without the owner, not even its pins
     hunks: list[tuple[list[str], list[str]]] = []
     with_hunks: set[str] = set()
     current = None
@@ -1045,33 +1047,69 @@ def pin_lines_only(paths: list[str], patch: str) -> bool:
 
 def workflow_jobs(text: str) -> set[str]:
     """The ids and names of a workflow's jobs, read from the block under its top-level `jobs:`. A required
-    check is matched by name, so these are what another workflow could take over."""
-    found, inside, job_indent = set(), False, None
+    check is matched by name, so these are what another workflow could take over. A name GitHub would
+    compute (one holding `${{`) or one written as a block (`>` or `|`) is kept as written, so that
+    job_clashes can treat it as able to be anything its fixed parts allow."""
+    found, inside, job_indent, key_indent = set(), False, None, None
     for line in text.replace("\r\n", "\n").split("\n"):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         indent = len(line) - len(line.lstrip())
         if indent == 0:
-            inside = line.rstrip() == "jobs:"
-            job_indent = None
+            inside = re.fullmatch(r"([\"']?)jobs\1\s*:\s*(#.*)?", line.rstrip()) is not None
+            job_indent = key_indent = None
             continue
         if not inside:
             continue
         if job_indent is None:
             job_indent = indent
-        m = re.fullmatch(r"\s*([\"']?)([\w-]+)\1:\s*", line)
-        if indent == job_indent and m:
-            found.add(m.group(2))
-        m = re.fullmatch(r"\s*name:\s*([\"']?)(.*?)\1\s*", line)
-        if job_indent is not None and indent == job_indent + 2 and m:
-            found.add(m.group(2))
+        if indent == job_indent:
+            m = re.fullmatch(r"\s*([\"']?)([^\"':#]+)\1\s*:\s*(#.*)?", line)
+            if m:
+                found.add(m.group(2).strip())
+            key_indent = None
+            continue
+        if key_indent is None:
+            key_indent = indent
+        m = re.fullmatch(r"\s*([\"']?)name\1\s*:\s*(.*?)\s*(#[^\"']*)?", line)
+        if indent == key_indent and m:
+            value = m.group(2)
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            found.add(value)
     return found
 
 
+def could_be(written: str, name: str) -> bool:
+    """Whether a job name as written could be shown as `name`: exactly, or, when GitHub computes it or it is
+    a block, by any text in the places it does not fix."""
+    if written.startswith((">", "|")):
+        return True
+    if "${{" not in written:
+        return written == name
+    parts = re.split(r"\$\{\{.*?\}\}", written)
+    return re.fullmatch(".*".join(re.escape(p) for p in parts), name, flags=re.S) is not None
+
+
+WRITES_STATUS = re.compile(r"\b(checks|statuses)\s*:\s*write\b|\bwrite-all\b")
+
+
 def job_clashes(workflows: dict[str, str], own: str, names: set[str]) -> list[str]:
-    """Other workflows that define a job with one of `names` as its id or name."""
-    return [f"{path} defines a job {name!r}, as {own} does: a required check of that name could be passed by it"
-            for path, text in sorted(workflows.items()) if path != own for name in sorted(names & workflow_jobs(text))]
+    """Other workflows that define a job that could be shown under one of `names`, or whose token could post a
+    check or a status of any name. The repository's default token can only read, so a workflow needs one of
+    these permissions written out to post one."""
+    found = []
+    for path, text in sorted(workflows.items()):
+        if path == own:
+            continue
+        for written in sorted(workflow_jobs(text)):
+            for name in sorted(names):
+                if could_be(written, name):
+                    found.append(f"{path} defines a job {written!r} that could be shown as {name!r}, as {own} names its job: "
+                                 "a required check of that name could be passed by it")
+        if WRITES_STATUS.search(text):
+            found.append(f"{path} gives its token permission to post checks or statuses: it could post one named as {own}'s job")
+    return found
 
 
 def head_workflows(root: pathlib.Path, head: str) -> dict[str, str]:
@@ -1123,7 +1161,9 @@ def diff(root: pathlib.Path, base: str, head: str | None, pr_body: str | None,
         out = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=root, capture_output=True, env=env)
         return out.stdout.decode("utf-8", "replace") if out.returncode == 0 else None
 
-    docs_changed = {p for _, p in changed if p.endswith(".md") and substance(at(merge_base, p)) != substance(at(head, p))}
+    # A document deleted or renamed away is not a document brought up to date: it must still be there.
+    docs_changed = {p for _, p in changed if p.endswith(".md") and at(head, p) is not None
+                    and substance(at(merge_base, p)) != substance(at(head, p))}
     log = git(root, "log", "--format=%B%x00", f"{merge_base}..{head_rev}").decode("utf-8", "replace")
     messages = [m for m in log.split("\0") if m.strip()]
     head_text = at(head, MAP_FILE)
@@ -1367,6 +1407,15 @@ def _git_case(problems: list[str]) -> None:
             found, _ = judge(root, base, "HEAD", None)
             if not any("rule a:" in p for p in found):
                 problems.append(f"self-test: a code change with only line endings changed in its document passed end to end: {found}")
+            run("checkout", "-q", "-b", "gone", base)
+            write("src/a.py", "x = 3\n")
+            (root / "docs" / "a.md").unlink()
+            run("add", "-A")
+            run("commit", "-q", "-m", "change x, delete its guide")
+            found, _ = judge(root, base, "HEAD", None)
+            if not any("rule a:" in p for p in found):
+                problems.append(f"self-test: a code change whose document was deleted passed as if the document were updated: {found}")
+            run("checkout", "-q", "work")
             write("docs/a.md", "# A\n\nx is two.\n")
             found, _ = judge(root, base, None, "## Verified\n\nself-test ran.\n\n## Not verified\n\nnothing else here.\n")
             if found:
@@ -1406,7 +1455,7 @@ def _git_case(problems: list[str]) -> None:
             run("add", "-A")
             run("commit", "-q", "-m", "workflow")
             pinned = git(root, "rev-parse", "HEAD", env=env).decode().strip()
-            write(workflow, "jobs:\n  a:\n    runs-on: ubuntu-26.04\n    steps:\n      - uses: a/b@2222 # v2\n      - run: x\n")
+            write(workflow, "jobs:\n  a:\n    runs-on: ubuntu-26.04\n    steps:\n      - uses: a/b@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb # v2\n      - run: x\n")
             run("commit", "-q", "-am", "bump")
             if not pins_only(root, pinned, "HEAD", env=env):
                 problems.append("self-test: a change of pinned versions only was not recognised as one")
@@ -1468,7 +1517,7 @@ def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
     def h(body: str, path: str = wf[0], extra: str = "") -> str:  # a file's diff header, then its hunks
         return f"diff --git a/{path} b/{path}\n{extra}index 1..2 100644\n--- a/{path}\n+++ b/{path}\n" + body
 
-    bump = "@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+      - uses: a/b@2222 # v2\n"
+    bump = "@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+      - uses: a/b@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb # v2\n"
     other = ".github/workflows/models.yml"
     for what, paths, patch, want in (
             ("an action's ref and version comment", wf, h(bump), True),
@@ -1492,6 +1541,9 @@ def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
             ("a binary note after a pin bump", wf, h(bump) + f"Binary files a/{wf[0]} and b/{wf[0]} differ\n", False),
             ("a removed line that reads like a file header", wf, h("@@ -1,2 +1 @@\n----\n-      - uses: a/b@1\n+      - uses: a/b@2\n"), False),
             ("a file outside the workflows", wf + ["tools/host.py"], h(bump), False),
+            ("a ref that is a branch, which can move", wf, h("@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+      - uses: a/b@main\n"), False),
+            ("a short commit", wf, h("@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+      - uses: a/b@2222 # v2\n"), False),
+            ("a pin in the docs workflow itself", [".github/workflows/docs.yml"], h(bump, ".github/workflows/docs.yml"), False),
             ("nothing", wf, "", False)):
         if pin_lines_only(paths, patch) != want:
             problems.append(f"self-test: pin_lines_only takes {what} for {'a' if not want else 'no'} change of pinned versions only")
@@ -1501,9 +1553,16 @@ def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
     if len(names) < 2 or job_clashes(workflows, own, names):
         problems.append(f"self-test: the docs job's id and name are not both read, or another workflow already uses them: {sorted(names)}")
     for what, edit in (("the same job name", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n}\n", 1)),
-                       ("the same job id", lambda s, n: s.replace("  checks:\n", f"  {n}:\n", 1))):
+                       ("the same job id", lambda s, n: s.replace("  checks:\n", f"  {n}:\n", 1)),
+                       ("the same name, quoted, with a comment after jobs", lambda s, n: s.replace("jobs:\n", "jobs: # all\n", 1).replace("  checks:\n", f"  checks:\n    name: \"{n}\"\n", 1)),
+                       ("the same name in a job indented four spaces", lambda s, n: s.replace("jobs:\n", f"jobs:\n    other:\n        name: {n}\n        runs-on: x\n", 1)),
+                       ("a name GitHub computes", lambda s, n: s.replace("  checks:\n", "  checks:\n    name: ${{ 'x' }}\n", 1)),
+                       ("a name with a matrix value in it", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n.split(' ')[0]} ${{{{ matrix.w }}}}\n", 1)),
+                       ("a name written as a block", lambda s, n: s.replace("  checks:\n", "  checks:\n    name: >-\n      x\n", 1)),
+                       ("a token that can post statuses", lambda s, n: s.replace("jobs:\n", "permissions:\n  statuses: write\njobs:\n", 1))):
         for name in sorted(names):
-            if " " in name and what.endswith("id") or " " not in name and what.endswith("name"):
+            if " " in name and what.endswith("id") or " " not in name and what.endswith("name") \
+                    or " " not in name and what.startswith(("the same name", "a name with")):
                 continue
             planted = {**workflows, ".github/workflows/checks.yml": edit(workflows[".github/workflows/checks.yml"], name)}
             if not job_clashes(planted, own, names):
