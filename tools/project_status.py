@@ -25,6 +25,7 @@ import ledger  # noqa: E402
 
 SERVED = ("obligation.enumerate", "intent.index")
 UNREAD_CRITERIA = False  # set in step 7: a criterion declares what no status rule reads yet
+ENUMERATED: dict = {}  # step 5: each obligation's binding, as enumerated, and the files of F, for a run command
 NOTHING = {"do": {"set_gate": {"intent": "", "criterion": "", "to": "hard"}}}
 
 
@@ -263,6 +264,7 @@ def obligations_of(root: pathlib.Path, site: dict, bindings: list[dict], claims:
                            "config": canonical.identity(item["config"]), "expect": item["expect"]},
                 "provider": {"name": sess.manifest["name"], "version": version, "protocol": sess.manifest["protocol"]}}}
             listed.append({"binding": binding["name"], "name": item["name"]})
+            ENUMERATED[item["name"]] = {"binding": binding, "item": item, "inputs": given}
         unchecked += [r["name"] for r in rejected]
     listed.sort(key=lambda o: (sort_key(o["binding"]), sort_key(o["name"])))
     return found, listed, canonical_sorted(unchecked)

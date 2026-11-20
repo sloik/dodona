@@ -410,16 +410,18 @@ def check_final(final: dict, manifest: dict, capability: str, runs_done: int, ro
             raise Refused("strength-class-mismatch")  # a test is not a proof, whatever its rank
 
 
-def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], report_for, root: pathlib.Path = ROOT) -> dict:
-    """Take one obligation through start, runs and final. `report_for(run_number, description)` returns
-    the executor's report for a run, or None if there is none yet, in which case the description is returned."""
+def check_steps(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], platform: dict, root: pathlib.Path = ROOT):
+    """Take one obligation through start, runs and final, one run at a time: a generator that yields
+    `(number, description, run_key)` for each run it needs and is sent the executor's report for it, and returns
+    `{"final", "runs", "run_keys"}` (with `"unavailable": True` when the executor said so). Refused as the host
+    checks say. Several of these can be advanced side by side, so that their runs go to the executor together."""
     known = {f["path"]: f["identity"] for f in inputs}
     if not set(obligation.get("specified_by", []) + obligation.get("targets", [])) <= set(known):
         raise Refused("unknown-file")  # an obligation names a file the check was not given
     known_tools = {t["name"]: t["digest"] for t in tools}
     check_key = canonical.identity({"obligation": obligation, "inputs": inputs})
     keys: list[str] = []
-    body = session.ask("obligation.check", {"op": "start", "obligation": obligation, "inputs": inputs, "tools": tools, "platform": PLATFORM})
+    body = session.ask("obligation.check", {"op": "start", "obligation": obligation, "inputs": inputs, "tools": tools, "platform": platform})
     check_id, runs = session.last_request, 0
     while True:
         if ("next" in body) == ("final" in body):
@@ -431,17 +433,15 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
             raise Refused("too-many-runs")  # refused when the next run is asked for, before it starts
         if not description_has_its_shape(body["next"]):
             raise Refused("bad-description")
-        check_run_description(body["next"], session.manifest, known, known_tools, PLATFORM,
+        check_run_description(body["next"], session.manifest, known, known_tools, platform,
                               set(obligation.get("specified_by", []) + obligation.get("targets", [])))
         keys.append(run_key(check_key, runs + 1, body["next"]))
-        report = report_for(runs + 1, body["next"])
-        if report is None:
-            return {"pending": body["next"], "run_key": keys[-1]}
+        report = yield (runs + 1, body["next"], keys[-1])
         runs += 1
         if report.get("end") != "exited":
             # Only the executor's report makes a check unavailable, so the mark is kept outside the final,
             # where nothing a provider says can set it.
-            return {"final": {"verdict": "error", "reason": "run-" + str(report.get("end"))}, "runs": runs,
+            return {"final": {"verdict": "error", "reason": "run-" + str(report.get("end"))}, "runs": runs, "run_keys": keys,
                     "unavailable": report.get("end") == "unavailable"}
         # What the executor says ran must be what was asked for: another platform or another tool is an
         # error, never a result (protocol/messages.schema.json, run_report).
@@ -450,8 +450,23 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
         ran_tools = (sorted((t.get("name"), t.get("digest")) for t in ran)
                      if isinstance(ran, list) and all(isinstance(t, dict) for t in ran) else None)
         if report.get("platform") != body["next"].get("platform") or ran_tools != asked_tools:
-            return {"final": {"verdict": "error", "reason": "run-report-mismatch"}, "runs": runs}
+            return {"final": {"verdict": "error", "reason": "run-report-mismatch"}, "runs": runs, "run_keys": keys}
         body = session.ask("obligation.check", {"op": "run.result", "check": check_id, "run": runs, "report": report})
+
+
+def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], report_for, root: pathlib.Path = ROOT) -> dict:
+    """Take one obligation through start, runs and final. `report_for(run_number, description)` returns
+    the executor's report for a run, or None if there is none yet, in which case the description is returned."""
+    steps = check_steps(session, obligation, inputs, tools, PLATFORM, root)
+    try:
+        number, description, key = next(steps)
+        while True:
+            report = report_for(number, description)
+            if report is None:
+                return {"pending": description, "run_key": key}
+            number, description, key = steps.send(report)
+    except StopIteration as done:
+        return done.value
 
 
 # What the provider said it could not make into a check, last time it was asked. A run is not
