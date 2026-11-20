@@ -10,11 +10,11 @@ use std::{
 };
 /// What a ledger file holds.
 #[derive(Debug)]
-struct Contents {
-    entries: Vec<Value>,
+pub(crate) struct Contents {
+    pub(crate) entries: Vec<Value>,
     /// Where the last complete line ends. Bytes after it are a torn final entry.
     end: usize,
-    torn: bool,
+    pub(crate) torn: bool,
 }
 fn line(entry: &Value) -> String {
     let payload = json::encode(entry);
@@ -50,7 +50,7 @@ fn entry(line: &[u8], earlier: &[String]) -> Option<Value> {
     (shaped && json::encode(&entry) == payload).then_some(entry)
 }
 /// Read the bytes of a ledger, or say which line, counting from 1, makes it corrupt.
-fn parse(data: &[u8]) -> Result<Contents, usize> {
+pub(crate) fn parse(data: &[u8]) -> Result<Contents, usize> {
     let end = data.iter().rposition(|b| *b == b'\n').map_or(0, |i| i + 1);
     let mut entries = Vec::new();
     // The identity of every entry so far, in order.
