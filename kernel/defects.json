@@ -1512,6 +1512,384 @@
       "file": "src/jsonread.rs",
       "find": "            integer = false;\n",
       "replace": "            integer = true;\n"
+    },
+    {
+      "name": "status step 1: input followed by a carriage return and a line feed is read",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    let body = input.strip_suffix(b\"\\n\").unwrap_or(input);\n",
+      "replace": "    let body = input.trim_ascii_end();\n"
+    },
+    {
+      "name": "status step 1: a deadline longer than a day is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        Some(Value::Number(n)) if (1..=MAX_DEADLINE_MS).contains(n) => *n as u64,\n",
+      "replace": "        Some(Value::Number(n)) if *n >= 1 => *n as u64,\n"
+    },
+    {
+      "name": "status step 1: not_applied out of order is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        Some(n) if sorted_once(&n) => None,\n",
+      "replace": "        Some(_) => None,\n"
+    },
+    {
+      "name": "status step 1: a policy with a field more is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    if fields.len() != expected.len() || !expected.iter().all(|k| p.opt(k).is_some()) {\n",
+      "replace": "    if !expected.iter().all(|k| p.opt(k).is_some()) {\n"
+    },
+    {
+      "name": "status step 1: provider code that cannot be read is left out of its digest",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                Err(e) => return stop(\"unreadable-file\", format!(\"provider {name}: {rel}: {e}\")),\n",
+      "replace": "                Err(_) => continue,\n"
+    },
+    {
+      "name": "status step 1: a code path listed twice is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        if sort_set(code.clone()).len() != code.len() {\n",
+      "replace": "        if sort_set(code.clone()).len() > code.len() {\n"
+    },
+    {
+      "name": "status step 2: control characters other than NUL are taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    c <= '\\u{1f}' || ('\\u{7f}'..='\\u{9f}').contains(&c)\n",
+      "replace": "    c == '\\u{0}' || ('\\u{7f}'..='\\u{9f}').contains(&c)\n"
+    },
+    {
+      "name": "status step 2: a comment needs no space before it",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    let ends_well = tail.is_empty() || (tail.starts_with('#') && rest.starts_with(' '));\n",
+      "replace": "    let ends_well = tail.is_empty() || tail.starts_with('#');\n"
+    },
+    {
+      "name": "status step 2: two bindings with one name are taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        if out[..i].iter().any(|a| a.name == b.name) {\n",
+      "replace": "        if out[..i].iter().any(|a| a.name == b.name && a.provider == b.provider) {\n"
+    },
+    {
+      "name": "status step 2: a range from a later character to an earlier one is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                    && chars[i + 1] <= chars[i + 3];\n",
+      "replace": "                    && chars[i + 1] != ' ';\n"
+    },
+    {
+      "name": "status step 2: a pattern may climb out with ..",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    relative(p) && p.split('/').all(pattern_segment)\n",
+      "replace": "    !p.starts_with('/') && p.split('/').all(pattern_segment)\n"
+    },
+    {
+      "name": "status step 2: a key may hold a digit",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        .find(|c: char| !(c.is_ascii_lowercase() || c == '_'))\n",
+      "replace": "        .find(|c: char| !(c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit()))\n"
+    },
+    {
+      "name": "status step 3: a capability listed twice is named twice as not served",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    not_served.dedup();\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 3: a binding that serves intents only is not served",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        .filter(|b| SERVED.iter().any(|c| b.serves(c)))\n",
+      "replace": "        .filter(|b| b.serves(\"obligation.enumerate\"))\n"
+    },
+    {
+      "name": "status step 4: files under .git are claimed",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "            if name == \".git\" {\n",
+      "replace": "            if name == \".git/\" {\n"
+    },
+    {
+      "name": "status step 4: a pattern matches a path with more segments",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    p.len() == r.len()\n        && p.iter()",
+      "replace": "    p.len() <= r.len()\n        && p.iter()"
+    },
+    {
+      "name": "status step 4: * matches no empty run",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        Some('*') => (0..=name.len()).any(|i| segment_matches(&pattern[1..], &name[i..])),\n",
+      "replace": "        Some('*') => (1..=name.len()).any(|i| segment_matches(&pattern[1..], &name[i..])),\n"
+    },
+    {
+      "name": "status step 4: a file claimed twice for one capability is not an overlap",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                if let Some((_, other)) = owners.iter().find(|(p, _)| p == path) {\n",
+      "replace": "                if let Some((_, other)) = owners.iter().find(|(p, o)| p == path && *o == name.as_str()) {\n"
+    },
+    {
+      "name": "status step 4: a folder that cannot be listed is skipped",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "            Err(e) => return unreadable(&here, e),\n        };\n        for entry in entries {\n",
+      "replace": "            Err(_) => continue,\n        };\n        for entry in entries {\n"
+    },
+    {
+      "name": "status step 5: bindings are taken in the order the project file gives",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    out.sort_by(|a, b| order(&a.name, &b.name));\n    out\n",
+      "replace": "    out\n"
+    },
+    {
+      "name": "status step 5: a provider that is not the one the binding names is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        if manifest.text(\"name\") != Some(binding.provider.as_str()) {\n",
+      "replace": "        if manifest.text(\"name\").is_none() {\n"
+    },
+    {
+      "name": "status step 5: a manifest whose version is not a string is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    let strings = [\"name\", \"version\", \"protocol\"]\n",
+      "replace": "    let strings = [\"name\", \"protocol\"]\n"
+    },
+    {
+      "name": "status step 5: hello carries the deadline rounded to whole seconds",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "            &hello(host::MAX_LINE, self.deadline_ms),\n",
+      "replace": "            &hello(host::MAX_LINE, self.deadline_ms / 1000 * 1000),\n"
+    },
+    {
+      "name": "status step 5: no shutdown is sent",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        let _ = self.peer.shutdown(Instant::now() + wire::SHUTDOWN_GRACE);\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 5: unsorted inputs are taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                .is_some_and(|i| sorted_once(&i) && i.iter().all(|p| identity_of(p).is_some()));\n",
+      "replace": "                .is_some_and(|i| i.iter().all(|p| identity_of(p).is_some()));\n"
+    },
+    {
+      "name": "status step 5: a target outside the inputs is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "            if !named.into_iter().all(|p| inputs.contains(&p)) {\n",
+      "replace": "            if !named.into_iter().all(|p| !p.is_empty()) {\n"
+    },
+    {
+      "name": "status step 5: an obligation given twice is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "            if out.found.iter().any(|(n, _)| n == name) {\n",
+      "replace": "            if out.listed.iter().any(|(b, n)| n == name && *b == binding.name && false) {\n"
+    },
+    {
+      "name": "status step 5: an obligation without inputs is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        && o.opt(\"inputs\").is_some()\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 5: rejected definitions are not named as not checkable",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "            .extend(rejected.iter().map(|r| r.get(\"name\").str().to_owned()));\n",
+      "replace": "            .extend(rejected.iter().take(0).map(|r| r.get(\"name\").str().to_owned()));\n"
+    },
+    {
+      "name": "status step 6: the closure holds identities without their paths",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                        canonical::identity(&json::object(vec![\n                            (\"path\", json::string(p)),\n",
+      "replace": "                        canonical::identity(&json::object(vec![\n                            (\"path\", json::string(\"\")),\n"
+    },
+    {
+      "name": "status step 6: the runner is left out of the provider's version",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "            \"{}+{}+{}\",\n            manifest.get(\"version\").str(),\n            provider,\n            input.runner\n",
+      "replace": "            \"{}+{}+{}\",\n            manifest.get(\"version\").str(),\n            provider,\n            \"\"\n"
+    },
+    {
+      "name": "status step 6: the provider's code is left out of its version",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        let code = digest[\"sha256:\".len()..][..16].to_owned();\n",
+      "replace": "        let code = digest[\"sha256:\".len()..][..16].to_owned();\n        let code = code[..0].to_owned();\n"
+    },
+    {
+      "name": "status step 6: the config is not hashed",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                            json::string(&canonical::identity(o.get(\"config\"))),\n",
+      "replace": "                            json::string(&canonical::identity(&Value::Null)),\n"
+    },
+    {
+      "name": "status step 7: a rejected intent file is ignored",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        if !rejected.is_empty() {\n",
+      "replace": "        if rejected.len() > 1 {\n"
+    },
+    {
+      "name": "status step 7: a link to an obligation nobody listed is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                if !listed.iter().any(|(lb, lo)| lb == b && lo == o) {\n",
+      "replace": "                if !listed.iter().any(|(_, lo)| lo == o) {\n"
+    },
+    {
+      "name": "status step 7: an intent given twice is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    if let Some(k) = (1..names.len()).find(|&k| names[..k].contains(&names[k])) {\n",
+      "replace": "    if let Some(k) = (1..names.len()).find(|&k| names[..k].contains(&names[k]) && k > 9) {\n"
+    },
+    {
+      "name": "status step 7: a child with two parents is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "            if parent.iter().any(|(c, _)| *c == child) {\n",
+      "replace": "            if parent.iter().any(|(c, p)| *c == child && p == i.get(\"name\").str()) {\n"
+    },
+    {
+      "name": "status step 7: intents in a cycle are taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                return stop(\"intent-cycle\", (*name).to_owned());\n",
+      "replace": "                break;\n"
+    },
+    {
+      "name": "status step 7: a criterion id given twice is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        if (1..ids.len()).any(|k| ids[..k].contains(&ids[k])) {\n",
+      "replace": "        if (1..ids.len()).any(|k| ids[..k].contains(&ids[k]) && k > 9) {\n"
+    },
+    {
+      "name": "status step 7: a worker that is null is taken",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        && (i.opt(\"worker\").is_none() || person(i.opt(\"worker\")))\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 7: runs that must agree are not a doubt",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                .any(|l| l.opt(\"varying\").is_some())\n",
+      "replace": "                .any(|l| l.opt(\"varying\").is_some() && false)\n"
+    },
+    {
+      "name": "status step 8: acts are read from every ledger",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                .filter(|e| (e.text(\"kind\") == Some(\"act\")) == is_owner),\n",
+      "replace": "                .filter(|e| is_owner <= (e.text(\"kind\") == Some(\"act\"))),\n"
+    },
+    {
+      "name": "status step 8: the same file listed twice is read twice",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        if present && seen.iter().any(|s| same_file(&path, s)) {\n",
+      "replace": "        if present && seen.iter().any(|s| *s == path) {\n"
+    },
+    {
+      "name": "status step 8: a link to nothing is read as absent",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                    Err(e) if e.kind() == ErrorKind::NotFound => Where::Absent,\n                    _ => Where::Unreadable,\n",
+      "replace": "                    _ => Where::Absent,\n"
+    },
+    {
+      "name": "status step 8: the owner's ledger may be reached through a link",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    if link_on_the_way(root, owner) {\n",
+      "replace": "    if link_on_the_way(root, owner) && false {\n"
+    },
+    {
+      "name": "status step 8: a ledger the site names that does not exist is not a doubt",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        out.absent |= read.absent && !is_owner;\n",
+      "replace": "        out.absent |= read.absent && is_owner;\n"
+    },
+    {
+      "name": "status step 8: a ledger that is not a file is read as empty",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        Ok(_) => return stop(\"corrupt-ledger\", format!(\"{rel} is not a file\")),\n",
+      "replace": "        Ok(_) => return Ok(Read { entries: vec![], torn: false, absent: false }),\n"
+    },
+    {
+      "name": "status step 9: a minimum of hard gates below 1 is handed over as it is",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        (\"min_hard_gates\", Value::Number(input.min_hard_gates.max(1))),\n",
+      "replace": "        (\"min_hard_gates\", Value::Number(input.min_hard_gates)),\n"
+    },
+    {
+      "name": "status step 10: no step that names nothing at the end",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "    steps.push(json::object(vec![(\n",
+      "replace": "    steps.truncate(steps.len());\n    let _ = (json::object(vec![(\n"
+    },
+    {
+      "name": "status step 10: the platform joined with a dash",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        platform: format!(\"{os}/{arch}\"),\n",
+      "replace": "        platform: format!(\"{os}-{arch}\"),\n"
+    },
+    {
+      "name": "status step 11: a deferred gate counts as hard",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                .filter(|(_, c)| !matches!(c.text(\"gate\"), Some(\"soft\" | \"deferred\")))\n",
+      "replace": "                .filter(|(_, c)| !matches!(c.text(\"gate\"), Some(\"soft\")))\n"
+    },
+    {
+      "name": "status step 11: the thinnest intent on a tie is the last",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "            Some((_, best)) if own(name) < best.1 => *best = (name.clone(), own(name)),\n",
+      "replace": "            Some((_, best)) if own(name) <= best.1 => *best = (name.clone(), own(name)),\n"
+    },
+    {
+      "name": "status step 11: a root is said to meet the floor only over its tree",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "                    Value::Bool(*name != root && subtree < floor),\n",
+      "replace": "                    Value::Bool(subtree < floor),\n"
+    },
+    {
+      "name": "status: the headline ignores the doubts",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        if !doubts.is_empty() && matches!(stated.as_str(), \"passed\" | \"nothing-required\") {\n",
+      "replace": "        if doubts.len() > 9 && matches!(stated.as_str(), \"passed\" | \"nothing-required\") {\n"
     }
   ]
 }
