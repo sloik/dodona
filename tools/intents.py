@@ -82,16 +82,14 @@ def front(text: str) -> tuple[dict, str]:
 
 
 # GitHub shows :name: as an emoji, so plain text may not hold one. A time such as 02:00:00 is not one.
-EMOJI = re.compile(r"(?<![0-9]):[A-Za-z0-9_+-]+:(?![0-9])")
-# A deadline is the limit_days of a deferred criterion and nothing else: no other text may state one.
-DEADLINE = re.compile(r"\b[0-9]+\s*days?\b|\bdays?\b.*\bdelivery\b", re.I)
+EMOJI = re.compile(r"(?<![0-9]):[A-Za-z0-9_+-]+:")
 
 
 def plain(text) -> bool:
     """Text that Markdown and HTML render as itself: allowed characters only, the whole of it (no line feed slips
     past the end), and no emoji code."""
     return isinstance(text, str) and PLAIN.fullmatch(text) is not None and not EMOJI.search(text) \
-        and not DEADLINE.search(text) and text == text.strip() and any(ch.isalpha() for ch in text)
+        and text == text.strip() and any(ch.isalpha() for ch in text)
 
 
 def no_repeats(pairs: list) -> dict:

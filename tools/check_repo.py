@@ -467,8 +467,9 @@ def gap_an_intent_reads_one_way_only() -> None:
             problems.append("tools/intents.py accepts a criterion that names a field twice")
         except intents.Unreadable:
             pass
-        # The front matter: keys no reader takes, and an id or parent spelled another way.
-        for name, old, new in (("a key no reader takes, named like a criterion's field", "\ntitle: ", "\nlimit_days: 400\ntitle: "),
+        # The front matter: keys no reader takes, a key twice, and an id or parent spelled another way.
+        for name, old, new in (("a front-matter key given twice", "\ntitle: ", "\ntitle: Another\ntitle: "),
+                               ("a key no reader takes, named like a criterion's field", "\ntitle: ", "\nlimit_days: 400\ntitle: "),
                                ("an id in single quotes", 'id: "0001"', "id: '0001'"),
                                ("an id with a space after it", 'id: "0001"', 'id: "0001" '),
                                ("an id without quotes", 'id: "0001"', "id: 1"),
@@ -489,9 +490,11 @@ def gap_an_intent_reads_one_way_only() -> None:
         except intents.Unreadable:
             pass
         # Plain text that states a deadline of its own, says nothing, or is a time (which must still be read).
-        for name, change, refused in (("a condition stating a deadline", lambda c: c[deferred].update(condition="seen within 400 days"), True),
-                                      ("words stating a deadline", lambda c: c[deferred].update(words="Within 400 days of delivery, it is seen"), True),
-                                      ("words of a space", lambda c: c[deferred].update(words=" "), True),
+        for name, change, refused in (("words of a space", lambda c: c[deferred].update(words=" "), True),
+                                      ("words with a space at the end", lambda c: c[deferred].update(words="seen "), True),
+                                      ("a note without a word", lambda c: c[deferred].update(checked_by="1 2"), True),
+                                      ("an emoji code followed by a digit", lambda c: c[deferred].update(condition="seen :x:1 times"), True),
+                                      ("words with a number of days, which a hard criterion may state", lambda c: c[other].update(words="Logs are kept for 30 days"), False),
                                       ("a note holding a time, which is not an emoji", lambda c: c[deferred].update(checked_by="Runs at 02:00:00 in CI"), False)):
             changed_items = json.loads(fields["criteria"])
             change(changed_items)
@@ -528,8 +531,12 @@ def gap_an_intent_reads_one_way_only() -> None:
                 problems.append(f"{path.name}: criterion {c['id']}'s observation and limit are not shown in a column of their own")
             if isinstance(longest, int) and c["limit_days"] > longest:
                 problems.append(f"{path.name}: criterion {c['id']} has a limit of {c['limit_days']} days; policy.toml allows at most {longest}")
-    if "observed after delivery" not in (ROOT / "tools" / "confirm.py").read_text(encoding="utf-8"):
-        problems.append("tools/confirm.py must show each deferred criterion's observation and limit before the owner agrees")
+    import confirm
+    shown = "\n".join(confirm.observation_lines({"gate": "deferred", "condition": "seen on a probe", "limit_days": 120},
+                                                {"gates": {"max_deferred_days": 90}}))
+    if "seen on a probe" not in shown or "120" not in shown or "longer than policy allows" not in shown:
+        problems.append("tools/confirm.py must show each deferred criterion's observation and limit, and warn of a limit above policy, "
+                        f"before the owner agrees: {shown!r}")
     import status
     with tempfile.TemporaryDirectory() as tmp:
         sample = sorted((ROOT / "intents").glob("[0-9]*.md"))[0]
