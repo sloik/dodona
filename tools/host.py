@@ -610,8 +610,10 @@ def tool_faults(pinned: dict, measured: dict, versions: dict) -> tuple[list, lis
         tool = pinned[n]
         if tool.get("floor"):
             seen, floor = version_tuple(versions.get(tool["file"])), version_tuple(tool["floor"])
-            # The floor's own major version only: a new major release is another tool, and must be pinned anew.
-            if seen is None or floor is None or seen < floor or seen[0] != floor[0]:
+            # The floor or any later version, a new major release included: an upgrade of the site's tool neither
+            # stops the checks nor makes their results stale (the key holds the floor); each result records the
+            # version it ran on, outside the key, so a difference a new version makes stays visible.
+            if seen is None or floor is None or seen < floor:
                 mismatched.append(n)
         elif tool["sha256"] is not None and measured.get(tool["file"]) != tool["sha256"]:
             mismatched.append(n)

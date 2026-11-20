@@ -883,15 +883,15 @@ class ToolPinTests(unittest.TestCase):
         return host.tool_faults(self.pinned, measured or self.measured, {} if version is None else {"java/bin/java": version})
 
     def test_the_floor_and_later_are_accepted(self):
-        for version in ("21.0.13", "21.0.13.1", "21.0.100", "21.1"):
+        for version in ("21.0.13", "21.0.13.1", "21.0.100", "21.1", "22", "25.0.1", "100.0.1"):
             self.assertEqual(self.faults(version), ([], []), version)
 
     def test_below_the_floor_is_a_mismatch(self):
         for version in ("21.0.12", "21.0.9", "21.0.1", "21"):  # compared as numbers: 9 is below 13
             self.assertEqual(self.faults(version), ([], ["java"]), version)
 
-    def test_another_major_version_is_a_mismatch(self):
-        for version in ("22", "25.0.1", "100.0.1", "3.0"):
+    def test_an_older_major_version_is_a_mismatch(self):
+        for version in ("3.0", "20.0.2", "1.8.0"):
             self.assertEqual(self.faults(version), ([], ["java"]), version)
 
     def test_a_job_on_java_below_the_floor_proves_nothing(self):
@@ -901,7 +901,7 @@ class ToolPinTests(unittest.TestCase):
                 "measured": {t["file"]: (t["sha256"] or "x") for t in pinned.values()},
                 "versions": {t["file"]: t["floor"] for t in pinned.values() if t.get("floor")}}
         self.assertIsNone(host.job_fault(good))
-        for version in ("21.0.9", None, "25.0.1"):
+        for version in ("21.0.9", None, "20.0.2"):
             low = dict(good, versions={f: version for f in good["versions"]})
             self.assertEqual(host.job_fault(low), "tool-mismatch", version)
 
