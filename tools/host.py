@@ -610,7 +610,8 @@ def tool_faults(pinned: dict, measured: dict, versions: dict) -> tuple[list, lis
         tool = pinned[n]
         if tool.get("floor"):
             seen, floor = version_tuple(versions.get(tool["file"])), version_tuple(tool["floor"])
-            if seen is None or floor is None or seen < floor:
+            # The floor's own major version only: a new major release is another tool, and must be pinned anew.
+            if seen is None or floor is None or seen < floor or seen[0] != floor[0]:
                 mismatched.append(n)
         elif tool["sha256"] is not None and measured.get(tool["file"]) != tool["sha256"]:
             mismatched.append(n)
@@ -746,10 +747,16 @@ def send_job(site: dict, bundle: pathlib.Path, cases: list[dict]) -> dict:
             "versions": {name: seen_versions.get(path) for name, path in where.items() if path in seen_versions}}
 
 
+def job_tool_faults(runs: dict) -> tuple[list, list]:
+    """The tools of a job not measured, and those measured to be other than pinned, from what the job recorded."""
+    _, pinned = lock_tools()
+    versions = runs.get("versions", {})
+    return tool_faults(pinned, runs.get("measured", {}), versions if isinstance(versions, dict) else {})
+
+
 def job_fault(runs: dict) -> str | None:
     """Why nothing from this job may be judged, measured against this site's pins; None if it may."""
-    _, pinned = lock_tools()
-    unmeasured, mismatched = tool_faults(pinned, runs.get("measured", {}), runs.get("versions", {}))
+    unmeasured, mismatched = job_tool_faults(runs)
     return proves_nothing(runs, unmeasured, mismatched)
 
 
@@ -825,7 +832,7 @@ def conclude(args) -> int:
     transcript: list = []
     tools, pinned = lock_tools()
     measured = runs["measured"]
-    unmeasured, mismatched = tool_faults(pinned, measured, runs.get("versions", {}))
+    unmeasured, mismatched = job_tool_faults(runs)
     # The key is made from what was measured to have run; for a floor tool, from its floor, once its version is checked.
     ran = [{"name": n, "digest": "sha256:" + (floor_digest(pinned[n]) if pinned[n].get("floor") else (measured.get(pinned[n]["file"]) or "0" * 64))}
            for n in sorted(pinned)]
@@ -877,7 +884,10 @@ def conclude(args) -> int:
                 key = kernel(args.kernel, "key", made_with)["core_key"]
                 body = {"obligation": name, "preimage": made_with, "core_key": key, "platform": "linux/aarch64", "verdict": verdict,
                         "writer": args.writer, "level": LEVEL_OF_RANK.get(final["strength"]["rank"], "asserted"), "strength": final["strength"], "summary": final.get("summary", {}),
-                        "executor": runs["executor"], "unpinned_tools": unpinned}
+                        "executor": runs["executor"], "unpinned_tools": unpinned,
+                        # What the job found, outside the key: a tool pinned by a floor keeps its results across builds.
+                        "tools_measured": {n: {"digest": measured.get(pinned[n]["file"]), "version": runs.get("versions", {}).get(pinned[n]["file"])}
+                                           for n in sorted(pinned)}}
                 kernel(args.kernel, "ledger-append", {"ledger": str(args.ledger), "kind": "evidence", "body": body, "wait_ms": 5000})
             else:
                 kernel(args.kernel, "ledger-append", {"ledger": str(args.ledger), "kind": "outcome", "wait_ms": 5000,
