@@ -1,0 +1,6 @@
+{
+  "about": "Site binding for this repository's own CI (decision 0035): the executor for runs on the hosted CI machine itself, which runs the programs named here and answers unavailable for any other. It is not part of dodona's design.",
+  "programs": {
+    "node": "node"
+  }
+}

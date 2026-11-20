@@ -15,6 +15,14 @@
       "file": "tla2tools/tla2tools.jar",
       "sha256": "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88",
       "basis": "Measured on the executor in CI run 44201829244 and equal, byte for byte, to tla2tools.jar of the upstream release v1.7.4 (github.com/tlaplus/tlaplus), downloaded and hashed on 2026-11-18."
+    },
+    {
+      "name": "node",
+      "version": ">=24.0.0",
+      "file": "node/bin/node",
+      "sha256": null,
+      "basis": "The test runner's runtime (decision 0035), installed on the hosted CI machine by actions/setup-node at Node 24 and pinned by a floor, as Java is: accepted from 24.0.0 on, a newer major version included; each run records the build it measured.",
+      "floor": "24.0.0"
     }
   ]
 }

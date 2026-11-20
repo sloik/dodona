@@ -101,7 +101,8 @@ def describe_run(body: dict) -> dict:
                      "args": ["--test", "--test-reporter=tap", "--test-name-pattern=" + pattern(config["test"]), config["file"]],
                      "inputs": body["inputs"], "outputs": [], "limits": {"wall_ms": WALL_MS, "output_bytes": 8_388_608},
                      "platform": body["platform"], "cwd": ".",
-                     "tools": [{"name": t["name"], "digest": t["digest"]} for t in body["tools"]]}}
+                     # Only the tool this run uses: a site may pin others, which this run neither needs nor runs.
+                     "tools": [{"name": t["name"], "digest": t["digest"]} for t in body["tools"] if t["name"] == "node"]}}
 
 
 TOP_LEVEL = re.compile(r"(not ok|ok) [0-9]+ - (.*)")
