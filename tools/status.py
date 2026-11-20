@@ -53,6 +53,8 @@ def read_intents(obligations: list[str]) -> dict:
         except intents_tool.Unreadable as err:
             raise SystemExit(f"{path.relative_to(ROOT)} cannot be read one way only: {err}") from None
         ident = fields["id"].strip('"')
+        if ident in intents:
+            raise SystemExit(f"{path.relative_to(ROOT)} has the id {ident} of another intent file; no status is reported")
         criteria = {}
         for item in items:
             names = sorted({n for pattern in item.get("checks", []) for n in obligations if fnmatch.fnmatchcase(n, pattern)})

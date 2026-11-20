@@ -439,6 +439,11 @@ def gap_an_intent_reads_one_way_only() -> None:
                              ("a limit that is true", lambda c: c[deferred].update(limit_days=True)),
                              ("a condition with markup", lambda c: c[deferred].update(condition="<b>seen</b>")),
                              ("a condition of spaces", lambda c: c[deferred].update(condition=" ")),
+                             ("a condition with a space at its end", lambda c: c[deferred].update(condition="seen ")),
+                             ("a condition without a word", lambda c: c[deferred].update(condition="1 2")),
+                             ("a note ending in a line feed", lambda c: c[deferred].update(checked_by="seen\n")),
+                             ("words ending in a line feed", lambda c: c[deferred].update(words="seen\n")),
+                             ("an emoji code in a condition", lambda c: c[deferred].update(condition="seen :100: times")),
                              ("a criterion that is not deferred with a condition", lambda c: c[other].update(condition="seen")),
                              ("a criterion that is not deferred with a limit", lambda c: c[other].update(limit_days=1)),
                              ("a soft criterion with a condition and a limit", lambda c: c[other].update(gate="soft", condition="seen", limit_days=1))):
@@ -453,6 +458,21 @@ def gap_an_intent_reads_one_way_only() -> None:
                 problems.append(f"tools/intents.py accepts {name}")
             except intents.Unreadable:
                 pass
+        # A field named twice in one criterion: json keeps the last, a person may read the first.
+        path = pathlib.Path(tmp) / "0001-probe.md"
+        doubled = fields["criteria"].replace('"gate": "deferred"', '"gate": "hard", "gate": "deferred"', 1)
+        path.write_text(sample.replace(fields["criteria"], doubled), encoding="utf-8")
+        try:
+            intents.read(path)
+            problems.append("tools/intents.py accepts a criterion that names a field twice")
+        except intents.Unreadable:
+            pass
+        # Two files with one id: which one counts would depend on the order they are listed in.
+        twin = pathlib.Path(tmp) / "0001-twin.md"
+        twin.write_text(sample, encoding="utf-8")
+        path.write_text(sample, encoding="utf-8")
+        if not intents.check_all([path, twin]):
+            problems.append("tools/intents.py accepts two intent files with one id")
     source = (ROOT / "tools" / "status.py").read_text(encoding="utf-8")
     if 'e.get("kind") == "act"' not in source or "OWNER_LEDGER.resolve()" not in source:
         problems.append("tools/status.py must read only acts from the owner's ledger, and compare ledger paths after resolving them")
