@@ -1494,7 +1494,12 @@ def self_test(mutants: bool) -> int:
             end = source.index("\n]\n", start) + 3
             head, block, tail = source[:start], source[start:end], source[end:]
             jobs = []
+            # A mutant whose only catching plants could not run on this system is listed as not run, never as caught.
+            needs = {"error messages are printed raw": "named with line breaks"}
             for label, old, new in MUTANTS:
+                if label in needs and any(needs[label] in item for item in skipped):
+                    skipped.append(f"mutant '{label}': the plants that catch it cannot run on this system")
+                    continue
                 if (head + tail).count(old) != 1:
                     record(f"mutant '{label}' can be planted", False, f"{old!r} is not in the tool exactly once")
                     continue
