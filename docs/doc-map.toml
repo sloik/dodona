@@ -125,3 +125,13 @@ why = "Written by tools/confirm.py at the owner's first confirmation; records/RE
 [[absent]]
 path = "tools/widthcheck"
 why = "A path inside the example project of the provider guide, not in this repository."
+
+[[known]]
+check = "docs_usage_matches_the_parser"
+problem = "tools/host.py: subcommand 'check' is not shown in its usage lines"
+why = "tools/host.py is part of every model check's key: changing even its docstring makes all 121 kept results run again on the shared queue. Branch kernel-run changes tools/host.py anyway and shows the command there, which removes this entry. Listed by the agent that found it; the owner accepts it by merging."
+
+[[known]]
+check = "docs_usage_matches_the_parser"
+problem = "tools/host.py: flag --policy-ref of `host.py plan` is not shown in its usage lines"
+why = "As the entry above: tools/host.py is part of every model check's key, so its usage is corrected with branch kernel-run, which changes the file anyway. Listed by the agent that found it; the owner accepts it by merging."

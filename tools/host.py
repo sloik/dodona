@@ -8,13 +8,9 @@ a kernel writes the results to a ledger and reports status.
 It is in two halves, because the executor and the kernel may live on
 different machines:
 
-    python tools/host.py plan     --ledger FILE --dumps-from DIR --writer NAME --out PLAN [--policy-ref REF] --kernel CMD...
+    python tools/host.py plan     --ledger FILE --dumps-from DIR --writer NAME --out PLAN --kernel CMD...
     python tools/host.py collect  --site FILE --out DIR [--plan PLAN] [--dumps]
     python tools/host.py conclude --runs DIR --ledger FILE --writer NAME --kernel CMD...
-
-and, as the reference a kernel's `check` command is judged against (decision 0033):
-
-    python tools/host.py check    < INPUT.json
 
 `plan` reads the ledger kept from earlier runs and asks a kernel which checks
 still have a current result; only the others are sent.

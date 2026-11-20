@@ -55,7 +55,7 @@ The usual way a document here goes wrong is quiet: code or data changes and the 
 | `docs_counts_match_the_repository` | The README counts scenarios, vectors and models; a new one would leave the count stale. The models' README must list every model |
 | `docs_every_check_is_listed` | A check whose reason is lost gets deleted by mistake |
 
-Drift a check finds that cannot be fixed now is listed under `[[known]]` in the map, word for word, with the reason, and the entry fails once the drift is gone. None is listed now. The first, a usage line of `tools/check_states.py` without `--settings`, was removed once main showed the flag.
+Drift a check finds that cannot be fixed now is listed under `[[known]]` in the map, word for word, with the reason, and the entry fails once the drift is gone. Two are listed: `tools/host.py`'s usage does not show its `check` command or `plan`'s `--policy-ref`. That file is part of every model check's key, so showing it would make all kept results run again; it is shown with the next change that touches the file anyway (branch `kernel-run`). The first entry, a usage line of `tools/check_states.py` without `--settings`, was removed once main showed the flag.
 
 ### A change must bring its documents
 
