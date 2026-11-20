@@ -24,6 +24,7 @@ It covers what the formal models cover and no more: obligation status, intent st
 | `kernel/index.json` | The modelled cases that have no scenario, each with the reason |
 | `provider/misbehaving_provider.py` | A provider that does one thing wrong in each of its modes: garbage, a byte-order mark, a carriage return, bad encoding, an over-long line, half a line, no answer, a late answer, a wrong or repeated answer, a flood on standard error, a process left behind |
 | `provider/cases.json` | What a host must do with it in each mode |
+| `project/cases.json`, `project/fixture_provider.py` | Small projects, each with providers that answer from a file, and what a command reporting the project's status must refuse or report |
 | `vectors/canonical.json` | The [canonical encoding](../protocol/canonical-encoding.md): values with their exact text and hash, and inputs that must be refused |
 | `vectors/paths.json` | The [path check](../protocol/path-check.md): accepted paths, refused paths with the reason, and sets that collide |
 
@@ -360,7 +361,8 @@ In this order; the first rule broken gives the reason, and nothing after it is d
 ## Not yet in the kit
 
 - The evidence entries and the status report in the kit are smaller than `protocol/evidence-record.schema.json` and `protocol/status.schema.json` describe. Those schemas are the target, and nothing validates a kernel's output against them yet.
-- A kernel's whole pipeline: listing a project, planning, sending work to a site's executor and recording verdicts, and its status command (decision 0033, the second step).
+- A kernel's whole pipeline: planning, sending work to a site's executor and recording verdicts (decision 0034, the `run` command). The status command's cases are in `project/`; no kernel implements it yet.
+- Status cases compare what a command judged with the reference; statuses are written by hand only in the cases that name them. No status rule reads a deferred gate's limit yet.
 - A process that deliberately leaves a provider's or an executor's process group or job; no host is judged on ending it.
 - The wait for an executor is judged only to within two seconds of `wall_ms`, not to the full 60-second margin the text requires: judging that would add a minute to every run of the kit.
 - The two kernels' `session` and `check` commands are not compared with each other the way `tools/kernel_differential.py` compares their scenario answers; they are compared only through the cases above, so an input no case gives can still get two answers.

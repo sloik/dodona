@@ -55,6 +55,8 @@ jobs:
         run: ${{ matrix.python }} tools/check_intents_provider.py
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
+      - name: Judge the reference status command with the project cases (decision 0034)
+        run: ${{ matrix.python }} tools/run_status_cases.py --kernel kernel/target/release/dodona-kernel -- ${{ matrix.python }} tools/project_status.py --kernel kernel/target/release/dodona-kernel
       - name: Kernel unit tests
         run: cargo test --locked --manifest-path kernel/Cargo.toml
       - name: Judge the kernel with the conformance kit
