@@ -48,6 +48,8 @@ jobs:
           .venv-examples/bin/python -m pip install --quiet jsonschema==4.26.0
           .venv-examples/bin/python tools/check_examples.py
           .venv-examples/bin/python tools/policy_input.py --self-test
+      - name: Test this site's batch executor for a kernel's run, against a fake queue
+        run: ${{ matrix.python }} .github/site/test_kernel_executor.py
       - name: Judge the reference host with the misbehaving provider
         run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.python }} tools/provider_host.py
       - name: Judge the stage-0 host with a checker that breaks one rule at a time
@@ -137,5 +139,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The status judge recomputes each report with the other kernel's scenario command, so the second kernel's
+      # defects need the first kernel built (the first kernel's run uses Node, which the runner has).
+      - name: Build the first kernel, whose scenario command the second kernel's status judge uses
+        run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every listed defect and check some judge rejects each
         run: ${{ matrix.run }}

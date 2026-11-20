@@ -883,14 +883,40 @@ class ToolPinTests(unittest.TestCase):
         return host.tool_faults(self.pinned, measured or self.measured, {} if version is None else {"java/bin/java": version})
 
     def test_the_floor_and_later_are_accepted(self):
-        for version in ("21.0.13", "21.0.13.1", "21.1", "22"):
+        for version in ("21.0.13", "21.0.13.1", "21.0.100", "21.1", "22", "25.0.1", "100.0.1"):
             self.assertEqual(self.faults(version), ([], []), version)
 
     def test_below_the_floor_is_a_mismatch(self):
-        self.assertEqual(self.faults("21.0.12"), ([], ["java"]))
+        for version in ("21.0.12", "21.0.9", "21.0.1", "21"):  # compared as numbers: 9 is below 13
+            self.assertEqual(self.faults(version), ([], ["java"]), version)
+
+    def test_an_older_major_version_is_a_mismatch(self):
+        for version in ("3.0", "20.0.2", "1.8.0"):
+            self.assertEqual(self.faults(version), ([], ["java"]), version)
+
+    def test_a_job_on_java_below_the_floor_proves_nothing(self):
+        import host
+        _, pinned = host.lock_tools()
+        good = {"reachable": True, "complete": True,
+                "measured": {t["file"]: (t["sha256"] or "x") for t in pinned.values()},
+                "versions": {t["file"]: t["floor"] for t in pinned.values() if t.get("floor")}}
+        self.assertIsNone(host.job_fault(good))
+        for version in ("21.0.9", None, "20.0.2"):
+            low = dict(good, versions={f: version for f in good["versions"]})
+            self.assertEqual(host.job_fault(low), "tool-mismatch", version)
+
+    def test_the_driver_reads_only_a_released_version_on_its_own_line(self):
+        sys.path.insert(0, str(ROOT / ".github" / "site"))
+        import batch_driver
+        read = batch_driver.stated_version
+        self.assertEqual(read(b'openjdk version "21.0.13" 2026-10-21 LTS\nOpenJDK Runtime Environment\n', 0), "21.0.13")
+        self.assertEqual(read(b'java version "21.0.15"\n', 0), "21.0.15")
+        self.assertIsNone(read(b'openjdk version "21.0.13-ea" 2026-10-21\n', 0))
+        self.assertIsNone(read(b'openjdk version "21.0.13"\n', 1))
+        self.assertEqual(read(b'Picked up JAVA_TOOL_OPTIONS: -Dx=version "99"\nopenjdk version "21.0.9"\n', 0), "21.0.9")
 
     def test_an_unreadable_or_missing_version_is_a_mismatch(self):
-        for version in ("garbage", "", None):
+        for version in ("garbage", "", None, "21.0.13-ea", "v21.0.13", " 21.0.13"):
             self.assertEqual(self.faults(version), ([], ["java"]), version)
 
     def test_an_exact_pin_still_compares_its_digest(self):

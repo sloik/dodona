@@ -25,6 +25,9 @@ import ledger  # noqa: E402
 
 SERVED = ("obligation.enumerate", "intent.index")
 UNREAD_CRITERIA = False  # set in step 7: a criterion declares what no status rule reads yet
+ENUMERATED: dict = {}  # step 5: each obligation's binding, as enumerated, and the files of F, for a run command
+TRANSCRIPT: list = []  # every message sent to and read from a provider, in order, for a run command that keeps one
+KEEP_OPEN: dict | None = None  # a run command sets this: step 5's sessions of bindings that check are kept open
 NOTHING = {"do": {"set_gate": {"intent": "", "criterion": "", "to": "hard"}}}
 
 
@@ -36,6 +39,11 @@ class Stop(Exception):
 
 def strings(value) -> bool:
     return isinstance(value, list) and all(isinstance(x, str) for x in value)
+
+
+def command_ok(value) -> bool:
+    """A command: a non-empty list of strings, none holding a NUL, which no program's arguments can carry."""
+    return strings(value) and bool(value) and all("\x00" not in x for x in value)
 
 
 def sort_key(text: str) -> list[int]:
@@ -102,7 +110,7 @@ def check_input(asked) -> None:
         ok = isinstance(site.get("writer"), str) and isinstance(site.get("runner"), str) \
             and isinstance(platform, dict) and isinstance(platform.get("os"), str) and isinstance(platform.get("arch"), str) \
             and isinstance(tools, list) and all(isinstance(t, dict) and all(isinstance(t.get(k), str) for k in ("name", "version", "digest")) for t in tools) \
-            and isinstance(providers, dict) and all(isinstance(p, dict) and strings(p.get("command")) and p["command"] and strings(p.get("code"))
+            and isinstance(providers, dict) and all(isinstance(p, dict) and command_ok(p.get("command")) and strings(p.get("code"))
                                                     for p in providers.values()) \
             and type(deadline) is int and 0 < deadline <= 86_400_000
     if not ok:
@@ -190,7 +198,7 @@ def claimed(root: pathlib.Path, patterns: list[str]) -> list[dict]:
 
 def session(root: pathlib.Path, site: dict, binding: dict):
     try:
-        sess = host.Session(site["providers"][binding["provider"]]["command"], root, [], deadline_ms=site["deadline_ms"])
+        sess = host.Session(site["providers"][binding["provider"]]["command"], root, TRANSCRIPT, deadline_ms=site["deadline_ms"])
     except host.Refused as err:
         raise Stop(str(err), binding["provider"]) from None
     except OSError as err:
@@ -232,9 +240,15 @@ def obligations_of(root: pathlib.Path, site: dict, bindings: list[dict], claims:
         files = claims[binding["name"]]
         identity = {f["path"]: f["identity"] for f in files}
         sess = session(root, site, binding)
+        keep = KEEP_OPEN is not None and "obligation.check" in binding["capabilities"]
         try:
             body = ask(sess, "obligation.enumerate", {"binding": binding["name"], "definitions": [], "files": files})
-        finally:
+        except Stop:
+            sess.close()
+            raise
+        if keep:
+            KEEP_OPEN[binding["name"]] = sess  # a run command checks with this same session: the provider cannot change
+        else:
             sess.close()
         items, rejected = body.get("obligations"), body.get("rejected", [])
         # Each rule over every obligation of the answer, before the next rule.
@@ -253,16 +267,20 @@ def obligations_of(root: pathlib.Path, site: dict, bindings: list[dict], claims:
             if item["name"] in found:
                 raise Stop("duplicate-obligation", item["name"])
             given = [{"path": p, "identity": identity[p]} for p in item["inputs"]]
+            uses = {t.get("name") for t in sess.manifest.get("tools", []) if isinstance(t, dict)}
             version = f"{sess.manifest['version']}+{site['providers'][binding['provider']]['digest']}+{site['runner']}"
             found[item["name"]] = {"preimage": {
                 "obligation": canonical.identity({"binding": binding["name"], "name": item["name"]}), "kind": "check",
                 "inputs": {"specified_by": canonical_sorted(f["identity"] for f in given if f["path"] in item["specified_by"]),
                            "targets": canonical_sorted(f["identity"] for f in given if f["path"] in item["targets"]),
                            "closure": canonical_sorted(canonical.identity({"path": f["path"], "identity": f["identity"]}) for f in given),
-                           "tools": [{"name": t["name"], "digest": t["digest"]} for t in site["tools"]],
+                           # Only the tools the provider's manifest says it uses: pinning another tool for another provider
+                           # changes no key of this one.
+                           "tools": [{"name": t["name"], "digest": t["digest"]} for t in site["tools"] if t["name"] in uses],
                            "config": canonical.identity(item["config"]), "expect": item["expect"]},
                 "provider": {"name": sess.manifest["name"], "version": version, "protocol": sess.manifest["protocol"]}}}
             listed.append({"binding": binding["name"], "name": item["name"]})
+            ENUMERATED[item["name"]] = {"binding": binding, "item": item, "inputs": given}
         unchecked += [r["name"] for r in rejected]
     listed.sort(key=lambda o: (sort_key(o["binding"]), sort_key(o["name"])))
     return found, listed, canonical_sorted(unchecked)
@@ -531,6 +549,12 @@ def run(asked) -> dict:
     return out
 
 
+def emit(value: dict) -> None:
+    """One JSON object, as UTF-8 bytes whatever the console's encoding (Windows' is not UTF-8), and a line feed."""
+    sys.stdout.buffer.write(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8") + b"\n")
+    sys.stdout.buffer.flush()
+
+
 def main() -> int:
     kernel = sys.argv[sys.argv.index("--kernel") + 1:] if "--kernel" in sys.argv else None
     try:
@@ -544,13 +568,13 @@ def main() -> int:
     try:
         out = run(asked)
     except Stop as stop:
-        print(json.dumps({"refused": stop.reason, "detail": stop.detail}, ensure_ascii=False))
+        emit({"refused": stop.reason, "detail": stop.detail})
         return 0
     if kernel:
         answer = subprocess.run(kernel + ["scenario"], input=json.dumps(out["judged"]).encode("utf-8"), capture_output=True, check=True)
         out["report"] = json.loads(answer.stdout)["results"][-1]
         out["project_status"] = headline(out["report"]["project"]["status"], out["project_doubts"])
-    print(json.dumps(out, ensure_ascii=False, sort_keys=True))
+    emit(out)
     return 0
 
 

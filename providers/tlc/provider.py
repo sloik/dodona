@@ -76,7 +76,8 @@ def describe_run(body: dict) -> dict:
                      "inputs": [f for f in body["inputs"] if f["path"].startswith(config["folder"] + "/")],
                      "outputs": [], "limits": {"wall_ms": 1800000, "output_bytes": 33554432},
                      "platform": body["platform"], "cwd": config["folder"],
-                     "tools": [{"name": t["name"], "digest": t["digest"]} for t in body["tools"]]}}
+                     # Only the tools this run uses: a site may pin others, which this run neither needs nor runs.
+                     "tools": [{"name": t["name"], "digest": t["digest"]} for t in body["tools"] if t["name"] in ("java", "tla2tools")]}}
 
 
 def interpret(obligation: dict, report: dict) -> dict:
