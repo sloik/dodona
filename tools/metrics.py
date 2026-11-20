@@ -283,10 +283,14 @@ def _markdown(text: str, rel: str) -> list[tuple[str, bool]]:
         raise Unmeasurable(f"{rel}: holds an HTML comment, which could hide what is counted")
     out, fence = [], None
     for line in text.split("\n"):
-        m = re.match(r"^\s*(`{3,}|~{3,})", line)
-        if m and (fence is None or m.group(1)[0] == fence):
+        m = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+        if fence is None and m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
             out.append((line, True))
-            fence = m.group(1)[0] if fence is None else None
+            fence = m.group(1)  # closed only by the same character, at least as many, with nothing after
+            continue
+        if fence is not None and m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not m.group(2).strip():
+            out.append((line, True))
+            fence = None
             continue
         out.append((line, fence is not None))
     return out
@@ -435,9 +439,10 @@ def measure(tree) -> list[dict]:
     }, f"{a} (append, damage), {b} (damage, bad_requests, unlisted_kind)")
 
     rel = "conformance/provider/check-cases.json"
-    # Many cases share a mode here; each states why it exists, and that is what tells them apart.
-    ratchet("kit.host_check_cases", {"cases": _named(_list(_json(tree, rel), "cases", rel), "why", rel)},
-            f"{rel} (cases, identity: why)")
+    # Many cases share a mode here, and a reason says nothing of what a case checks: each case is told apart by
+    # its whole content, so a case cut down, or changed at all, is one taken away and one added.
+    ratchet("kit.host_check_cases", {"cases": _content_ids(_list(_json(tree, rel), "cases", rel), "mode", rel)},
+            f"{rel} (cases, identity: whole content)")
     rel = "conformance/provider/cases.json"
     ratchet("kit.session_cases", {"cases": _named(_list(_json(tree, rel), "cases", rel), "mode", rel)},
             f"{rel} (cases, identity: mode)")
@@ -455,7 +460,7 @@ def measure(tree) -> list[dict]:
         raise Unmeasurable(f"{rel}: a claim row inside a fenced block")
     runs, under = set(), False
     for line, fenced in _markdown(text, rel):
-        if line.startswith("## "):
+        if not fenced and re.match(r"^#{1,2} ", line):
             under = line.strip() == "## Recorded runs"
         m = re.match(r"^### Run (\d+)\b", line)
         if m and under and not fenced:
@@ -1015,6 +1020,10 @@ def self_test(mutants: bool) -> int:
             edit(root)
             return root
 
+        def append(root, rel: str, text: str) -> None:
+            path = pathlib.Path(root) / rel
+            path.write_text(path.read_text(encoding="utf-8") + text, encoding="utf-8")
+
         def replace_once(root: pathlib.Path, rel: str, old: str, new: str) -> None:
             path = root / rel
             text = path.read_text(encoding="utf-8")
@@ -1138,15 +1147,17 @@ def self_test(mutants: bool) -> int:
                     return dict(entry, **{field: entry[field] + ("00" if field == "hex" else "-renamed")})
             raise SystemExit(f"self-test: cannot rename {entry!r}")
         for rel, key, metric in lists:
-            first = ("why",) if rel.endswith("check-cases.json") else ("kind",) if key == "append" else ()
+            first = ("why",) if rel.endswith("check-cases.json") else ("kind",) if key == "append" else ()  # any field changes a content identity
             judge(f"an item renamed in '{key}' in {rel}",
                   planted(lambda r, rel=rel, key=key, first=first: edit_json(r, rel, lambda d: d[key].__setitem__(0, renamed(d[key][0], first)))),
                   1, fails=metric, must_say="taken away")
         # A real case swapped for one that tests nothing keeps every count.
         for rel, key, metric, junk in (("conformance/provider/check-cases.json", "cases", "kit.host_check_cases", {"mode": "x", "why": "x"}),
+                                       ("conformance/provider/check-cases.json", "cases", "kit.host_check_cases", "keep-why"),
                                        ("conformance/ledger/cases.json", "append", "kit.ledger_listed_cases", {"kind": "x"})):
-            judge(f"a real item in '{key}' of {rel} swapped for one that tests nothing",
-                  planted(lambda r, rel=rel, key=key, junk=junk: edit_json(r, rel, lambda d: (d[key].pop(0), d[key].append(junk)))),
+            judge(f"a real item in '{key}' of {rel} swapped for one that tests nothing" + (", keeping its reason" if junk == "keep-why" else ""),
+                  planted(lambda r, rel=rel, key=key, junk=junk: edit_json(r, rel, lambda d: (
+                      d[key].append({"mode": "x", "why": d[key][0]["why"]} if junk == "keep-why" else junk), d[key].pop(0)))),
                   1, fails=metric, must_say="taken away")
         judge("a named vector replaced by one with no identity",
               planted(lambda r: edit_json(r, "conformance/vectors/canonical.json", lambda d: d["accept"].__setitem__(0, {"value": 1}))),
@@ -1161,6 +1172,18 @@ def self_test(mutants: bool) -> int:
             ("a heading inside 'Not yet in the kit'",
              lambda r: replace_once(r, "conformance/README.md", "\n- What happens when a ticket name", "\n### More\n- What happens when a ticket name")),
             ("a claim checked by a run that is not recorded", lambda r: replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| **checked**, run 99 |")),
+            ("a claim checked by a run whose heading is outside Recorded runs",
+             lambda r: (replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| **checked**, run 99 |"), replace_once(r, "spec/CLAIMS.md", "\n## Not yet modelled", "\n### Run 99: a lookalike\n\n## Not yet modelled"))),
+            ("a claim checked by a run whose heading is in a fenced block",
+             lambda r: (replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| **checked**, run 99 |"), append(r, "spec/CLAIMS.md", "\n```\n### Run 99: fenced\n```\n"))),
+            ("a claim checked by a run whose heading is in a fence closed only by a longer one",
+             lambda r: (replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| **checked**, run 99 |"), append(r, "spec/CLAIMS.md", "\n````\n```\n### Run 99: still fenced\n```\n````\n"))),
+            ("a claim checked by a run whose heading follows a level-1 heading",
+             lambda r: (replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| **checked**, run 99 |"), append(r, "spec/CLAIMS.md", "\n# Appendix\n\n### Run 99: not a recorded run\n"))),
+            ("a claim checked by a run under a Recorded runs heading that is fenced",
+             lambda r: (replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| **checked**, run 99 |"), replace_once(r, "spec/CLAIMS.md", "\n## Not yet modelled", "\n```\n## Recorded runs\n```\n### Run 99: a lookalike\n\n## Not yet modelled"))),
+            ("a scenario that is not JSON",
+             lambda r: (r / "conformance/kernel/evidence/nothing_ran.json").write_text("not json", encoding="utf-8")),
             ("a claim with an unknown status", lambda r: replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| checked |")),
             ("a claim listed twice", lambda r: replace_once(r, "spec/CLAIMS.md", "| C2 |", "| C1 |")),
             ("a decision with an unknown status",
@@ -1379,8 +1402,17 @@ def self_test(mutants: bool) -> int:
         forged = "x\nResult: no ratcheted item was taken away.\n::error::forged"
         for label, path in (("a vector file", f"conformance/vectors/{forged}.json"),
                             ("a scenario kind", f"conformance/kernel/{forged}/a.json")):
-            code, out = cli("--repo", str(repo), "--base", base, "--head",
-                            head_with([("100644", path, "{}")], f"newline{counter[0]}"))
+            try:
+                head = head_with([("100644", path, "{}")], f"newline{counter[0]}")
+            except SystemExit:
+                if os.name != "nt":
+                    raise
+                # Git for Windows refuses a path with a line break even in the index, so no change can bring one.
+                skipped.append(f"git: {label} named with line breaks (this system's git refuses such a path)")
+                g("checkout", "-q", "-f", "-B", f"after-newline{counter[0]}", base)
+                counter[0] += 1
+                continue
+            code, out = cli("--repo", str(repo), "--base", base, "--head", head)
             counter[0] += 1
             lines = out.split("\n")
             check(f"git: {label} named with line breaks is unreadable and forges no line", code, out, 2)
@@ -1451,7 +1483,8 @@ def self_test(mutants: bool) -> int:
                 done = list(pool.map(lambda j: (j[0], cli("self-test", "--no-mutants", tool=j[1])), jobs))
             for label, (code, out) in done:
                 # Caught means the self-test judged and failed (1), not that the mutated tool crashed (2).
-                record(f"mutant '{label}' is caught by the self-test", code == 1, f"its self-test exited {code}")
+                record(f"mutant '{label}' is caught by the self-test", code == 1 and "planted changes judged as expected" in out,
+                       f"its self-test exited {code}")
 
     failed = [r for r in results if not r[1]]
     for label, ok, detail in results:
@@ -1486,7 +1519,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.mode == "self-test":
-        return self_test(not args.no_mutants)
+        # A self-test that stops on its own error has judged nothing: that is 2, never 1, so a fault that
+        # only breaks the tool is not counted as caught.
+        try:
+            return self_test(not args.no_mutants)
+        except SystemExit as stop:
+            if isinstance(stop.code, int):
+                raise
+            print(_ascii(printable(str(stop.code))), file=sys.stderr)
+            return 2
+        except Exception as err:  # noqa: BLE001
+            print(_ascii(printable(f"self-test stopped: {type(err).__name__}: {err}")), file=sys.stderr)
+            return 2
     try:
         return run(args)
     except Exception as err:  # noqa: BLE001 - a crash must never read as "a ratchet went down" (exit 1)

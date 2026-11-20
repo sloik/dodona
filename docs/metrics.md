@@ -34,11 +34,11 @@ The check stops a merge only once `main`'s ruleset requires it. Until then it re
 | `kit.tool_tree_vectors` | `conformance/vectors/tool-tree.json`, judged against the reference only | ratcheted, by name |
 | `kit.vectors.<file>` | one vector file | shown |
 | `kit.ledger_listed_cases` | the cases the ledger files list: `append` and `damage` in `conformance/ledger/cases.json`; `damage`, `bad_requests` and `unlisted_kind` in `more-damage.json` | ratcheted, by name; the appends by their whole content, and the unlisted kind counted |
-| `kit.host_check_cases` | `cases` in `conformance/provider/check-cases.json` | ratcheted, by the `why` each case states: many cases share a mode, and no two share a reason |
+| `kit.host_check_cases` | `cases` in `conformance/provider/check-cases.json` | ratcheted, by each case's whole content: many cases share a mode, and a reason says nothing of what a case checks, so a case changed at all is one taken away and one added, and the owner merges over that |
 | `kit.session_cases` | `cases` in `conformance/provider/cases.json` | ratcheted, by mode |
 | `planted_defects.kernel`, `planted_defects.kernel2` | `defects` in `kernel/defects.json` and `kernel2/defects.json` | ratcheted, by name |
 | `claims.total` | rows `\| C<n> \|` in `spec/CLAIMS.md` | ratcheted, by claim id |
-| `claims.checked` | claims whose status is `**checked**, run <n>`, with a heading `### Run <n>` under `## Recorded runs`, outside any fenced block | ratcheted, by claim id |
+| `claims.checked` | claims whose status is `**checked**, run <n>`, with a heading `### Run <n>` under `## Recorded runs`, outside any fenced block; a heading of level 1 or 2 ends that section, and a fence closes only on the same character, at least as long, with nothing after it | ratcheted, by claim id |
 | `claims.unchecked` | every other claim | shown |
 | `claims.sampled_by_kit`, `claims.modelled_unchecked`, `claims.not_modelled` | the other statuses, and the section "Not yet modelled" | shown |
 | `decisions.total` | `decisions/[0-9]*.md` | ratcheted, by file name |
