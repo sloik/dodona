@@ -36,6 +36,7 @@ import ast
 import concurrent.futures
 import contextlib
 import fnmatch
+import hashlib
 import io
 import json
 import os
@@ -257,6 +258,14 @@ def _objects(items: list, field: str, where: str) -> list:
     return items
 
 
+def _content_ids(items: list, field: str, where: str) -> list[str]:
+    """Items with no name of their own, told apart by their whole content: a changed item is one taken away
+    and one added."""
+    _objects(items, field, where)
+    return _ids((hashlib.sha256(json.dumps(e, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
+                 for e in items), where)
+
+
 def _vector_id(entry):
     if isinstance(entry, str):
         return entry
@@ -370,6 +379,9 @@ def measure(tree) -> list[dict]:
     for kind in kinds:
         names, _ = tree.listing(f"conformance/kernel/{kind}")
         scenarios[kind] = _ids([n[:-5] for n in names if n.endswith(".json")], f"conformance/kernel/{kind}")
+        for name in scenarios[kind]:
+            # A file that is not a scenario at all is not counted as one.
+            _json(tree, f"conformance/kernel/{kind}/{name}.json")
     ratchet("kit.scenarios", scenarios, "conformance/kernel/<kind>/<name>.json (identity: kind and name)")
     for kind, ids in scenarios.items():
         shown(f"kit.scenarios.{kind}", len(ids), f"conformance/kernel/{kind}/*.json")
@@ -415,7 +427,7 @@ def measure(tree) -> list[dict]:
     if not isinstance(more.get("unlisted_kind"), dict):
         raise Unmeasurable(f"{b}: no 'unlisted_kind'")
     ratchet("kit.ledger_listed_cases", {
-        "cases.json:append": len(_objects(_list(cases, "append", a), "kind", f"{a} 'append'")),
+        "cases.json:append": _content_ids(_list(cases, "append", a), "kind", f"{a} 'append'"),
         "cases.json:damage": _named(_list(cases, "damage", a), "name", f"{a} 'damage'"),
         "more-damage.json:damage": _named(_list(more, "damage", b), "name", f"{b} 'damage'"),
         "more-damage.json:bad_requests": _named(_list(more, "bad_requests", b), "name", f"{b} 'bad_requests'"),
@@ -423,9 +435,9 @@ def measure(tree) -> list[dict]:
     }, f"{a} (append, damage), {b} (damage, bad_requests, unlisted_kind)")
 
     rel = "conformance/provider/check-cases.json"
-    # Two cases share a mode here, so they have no identity of their own: counted.
-    ratchet("kit.host_check_cases", {"cases": len(_objects(_list(_json(tree, rel), "cases", rel), "mode", rel))},
-            f"{rel} (cases, counted)")
+    # Many cases share a mode here; each states why it exists, and that is what tells them apart.
+    ratchet("kit.host_check_cases", {"cases": _named(_list(_json(tree, rel), "cases", rel), "why", rel)},
+            f"{rel} (cases, identity: why)")
     rel = "conformance/provider/cases.json"
     ratchet("kit.session_cases", {"cases": _named(_list(_json(tree, rel), "cases", rel), "mode", rel)},
             f"{rel} (cases, identity: mode)")
@@ -441,7 +453,13 @@ def measure(tree) -> list[dict]:
     text = tree.read(rel)
     if any(fenced and re.match(r"^\| C\d+ \|", line) for line, fenced in _markdown(text, rel)):
         raise Unmeasurable(f"{rel}: a claim row inside a fenced block")
-    runs = set(re.findall(r"^### Run (\d+)\b", text, flags=re.M))
+    runs, under = set(), False
+    for line, fenced in _markdown(text, rel):
+        if line.startswith("## "):
+            under = line.strip() == "## Recorded runs"
+        m = re.match(r"^### Run (\d+)\b", line)
+        if m and under and not fenced:
+            runs.add(m.group(1))
     by: dict[str, list[str]] = {"checked": [], "sampled_by_kit": [], "modelled_unchecked": [], "not_modelled": []}
     seen: list[str] = []
     section = ""
@@ -1112,18 +1130,23 @@ def self_test(mutants: bool) -> int:
             r / "decisions/0001-decisions-are-first-class.md")), 1, fails="decisions.total")
 
         # An item renamed in every list that has identities, the count unchanged, however short the list.
-        def renamed(entry):
+        def renamed(entry, first=()):
             if isinstance(entry, str):
                 return entry + "-renamed"
-            for field in ("name", "path", "hex", "mode"):
+            for field in (*first, "name", "path", "hex", "mode"):
                 if isinstance(entry.get(field), str):
                     return dict(entry, **{field: entry[field] + ("00" if field == "hex" else "-renamed")})
             raise SystemExit(f"self-test: cannot rename {entry!r}")
-        named_lists = [(rel, key, metric) for rel, key, metric in lists
-                       if not (rel.endswith("check-cases.json") or (rel.endswith("ledger/cases.json") and key == "append"))]
-        for rel, key, metric in named_lists:
+        for rel, key, metric in lists:
+            first = ("why",) if rel.endswith("check-cases.json") else ("kind",) if key == "append" else ()
             judge(f"an item renamed in '{key}' in {rel}",
-                  planted(lambda r, rel=rel, key=key: edit_json(r, rel, lambda d: d[key].__setitem__(0, renamed(d[key][0])))),
+                  planted(lambda r, rel=rel, key=key, first=first: edit_json(r, rel, lambda d: d[key].__setitem__(0, renamed(d[key][0], first)))),
+                  1, fails=metric, must_say="taken away")
+        # A real case swapped for one that tests nothing keeps every count.
+        for rel, key, metric, junk in (("conformance/provider/check-cases.json", "cases", "kit.host_check_cases", {"mode": "x", "why": "x"}),
+                                       ("conformance/ledger/cases.json", "append", "kit.ledger_listed_cases", {"kind": "x"})):
+            judge(f"a real item in '{key}' of {rel} swapped for one that tests nothing",
+                  planted(lambda r, rel=rel, key=key, junk=junk: edit_json(r, rel, lambda d: (d[key].pop(0), d[key].append(junk)))),
                   1, fails=metric, must_say="taken away")
         judge("a named vector replaced by one with no identity",
               planted(lambda r: edit_json(r, "conformance/vectors/canonical.json", lambda d: d["accept"].__setitem__(0, {"value": 1}))),
@@ -1168,6 +1191,9 @@ def self_test(mutants: bool) -> int:
              lambda r: replace_once(r, "spec/CLAIMS.md", "| C11 |", "<!--\n| C11 |")),
             ("a claim row inside a fenced block",
              lambda r: replace_once(r, "spec/CLAIMS.md", "\n| C11 |", "\n```\n| C11 |")),
+            # A fenced block that holds only a row of a new claim: nothing else about the file changes.
+            ("a new claim row inside a closed fenced block",
+             lambda r: replace_once(r, "spec/CLAIMS.md", "\n| C11 |", "\n```\n| C998 | planted | not modelled |\n```\n| C11 |")),
             ("a gap-checks table inside a fenced block",
              lambda r: replace_once(r, "docs/gap-checks.md", "\n| Check |", "\n```\n| Check |")),
             ("an HTML comment in docs/gap-checks.md",
@@ -1234,6 +1260,9 @@ def self_test(mutants: bool) -> int:
 
         # Links on disk are refused, never followed.
         for label, where, target in (("a link among the scenarios", "conformance/kernel/evidence/zz_link.json",
+                                      "conformance/kernel/evidence"),
+                                     # Not a scenario, so only the listing's own refusal can catch it.
+                                     ("a link that is not a scenario, among the scenarios", "conformance/kernel/evidence/zz_link.txt",
                                       "conformance/kernel/evidence"),
                                      ("a link in place of the claims file", "spec/CLAIMS.md", "spec")):
             root = copy()
@@ -1421,7 +1450,8 @@ def self_test(mutants: bool) -> int:
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
                 done = list(pool.map(lambda j: (j[0], cli("self-test", "--no-mutants", tool=j[1])), jobs))
             for label, (code, out) in done:
-                record(f"mutant '{label}' is caught by the self-test", code != 0, f"its self-test exited {code}")
+                # Caught means the self-test judged and failed (1), not that the mutated tool crashed (2).
+                record(f"mutant '{label}' is caught by the self-test", code == 1, f"its self-test exited {code}")
 
     failed = [r for r in results if not r[1]]
     for label, ok, detail in results:

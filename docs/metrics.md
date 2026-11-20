@@ -33,12 +33,12 @@ The check stops a merge only once `main`'s ruleset requires it. Until then it re
 | `kit.vectors` | `accept`, `reject`, `reject_bytes` and `collisions` in `conformance/vectors/` `canonical.json`, `core-key.json`, `core-key-more.json` and `paths.json`: the vectors the kernels are judged with | ratcheted, by name, or by the path or bytes where a vector has no name |
 | `kit.tool_tree_vectors` | `conformance/vectors/tool-tree.json`, judged against the reference only | ratcheted, by name |
 | `kit.vectors.<file>` | one vector file | shown |
-| `kit.ledger_listed_cases` | the cases the ledger files list: `append` and `damage` in `conformance/ledger/cases.json`; `damage`, `bad_requests` and `unlisted_kind` in `more-damage.json` | ratcheted, by name; the appends and the unlisted kind are counted |
-| `kit.host_check_cases` | `cases` in `conformance/provider/check-cases.json` | ratcheted, counted: two cases share a mode, so a case has no identity |
+| `kit.ledger_listed_cases` | the cases the ledger files list: `append` and `damage` in `conformance/ledger/cases.json`; `damage`, `bad_requests` and `unlisted_kind` in `more-damage.json` | ratcheted, by name; the appends by their whole content, and the unlisted kind counted |
+| `kit.host_check_cases` | `cases` in `conformance/provider/check-cases.json` | ratcheted, by the `why` each case states: many cases share a mode, and no two share a reason |
 | `kit.session_cases` | `cases` in `conformance/provider/cases.json` | ratcheted, by mode |
 | `planted_defects.kernel`, `planted_defects.kernel2` | `defects` in `kernel/defects.json` and `kernel2/defects.json` | ratcheted, by name |
 | `claims.total` | rows `\| C<n> \|` in `spec/CLAIMS.md` | ratcheted, by claim id |
-| `claims.checked` | claims whose status is `**checked**, run <n>`, with run `<n>` under Recorded runs | ratcheted, by claim id |
+| `claims.checked` | claims whose status is `**checked**, run <n>`, with a heading `### Run <n>` under `## Recorded runs`, outside any fenced block | ratcheted, by claim id |
 | `claims.unchecked` | every other claim | shown |
 | `claims.sampled_by_kit`, `claims.modelled_unchecked`, `claims.not_modelled` | the other statuses, and the section "Not yet modelled" | shown |
 | `decisions.total` | `decisions/[0-9]*.md` | ratcheted, by file name |
@@ -62,7 +62,7 @@ A shown metric can move either way as the project grows:
 - the unchecked claims fall when a claim is checked and rise when one is added;
 - the items not yet in the kit fall when one is added to the kit and rise when a gap is found;
 - the decisions by status change when the owner accepts or supersedes a record;
-- the breakdowns by kind and by file change when an item moves between files, and their totals are ratcheted.
+- the breakdowns by file change when an item moves between files, and their totals are ratcheted. Scenarios are the exception: they are ratcheted by kind and name, so moving one to another kind takes it away from the first.
 
 In CI one copy of the tool measures both sides of a change, so a change to its list of ratchets is not seen as a metric moving. It is seen as a change to `tools/metrics.py`, which fails the check on its own. The self-test also requires the list to match the expected one. Only `--compare FILE`, against numbers saved earlier, sees a ratcheted metric that disappeared or stopped being ratcheted, and counts that as taking its items away.
 
@@ -82,9 +82,9 @@ Each change is compared with its own base, so a removal that the owner merged ov
 
 ## What the check cannot see
 
-- **Its own job name, taken by another workflow.** A required check is matched by its name. `tools/metrics.py jobs` fails the check when another workflow of the change defines a job with the gate's id or name, in a `.yml` or `.yaml` file. This is best effort. It reads plain block-style YAML. A name made by an expression or a matrix, written in flow style or with escapes, or a check run created through the API gets past it. What remains is that taking the name needs a workflow file in the change, which a reviewer sees.
+- **Its own job name, taken by another workflow.** A required check is matched by its name. `tools/metrics.py jobs` fails the check when another workflow of the change defines a job with the gate's id or name, in a `.yml` or `.yaml` file. This is best effort. It reads plain block-style YAML. A name made by an expression or a matrix, written in flow style or with escapes, or a check run created through the API gets past it. The ruleset must pin the required check to the GitHub Actions app, or a status posted by anyone with write access, with no workflow at all, would count. Even pinned, a workflow of the change given `checks: write` could create a check run under the gate's name; that needs a workflow file in the change, which a reviewer sees.
 - **Unsafe edits of its own workflow.** The self-test reads `metrics.yml` for known ways of running or checking out the pull request's code and plants each one. That reading is advisory, because a determined edit could get past it. Any change to the workflow fails the check anyway.
-- **What a file means.** The tool counts what files state. A scenario whose content is emptied, or a defect cut down to its name, keeps its identity and is not seen as taken away.
+- **What a file means.** The tool counts what files state. A scenario must still be JSON, but one whose content is emptied, or a defect cut down to its name, keeps its identity and is not seen as taken away.
 
 ## The self-test
 
