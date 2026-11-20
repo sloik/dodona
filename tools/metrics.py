@@ -355,6 +355,9 @@ def _check_list(tree, rel: str, name: str) -> set[str]:
                    and not isinstance(n.ctx, ast.Load))]
     if len(stores) != 1 or changed:
         raise Unmeasurable(f"{rel}: {name} must be bound exactly once and never changed ({len(stores)} bindings, {len(changed)} changes)")
+    # Read whole wherever it is read: a slice or an index (GAP_CHECKS[:0]) would run fewer checks than are counted.
+    if any(isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id == name for n in ast.walk(module)):
+        raise Unmeasurable(f"{rel}: {name} is sliced or indexed where it is read, so the checks that run are not the ones counted")
     for node in module.body:
         if (isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets)
                 and isinstance(node.value, (ast.List, ast.Tuple)) and all(isinstance(e, ast.Name) for e in node.value.elts)):
@@ -737,36 +740,30 @@ def comparison(title: str, rows, malformed, unused, failed, markdown: bool, judg
 # --------------------------------------------------------------------------- workflows
 
 
-def workflow_jobs(text: str) -> set[str]:
-    """The ids and names of a workflow's jobs, read from the block under its top-level `jobs:`."""
-    found, inside, job_indent = set(), False, None
-    for line in text.replace("\r\n", "\n").split("\n"):
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        indent = len(line) - len(line.lstrip())
-        if indent == 0:
-            inside, job_indent = line.rstrip() == "jobs:", None
-            continue
-        if not inside:
-            continue
-        if job_indent is None:
-            job_indent = indent
-        m = re.fullmatch(r"\s*([\"']?)([\w-]+)\1:\s*", line)
-        if indent == job_indent and m:
-            found.add(m.group(2))
-        m = re.fullmatch(r"\s*name:\s*([\"']?)(.*?)\1\s*", line)
-        if indent == job_indent + 2 and m:
-            found.add(m.group(2))
-    return found
+def mentions(text: str, name: str) -> bool:
+    """Whether a workflow's text could give a job this id or name, read so as to fail closed: the name anywhere in
+    the text, in comments and quotes too, or once spacing and line breaks are folded (a folded or quoted scalar)."""
+    flat = " ".join(text.replace("\r\n", "\n").split())
+    return name in text or name in flat or name in flat.replace('"', "").replace("'", "")
+
+
+def escaped_names(text: str) -> bool:
+    """A key or a name written with escapes: what it says cannot be told without a full YAML reader, so it fails."""
+    return any(re.search(r"\\", line) and (re.match(r"\s*name\s*:", line) or re.match(r"\s*[\"'][^\"']*\\", line))
+               for line in text.split("\n"))
 
 
 def job_clashes(repo: pathlib.Path, head: str, own: str, names: set[str]) -> list[str]:
-    """Other workflows of head that define a job with one of names as its id or name."""
+    """Other workflows of head that could define a job with one of names as its id or name. Fails closed: a workflow
+    that mentions the name anywhere, or writes a key or name with escapes, is a clash."""
     tree = GitTree(repo, head)
     own = own.replace("\\", "/").removeprefix("./")
     paths = [p for p in tree.entries if re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p) and p != own]
-    return [f"{p} defines a job {n!r}, as {own} does: a required check of that name could be passed by it"
-            for p in sorted(paths) for n in sorted(names & workflow_jobs(tree.read(p)))]
+    out = [f"{p} mentions {n!r}, which {own} uses as a job id or name: a required check of that name could be passed by it"
+           for p in sorted(paths) for n in sorted(names) if mentions(tree.read(p), n)]
+    out += [f"{p} writes a job key or name with escapes, which this guard cannot read; write it plainly"
+            for p in sorted(paths) if escaped_names(tree.read(p))]
+    return out
 
 
 def judge_changes(base, head) -> list[str]:
@@ -1248,6 +1245,8 @@ def self_test(mutants: bool) -> int:
             ("GAP_CHECKS bound a second time",
              lambda r: (r / "tools/check_repo.py").write_text((r / "tools/check_repo.py").read_text(encoding="utf-8")
                                                              + "\nGAP_CHECKS = []\n", encoding="utf-8")),
+            ("GAP_CHECKS sliced where it runs",
+             lambda r: replace_once(r, "tools/check_repo.py", "check_indexes] + GAP_CHECKS:", "check_indexes] + GAP_CHECKS[:0]:")),
             ("GAP_CHECKS changed after it is bound",
              lambda r: (r / "tools/check_repo.py").write_text((r / "tools/check_repo.py").read_text(encoding="utf-8")
                                                              + "\nGAP_CHECKS.clear()\n", encoding="utf-8")),
