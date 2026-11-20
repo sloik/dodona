@@ -5,7 +5,7 @@
 ANSWERS.json holds `manifest` (the manifest to send; its echo is copied from hello unless
 `wrong_echo` is true), `checks` (for obligation.check, per obligation: `verdict`, `runs`, `by_exit` (passed when
 the report's exit status is 0, failed otherwise), `strength_rank`, `no_tools_in_run`, `late_ms`, `edit_input` (a file changed while the check runs), `final_at_start`,
-`strength_class`, `tool_digest`, `bad_input_identity`, `extra_input`, `run_platform`, `wall_ms`, `wrong_id_at_result`),
+`strength_class`, `tool_digest`, `missing_input`, `neither_or_both`, `bad_input_identity`, `extra_input`, `run_platform`, `wall_ms`, `wrong_id_at_result`),
 and, as before, 
 `wrong_echo` is true) and, for each capability, the body to answer with; under `raw`, for a
 capability, a line to send as it is instead, with %ID% replaced by the request's id; `delay_ms`, a
@@ -29,6 +29,9 @@ def check_answer(script: dict, body: dict) -> dict:
     if body.get("op") == "start":
         name = body["obligation"]["name"]
         STARTED[CURRENT_ID[0]] = [name, body, 0]
+        if script.get(name, {}).get("neither_or_both"):
+            run = describe(script, body)
+            return {"next": run, "final": {"verdict": "passed", "strength": {"class": "c", "rank": "bounded"}}}
         if script.get(name, {}).get("final_at_start"):
             return {"final": {"verdict": "passed", "strength": {"class": "c", "rank": "bounded"}}}  # no run behind it
         return {"next": describe(script, body)}
@@ -74,6 +77,8 @@ def describe_run(script: dict, start: dict) -> dict:
     inputs = [dict(i) for i in start["inputs"]]
     if plan.get("bad_input_identity"):
         inputs[0]["identity"] = "sha256:" + "1" * 64  # not the identity the start gave
+    if plan.get("missing_input"):
+        inputs = [i for i in inputs if i["path"] not in start["obligation"].get("targets", [])]  # a file the obligation names, left out
     if plan.get("extra_input"):
         inputs.append({"path": "m/zz.txt", "identity": "sha256:" + "2" * 64})  # a file the start did not give
     platform = dict(start["platform"], os="other") if plan.get("run_platform") else start["platform"]

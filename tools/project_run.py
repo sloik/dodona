@@ -18,6 +18,7 @@ import pathlib
 import subprocess
 import sys
 import time
+import unicodedata
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import canonical  # noqa: E402
@@ -33,20 +34,26 @@ SESSION_REASONS = {"deadline", "closed", "framing", "too-long", "encoding", "mal
 LOCK_WAIT_S = 60
 
 
+def same_name(a: str, b: str) -> bool:
+    """Whether two relative paths could name one file on a disk that ignores case or Unicode normalization."""
+    fold = lambda s: unicodedata.normalize("NFC", unicodedata.normalize("NFC", s).casefold())
+    return fold(a) == fold(b)
+
+
 def check_run_input(asked) -> None:
     """The fields a run adds to the status command's input, checked in step 1 before anything is started."""
     if not isinstance(asked, dict):
         return  # the status command's own check refuses it
     rel, owner = asked.get("ledger"), asked.get("owner_ledger")
     listed = asked.get("ledgers") if isinstance(asked.get("ledgers"), list) else []
-    # Compared without case too: on a disk that ignores case, Records/owner.ledger is the owner's ledger.
-    if not ps.relpath_ok(rel) or rel not in listed or (isinstance(owner, str) and rel.casefold() == owner.casefold()):
+    # Compared as a disk that ignores case and Unicode normalization would: there Records/owner.ledger is the owner's.
+    if not ps.relpath_ok(rel) or rel not in listed or (isinstance(owner, str) and same_name(rel, owner)):
         raise Stop("bad-input", "ledger must be a relative path listed among ledgers, and not the owner's ledger")
     executor = asked.get("executor")
     if not (isinstance(executor, list) and executor and all(isinstance(x, str) for x in executor)):
         raise Stop("bad-input", "executor must be a non-empty list of strings")
-    if "transcript" in asked and (not ps.relpath_ok(asked["transcript"]) or asked["transcript"] in listed
-                                  or asked["transcript"] in (owner, asked.get("project"))):
+    if "transcript" in asked and (not ps.relpath_ok(asked["transcript"])
+                                  or any(isinstance(x, str) and same_name(asked["transcript"], x) for x in [*listed, owner, asked.get("project")])):
         raise Stop("bad-input", "transcript, where given, is a relative path that is no ledger and not the project file")
     root = pathlib.Path(asked["root"]) if isinstance(asked.get("root"), str) else None
     if root is None or not root.is_dir():

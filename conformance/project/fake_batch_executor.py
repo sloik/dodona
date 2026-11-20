@@ -7,7 +7,7 @@ Reads `{"runs": [{"number", "run_key", "run"}]}` on standard input, appends what
 exited on the run's platform with the run's tools. SCRIPT.json's `mode` breaks that in one way: `not-ended`,
 `exit-1`, `missing-report`, `extra-report`, `repeated-report`, `unavailable`, `crlf`, `wrong-platform`, `exit-status-1`
 (every run exited with status 1), `exit-by-input` (a run reading m/c.txt exited with 1), `timed-out-end`,
-`slow` (answers after six seconds), `tools-ran-empty`, `tools-ran-null-name`, `non-object-report`, `bom`, `trailing` (a second line after the answer). It runs nothing.
+`slow` (answers after six seconds), `tools-ran-empty`, `tools-ran-null-name`, `tools-ran-other-digest`, `non-object-report`, `bom`, `trailing` (a second line after the answer). It runs nothing.
 """
 from __future__ import annotations
 
@@ -30,7 +30,8 @@ def main() -> int:
         report = {"end": {"unavailable": "unavailable", "timed-out-end": "timed-out"}.get(mode, "exited"), "exit_status": 1 if failing else 0,
                   "platform": {"os": "other", "arch": "x"} if mode == "wrong-platform" else run["platform"],
                   "tools_ran": [] if mode == "tools-ran-empty" else
-                  [dict(t, name=None) for t in run["tools"]] + run["tools"] if mode == "tools-ran-null-name" else run["tools"], "isolation": "best-effort", "outputs": []}
+                  [dict(t, name=None) for t in run["tools"]] + run["tools"] if mode == "tools-ran-null-name" else
+                  [dict(t, digest="sha256:" + "e" * 64) for t in run["tools"]] if mode == "tools-ran-other-digest" else run["tools"], "isolation": "best-effort", "outputs": []}
         reports.append({"run_key": item["run_key"], "report": report})
     if mode == "missing-report" and reports:
         reports.pop(0)
