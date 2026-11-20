@@ -5,4 +5,5 @@ Reference providers are examples of the [protocol](../protocol/README.md); none 
 | Provider | Name in its manifest | Capabilities | What it reads |
 |---|---|---|---|
 | [tlc/](tlc/) | `dodona.tla` | `obligation.enumerate`, `obligation.check` | Each model folder's `expected.json`, and what the model checker printed |
+| [node-test/](node-test/) | `dodona.node-test` | `obligation.enumerate`, `obligation.check` | Each test file's top-level `test('name', ...)` calls, and what Node's test runner printed |
 | [intents/](intents/) | `dodona.intent.markdown` | `intent.index` | `intents/*.md`, refusing a file that could be read more than one way |
