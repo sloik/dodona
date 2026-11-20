@@ -34,11 +34,15 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 JUDGES = (("ledger", "run_ledger_cases.py", []), ("core-key", "run_key_vectors.py", ["key"]),
           ("attest", "run_attest_check.py", ["scenario"]), ("harness", "run_harness_check.py", ["scenario"]),
           ("input", "run_input_cases.py", []), ("session", "run_provider_cases.py", ["session"]),
-          ("host-check", "run_check_cases.py", ["check"]))
+          ("host-check", "run_check_cases.py", ["check"]), ("status", "run_status_cases.py", ["status"]))
+# The status judge recomputes each report with another kernel's scenario command, so that the kernel judged does
+# not certify its own report: here the second kernel's.
+OTHER_KERNEL = ["node", str(pathlib.Path(__file__).resolve().parent.parent / "kernel2" / "dodona-kernel2.js")]
 # The host judges take about a minute each, so a defect in the host's own files is tried first on the
 # judge meant for that file: the check judge for the check, the session judge for the session.
 FIRST_JUDGE = {"src/host.rs": "host-check", "src/jsonread.rs": "host-check",
-               "src/session.rs": "session", "src/proc.rs": "session", "src/wire.rs": "session"}
+               "src/session.rs": "session", "src/proc.rs": "session", "src/wire.rs": "session",
+               "src/project_status.rs": "status"}
 
 
 def passes_kit(kernel_dir: pathlib.Path, defect_file: str | None = None) -> tuple[bool, list[str]]:
@@ -60,10 +64,11 @@ def passes_kit(kernel_dir: pathlib.Path, defect_file: str | None = None) -> tupl
     judges = list(JUDGES)
     if defect_file in FIRST_JUDGE:
         first = FIRST_JUDGE[defect_file]
-        judges.sort(key=lambda judge: (judge[0] != first, judge[0] not in ("session", "host-check")))
+        judges.sort(key=lambda judge: (judge[0] != first, judge[0] not in ("session", "host-check", "status")))
     # The ledger, the core keys and freshly made check values are judged by their own tools.
     for label, tool, extra in judges:
-        other = subprocess.run([sys.executable, str(ROOT / "tools" / tool), "--", str(binary)] + extra, capture_output=True, text=True)
+        before = ["--kernel"] + OTHER_KERNEL if label == "status" else []
+        other = subprocess.run([sys.executable, str(ROOT / "tools" / tool)] + before + ["--", str(binary)] + extra, capture_output=True, text=True)
         if other.returncode != 0:
             ok = False
             failing.append(f"{label}-judge")
