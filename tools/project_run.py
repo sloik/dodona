@@ -54,7 +54,7 @@ def check_run_input(asked) -> None:
         raise Stop("bad-input", "executor must be a non-empty list of strings, none holding a NUL")
     if "transcript" in asked and (not ps.relpath_ok(asked["transcript"])
                                   or any(isinstance(x, str) and same_name(asked["transcript"], x)
-                                         for x in [*listed, *[l + ".lock" for l in listed if isinstance(l, str)], owner, asked.get("project")])):
+                                         for x in [*listed, *[l + ".lock" for l in [*listed, owner] if isinstance(l, str)], owner, asked.get("project")])):
         raise Stop("bad-input", "transcript, where given, is a relative path that is no ledger, no ledger's lock and not the project file")
     root = pathlib.Path(asked["root"]) if isinstance(asked.get("root"), str) else None
     if root is None or not root.is_dir():
@@ -99,7 +99,7 @@ def run_batch(root: pathlib.Path, executor: list[str], batch: list[dict]):
                          ensure_ascii=False).encode("utf-8") + b"\n"
     walls = [r["run"].get("limits", {}).get("wall_ms") if isinstance(r["run"].get("limits"), dict) else None for r in batch]
     # At least each run's wall_ms plus 60 seconds, at most 24 hours; a run stating no wall_ms is waited 24 hours.
-    wait = 86_400 if any(type(w) is not int for w in walls) else min(max(walls) / 1000 + 60, 86_400)
+    wait = 86_400 if any(type(w) is not int for w in walls) else min(max(max(walls), 0) / 1000 + 60, 86_400)  # below 0 is read as 0
     try:
         tree = host.Session._start(executor, root)  # in root, in a process group or job of its own
     except OSError:
