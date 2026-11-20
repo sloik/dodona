@@ -3,7 +3,7 @@
     python tools/check_docs.py                                          # every repository-wide check
     python tools/check_docs.py self-test                                # plant a fault for each check; each must fail
     python tools/check_docs.py diff --base REV [--head REV] [--pr-body FILE] [--repo DIR]
-    python tools/check_docs.py pins-only --base REV --head REV [--repo DIR]   # exit 0 if only pinned versions changed
+    python tools/check_docs.py pins-only --base REV --head REV [--merged] [--repo DIR]   # exit 0 if only pinned versions changed
     python tools/check_docs.py jobs --head REV --own WORKFLOW --name NAME... [--repo DIR]   # no other workflow may use these job names
 
 The usual way documents go wrong here is quiet: code changes and the text that
@@ -1007,11 +1007,16 @@ def _same_pin(old: str, new: str) -> bool:
     return bool(a and b) and (a.group(1), a.group(2), a.group(4)) == (b.group(1), b.group(2), b.group(4))
 
 
-def pin_lines_only(paths: list[str], patch: str) -> bool:
+def pin_lines_only(paths: list[str], patch: str, judging_allowed: bool = False) -> bool:
     """Whether a change only moves pinned versions in workflows: what an automatic update of pinned
     versions changes, and nothing a document describes. Each removed line must be replaced, in the same
     place, by one line pinning the same thing at another version; no line is only added or only removed."""
     if not paths or any(not re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p) for p in paths):
+        return False
+    # Moving a pin of a file that judges changes is a change to how changes are judged: on a pull request it fails
+    # like any other, so the owner merges it. Only once on main (judging_allowed) is it taken for a pin update, so a
+    # merged update does not turn main red.
+    if not judging_allowed and any(p in JUDGING_FILES for p in paths):
         return False
     hunks: list[tuple[list[str], list[str]]] = []
     with_hunks: set[str] = set()
@@ -1045,88 +1050,97 @@ def pin_lines_only(paths: list[str], patch: str) -> bool:
                                for old, new in hunks)
 
 
-def workflow_jobs(text: str) -> set[str]:
-    """The ids and names of a workflow's jobs, read from the block under its top-level `jobs:`. A required
-    check is matched by name, so these are what another workflow could take over. A name GitHub would
-    compute (one holding `${{`) or one written as a block (`>` or `|`) is kept as written, so that
-    job_clashes can treat it as able to be anything its fixed parts allow."""
-    found, inside, job_indent, key_indent, pending = set(), False, None, None, None
-    for line in text.replace("\r\n", "\n").split("\n"):
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        indent = len(line) - len(line.lstrip())
-        if pending is not None and (indent == 0 or not inside):
-            found.add(pending)
-            pending = None
-        if indent == 0:
-            inside = re.fullmatch(r"([\"']?)jobs\1\s*:\s*(#.*)?", line.rstrip()) is not None
-            job_indent = key_indent = None
-            continue
-        if not inside:
-            continue
-        if job_indent is None:
-            job_indent = indent
-        if indent == job_indent:
-            m = re.fullmatch(r"\s*([\"']?)([^\"':#]+)\1\s*:\s*(#.*)?", line)
-            if m:
-                found.add(m.group(2).strip())
-            key_indent = None
-            continue
-        if key_indent is None:
-            key_indent = indent
-        if pending is not None:
-            # A plain or quoted name may go on over the next, deeper lines: it cannot be read here.
-            found.add(">" if indent > key_indent and not re.match(r"\s*[\w\"'-]+\s*:", line) else pending)
-            pending = None
-        m = re.fullmatch(r"\s*([\"']?)name\1\s*:\s*(.*)", line)
-        if indent == key_indent and m:
-            value = m.group(2).strip()
-            if value[:1] in ("\"", "'"):
-                end = value.find(value[0], 1)
-                value = value[1:end] if end > 0 else ">"
-            else:
-                value = re.split(r"\s#", value, maxsplit=1)[0].strip()
-            pending = value
-    if pending is not None:
-        found.add(pending)
-    return found
+def _yaml_reader():
+    """A YAML parser, so that a workflow is read as GitHub reads it: anchors, aliases, tags, escapes, flow style,
+    explicit keys and block scalars all resolved. CI installs it pinned by hash (.github/yaml-reader.txt); without
+    it the guard cannot run, which is never a pass."""
+    try:
+        from ruamel.yaml import YAML
+    except ImportError:
+        raise CannotRun("no YAML reader: install the version .github/yaml-reader.txt pins (ruamel.yaml)") from None
+    reader = YAML(typ="safe", pure=True)
+    reader.allow_duplicate_keys = False
+    return reader
+
+
+def workflow_view(text: str) -> tuple[set[str], bool]:
+    """The ids and names of a workflow's jobs, and whether its token may post checks or statuses. Raises ValueError
+    when the text is not a workflow this can read."""
+    try:
+        data = _yaml_reader().load(text)
+    except CannotRun:
+        raise
+    except Exception as err:  # noqa: BLE001 - any text the parser refuses is a workflow nobody can vouch for
+        raise ValueError(f"not readable as YAML: {type(err).__name__}") from None
+    if not isinstance(data, dict):
+        raise ValueError("not a mapping")
+    jobs = data.get("jobs", {})
+    if not isinstance(jobs, dict):
+        raise ValueError("jobs is not a mapping")
+    found = set()
+    writes = _writes_status(data.get("permissions"))
+    for job_id, job in jobs.items():
+        found.add(str(job_id))
+        if not isinstance(job, dict):
+            raise ValueError(f"job {job_id!r} is not a mapping")
+        if "name" in job:
+            if not isinstance(job["name"], str):
+                raise ValueError(f"job {job_id!r} has a name that is not text")
+            found.add(job["name"])
+        writes = writes or _writes_status(job.get("permissions"))
+    return found, writes
+
+
+def _writes_status(permissions) -> bool:
+    if isinstance(permissions, str):
+        return permissions.strip() == "write-all"
+    if isinstance(permissions, dict):
+        return any(str(k).strip() in ("checks", "statuses") and str(v).strip() == "write" for k, v in permissions.items())
+    return False
 
 
 def could_be(written: str, name: str) -> bool:
-    """Whether a job name as written could be shown as `name`: exactly, or, when GitHub computes it or it is
-    a block, by any text in the places it does not fix."""
-    if written.startswith((">", "|")):
-        return True
+    """Whether a job name as written could be shown as `name`: exactly, with matrix values GitHub adds after a
+    plain name, or, when GitHub computes it, by any text in the places it does not fix."""
     if "${{" not in written:
-        # GitHub adds a matrix job's values after a plain name, in brackets.
         return written == name or name.startswith(written + " (")
-    parts = re.split(r"\$\{\{.*?\}\}", written)
+    parts = re.split(r"\$\{\{.*?\}\}", written, flags=re.S)
     return re.fullmatch(".*".join(re.escape(p) for p in parts), name, flags=re.S) is not None
 
 
-WRITES_STATUS = re.compile(r"""\b(checks|statuses)["']?\s*:\s*["']?write\b|\bwrite-all\b""")
-# YAML this check does not read: anchors, aliases, tags and merge keys can carry a name or a permission anywhere.
-UNREAD_YAML = re.compile(r"""(^|[\s\[{,:-])&[\w-]+|(:|-|\[|\{|,)\s*\*[\w-]+|!!|(:\s*)![\w]|<<\s*:""", re.M)
-
-
 def job_clashes(workflows: dict[str, str], own: str, names: set[str]) -> list[str]:
-    """Other workflows that define a job that could be shown under one of `names`, or whose token could post a
-    check or a status of any name. The repository's default token can only read, so a workflow needs one of
-    these permissions written out to post one."""
+    """Other workflows that define a job that could be shown under one of `names`, whose token could post a check
+    or a status of any name, or that cannot be read. The repository's default token can only read, so a workflow
+    needs one of those permissions written out to post one."""
     found = []
     for path, text in sorted(workflows.items()):
         if path == own:
+            # The judging workflow itself, as the change has it: if it also ran on an event that runs the change's
+            # own copy (pull_request, workflow_run and the like), that copy could pass under the protected name.
+            try:
+                data = _yaml_reader().load(text)
+                events = data.get("on", data.get(True)) if isinstance(data, dict) else None
+                names_of = set(events) if isinstance(events, dict) else {events} if isinstance(events, str) else set(events or [])
+            except CannotRun:
+                raise
+            except Exception:  # noqa: BLE001
+                names_of = {"unreadable"}
+            if not names_of <= {"pull_request_target", "push"}:
+                found.append(f"{own} as the change has it runs on {sorted(map(str, names_of))}: only pull_request_target and push "
+                             "keep the change's own copy from running under its name")
             continue
-        for written in sorted(workflow_jobs(text)):
+        try:
+            jobs, writes = workflow_view(text)
+        except ValueError as err:
+            found.append(f"{path} cannot be read as a workflow ({err}), so a job in it could take {own}'s name")
+            continue
+        for written in sorted(jobs):
             for name in sorted(names):
                 if could_be(written, name):
                     found.append(f"{path} defines a job {written!r} that could be shown as {name!r}, as {own} names its job: "
                                  "a required check of that name could be passed by it")
-        if WRITES_STATUS.search(text):
+        if writes:
             found.append(f"{path} gives its token permission to post checks or statuses: it could post one named as {own}'s job")
-        if UNREAD_YAML.search(text):
-            found.append(f"{path} uses YAML anchors, aliases, tags or merge keys, which this check does not read: "
-                         "a job name or a permission could hide in them")
     return found
 
 
@@ -1136,11 +1150,11 @@ def head_workflows(root: pathlib.Path, head: str) -> dict[str, str]:
             if re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p)}
 
 
-def pins_only(root: pathlib.Path, base: str, head: str, env: dict | None = None) -> bool:
+def pins_only(root: pathlib.Path, base: str, head: str, env: dict | None = None, judging_allowed: bool = False) -> bool:
     merge_base = git(root, "merge-base", base, head, env=env).decode().strip()
     names = git(root, "diff", "--no-renames", "--name-only", "-z", merge_base, head, env=env).decode("utf-8").split("\0")
     patch = git(root, "diff", "--no-renames", "-U0", "--no-color", merge_base, head, env=env).decode("utf-8", "replace")
-    return pin_lines_only([n for n in names if n], patch)
+    return pin_lines_only([n for n in names if n], patch, judging_allowed)
 
 
 def diff(root: pathlib.Path, base: str, head: str | None, pr_body: str | None,
@@ -1585,36 +1599,74 @@ def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
             ("a file outside the workflows", wf + ["tools/host.py"], h(bump), False),
             ("a ref that is a branch, which can move", wf, h("@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+      - uses: a/b@main\n"), False),
             ("a short commit", wf, h("@@ -1 +1 @@\n-      - uses: a/b@1111 # v1\n+      - uses: a/b@2222 # v2\n"), False),
-            ("a pin in the docs workflow too, as one update moves every copy", wf + [".github/workflows/docs.yml"],
-             h(bump) + h(bump, ".github/workflows/docs.yml"), True),
+            ("a pin in the docs workflow, on a pull request, which the owner merges", wf + [".github/workflows/docs.yml"],
+             h(bump) + h(bump, ".github/workflows/docs.yml"), False),
             ("nothing", wf, "", False)):
         if pin_lines_only(paths, patch) != want:
             problems.append(f"self-test: pin_lines_only takes {what} for {'a' if not want else 'no'} change of pinned versions only")
+    docs_bump = h(bump) + h(bump, ".github/workflows/docs.yml")
+    if not pin_lines_only(wf + [".github/workflows/docs.yml"], docs_bump, judging_allowed=True):
+        problems.append("self-test: a merged update that moves the docs workflow's pin with the others is not taken for a pin update on main")
     own = ".github/workflows/docs.yml"
     workflows = {p: repo.read(p) for p in repo.glob(".github/workflows/*.yml")}
-    names = workflow_jobs(workflows.get(own, ""))
-    if len(names) < 2 or job_clashes(workflows, own, names):
-        problems.append(f"self-test: the docs job's id and name are not both read, or another workflow already uses them: {sorted(names)}")
-    for what, edit in (("the same job name", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n}\n", 1)),
-                       ("the same job id", lambda s, n: s.replace("  checks:\n", f"  {n}:\n", 1)),
-                       ("the same name, quoted, with a comment after jobs", lambda s, n: s.replace("jobs:\n", "jobs: # all\n", 1).replace("  checks:\n", f"  checks:\n    name: \"{n}\"\n", 1)),
-                       ("the same name in a job indented four spaces", lambda s, n: s.replace("jobs:\n", f"jobs:\n    other:\n        name: {n}\n        runs-on: x\n", 1)),
-                       ("a name GitHub computes", lambda s, n: s.replace("  checks:\n", "  checks:\n    name: ${{ 'x' }}\n", 1)),
-                       ("a name with a matrix value in it", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n.split(' ')[0]} ${{{{ matrix.w }}}}\n", 1)),
-                       ("a name written as a block", lambda s, n: s.replace("  checks:\n", "  checks:\n    name: >-\n      x\n", 1)),
-                       ("a token that can post statuses", lambda s, n: s.replace("jobs:\n", "permissions:\n  statuses: write\njobs:\n", 1)),
-                       ("a quoted permission to post checks", lambda s, n: s.replace("  checks:\n", "  checks:\n    permissions:\n      checks: 'write'\n", 1)),
-                       ("a name over two lines", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n[:9]}\n      {n[9:]}\n", 1)),
-                       ("a name with a comment holding a quote", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n} # it's\n", 1)),
-                       ("a plain name GitHub extends with matrix values", lambda s, n: s.replace("  checks:\n", f"  checks:\n    name: {n.split(' (')[0]}\n", 1)),
-                       ("a name from an anchor", lambda s, n: s.replace("  checks:\n", f"  checks:\n    env:\n      N: &n x\n    name: *n\n", 1))):
-        for name in sorted(names):
-            if " " in name and what.endswith("id") or " " not in name and what.endswith("name") \
-                    or " " not in name and what.startswith(("the same name", "a name", "a plain name")):
-                continue
-            planted = {**workflows, ".github/workflows/checks.yml": edit(workflows[".github/workflows/checks.yml"], name)}
-            if not job_clashes(planted, own, names):
-                problems.append(f"self-test: another workflow with {what} as the docs job was not noticed")
+    try:
+        _yaml_reader()
+        have_yaml = True
+    except CannotRun:
+        if with_git:
+            raise  # the whole self-test, as CI runs it, needs the parser: without it nothing about jobs is shown
+        have_yaml = False  # run from the repository checks with no parser: the job guard is left to the whole self-test
+    if have_yaml:
+        names, _ = workflow_view(workflows.get(own, ""))
+        if len(names) < 2 or job_clashes(workflows, own, names):
+            problems.append(f"self-test: the docs job's id and name are not both read, or another workflow already uses them: {sorted(names)}")
+        # Each form a workflow could take over the docs job's name in, as a whole new valid workflow. Each must be
+        # noticed for what it is (`could be shown as`, or a permission), not merely as unreadable.
+        head = "on: pull_request\npermissions:\n  contents: read\n"
+        job = "    runs-on: ubuntu-26.04\n    steps:\n      - run: 'true'\n"
+        hex_escaped = lambda n: "".join(f"\\x{ord(ch):02x}" if ch == " " else ch for ch in n)  # noqa: E731
+        forms = [
+            ("the same job id", "id", lambda n: head + f"jobs:\n  {n}:\n" + job, "could be shown"),
+            ("the same job name", "name", lambda n: head + f"jobs:\n  other:\n    name: {n}\n" + job, "could be shown"),
+            ("the same name, quoted, after a comment", "name", lambda n: head + f"jobs: # all\n  other:\n    name: \"{n}\" # it's\n" + job, "could be shown"),
+            ("a job indented four spaces", "name", lambda n: head + f"jobs:\n    other:\n        name: {n}\n        runs-on: x\n", "could be shown"),
+            ("a job written as a flow mapping", "name", lambda n: head + f"jobs:\n  other: {{name: '{n}', runs-on: x}}\n", "could be shown"),
+            ("the whole jobs block in flow style", "name", lambda n: head + f"jobs: {{other: {{name: '{n}', runs-on: x}}}}\n", "could be shown"),
+            ("a name with escapes", "name", lambda n: head + f"jobs:\n  other:\n    name: \"{hex_escaped(n)}\"\n" + job, "could be shown"),
+            ("a name with a tag", "name", lambda n: head + f"jobs:\n  other:\n    name: !!str {n}\n" + job, "could be shown"),
+            ("a name with a long tag", "name", lambda n: head + f"jobs:\n  other:\n    name: !<tag:yaml.org,2002:str> {n}\n" + job, "could be shown"),
+            ("a name as an explicit key", "name", lambda n: head + f"jobs:\n  other:\n    ? name\n    : {n}\n" + job, "could be shown"),
+            ("a name over two lines", "name", lambda n: head + f"jobs:\n  other:\n    name: {n[:9]}\n      {n[9:]}\n" + job, "could be shown"),
+            ("a name written as a block", "name", lambda n: head + f"jobs:\n  other:\n    name: >-\n      {n}\n" + job, "could be shown"),
+            ("a name from an anchor", "name", lambda n: head + f"env:\n  N: &n {n}\njobs:\n  other:\n    name: *n\n" + job, "could be shown"),
+            ("a name GitHub computes", "name", lambda n: head + "jobs:\n  other:\n    name: ${{ 'x' }}\n" + job, "could be shown"),
+            ("a name with a matrix value in it", "name", lambda n: head + f"jobs:\n  other:\n    name: {n.split(' ')[0]} ${{{{ matrix.w }}}}\n" + job, "could be shown"),
+            ("a plain name GitHub extends with matrix values", "name", lambda n: head + f"jobs:\n  other:\n    name: {n.split(' (')[0]}\n" + job, "could be shown"),
+            ("a token that can post statuses", "any", lambda n: "on: pull_request\npermissions:\n  statuses: write\njobs:\n  other:\n" + job, "permission"),
+            ("a quoted, escaped permission to post checks", "any", lambda n: head + "jobs:\n  other:\n    permissions:\n      \"\\x63hecks\": \"wr\\x69te\"\n" + job, "permission"),
+            ("a permission written as a block", "any", lambda n: head + "jobs:\n  other:\n    permissions:\n      statuses: >-\n        write\n" + job, "permission"),
+            ("permission to write everything", "any", lambda n: "on: pull_request\npermissions: write-all\njobs:\n  other:\n" + job, "permission"),
+            ("a workflow the parser cannot read", "any", lambda n: head + "jobs:\n  other: [unclosed\n", "cannot be read"),
+            ("a key given twice", "any", lambda n: head + "jobs:\n  other:\n    name: x\n    name: y\n" + job, "cannot be read"),
+        ]
+        for what, kind, text_of, must in forms:
+            for name in sorted(names):
+                if kind == "id" and " " in name or kind == "name" and " " not in name:
+                    continue
+                planted = {**workflows, ".github/workflows/planted.yml": text_of(name)}
+                if not any(must in c for c in job_clashes(planted, own, names)):
+                    problems.append(f"self-test: another workflow with {what} was not noticed as it should be ({must})")
+                if kind == "any":
+                    break
+            # The judging workflow, changed to run on an event that runs the change's own copy.
+        own_changed = {**workflows, own: workflows[own].replace("pull_request_target:", "pull_request:\n  pull_request_target:", 1)}
+        if not any("runs on" in c for c in job_clashes(own_changed, own, names)):
+            problems.append("self-test: the docs workflow changed to run on pull_request was not noticed")
+    # Ordinary text in a run block is not mistaken for anything.
+        calm = {**workflows, ".github/workflows/planted.yml": head + "jobs:\n  other:\n    runs-on: x\n    steps:\n"
+                "      - run: python3 -c \"import sys; print(1, *sys.argv)\"\n      - run: sleep 5 &wait_pid=1\n      - run: 'echo \"!important ? 1: !b\"'\n"}
+        if job_clashes(calm, own, names):
+            problems.append(f"self-test: ordinary run lines were taken for a clash: {job_clashes(calm, own, names)}")
     for raw, shown in (("a\nPROBLEM forged", "a\\nPROBLEM forged"), ("a\r::error::x", "a\\r: :error: :x"), ("a\x1b[2Kb", "a?[2Kb")):
         if printable(raw) != shown:
             problems.append(f"self-test: output text {raw!r} is printed as {printable(raw)!r}, not {shown!r}")
@@ -1651,9 +1703,15 @@ def main() -> int:
     two.add_argument("--base", required=True)
     two.add_argument("--head", required=True)
     two.add_argument("--repo", type=pathlib.Path, default=ROOT)
+    two.add_argument("--merged", action="store_true",
+                     help="the change is already on main: a pin moved in a file that judges changes is a pin update too")
     args = ap.parse_args()
     if args.command == "self-test":
-        found, notes = self_test(), []
+        try:
+            found, notes = self_test(), []
+        except CannotRun as err:
+            print(f"COULD NOT RUN {err}")
+            return 2
     elif args.command == "jobs":
         try:
             clashes = job_clashes(head_workflows(args.repo.resolve(), args.head), args.own, set(args.name))
@@ -1666,7 +1724,7 @@ def main() -> int:
         return 1 if clashes else 0
     elif args.command == "pins-only":
         try:
-            only = pins_only(args.repo.resolve(), args.base, args.head)
+            only = pins_only(args.repo.resolve(), args.base, args.head, judging_allowed=args.merged)
         except CannotRun as err:
             print(f"COULD NOT RUN {err}")
             return 2

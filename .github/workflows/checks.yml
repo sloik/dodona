@@ -42,7 +42,12 @@ jobs:
       - name: Run repository checks
         run: ${{ matrix.python }} tools/check_repo.py
       - name: Plant a fault for every document check, and judge a throwaway repository through git
-        run: ${{ matrix.python }} tools/check_docs.py self-test
+        shell: bash
+        run: |
+          ${{ matrix.python }} -m venv .venv-yaml
+          if [ -x .venv-yaml/bin/python ]; then P=.venv-yaml/bin/python; else P=.venv-yaml/Scripts/python.exe; fi
+          "$P" -m pip install --quiet --no-deps --require-hashes --only-binary=:all: -r .github/yaml-reader.txt
+          "$P" -I tools/check_docs.py self-test
       - name: Validate schemas, guide examples and policy with a JSON Schema validator
         if: matrix.os == 'ubuntu-26.04'
         run: |

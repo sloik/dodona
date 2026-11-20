@@ -78,11 +78,16 @@ jobs:
             exit 1
           fi
           failed=0
-          python3 -I tools/check_docs.py jobs --repo . --head "$HEAD" --own .github/workflows/docs.yml \
+          # The guard reads workflows with a YAML parser, installed from the base, pinned by its hash.
+          python3 -I -m venv "$RUNNER_TEMP/yaml"
+          "$RUNNER_TEMP/yaml/bin/python" -I -m pip install --quiet --no-deps --require-hashes --only-binary=:all: -r .github/yaml-reader.txt
+          "$RUNNER_TEMP/yaml/bin/python" -I tools/check_docs.py jobs --repo . --head "$HEAD" --own .github/workflows/docs.yml \
             --name documents-main-checker --name "documents follow code (judged by main)" || failed=1
           # An update that only moves pinned actions or runner images needs no document. The checker reads
           # the change itself to decide that; for a pull request, it must also come from the update bot.
-          if python3 -I tools/check_docs.py pins-only --repo . --base "$BASE" --head "$HEAD" \
+          # Once merged, a pin moved in docs.yml with the others is a pin update; on a pull request it is not.
+          MERGED=""; if [ "$EVENT" = push ]; then MERGED="--merged"; fi
+          if python3 -I tools/check_docs.py pins-only --repo . --base "$BASE" --head "$HEAD" $MERGED \
              && { [ "$EVENT" = push ] || [ "$PR_AUTHOR" = "renovate[bot]" ]; }; then
             echo "NOTE not judged for documents: the change only moves pinned versions of actions or runner images."
             exit "$failed"
