@@ -29,9 +29,6 @@ def check_answer(script: dict, body: dict) -> dict:
     if body.get("op") == "start":
         name = body["obligation"]["name"]
         STARTED[CURRENT_ID[0]] = [name, body, 0]
-        if script.get(name, {}).get("neither_or_both"):
-            run = describe(script, body)
-            return {"next": run, "final": {"verdict": "passed", "strength": {"class": "c", "rank": "bounded"}}}
         if script.get(name, {}).get("final_at_start"):
             return {"final": {"verdict": "passed", "strength": {"class": "c", "rank": "bounded"}}}  # no run behind it
         return {"next": describe(script, body)}
@@ -43,6 +40,9 @@ def check_answer(script: dict, body: dict) -> dict:
             f.write("changed while it was checked\n")
     if plan.get("late_ms"):
         time.sleep(plan["late_ms"] / 1000)  # answers the run's report later than the deadline
+    if plan.get("neither_or_both"):
+        # After a run, so that only the neither-or-both rule refuses it (a final at the start is refused anyway).
+        return {"next": describe(script, start), "final": {"verdict": "passed", "strength": {"class": "c", "rank": "bounded"}}}
     if done + 1 < plan.get("runs", 1):
         return {"next": describe(script, start)}
     verdict = plan.get("verdict", "passed")
