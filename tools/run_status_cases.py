@@ -213,7 +213,9 @@ def requests(aux: pathlib.Path) -> dict:
     for record in sorted(aux.glob("*.record.jsonl")):
         lines = [json.loads(l) for l in record.read_text(encoding="utf-8").splitlines() if l.strip()]
         # hello as sent, but for its echo, which a host chooses: its protocol and limits are compared.
-        seen[record.name] = [{"type": m.get("type"), "capability": m.get("capability"), "body": m.get("body"),
+        # A run.result names its check by the id of the start request, which a host chooses: left out.
+        seen[record.name] = [{"type": m.get("type"), "capability": m.get("capability"),
+                              "body": ({k: v for k, v in m["body"].items() if k != "check"} if isinstance(m.get("body"), dict) else m.get("body")),
                               "protocol": m.get("protocol"), "limits": m.get("limits"), "deadline_ms": m.get("deadline_ms")} for m in lines]
     return seen
 
@@ -245,7 +247,7 @@ def run(command: list[str], case: dict, site: dict, preimages: dict, timeout: in
 
 
 def _preimages(case: dict, site: dict) -> dict:
-    bare = dict(case, ledgers=[], owner_ledger=None, input_edit=[], unreadable=[])
+    bare = dict(case, ledgers=[], owner_ledger=None, input_edit=[], unreadable=[], unreadable_mode={})
     ref, _, _ = run(REFERENCE, bare, site, {})
     view = (ref or {}).get("judged", {})
     found = {n: o["preimage"] for n, o in view.get("obligations", {}).items()}
@@ -429,6 +431,9 @@ VARIANT_BASES = ("an empty ledger has a report", "a project with two bindings, a
 
 
 def main() -> int:
+    # Case names hold characters a Windows console cannot show; they are printed escaped rather than crash the judge.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--kernel", nargs="+", required=True, help="a kernel command whose `scenario` recomputes the report")
     ap.add_argument("--variants", action="store_true",
