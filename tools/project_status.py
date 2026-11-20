@@ -27,6 +27,7 @@ SERVED = ("obligation.enumerate", "intent.index")
 UNREAD_CRITERIA = False  # set in step 7: a criterion declares what no status rule reads yet
 ENUMERATED: dict = {}  # step 5: each obligation's binding, as enumerated, and the files of F, for a run command
 TRANSCRIPT: list = []  # every message sent to and read from a provider, in order, for a run command that keeps one
+KEEP_OPEN: dict | None = None  # a run command sets this: step 5's sessions of bindings that check are kept open
 NOTHING = {"do": {"set_gate": {"intent": "", "criterion": "", "to": "hard"}}}
 
 
@@ -234,9 +235,15 @@ def obligations_of(root: pathlib.Path, site: dict, bindings: list[dict], claims:
         files = claims[binding["name"]]
         identity = {f["path"]: f["identity"] for f in files}
         sess = session(root, site, binding)
+        keep = KEEP_OPEN is not None and "obligation.check" in binding["capabilities"]
         try:
             body = ask(sess, "obligation.enumerate", {"binding": binding["name"], "definitions": [], "files": files})
-        finally:
+        except Stop:
+            sess.close()
+            raise
+        if keep:
+            KEEP_OPEN[binding["name"]] = sess  # a run command checks with this same session: the provider cannot change
+        else:
             sess.close()
         items, rejected = body.get("obligations"), body.get("rejected", [])
         # Each rule over every obligation of the answer, before the next rule.

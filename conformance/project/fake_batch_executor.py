@@ -6,7 +6,8 @@ Reads `{"runs": [{"number", "run_key", "run"}]}` on standard input, appends what
 (one line per batch), and answers `{"ended": true, "reports": [{"run_key", "report"}]}`, each report saying the run
 exited on the run's platform with the run's tools. SCRIPT.json's `mode` breaks that in one way: `not-ended`,
 `exit-1`, `missing-report`, `extra-report`, `repeated-report`, `unavailable`, `crlf`, `wrong-platform`, `exit-status-1`
-(the run exited with status 1). It runs nothing.
+(every run exited with status 1), `exit-by-input` (a run reading m/c.txt exited with 1), `timed-out-end`,
+`tools-ran-empty`, `non-object-report`, `bom`, `trailing` (a second line after the answer). It runs nothing.
 """
 from __future__ import annotations
 
@@ -23,9 +24,11 @@ def main() -> int:
     reports = []
     for item in asked["runs"]:
         run = item["run"]
-        report = {"end": "unavailable" if mode == "unavailable" else "exited", "exit_status": 1 if mode == "exit-status-1" else 0,
+        names = [i["path"] for i in run.get("inputs", [])]
+        failing = mode == "exit-status-1" or (mode == "exit-by-input" and "m/c.txt" in names)
+        report = {"end": {"unavailable": "unavailable", "timed-out-end": "timed-out"}.get(mode, "exited"), "exit_status": 1 if failing else 0,
                   "platform": {"os": "other", "arch": "x"} if mode == "wrong-platform" else run["platform"],
-                  "tools_ran": run["tools"], "isolation": "best-effort", "outputs": []}
+                  "tools_ran": [] if mode == "tools-ran-empty" else run["tools"], "isolation": "best-effort", "outputs": []}
         reports.append({"run_key": item["run_key"], "report": report})
     if mode == "missing-report" and reports:
         reports.pop(0)
@@ -33,8 +36,13 @@ def main() -> int:
         reports.append({"run_key": "sha256:" + "0" * 64, "report": reports[0]["report"] if reports else {}})
     if mode == "repeated-report" and reports:
         reports.append(reports[0])
+    if mode == "non-object-report" and reports:
+        reports[0] = {"run_key": reports[0]["run_key"], "report": "exited"}
     answer = {"ended": mode != "not-ended", "reports": reports}
-    sys.stdout.buffer.write(json.dumps(answer).encode("utf-8") + (b"\r\n" if mode == "crlf" else b"\n"))
+    line = json.dumps(answer).encode("utf-8")
+    if mode == "bom":
+        line = b"\xef\xbb\xbf" + line
+    sys.stdout.buffer.write(line + (b"\r\n" if mode == "crlf" else b"\n") + (b"anything after the first line\n" if mode == "trailing" else b""))
     sys.stdout.buffer.flush()
     return 1 if mode == "exit-1" else 0
 

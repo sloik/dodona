@@ -3,7 +3,8 @@
     python conformance/project/fixture_provider.py ANSWERS.json RECORD.jsonl
 
 ANSWERS.json holds `manifest` (the manifest to send; its echo is copied from hello unless
-`wrong_echo` is true), `checks` (for obligation.check: each obligation's scripted verdict and number of runs),
+`wrong_echo` is true), `checks` (for obligation.check, per obligation: `verdict`, `runs`, `by_exit` (passed when
+the report's exit status is 0, failed otherwise), `strength_rank`, `no_tools_in_run`, `late_ms`),
 and, as before, 
 `wrong_echo` is true) and, for each capability, the body to answer with; under `raw`, for a
 capability, a line to send as it is instead, with %ID% replaced by the request's id; `delay_ms`, a
@@ -31,12 +32,16 @@ def check_answer(script: dict, body: dict) -> dict:
     name, start, done = STARTED[body["check"]]
     STARTED[body["check"]][2] = done + 1
     plan = script.get(name, {})
+    if plan.get("late_ms"):
+        time.sleep(plan["late_ms"] / 1000)  # answers the run's report later than the deadline
     if done + 1 < plan.get("runs", 1):
         return {"next": describe(script, start)}
     verdict = plan.get("verdict", "passed")
+    if plan.get("by_exit"):
+        verdict = "passed" if body.get("report", {}).get("exit_status") == 0 else "failed"
     final = {"verdict": verdict}
     if verdict in ("passed", "failed"):
-        final["strength"] = {"class": "c", "rank": "bounded"}
+        final["strength"] = {"class": "c", "rank": plan.get("strength_rank", "bounded")}
     else:
         final["reason"] = "as the case scripts it"
     return {"final": final}
@@ -44,6 +49,8 @@ def check_answer(script: dict, body: dict) -> dict:
 
 def describe(script: dict, start: dict) -> dict:
     tools = [{"name": t["name"], "digest": t["digest"]} for t in start["tools"] if t["name"] == "checker"]
+    if script.get(start["obligation"]["name"], {}).get("no_tools_in_run"):
+        tools = []  # the program's tool is not in the run's own tools: host rule 4
     return {"program": {"tool": "checker", "path": "bin/check"}, "args": [], "inputs": start["inputs"], "outputs": [],
             "tools": tools, "platform": start["platform"], "limits": {"wall_ms": 10000}}
 

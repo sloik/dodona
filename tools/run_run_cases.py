@@ -19,6 +19,7 @@ reference, tools/project_run.py, run on their own copies. Most of what is judged
 from __future__ import annotations
 
 import argparse
+import hashlib
 import concurrent.futures
 import json
 import os
@@ -29,6 +30,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import canonical  # noqa: E402
 import ledger  # noqa: E402
 import run_status_cases as rsc  # noqa: E402
 from run_status_cases import Skip, same  # noqa: E402
@@ -92,6 +94,14 @@ def recorded(root: pathlib.Path, rel: str) -> dict:
             if e["kind"] == "evidence" and isinstance(e["body"], dict) and "obligation" in e["body"]}
 
 
+def tree_digest(root: pathlib.Path) -> str:
+    """Every file under the project root, by path and bytes: a refused run must leave the project as it was."""
+    h = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file() and not p.is_symlink()):
+        h.update(path.relative_to(root).as_posix().encode("utf-8") + b"\0" + path.read_bytes() + b"\0")
+    return h.hexdigest()
+
+
 def provider_records(aux: pathlib.Path) -> list[dict]:
     """Every message the providers were sent, as they recorded them, in no particular order across providers."""
     found = []
@@ -106,7 +116,9 @@ def run_case(command: list[str], status: list[str], case: dict, site: dict) -> d
     with tempfile.TemporaryDirectory() as tmp:
         stdin, status_input, root, aux = set_up(case, site, pathlib.Path(tmp))
         try:
+            before = tree_digest(root)
             first, err = call(command, stdin)
+            changed_files = tree_digest(root) != before
             sent = batches(aux)
             records_first = provider_records(aux)
             transcript_rel = json.loads(stdin).get("transcript")
@@ -117,12 +129,14 @@ def run_case(command: list[str], status: list[str], case: dict, site: dict) -> d
                 except (OSError, ValueError):
                     transcript = "unreadable"
             after, err_status = (call(status, status_input) if first and "refused" not in first else (None, ""))
-            again, err_again = (call(command, stdin) if first and "refused" not in first else (None, ""))
+            second = json.loads(stdin)
+            second.pop("transcript", None)  # a transcript is written once, to a new file
+            again, err_again = (call(command, json.dumps(second, ensure_ascii=False).encode("utf-8")) if first and "refused" not in first else (None, ""))
             sent_again = batches(aux)[len(sent):]
             ledger_rel = json.loads(stdin)["ledger"]
             return {"first": first, "err": err, "sent": sent, "after": after, "err_status": err_status, "again": again,
                     "sent_again": sent_again, "recorded": recorded(root, ledger_rel), "asked": rsc.requests(aux),
-                    "transcript": transcript, "provider_records": records_first,
+                    "transcript": transcript, "provider_records": records_first, "changed_files": changed_files,
                     "ledger_bytes": (root / ledger_rel).read_bytes() if (root / ledger_rel).exists() else b""}
         finally:
             for rel in list(case.get("unreadable", [])) + list(case.get("unreadable_mode", {})):
@@ -130,6 +144,28 @@ def run_case(command: list[str], status: list[str], case: dict, site: dict) -> d
                     os.chmod(root / rel, 0o755)
                 except OSError:
                     pass
+
+
+def run_key_problems(got: dict) -> list[str]:
+    """Each run in a batch must carry the number and run key the host checks give it, recomputed here from the start
+    request its provider received and the description the executor was sent."""
+    starts = {}
+    for m in got["provider_records"]:
+        body = m.get("body") if isinstance(m, dict) else None
+        if m.get("type") == "request" and m.get("capability") == "obligation.check" and isinstance(body, dict) and body.get("op") == "start":
+            starts[body["obligation"]["name"]] = canonical.identity({"obligation": body["obligation"], "inputs": body["inputs"]})
+    numbers: dict = {}
+    for batch in got["sent"]:
+        for item in batch.get("runs", []):
+            run = item.get("run", {})
+            owner = [n for n, check in starts.items()
+                     if item.get("run_key") == canonical.identity({"check": check, "run": item.get("number"), "description": canonical.identity(run)})]
+            if len(owner) != 1:
+                return [f"a run sent to the executor carries a run key no check gives it (run {item.get('number')})"]
+            numbers[owner[0]] = numbers.get(owner[0], 0) + 1
+            if item.get("number") != numbers[owner[0]]:
+                return [f"run {item.get('number')} of {owner[0]} is numbered out of order"]
+    return []
 
 
 def judge(case: dict, site: dict, command: list[str], status: list[str], kernel: list[str]) -> list[str]:
@@ -144,8 +180,10 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
             problems.append(f"the kit is wrong: the reference gives {ref['first']} ({ref['err']})")
         if first.get("refused") != expect["refused"] or set(first) != {"refused", "detail"}:
             problems.append(f"expected exactly refused {expect['refused']}, got {json.dumps(first)[:200]}")
-        if got["sent"]:
-            problems.append("the executor was sent a batch although the run was refused")
+        if not same(got["sent"], ref["sent"]):
+            problems.append("the batches sent before the refusal differ from the reference's")
+        if got["changed_files"]:
+            problems.append("a refused run changed files of the project")
         if not same(got["asked"], ref["asked"]):
             problems.append("the providers started or asked differ from the reference's")
         return problems
@@ -166,6 +204,7 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
         shape = [sorted(r["run"]["inputs"][0]["path"] if r["run"]["inputs"] else "" for r in b["runs"]) for b in got["sent"]]
         if len(got["sent"]) != expect["batches"]:
             problems.append(f"expected {expect['batches']} batches sent to the executor, got {len(got['sent'])} ({shape})")
+    problems += run_key_problems(got)
     if "recorded" in expect and not same(got["recorded"], expect["recorded"]):
         problems.append(f"recorded: expected {expect['recorded']}, got {got['recorded']}")
     after = got["after"]
