@@ -26,6 +26,7 @@ import ledger  # noqa: E402
 SERVED = ("obligation.enumerate", "intent.index")
 UNREAD_CRITERIA = False  # set in step 7: a criterion declares what no status rule reads yet
 ENUMERATED: dict = {}  # step 5: each obligation's binding, as enumerated, and the files of F, for a run command
+TRANSCRIPT: list = []  # every message sent to and read from a provider, in order, for a run command that keeps one
 NOTHING = {"do": {"set_gate": {"intent": "", "criterion": "", "to": "hard"}}}
 
 
@@ -191,7 +192,7 @@ def claimed(root: pathlib.Path, patterns: list[str]) -> list[dict]:
 
 def session(root: pathlib.Path, site: dict, binding: dict):
     try:
-        sess = host.Session(site["providers"][binding["provider"]]["command"], root, [], deadline_ms=site["deadline_ms"])
+        sess = host.Session(site["providers"][binding["provider"]]["command"], root, TRANSCRIPT, deadline_ms=site["deadline_ms"])
     except host.Refused as err:
         raise Stop(str(err), binding["provider"]) from None
     except OSError as err:

@@ -33,6 +33,9 @@ def check_run_input(asked: dict) -> None:
         return  # the status command's own check refuses it
     if not ps.relpath_ok(asked.get("ledger")) or asked.get("ledger") not in (asked.get("ledgers") or []):
         raise Stop("bad-input", "ledger must be a relative path listed among ledgers")
+    if "transcript" in asked and (not ps.relpath_ok(asked["transcript"]) or asked["transcript"] in (asked.get("ledgers") or [])
+                                  or asked["transcript"] == asked.get("owner_ledger")):
+        raise Stop("bad-input", "transcript, where given, is a relative path that is no ledger")
     executor = asked.get("executor")
     if not (isinstance(executor, list) and executor and all(isinstance(x, str) for x in executor)):
         raise Stop("bad-input", "executor must be a non-empty list of strings")
@@ -230,6 +233,19 @@ def emit(value: dict) -> None:
     sys.stdout.buffer.flush()
 
 
+def keep_transcript(asked) -> None:
+    """Every message sent to and read from a provider, in order, as tools/check_transcript.py reads them, when the
+    input asks for it: written however the run ends, a refusal included."""
+    if isinstance(asked, dict) and isinstance(asked.get("transcript"), str) and ps.relpath_ok(asked["transcript"]) \
+            and isinstance(asked.get("root"), str):
+        path = pathlib.Path(asked["root"]) / asked["transcript"]
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(ps.TRANSCRIPT, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        except OSError:
+            pass
+
+
 def main() -> int:
     kernel = sys.argv[sys.argv.index("--kernel") + 1:] if "--kernel" in sys.argv else None
     try:
@@ -240,11 +256,14 @@ def main() -> int:
         asked = host.strict_load(body)
     except Exception:  # noqa: BLE001 - any input that is not strict JSON is bad input
         asked = None
+    ps.TRANSCRIPT.clear()
     try:
         out = run(asked)
     except Stop as stop:
+        keep_transcript(asked)
         emit({"refused": stop.reason, "detail": stop.detail})
         return 0
+    keep_transcript(asked)
     if kernel:
         answer = subprocess.run(kernel + ["scenario"], input=json.dumps(out["judged"]).encode("utf-8"), capture_output=True, check=True)
         out["report"] = json.loads(answer.stdout)["results"][-1]

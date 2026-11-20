@@ -92,18 +92,37 @@ def recorded(root: pathlib.Path, rel: str) -> dict:
             if e["kind"] == "evidence" and isinstance(e["body"], dict) and "obligation" in e["body"]}
 
 
+def provider_records(aux: pathlib.Path) -> list[dict]:
+    """Every message the providers were sent, as they recorded them, in no particular order across providers."""
+    found = []
+    for record in sorted(aux.glob("*.record.jsonl")):
+        if record.name == "executor.record.jsonl":
+            continue  # the executor's batches, not a provider's messages
+        found += [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return found
+
+
 def run_case(command: list[str], status: list[str], case: dict, site: dict) -> dict:
     with tempfile.TemporaryDirectory() as tmp:
         stdin, status_input, root, aux = set_up(case, site, pathlib.Path(tmp))
         try:
             first, err = call(command, stdin)
             sent = batches(aux)
+            records_first = provider_records(aux)
+            transcript_rel = json.loads(stdin).get("transcript")
+            transcript = None
+            if transcript_rel:
+                try:
+                    transcript = json.loads((root / transcript_rel).read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    transcript = "unreadable"
             after, err_status = (call(status, status_input) if first and "refused" not in first else (None, ""))
             again, err_again = (call(command, stdin) if first and "refused" not in first else (None, ""))
             sent_again = batches(aux)[len(sent):]
             ledger_rel = json.loads(stdin)["ledger"]
             return {"first": first, "err": err, "sent": sent, "after": after, "err_status": err_status, "again": again,
                     "sent_again": sent_again, "recorded": recorded(root, ledger_rel), "asked": rsc.requests(aux),
+                    "transcript": transcript, "provider_records": records_first,
                     "ledger_bytes": (root / ledger_rel).read_bytes() if (root / ledger_rel).exists() else b""}
         finally:
             for rel in list(case.get("unreadable", [])) + list(case.get("unreadable_mode", {})):
@@ -162,6 +181,16 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
     left = counts["checked"] - counts["passed"] - counts["failed"]
     if not isinstance(again, dict) or again.get("counts", {}).get("checked") != left or (left == 0 and got["sent_again"]):
         problems.append(f"run a second time, it checked {(again or {}).get('counts', {}).get('checked')} obligations, not the {left} left without a recorded verdict")
+    if "transcript" in json.dumps(case.get("run_input_edit", [])):
+        # The transcript of the first run holds what the providers were sent then (the second run appended none to it).
+        kept = got["transcript"]
+        if not isinstance(kept, list) or not all(isinstance(m, dict) and m.get("to") in ("provider", "kernel") for m in kept):
+            problems.append("no transcript as the text gives it was written")
+        else:
+            sent_to = sorted(json.dumps(m["message"], sort_keys=True) for m in kept if m["to"] == "provider")
+            received = sorted(json.dumps(m, sort_keys=True) for m in got["provider_records"])
+            if not sent_to or sent_to != received:
+                problems.append("the transcript's messages to providers are not exactly what the providers received")
     # Judged against the reference.
     for field in COMPARED:
         if not same(first.get(field), ref["first"].get(field)):
