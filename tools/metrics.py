@@ -748,9 +748,25 @@ def mentions(text: str, name: str) -> bool:
 
 
 def escaped_names(text: str) -> bool:
-    """A key or a name written with escapes: what it says cannot be told without a full YAML reader, so it fails."""
-    return any(re.search(r"\\", line) and (re.match(r"\s*name\s*:", line) or re.match(r"\s*[\"'][^\"']*\\", line))
-               for line in text.split("\n"))
+    """A backslash anywhere outside the commands of a run: step, or an explicit `?` key: what a key or a name
+    says could then differ from its letters (an escape in a quoted scalar, flow style or block style alike), and
+    this guard has no YAML reader to tell, so it fails."""
+    block = None
+    for line in text.replace("\r\n", "\n").split("\n"):
+        stripped = line.lstrip()
+        indent = len(line) - len(stripped)
+        if block is not None and stripped and indent <= block:
+            block = None
+        if block is not None:
+            continue  # a line of a run: block's commands
+        run = re.match(r"(?:-\s+)?run:\s*(.*)$", stripped)
+        if run:
+            if run.group(1).strip() in ("", "|", ">", "|-", ">-", "|+", ">+"):
+                block = indent
+            continue  # the command on the run: line itself
+        if "\\" in line or stripped.startswith("? ") or stripped == "?":
+            return True
+    return False
 
 
 def job_clashes(repo: pathlib.Path, head: str, own: str, names: set[str]) -> list[str]:
@@ -898,8 +914,9 @@ MUTANTS = [
     ("identities are printed raw", "{printable(i)} taken away", "{i} taken away"),
     ("error messages are printed raw", "    print(_ascii(printable(message)), file=sys.stderr)", "    print(_ascii(message), file=sys.stderr)"),
     ("a crash reads as a failed ratchet", "        return 2\n\n\ndef complain(", "        return 1\n\n\ndef complain("),
-    ("job ids are not compared, only names", "        if indent == job_indent and m:\n            found.add(m.group(2))",
-     "        if False and indent == job_indent and m:\n            found.add(m.group(2))"),
+    ("a name folded or split across lines is not seen", '    return name in text or name in flat or name in flat.replace(\'"\', "").replace("\'", "")',
+     "    return name in text"),
+    ("escapes in other workflows are not refused", "for p in sorted(paths) if escaped_names(tree.read(p))]", "for p in sorted(paths) if False]"),
     ("the jobs guard reads .yml only", 're.fullmatch(r"\\.github/workflows/[^/]+\\.ya?ml", p) and p != own]',
      're.fullmatch(r"\\.github/workflows/[^/]+\\.yml", p) and p != own]'),
     ("the jobs guard compares the gate with itself", "and p != own]", "]"),
@@ -1471,6 +1488,14 @@ def self_test(mutants: bool) -> int:
         g("commit", "-q", "-m", "w4")
         code, out = cli("jobs", "--repo", str(repo), "--head", g("rev-parse", "HEAD"), "--own", GATE_WORKFLOW, *names)
         check("jobs: another workflow taking the gate's job id", code, out, 1, must_say="'metrics-main-checker'")
+        for what, text in (("a name folded across lines", "jobs:\n  x:\n    name: >-\n      metrics only go up\n      (judged by main)\n"),
+                           ("a name in a flow mapping with an escape", 'jobs: {x: {name: "metrics only go up \\x28judged by main)"}}\n'),
+                           ("a job id written as an explicit key", 'jobs:\n  ? "metrics\\x2dmain-checker"\n  : {runs-on: x}\n')):
+            (repo / ".github/workflows/other.yaml").write_text("on: pull_request\n" + text, encoding="utf-8")
+            g("add", "-A")
+            g("commit", "-q", "-m", what)
+            code, out = cli("jobs", "--repo", str(repo), "--head", g("rev-parse", "HEAD"), "--own", GATE_WORKFLOW, *names)
+            check(f"jobs: {what}", code, out, 1, must_say="other.yaml")
         code, out = cli("jobs", "--repo", str(repo), "--head", base, "--own", GATE_WORKFLOW, *names)
         check("jobs: the gate's own workflow is not a clash with itself", code, out, 0)
 
