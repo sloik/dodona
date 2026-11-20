@@ -68,8 +68,8 @@ jobs:
             exit 1
           fi
           if [ ! -f tools/check_docs.py ]; then
-            # 8530ca0 is the last commit of main before the checker. Only a base no later than it may lack one.
-            if git merge-base --is-ancestor "$BASE" 8530ca0; then
+            # c8396c4 is the last commit of main before the checker. Only a base no later than it may lack one.
+            if git merge-base --is-ancestor "$BASE" c8396c4; then
               echo "NOTE not judged: the base predates tools/check_docs.py, so this change, which brings it, has no checker to be judged by."
               exit 0
             fi

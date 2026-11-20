@@ -35,6 +35,8 @@ A kernel could work out status from a scenario, and a model checker ran in CI, b
 
 **Protocol changes this forced.** A run description may give the directory a program starts in, and may name a file of a tool in an argument as `${tool:NAME}/PATH`; a tool tree need not be placed in the working directory; a check request carries the link from a planted defect to what it must break. Three rules were added to those a schema cannot express, each with a case in `conformance/provider/check-cases.json`.
 
+*Amended by [decision 0033](0033-a-kernel-hosts-providers.md): a kernel takes over hosting providers and the status command from these helpers, which stay as references the kit is checked against.*
+
 ## Consequences
 
 - dodona's own status is now worked out by a kernel in CI and published with each run. It is `draft` for every intent, because nobody has confirmed the criteria through an act a kernel can read, and the project is `unknown`. That is the honest answer, and making it better is the owner's act, not the agent's.

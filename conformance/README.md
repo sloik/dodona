@@ -26,6 +26,7 @@ It covers what the formal models cover and no more: obligation status, intent st
 | `provider/cases.json` | What a host must do with it in each mode |
 | `provider/misbehaving_checker.py` | A checking provider that sends only well-formed messages and breaks one rule a schema cannot express in each of its modes |
 | `provider/check-cases.json` | What a host must do with that checker in each mode |
+| `provider/fake_executor.py` | The executor command the check cases give a host: it records what it was started with and prints the report, or a broken one, that each case asks for |
 | `harness/checker_reads.py`, `harness/checker_nods.py` | Two checkers for judging the reference harness: one that reads the files it was given, and one that agrees with everything |
 | `vectors/tool-tree.json` | The [digest of a tool tree](../protocol/tool-tree-digest.md): listings of trees with their digest, and listings that must be refused, with the reason |
 | `vectors/canonical.json` | The [canonical encoding](../protocol/canonical-encoding.md): values with their exact text and hash, and inputs that must be refused |

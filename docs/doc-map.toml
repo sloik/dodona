@@ -125,8 +125,3 @@ why = "Written by tools/confirm.py at the owner's first confirmation; records/RE
 [[absent]]
 path = "tools/widthcheck"
 why = "A path inside the example project of the provider guide, not in this repository."
-
-[[known]]
-check = "docs_usage_matches_the_parser"
-problem = "tools/check_states.py: flag --settings of `check_states.py` is not shown in its usage lines"
-why = "tools/check_states.py is among the files recorded model runs are hashed against (spec/runs/index.json): editing even its docstring was tried, and withdrew claim C37. Show the flag when the models are next run and recorded. Listed by the agent that found it; the owner has not accepted it yet."
