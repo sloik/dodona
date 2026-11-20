@@ -2,6 +2,7 @@
 
     python tools/check_docs.py                                          # every repository-wide check
     python tools/check_docs.py self-test                                # plant a fault for each check; each must fail
+    python tools/check_docs.py whole --repo DIR                         # every repository-wide check, on a copy of the files
     python tools/check_docs.py diff --base REV [--head REV] [--pr-body FILE] [--merged] [--repo DIR]
     python tools/check_docs.py pins-only --base REV --head REV [--merged] [--repo DIR]   # exit 0 if only pinned versions changed
     python tools/check_docs.py jobs --head REV --own WORKFLOW --name NAME... [--repo DIR]   # no other workflow may use these job names
@@ -22,7 +23,8 @@ the change saying why none is needed:
 
 Only a line that starts exactly so is a waiver. It is the author's own word,
 and it is printed as such for whoever reviews the change. A change is judged
-by the map on its base, so it cannot loosen the rule it is judged by; a file
+by the map where it branched off and by the rules of the map where it goes, so
+the map it brings cannot loosen the rule it is judged by; a file
 new to the map must be bound by a rule the change brings, and an exemption or
 known drift the change adds fails it. `pins-only` says whether a change
 touches nothing but workflow lines pinning actions and runner images.
@@ -60,6 +62,9 @@ MIN_REASON_CHARS, MIN_REASON_WORDS = 40, 6
 # fails the change that makes it: nothing else stops a change from loosening what judges it, as the owner
 # opens the pull requests and a code-owner review therefore never applies.
 JUDGING_FILES = ("tools/check_docs.py", ".github/workflows/docs.yml", ".github/CODEOWNERS", ".github/yaml-reader.txt")
+# checks.yml and tools/check_repo.py run the repository-wide checks in CI as the change has them, so a change can
+# switch them off there. They are not judging files: docs.yml also runs the base's checker over the whole
+# repository as the change leaves it (`whole`), which nothing in the change can switch off.
 # Everything under these is run by the judging job (the YAML parser's wheel), so it judges changes too.
 JUDGING_DIRS = (".github/vendor/",)
 
@@ -68,7 +73,7 @@ def as_merged(found: list[str], notes: list[str]) -> tuple[list[str], list[str]]
     """On main, a change to what judges changes, or an entry granting an exception, was merged by the owner over its
     failure: that is the owner's act, so it is noted, not failed again. Every other problem still fails."""
     owned = [p for p in found if JUDGING in p or "granting yourself an exception" in p]
-    return [p for p in found if p not in owned], notes + [f"merged by the owner over its failure: {p}" for p in owned]
+    return [p for p in found if p not in owned], notes + [f"merged over its failure (the owner's to do; nothing here checks who did it): {p}" for p in owned]
 
 
 def is_judging(path: str) -> bool:
@@ -899,14 +904,16 @@ def report_problems(body: str) -> list[str]:
 
 def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], messages: list[str],
                  base_map: dict | None, head_map: dict, decisions: dict[str, list[str]] | None = None,
-                 head_files: list[str] | None = None) -> tuple[list[str], list[str]]:
+                 head_files: list[str] | None = None, main_map: dict | None = None) -> tuple[list[str], list[str]]:
     """The rule for a change. `changed` is (status, path) with status A, M or D; `docs_changed` the
-    documents whose substance changed. Returns problems and notes. Pure: no git, no files."""
+    documents whose substance changed. `base_map` is the map where the change branched off, `main_map` the map
+    on the branch it goes into now: a file either binds to a rule triggers that rule, so a change cannot escape
+    a rule main has gained by branching off before it. Returns problems and notes. Pure: no git, no files."""
     problems, notes = [], []
     given, refused, unreadable = waivers(messages)
     for line in unreadable:
         notes.append(f"ignored: {line!r} starts like a waiver and is not `Docs-unchanged: <rule id>: <reason>`")
-    known = {r["id"] for m in (base_map, head_map) if m for r in m["rule"]}
+    known = {r["id"] for m in (base_map, head_map, main_map) if m for r in m["rule"]}
     for rid in sorted((set(given) | set(refused)) - known):
         notes.append(f"ignored: a waiver names rule {rid!r}, which {MAP_FILE} does not have")
     if base_map is None:
@@ -918,6 +925,8 @@ def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], message
         if path.endswith(".md"):
             continue
         found = map_entry(base_map, path) if base_map else []
+        if not found and main_map:
+            found = [f for f in map_entry(main_map, path) if f[0] == "rule"][:1]  # main binds it, the change's base did not
         if not found:
             found = map_entry(head_map, path)
             if found and found[0][0] == "exempt" and base_map is not None:
@@ -931,9 +940,12 @@ def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], message
                 problems.append(f"{path}: no rule in {MAP_FILE} names the documents that describe it, and it is not exempt")
             continue
         kind, entry = found[0]
-        if kind == "exempt":
-            continue
-        triggered.setdefault(entry["id"], (entry, []))[1].append(path)
+        bound = [entry] if kind == "rule" else []
+        now = map_entry(main_map, path) if main_map else []
+        if now and now[0][0] == "rule" and all(e["id"] != now[0][1]["id"] for e in bound):
+            bound.append(now[0][1])  # main binds it to a rule the change's own base did not
+        for each in bound:
+            triggered.setdefault(each["id"], (each, []))[1].append(path)
     for rid, (entry, paths) in sorted(triggered.items()):
         touched = sorted(set(entry["docs"]) & docs_changed)
         shown = ", ".join(paths[:5]) + (f" and {len(paths) - 5} more" if len(paths) > 5 else "")
@@ -1226,13 +1238,16 @@ def diff(root: pathlib.Path, base: str, head: str | None, pr_body: str | None,
     messages = [m for m in log.split("\0") if m.strip()]
     head_text = at(head, MAP_FILE)
     if head_text is None:
-        raise CannotRun(f"{MAP_FILE} does not exist in the change")
+        raise CannotRun(f"{MAP_FILE} does not exist in the change: it branched off before the map was added. "
+                        "Merge the branch it goes into (main) into it, and it can be judged")
     # The map as the change found it: its merge-base with the base, so that a change behind main is not blamed
     # for map entries main has gained since it branched.
     base_text = at(merge_base, MAP_FILE)
+    main_text = at(base, MAP_FILE)  # and the map where it goes now, whose rules bind it too
     try:
         head_map = load_map(head_text)
         base_map = load_map(base_text) if base_text is not None else None
+        main_map = load_map(main_text) if main_text is not None else None
     except tomllib.TOMLDecodeError as err:
         raise CannotRun(f"{MAP_FILE} cannot be read: {err}") from err
     decisions = {}
@@ -1245,7 +1260,7 @@ def diff(root: pathlib.Path, base: str, head: str | None, pr_body: str | None,
     head_files = [f for f in git(root, "ls-tree", "-r", "--name-only", "-z", head_rev).decode("utf-8").split("\0") if f]
     if head is None:
         head_files = Repo(root).files
-    problems, notes = judge_change(changed, docs_changed, messages, base_map, head_map, decisions, head_files)
+    problems, notes = judge_change(changed, docs_changed, messages, base_map, head_map, decisions, head_files, main_map)
     if pr_body is not None:
         problems += report_problems(pr_body)
     return problems, notes
@@ -1592,6 +1607,11 @@ def self_test(repo: Repo | None = None, with_git: bool = True) -> list[str]:
         found, _ = judge_change(*args)
         if (expect is None and found) or (expect is not None and not any(expect in p for p in found)):
             problems.append(f"self-test: diff case {what!r} gave {found or 'a pass'}, not {expect or 'a pass'}")
+    # A rule main has gained since the change branched off binds the change too.
+    loose = dict(doc_map, rule=[r for r in doc_map["rule"] if "tools/status.py" not in r.get("code", [])])
+    found, _ = judge_change([("M", "tools/status.py")], set(), [], loose, loose, None, None, doc_map)
+    if not any(p.startswith("rule ") for p in found):
+        problems.append(f"self-test: a file only main's map binds to a rule passed when its documents did not change ({found})")
     for body, should_pass in (("## Verified\n\nRan tools/check_repo.py to the end: passed.\n\n## Not verified\n\nThe model checks did not run.\n", True),
                               ("## Verified\n\n<!-- what ran -->\n\n## Not verified\n\nNothing.\n", False),
                               ("## Verified\n\nTODO\n\n## Not verified\n\nThe model checks.\n", False),
@@ -1749,6 +1769,8 @@ def main() -> int:
     three.add_argument("--own", required=True, help="the workflow whose jobs no other may share")
     three.add_argument("--name", action="append", required=True, help="a job id or name it uses (may be repeated)")
     three.add_argument("--repo", type=pathlib.Path, default=ROOT)
+    whole = sub.add_parser("whole", help="the repository-wide checks, over a copy of the files that is only read, never run")
+    whole.add_argument("--repo", type=pathlib.Path, required=True)
     two = sub.add_parser("pins-only")
     two.add_argument("--base", required=True)
     two.add_argument("--head", required=True)
@@ -1791,6 +1813,8 @@ def main() -> int:
             print(f"COULD NOT RUN {err}")
             print("documents and code: not judged")
             return 2
+    elif args.command == "whole":
+        found, notes = repo_problems(Repo(args.repo.resolve())), []
     else:
         found, notes = repo_problems(), []
     for kind, lines in (("NOTE", notes), ("PROBLEM", found)):

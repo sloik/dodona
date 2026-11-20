@@ -10,8 +10,8 @@
 #
 # Every file that is not Markdown must match exactly one rule or exemption, and every pattern must match
 # a file, so new code cannot arrive unbound. Patterns: `*` within a path segment, `**` across segments,
-# `[0-9]` one of a set. A change is judged by this file as it is on the branch the change goes into; a
-# change that adds an [[exempt]], [[absent]] or [[known]] entry fails, so such an entry is the owner's to add.
+# `[0-9]` one of a set. A change is judged by this file as it was where the change branched off, and
+# by its rules as they are on the branch the change goes into; a change that adds an [[exempt]], [[absent]] or [[known]] entry fails, so such an entry is the owner's to add.
 
 [[rule]]
 id = "host"
