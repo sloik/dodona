@@ -164,7 +164,8 @@ def coverage(intents: dict, floor: int) -> dict:
                 todo.extend(intents[here]["children"])
         return found
 
-    own = {i: sum(1 for c in it["criteria"].values() if c["gate"] == "hard") for i, it in intents.items()}
+    # Hard as the status rules count it: a gate that is not exactly soft or deferred.
+    own = {i: sum(1 for c in it["criteria"].values() if c["gate"] not in ("soft", "deferred")) for i, it in intents.items()}
     out = {}
     for ident in intents:
         root = root_of(ident)
