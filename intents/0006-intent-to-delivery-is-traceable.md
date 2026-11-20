@@ -17,9 +17,9 @@ For any intent, dodona can show each link from the plain words to the running sy
 ## Criteria
 
 <!-- criteria: written by tools/intents.py from the front matter; do not edit -->
-| # | Criterion | Gate | Checked by |
-|---|---|---|---|
-| 1 | Intent status, gates, assurance and amendments are modelled, with a planted defect for each rule | hard | nothing a kernel reads yet. Partly: C23 and C25 are modelled and unchecked; C24, C26 and C27 are not modelled |
-| 2 | A self-granted exception is always shown first and never counts where an independent approver is required | hard | nothing a kernel reads yet. Not yet covered (claim C25) |
-| 3 | The intent and amendment formats have schemas | hard | nothing a kernel reads yet. Not yet covered |
+| # | Criterion | Gate | Checked by | Observed after delivery |
+|---|---|---|---|---|
+| 1 | Intent status, gates, assurance and amendments are modelled, with a planted defect for each rule | hard | nothing a kernel reads yet. Partly: C23 and C25 are modelled and unchecked; C24, C26 and C27 are not modelled |  |
+| 2 | A self-granted exception is always shown first and never counts where an independent approver is required | hard | nothing a kernel reads yet. Not yet covered (claim C25) |  |
+| 3 | The intent and amendment formats have schemas | hard | nothing a kernel reads yet. Not yet covered |  |
 <!-- end of criteria -->

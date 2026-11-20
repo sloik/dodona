@@ -78,9 +78,13 @@ def main() -> int:
         return 1
     print(f"Intent {args.intent}, owned by {intent['owner']}; the work is done by {intent['worker']}.")
     print(note)
+    written = {c["id"]: c for c in status.written_criteria(args.intent)}
     for name, criterion in sorted(intent["criteria"].items()):
         checks = ", ".join(criterion["checked_by"][:3]) + (f" and {len(criterion['checked_by']) - 3} more" if len(criterion["checked_by"]) > 3 else "")
         print(f"  criterion {name}: gate {criterion['gate']}; checked by {checks or 'nothing a kernel can read yet'}")
+        if criterion["gate"] == "deferred":
+            mine = written.get(name, {})
+            print(f"    observed after delivery, within {mine.get('limit_days')} days: {mine.get('condition')}")
     if intent["children"]:
         print("  children:", ", ".join(sorted(intent["children"])))
     # Where the hard gates sit (decision 0030): the floor is counted over the whole tree, so a

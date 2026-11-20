@@ -95,8 +95,8 @@ def criteria_of(fields: dict) -> list[dict]:
             raise Unreadable(f"criterion {ident}: checked_by must be plain text")
         if gate == "deferred":
             condition, days = item.get("condition"), item.get("limit_days")
-            if not isinstance(condition, str) or not PLAIN.match(condition):
-                raise Unreadable(f"criterion {ident} is deferred: its condition, what is to be observed, must be given in plain text")
+            if not isinstance(condition, str) or not PLAIN.match(condition) or condition != condition.strip() or not any(ch.isalpha() for ch in condition):
+                raise Unreadable(f"criterion {ident} is deferred: its condition, what is to be observed, must be given in plain text, with words, and no space at either end")
             if type(days) is not int or days < 1:
                 raise Unreadable(f"criterion {ident} is deferred: limit_days must be a whole number of days, at least 1")
         elif "condition" in item or "limit_days" in item:
@@ -108,15 +108,20 @@ def shown_checks(item: dict) -> str:
     """The Checked by cell: exactly the patterns that are read, then the note, which is only a note."""
     patterns = item.get("checks", [])
     cell = ("checks named " + ", ".join(f"`{p}`" for p in patterns)) if patterns else "nothing a kernel reads yet"
-    cell += f". {item['checked_by']}" if item.get("checked_by") else ""
-    if item.get("gate") == "deferred":
-        cell += f". Observed: {item.get('condition')}, within {item.get('limit_days')} days of delivery"
-    return cell
+    return cell + (f". {item['checked_by']}" if item.get("checked_by") else "")
+
+
+def shown_observation(item: dict) -> str:
+    """The Observed cell of a deferred criterion: the limit first, in a fixed form, then what is to be observed.
+    It has a column of its own, so nothing in the note can be taken for it."""
+    if item.get("gate") != "deferred":
+        return ""
+    return f"within {item.get('limit_days')} days of delivery: {item.get('condition')}"
 
 
 def table(items: list[dict]) -> str:
-    rows = ["| # | Criterion | Gate | Checked by |", "|---|---|---|---|"]
-    rows += [f"| {c['id']} | {c['words']} | {c['gate']} | {shown_checks(c)} |" for c in items]
+    rows = ["| # | Criterion | Gate | Checked by | Observed after delivery |", "|---|---|---|---|---|"]
+    rows += [f"| {c['id']} | {c['words']} | {c['gate']} | {shown_checks(c)} | {shown_observation(c)} |" for c in items]
     return "\n".join([BEGIN] + rows + [END])
 
 

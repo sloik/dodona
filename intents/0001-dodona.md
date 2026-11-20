@@ -18,10 +18,10 @@ It must work with whatever decision format, checking tools and compilers a proje
 ## Criteria
 
 <!-- criteria: written by tools/intents.py from the front matter; do not edit -->
-| # | Criterion | Gate | Checked by |
-|---|---|---|---|
-| 1 | Each child intent is delivered | hard | nothing a kernel reads yet. Children 0002 to 0006 |
-| 2 | dodona's own repository is judged by a dodona kernel, with every intent here reporting a derived status | hard | nothing a kernel reads yet. Not yet covered |
-| 3 | A less capable agent, given only dodona's output, correctly reports which criteria of a sample project are not shown | deferred | nothing a kernel reads yet. Not yet covered; needs a kernel and a trial. Observed: a sample project with criteria not shown is given to a less capable agent with only dodona's output, and it names exactly those criteria, within 90 days of delivery |
-| 4 | A project outside this repository is judged with tools chosen by someone else | deferred | nothing a kernel reads yet. Not yet covered. Observed: someone other than dodona's authors runs dodona on a project of theirs with tools they chose, and its report agrees with what their own checks show, within 180 days of delivery |
+| # | Criterion | Gate | Checked by | Observed after delivery |
+|---|---|---|---|---|
+| 1 | Each child intent is delivered | hard | nothing a kernel reads yet. Children 0002 to 0006 |  |
+| 2 | dodona's own repository is judged by a dodona kernel, with every intent here reporting a derived status | hard | nothing a kernel reads yet. Not yet covered |  |
+| 3 | A less capable agent, given only dodona's output, correctly reports which criteria of a sample project are not shown | deferred | nothing a kernel reads yet. Not yet covered; needs a kernel and a trial | within 90 days of delivery: a sample project with criteria not shown is given to a less capable agent with only dodona's output, and it names exactly those criteria |
+| 4 | A project outside this repository is judged with tools chosen by someone else | deferred | nothing a kernel reads yet. Not yet covered | within 180 days of delivery: someone other than dodona's authors runs dodona on a project of theirs with tools they chose, and its report agrees with what their own checks show |
 <!-- end of criteria -->

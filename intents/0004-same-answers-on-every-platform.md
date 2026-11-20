@@ -17,9 +17,9 @@ What is set up on one operating system gives the same results on another: macOS 
 ## Criteria
 
 <!-- criteria: written by tools/intents.py from the front matter; do not edit -->
-| # | Criterion | Gate | Checked by |
-|---|---|---|---|
-| 1 | The canonical encoding and the path check exist as test vectors | hard | nothing a kernel reads yet. conformance/vectors/, checked by the repository checks. Not an obligation a kernel can read yet |
-| 2 | The vectors give identical results on macOS and Linux | hard | nothing a kernel reads yet. Both kernels are judged with the vectors on both in CI. Not an obligation a kernel can read yet |
-| 3 | The vectors give identical results on Windows | deferred | nothing a kernel reads yet. Both kernels are judged with the vectors on Windows in CI. Not an obligation a kernel can read yet. Observed: both kernels run the vectors on Windows and give the same results as on macOS and Linux, within 30 days of delivery |
+| # | Criterion | Gate | Checked by | Observed after delivery |
+|---|---|---|---|---|
+| 1 | The canonical encoding and the path check exist as test vectors | hard | nothing a kernel reads yet. conformance/vectors/, checked by the repository checks. Not an obligation a kernel can read yet |  |
+| 2 | The vectors give identical results on macOS and Linux | hard | nothing a kernel reads yet. Both kernels are judged with the vectors on both in CI. Not an obligation a kernel can read yet |  |
+| 3 | The vectors give identical results on Windows | deferred | nothing a kernel reads yet. Both kernels are judged with the vectors on Windows in CI. Not an obligation a kernel can read yet | within 30 days of delivery: both kernels run the vectors on Windows and give the same results as on macOS and Linux |
 <!-- end of criteria -->

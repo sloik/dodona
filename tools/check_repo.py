@@ -438,7 +438,10 @@ def gap_an_intent_reads_one_way_only() -> None:
                              ("a limit written as text", lambda c: c[deferred].update(limit_days="30")),
                              ("a limit that is true", lambda c: c[deferred].update(limit_days=True)),
                              ("a condition with markup", lambda c: c[deferred].update(condition="<b>seen</b>")),
-                             ("a hard criterion with a condition", lambda c: c[other].update(condition="seen", limit_days=1))):
+                             ("a condition of spaces", lambda c: c[deferred].update(condition=" ")),
+                             ("a criterion that is not deferred with a condition", lambda c: c[other].update(condition="seen")),
+                             ("a criterion that is not deferred with a limit", lambda c: c[other].update(limit_days=1)),
+                             ("a soft criterion with a condition and a limit", lambda c: c[other].update(gate="soft", condition="seen", limit_days=1))):
             changed_items = json.loads(fields["criteria"])
             change(changed_items)
             path = pathlib.Path(tmp) / "0001-probe.md"
@@ -450,7 +453,7 @@ def gap_an_intent_reads_one_way_only() -> None:
                 problems.append(f"tools/intents.py accepts {name}")
             except intents.Unreadable:
                 pass
-    source =(ROOT / "tools" / "status.py").read_text(encoding="utf-8")
+    source = (ROOT / "tools" / "status.py").read_text(encoding="utf-8")
     if 'e.get("kind") == "act"' not in source or "OWNER_LEDGER.resolve()" not in source:
         problems.append("tools/status.py must read only acts from the owner's ledger, and compare ledger paths after resolving them")
 

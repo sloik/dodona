@@ -66,6 +66,15 @@ def read_intents(obligations: list[str]) -> dict:
     return intents
 
 
+def written_criteria(intent_id: str) -> list[dict]:
+    """The criteria of one intent as its front matter gives them, with every field."""
+    for path in sorted((ROOT / "intents").glob("[0-9]*.md")):
+        fields, items, _ = intents_tool.read(path)
+        if fields["id"].strip('"') == intent_id:
+            return items
+    return []
+
+
 def anchored_policy(ref: str) -> tuple[dict, str]:
     """The policy as the protected reference has it, and a sentence saying where it came from.
 

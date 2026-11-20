@@ -16,9 +16,9 @@ A person or agent who has never spoken to the authors can plug in their own deci
 ## Criteria
 
 <!-- criteria: written by tools/intents.py from the front matter; do not edit -->
-| # | Criterion | Gate | Checked by |
-|---|---|---|---|
-| 1 | Every message of every capability has a schema and a worked example | hard | nothing a kernel reads yet. Not yet covered |
-| 2 | The configuration, the lock and policy each have a reference | hard | nothing a kernel reads yet. Not yet covered |
-| 3 | An agent with no other context writes a working provider for a tool the authors did not choose | deferred | nothing a kernel reads yet. Not yet covered; needs a kernel. Observed: an agent given only the documents in protocol/ and docs/ writes a provider for a tool the authors did not choose, and the provider passes the conformance kit, within 90 days of delivery |
+| # | Criterion | Gate | Checked by | Observed after delivery |
+|---|---|---|---|---|
+| 1 | Every message of every capability has a schema and a worked example | hard | nothing a kernel reads yet. Not yet covered |  |
+| 2 | The configuration, the lock and policy each have a reference | hard | nothing a kernel reads yet. Not yet covered |  |
+| 3 | An agent with no other context writes a working provider for a tool the authors did not choose | deferred | nothing a kernel reads yet. Not yet covered; needs a kernel | within 90 days of delivery: an agent given only the documents in protocol/ and docs/ writes a provider for a tool the authors did not choose, and the provider passes the conformance kit |
 <!-- end of criteria -->
