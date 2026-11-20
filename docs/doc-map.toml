@@ -1,0 +1,137 @@
+# Which documents describe which files. Read by tools/check_docs.py; docs/gap-checks.md says how it is used.
+#
+# [[rule]]    A change to a file matching `code` needs a change of substance to one of `docs` in the same
+#             change, or a commit message line `Docs-unchanged: <id>: <reason>`. Name only the documents
+#             that specifically describe this code: a catch-all document would satisfy every rule.
+# [[exempt]]  Files no document has to follow, each with the reason.
+# [[absent]]  Paths that documents name in code type and that are meant not to exist in this repository.
+# [[known]]   Drift a check finds that cannot be fixed now, word for word, with the reason. Each entry
+#             fails once the drift is gone, so it is removed with the fix.
+#
+# Every file that is not Markdown must match exactly one rule or exemption, and every pattern must match
+# a file, so new code cannot arrive unbound. Patterns: `*` within a path segment, `**` across segments,
+# `[0-9]` one of a set. A change is judged by this file as it was where the change branched off, and
+# by its rules as they are on the branch the change goes into; a change that adds an [[exempt]], [[absent]] or [[known]] entry fails, so such an entry is the owner's to add.
+
+[[rule]]
+id = "host"
+code = ["tools/host.py", "tools/provider_host.py"]
+docs = ["protocol/README.md", "docs/writing-a-provider.md"]
+why = "The session rules and the rules a schema cannot express, which these hosts keep, are written in the protocol and the guide a provider is written from."
+
+[[rule]]
+id = "model-runs"
+code = ["tools/check_models.py", "tools/check_states.py", "tools/keep.py", "providers/tlc/*.py",
+        ".github/workflows/models.yml"]
+docs = ["spec/README.md", "spec/CLAIMS.md"]
+why = "How the models are run, judged and reused, and what the results count for, is told in the models' README and the claims."
+
+[[rule]]
+id = "site"
+code = [".github/site/*.py", ".github/site/*.json"]
+docs = [".github/site/README.md"]
+why = "The site binding is described only under .github/ (AGENTS.md rule 9)."
+
+[[rule]]
+id = "status"
+code = ["tools/status.py", "tools/confirm.py", "tools/intents.py"]
+docs = ["records/README.md", "intents/README.md"]
+why = "The owner's ledger that confirm.py writes, and how intents are read and their status reported, are described there."
+
+[[rule]]
+id = "harness"
+code = ["tools/attest.py", "tools/harness.py", "tools/run_attest_check.py", "tools/run_harness_check.py",
+        "conformance/harness/*.py"]
+docs = ["conformance/README.md"]
+why = "What the harness signs and how a kernel grades it is in the kit's Acts scenarios and 'Two kernels compared'."
+
+[[rule]]
+id = "kit-judges"
+code = ["tools/run_kit.py", "tools/run_vectors.py", "tools/run_path_vectors.py", "tools/run_key_vectors.py",
+        "tools/run_ledger_cases.py", "tools/run_input_cases.py", "tools/run_provider_cases.py",
+        "tools/run_check_cases.py", "tools/kernel_differential.py", "tools/path_differential.py",
+        "tools/kit_adequacy.py"]
+docs = ["conformance/README.md", "docs/gap-checks.md"]
+why = "How a kernel or host is judged is written in the kit's README, and the judges that run as their own tools are listed with the gap behind each."
+
+[[rule]]
+id = "kit-data"
+code = ["conformance/kernel/**", "conformance/ledger/*", "conformance/vectors/*", "conformance/provider/*",
+        "tools/gen_kit_vectors.py", "tools/gen_wrong_types.py"]
+docs = ["conformance/README.md"]
+why = "Every scenario, vector and case tests a rule written in the kit's README, which also lists what is in the kit. The README's counts are checked on their own."
+
+[[rule]]
+id = "kernel"
+code = ["kernel/**"]
+docs = ["kernel/README.md"]
+why = "The first kernel's README says what it does, how it is built and how it is judged."
+
+[[rule]]
+id = "kernel2"
+code = ["kernel2/**"]
+docs = ["kernel2/README.md"]
+why = "The second kernel's README says what it does, how it is built and how it is judged."
+
+[[rule]]
+id = "encoding"
+code = ["tools/canonical.py", "tools/pathcheck.py", "tools/tooltree.py", "tools/gen_unicode_tables.py"]
+docs = ["protocol/canonical-encoding.md", "protocol/path-check.md", "protocol/tool-tree-digest.md"]
+why = "These are reference implementations of the rules in those three documents."
+
+[[rule]]
+id = "protocol"
+code = ["protocol/*.schema.json"]
+docs = ["protocol/README.md", "docs/writing-a-provider.md", "protocol/ledger.md"]
+why = "The schemas and the prose of the protocol describe the same shapes."
+
+[[rule]]
+id = "models"
+code = ["spec/assurance/**", "spec/attempts/**", "spec/decisions/**", "spec/intent/**", "spec/kernel/**",
+        "spec/liveness/**", "spec/planner/**", "spec/platforms/**", "spec/tree/**"]
+docs = ["spec/CLAIMS.md", "spec/README.md"]
+why = "The claims say what each model checks and whether a recorded run of it as it is now exists."
+
+[[rule]]
+id = "configuration"
+code = ["dodona.toml", "policy.toml"]
+docs = ["docs/configuration.md", "MODEL.md"]
+why = "The configuration reference describes dodona.toml, and the data model the policy dodona holds itself to."
+
+[[rule]]
+id = "repo-checks"
+code = ["tools/check_repo.py", "tools/check_docs.py", "tools/check_examples.py", "tools/check_transcript.py",
+        ".github/workflows/checks.yml", ".github/workflows/docs.yml", ".github/yaml-reader.txt", ".github/vendor/ruamel.yaml-0.18.10-py3-none-any.whl", ".github/workflows/oracle-static.yml",
+        ".github/CODEOWNERS"]
+docs = ["docs/gap-checks.md"]
+why = "Every check is listed there with the gap behind it, and how the checks run."
+
+[[exempt]]
+paths = ["spec/runs/**/*.txt", "spec/runs/**/*.exit", "spec/runs/index.json"]
+why = "Saved outputs of recorded runs: hashed in spec/runs/index.json and judged against the claims by check_claims_match_runs."
+
+[[exempt]]
+paths = ["LICENSE", ".gitattributes", ".gitignore", "renovate.json"]
+why = "Repository housekeeping that no document describes."
+
+[[exempt]]
+paths = ["docs/doc-map.toml"]
+why = "These rules themselves. A change is judged by the rules on its base, and an exemption it adds fails it."
+
+[[absent]]
+path = "records/owner.ledger"
+why = "Written by tools/confirm.py at the owner's first confirmation; records/README.md says it does not exist until then."
+
+[[absent]]
+path = "tools/widthcheck"
+why = "A path inside the example project of the provider guide, not in this repository."
+
+[[known]]
+check = "docs_usage_matches_the_parser"
+problem = "tools/host.py: subcommand 'check' is not shown in its usage lines"
+why = "tools/host.py is part of every model check's key: changing even its docstring makes all 121 kept results run again on the shared queue. Branch kernel-run changes tools/host.py anyway and shows the command there, which removes this entry. Listed by the agent that found it; the owner accepts it by merging."
+
+[[known]]
+check = "docs_usage_matches_the_parser"
+problem = "tools/host.py: flag --policy-ref of `host.py plan` is not shown in its usage lines"
+why = "As the entry above: tools/host.py is part of every model check's key, so its usage is corrected with branch kernel-run, which changes the file anyway. Listed by the agent that found it; the owner accepts it by merging."

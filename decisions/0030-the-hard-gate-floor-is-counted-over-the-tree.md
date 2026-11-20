@@ -2,6 +2,7 @@
 id: "0030"
 title: The hard-gate floor is counted over the whole tree, and every intent in it needs a hard gate
 status: proposed
+direction: owner
 date: 2026-11-18
 governs:
   - spec/tree/IntentTree.tla
