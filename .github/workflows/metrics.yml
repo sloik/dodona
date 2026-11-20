@@ -73,7 +73,7 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
           MAIN_NOW: ${{ github.sha }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-          BOOTSTRAP_BEFORE: c8396c4ffb5a4d65be3fa9bb3ac552905d287fcc
+          BOOTSTRAP_BEFORE: 1be9c8430bbca1a5fe2d1011686e49cca387a0c6
         run: |
           set -uo pipefail
           say() { echo "$1"; printf '%s\n\n' "$1" >> "$GITHUB_STEP_SUMMARY"; }
