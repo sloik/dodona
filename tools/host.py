@@ -45,6 +45,10 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+
+# An integer of any length is read whole, so that a long one is not-an-integer, never refused as malformed.
+if hasattr(sys, "set_int_max_str_digits"):
+    sys.set_int_max_str_digits(0)
 import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -76,18 +80,21 @@ def file_ref(path: pathlib.Path, root: pathlib.Path) -> dict:
 class Session:
     """One provider process, with the rules about messages applied to it."""
 
-    def __init__(self, argv: list[str], cwd: pathlib.Path, transcript: list, deadline_s: float = 60):
+    def __init__(self, argv: list[str], cwd: pathlib.Path, transcript: list, deadline_s: float = 60, deadline_ms: int | None = None):
         import queue
         import threading
         self.tree = provider_host.Tree(argv) if cwd == pathlib.Path.cwd() else self._start(argv, cwd)
         self.lines: "queue.Queue" = queue.Queue()
+        # The deadline as given, in whole milliseconds, is what hello and every request carry; never rounded.
+        self.deadline_ms = deadline_ms if deadline_ms is not None else int(deadline_s * 1000)
+        deadline_s = self.deadline_ms / 1000
         self.transcript, self.deadline_s, self.next_id = transcript, deadline_s, 0
         log = {"bytes": 0, "kept": b"", "truncated": False}
         threading.Thread(target=provider_host.read_lines, args=(self.tree.proc.stdout, 1048576, self.lines), daemon=True).start()
         threading.Thread(target=provider_host.drain, args=(self.tree.proc.stderr, 65536, log), daemon=True).start()
         echo = "héllo ☃ \u0001\u001f end"
         try:
-            self.send({"type": "hello", "protocol": ["0.2"], "limits": {"max_line_bytes": 1048576, "deadline_ms": int(deadline_s * 1000)}, "echo": echo})
+            self.send({"type": "hello", "protocol": ["0.2"], "limits": {"max_line_bytes": 1048576, "deadline_ms": self.deadline_ms}, "echo": echo})
             answer = self.receive()
             if answer.get("type") != "manifest" or answer.get("echo") != echo:
                 raise Refused("bad-manifest")
@@ -151,7 +158,7 @@ class Session:
         """Send one request and return the body of its result."""
         self.next_id += 1
         ident = str(self.next_id)
-        self.send({"type": "request", "id": ident, "deadline_ms": int(self.deadline_s * 1000), "capability": capability, "body": body})
+        self.send({"type": "request", "id": ident, "deadline_ms": self.deadline_ms, "capability": capability, "body": body})
         answer = self.receive()
         if answer.get("id") != ident:
             raise Refused("wrong-id")
@@ -174,11 +181,15 @@ class Session:
 
 
 def depth(value) -> int:
-    if isinstance(value, dict):
-        return 1 + max((depth(v) for v in value.values()), default=0)
-    if isinstance(value, list):
-        return 1 + max((depth(v) for v in value), default=0)
-    return 0
+    """How deep objects and lists nest, without recursion, so no depth crashes the reader."""
+    deepest, todo = 0, [(value, 0)]
+    while todo:
+        here, level = todo.pop()
+        if isinstance(here, (dict, list)):
+            level += 1
+            deepest = max(deepest, level)
+            todo.extend((v, level) for v in (here.values() if isinstance(here, dict) else here))
+    return deepest
 
 
 def no_repeats(pairs):
@@ -202,13 +213,18 @@ def safe_integer(text):
 
 
 def half_pair(value) -> bool:
-    """Whether a string anywhere in the value holds half of a UTF-16 pair."""
-    if isinstance(value, str):
-        return any(0xD800 <= ord(c) <= 0xDFFF for c in value)
-    if isinstance(value, dict):
-        return any(half_pair(k) or half_pair(v) for k, v in value.items())
-    if isinstance(value, list):
-        return any(half_pair(v) for v in value)
+    """Whether a string anywhere in the value holds half of a UTF-16 pair. Without recursion."""
+    todo = [value]
+    while todo:
+        here = todo.pop()
+        if isinstance(here, str):
+            if any(0xD800 <= ord(c) <= 0xDFFF for c in here):
+                return True
+        elif isinstance(here, dict):
+            todo.extend(here.keys())
+            todo.extend(here.values())
+        elif isinstance(here, list):
+            todo.extend(here)
     return False
 
 
@@ -223,6 +239,8 @@ def strict_load(raw: bytes):
                            parse_constant=not_json)
     except UnicodeDecodeError:
         raise Refused("encoding") from None
+    except RecursionError:
+        raise Refused("too-deep") from None  # nested beyond what the reader can hold, so far beyond 64
     except ValueError as err:
         raise Refused(str(err) if str(err) in ("duplicate-key", "not-an-integer") else "malformed") from None
     if half_pair(value):
@@ -486,16 +504,26 @@ class Unreadable(Exception):
 
 def regular_files(root: pathlib.Path) -> list[str]:
     """Every regular file under root by relative path, reached without a link (a junction included) at any step, none
-    with a segment `.git`. A folder that cannot be listed raises Unreadable."""
-    def stop(err):
-        raise Unreadable(str(getattr(err, "filename", "") or err))
-    found = []
-    for here, dirs, files in os.walk(root, followlinks=False, onerror=stop):
-        dirs[:] = [d for d in dirs if d != ".git" and not os.path.islink(os.path.join(here, d)) and not is_junction(os.path.join(here, d))]
-        for name in files:
-            full = os.path.join(here, name)
-            if name != ".git" and not os.path.islink(full) and os.path.isfile(full):
-                found.append(pathlib.Path(full).relative_to(root).as_posix())
+    with a segment `.git`. Entries are told apart by what the folder listing says of them, not by following them; a
+    folder it walks that cannot be listed raises Unreadable. A file found this way that cannot be read is found
+    unreadable when it is read."""
+    found, todo = [], [pathlib.Path(root)]
+    while todo:
+        here = todo.pop()
+        try:
+            entries = list(os.scandir(here))
+        except OSError as err:
+            raise Unreadable(f"{here}: {err}") from None
+        for entry in entries:
+            if entry.name == ".git" or entry.is_symlink() or is_junction(entry.path):
+                continue
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    todo.append(pathlib.Path(entry.path))
+                elif entry.is_file(follow_symlinks=False):
+                    found.append(pathlib.Path(entry.path).relative_to(root).as_posix())
+            except OSError as err:
+                raise Unreadable(f"{entry.path}: {err}") from None
     return found
 
 
@@ -875,7 +903,7 @@ def check(args) -> int:
         return 0
     session = None
     try:
-        session = Session(asked["provider"], root, [], deadline_s=asked.get("deadline_ms", 60000) / 1000)
+        session = Session(asked["provider"], root, [], deadline_ms=asked.get("deadline_ms", 60000))
         driven = drive_check(session, asked["obligation"], asked["inputs"], asked["tools"], report_for, root)
         verdict = "unavailable" if driven.get("unavailable") else driven["final"]["verdict"]
         answer = {"outcome": "verdict", "verdict": verdict}

@@ -132,6 +132,8 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
         ledgers.append(item["path"])
         if item.get("absent"):
             continue
+        if any(item["path"].startswith(rel + "/") for rel in case.get("outside_links", {})):
+            continue  # written in the outside folder the link leads to
         path = root / item["path"]
         path.parent.mkdir(parents=True, exist_ok=True)
         if item.get("dangling"):
@@ -177,6 +179,26 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
             del here[path[-1]]
         else:
             here[path[-1]] = value
+    for rel, spec in case.get("outside_links", {}).items():
+        # A link from inside the root to a folder outside it (in aux), which may be locked or missing.
+        target = aux / ("outside-" + rel.replace("/", "-"))
+        if not spec.get("missing"):
+            target.mkdir()
+            for item in case["ledgers"]:
+                if item["path"].startswith(rel + "/") and "entries" in item:
+                    (target / item["path"][len(rel) + 1:]).write_bytes(ledger_bytes(fill(item["entries"], preimages)))
+        try:
+            os.symlink(target, root / rel)
+        except (OSError, NotImplementedError):
+            raise Skip("this system cannot make a symbolic link") from None
+        if "mode" in spec:
+            if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
+                raise Skip("this system cannot make a folder its own user cannot enter")
+            os.chmod(target, spec["mode"])
+    for rel, mode in case.get("unreadable_mode", {}).items():
+        if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
+            raise Skip("this system cannot make a file or folder its own user cannot read")
+        os.chmod(root / rel, mode)
     for rel in case.get("unreadable", []):
         if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
             raise Skip("this system cannot make a folder or file its own user cannot read")
@@ -204,8 +226,15 @@ def run(command: list[str], case: dict, site: dict, preimages: dict, timeout: in
         except subprocess.TimeoutExpired:
             return None, requests(aux), "timed out"
         finally:
-            for rel in case.get("unreadable", []):
+            for rel in list(case.get("unreadable", [])) + list(case.get("unreadable_mode", {})):
                 os.chmod(root / rel, 0o755)  # so the folder can be removed
+            for rel, spec in case.get("outside_links", {}).items():
+                target = aux / ("outside-" + rel.replace("/", "-"))
+                if target.exists() or not spec.get("missing"):
+                    try:
+                        os.chmod(target, 0o755)
+                    except OSError:
+                        pass
         if done.returncode != 0:
             return None, requests(aux), f"exit {done.returncode}: " + done.stderr.decode("utf-8", "replace")[-300:]
         try:
@@ -230,6 +259,16 @@ def judge(case: dict, site: dict, command: list[str], kernel: list[str]) -> list
     if "$" in json.dumps(case["ledgers"]) + json.dumps(case.get("owner_ledger")):
         preimages = _preimages(case, site)
     got, asked, err = run(command, case, site, preimages)
+    deadline = dict(site, **case.get("site_edit", {})).get("deadline_ms")
+    for path, value in case.get("input_edit", []):
+        if path == ["site", "deadline_ms"]:
+            deadline = value
+    if type(deadline) is int:
+        # Judged against the input, not the reference: hello and every request carry the deadline exactly as given.
+        sent = [m for record in asked.values() for m in record if m["type"] in ("hello", "request")]
+        late = [m for m in sent if (m["limits"] or {}).get("deadline_ms", m["deadline_ms"]) != deadline]
+        if late:
+            return [f"a provider was sent a deadline other than the {deadline} ms given"]
     ref, ref_asked, ref_err = run(REFERENCE, case, site, preimages)
     problems = []
     expect = case["expect"]

@@ -24,6 +24,7 @@ import host  # noqa: E402
 import ledger  # noqa: E402
 
 SERVED = ("obligation.enumerate", "intent.index")
+UNREAD_CRITERIA = False  # set in step 7: a criterion declares what no status rule reads yet
 NOTHING = {"do": {"set_gate": {"intent": "", "criterion": "", "to": "hard"}}}
 
 
@@ -100,7 +101,7 @@ def check_input(asked) -> None:
             and isinstance(tools, list) and all(isinstance(t, dict) and all(isinstance(t.get(k), str) for k in ("name", "version", "digest")) for t in tools) \
             and isinstance(providers, dict) and all(isinstance(p, dict) and strings(p.get("command")) and p["command"] and strings(p.get("code"))
                                                     for p in providers.values()) \
-            and type(deadline) is int and deadline > 0
+            and type(deadline) is int and 0 < deadline <= 86_400_000
     if not ok:
         raise Stop("bad-input", "the input does not have the shape the contract gives")
     problem = policy_problem(asked.get("policy"))
@@ -115,6 +116,9 @@ def check_input(asked) -> None:
         for rel in provider["code"]:
             if not relpath_ok(rel) or not reached_without_link(root, rel) or not (root / rel).is_file():
                 raise Stop("bad-input", f"{name}: code path {rel!r} is not a regular file under root reached without a link")
+    # Then every provider's code is read, before any provider is started.
+    for name, provider in sorted(site["providers"].items()):
+        provider["digest"] = code_digest(root, provider["code"])
 
 
 # Step 2. The project file.
@@ -183,7 +187,7 @@ def claimed(root: pathlib.Path, patterns: list[str]) -> list[dict]:
 
 def session(root: pathlib.Path, site: dict, binding: dict):
     try:
-        sess = host.Session(site["providers"][binding["provider"]]["command"], root, [], deadline_s=site["deadline_ms"] / 1000)
+        sess = host.Session(site["providers"][binding["provider"]]["command"], root, [], deadline_ms=site["deadline_ms"])
     except host.Refused as err:
         raise Stop(str(err), binding["provider"]) from None
     except OSError as err:
@@ -246,7 +250,7 @@ def obligations_of(root: pathlib.Path, site: dict, bindings: list[dict], claims:
             if item["name"] in found:
                 raise Stop("duplicate-obligation", item["name"])
             given = [{"path": p, "identity": identity[p]} for p in item["inputs"]]
-            version = f"{sess.manifest['version']}+{code_digest(root, site['providers'][binding['provider']]['code'])}+{site['runner']}"
+            version = f"{sess.manifest['version']}+{site['providers'][binding['provider']]['digest']}+{site['runner']}"
             found[item["name"]] = {"preimage": {
                 "obligation": canonical.identity({"binding": binding["name"], "name": item["name"]}), "kind": "check",
                 "inputs": {"specified_by": canonical_sorted(f["identity"] for f in given if f["path"] in item["specified_by"]),
@@ -293,6 +297,9 @@ def intents_of(root: pathlib.Path, site: dict, bindings: list[dict], listed: lis
         if rejected:
             raise Stop("intent-unreadable", ", ".join(r["path"] for r in rejected))
         answers += items
+    global UNREAD_CRITERIA
+    UNREAD_CRITERIA = any("limit_days" in c or "not_applicable" in c or any("varying" in link for link in c["links"])
+                          for it in answers for c in it["criteria"])
     known = {(o["binding"], o["name"]) for o in listed}
     for it in answers:
         ids = [c["id"] for c in it["criteria"]]
@@ -330,11 +337,35 @@ def intents_of(root: pathlib.Path, site: dict, bindings: list[dict], listed: lis
 
 # Step 8. Ledgers.
 
+def ledger_state(root: pathlib.Path, rel: str) -> str:
+    """'present', 'absent' (no file there and nothing in the way), or 'unreadable' (a folder that cannot be entered,
+    a link to nothing at any step, or any other error). Only a clean absence may be read as no entries."""
+    here = root
+    for part in rel.split("/"):
+        here = here / part
+        try:
+            os.stat(here)
+        except FileNotFoundError:
+            try:
+                os.lstat(here)
+            except FileNotFoundError:
+                return "absent"  # this step is not there, and every step before it was entered
+            except OSError:
+                return "unreadable"
+            return "unreadable"  # a link to nothing
+        except OSError:
+            return "unreadable"
+    return "present"
+
+
 def read_ledger(root: pathlib.Path, rel: str) -> dict:
     path = root / rel
-    if os.path.lexists(path) and not path.exists():
-        raise Stop("unreadable-file", f"{rel} is a link to nothing")
-    if path.exists() and not path.is_file():
+    state = ledger_state(root, rel)
+    if state == "unreadable":
+        raise Stop("unreadable-file", f"{rel}: a link to nothing or a folder that cannot be entered on the way")
+    if state == "absent":
+        return {"entries": [], "torn": False, "absent": True}
+    if not path.is_file():
         raise Stop("corrupt-ledger", f"{rel} is not a file")
     try:
         return ledger.read(path)
@@ -359,13 +390,15 @@ def entries_of(root: pathlib.Path, asked: dict) -> tuple[list, dict]:
         sources.append((p, False))
         if (root / p).exists():
             seen.append(root / p)
-    entries, torn = [], False
+    entries, torn, absent = [], False, []
     for rel, is_owner in sources:
         read = read_ledger(root, rel)
+        if read.get("absent") and not is_owner:
+            absent.append(rel)  # the owner's ledger may well not exist yet; a ledger the site names should
         # Acts are read only from the owner's ledger, and nothing else is read from it.
         entries += [e for e in read["entries"] if (e.get("kind") == "act") == is_owner]
         torn = torn or read["torn"]
-    return entries, {"entries": len(entries), "torn": torn}
+    return entries, {"entries": len(entries), "torn": torn}, absent
 
 
 # Step 9. Policy.
@@ -411,7 +444,7 @@ def coverage(intents: dict, floor: int) -> dict:
     return {"intents": out, "thinnest": thinnest}
 
 
-def doubts(out: dict) -> list[str]:
+def doubts(out: dict, absent: list) -> list[str]:
     """What keeps the report's passed or nothing-required from being the project's: each could hide a failure."""
     found = []
     if out["policy_not_applied"]:
@@ -420,8 +453,12 @@ def doubts(out: dict) -> list[str]:
         found.append("a required intent has children, and no status rule reads descendants yet")
     if out["not_checkable"]:
         found.append("obligations the provider could not make into checks")
+    if UNREAD_CRITERIA:
+        found.append("criteria declare what no status rule reads yet: a deferred gate's limit, runs that must agree, or evidence not applicable")
     if out["ledger"]["torn"]:
         found.append("a ledger ends in an entry cut short")
+    if absent:
+        found.append("a ledger the site names does not exist")
     return found
 
 
@@ -462,7 +499,7 @@ def run(asked) -> dict:
                     owners[f["path"]] = b["name"]
     obligations, listed, unchecked = obligations_of(root, site, bindings, claims)
     intents = intents_of(root, site, bindings, listed, claims)
-    entries, ledger_note = entries_of(root, asked)
+    entries, ledger_note, absent = entries_of(root, asked)
     policy = policy_of(asked["policy"])
     judged = {"kind": "status", "name": "this-project",
               "self": {"writer": site["writer"], "platform": f"{site['platform']['os']}/{site['platform']['arch']}"},
@@ -471,14 +508,15 @@ def run(asked) -> dict:
     out = {"judged": judged, "coverage": coverage(intents, policy["min_hard_gates"]), "policy_source": asked["policy_source"],
            "ledger": ledger_note, "not_served": not_served, "not_checkable": unchecked,
            "policy_not_applied": asked["policy"]["not_applied"]}
-    out["project_doubts"] = doubts(out)
+    out["project_doubts"] = doubts(out, absent)
     return out
 
 
 def main() -> int:
     kernel = sys.argv[sys.argv.index("--kernel") + 1:] if "--kernel" in sys.argv else None
     try:
-        asked = host.strict_load(sys.stdin.buffer.read())
+        raw = sys.stdin.buffer.read()
+        asked = host.strict_load(raw[:-1] if raw.endswith(b"\n") else raw)  # one JSON object, then at most a line feed
     except Exception:  # noqa: BLE001 - any input that is not strict JSON is bad input
         asked = None
     try:
