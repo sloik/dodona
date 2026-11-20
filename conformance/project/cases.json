@@ -128,6 +128,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -285,6 +286,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -448,6 +450,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -607,6 +610,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -763,6 +767,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -918,6 +923,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -1074,6 +1080,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -1234,7 +1241,9 @@
      }
     }
    },
-   "policy": {},
+   "policy": {
+    "policy": "0.2"
+   },
    "ledgers": [],
    "owner_ledger": null,
    "name": "no required intent is nothing required",
@@ -1362,6 +1371,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -1537,6 +1547,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -1697,6 +1708,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -1849,6 +1861,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -1992,6 +2005,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -2135,6 +2149,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -2277,7 +2292,8 @@
      "intents": [
       "i1"
      ]
-    }
+    },
+    "policy": "0.2"
    },
    "ledgers": [],
    "owner_ledger": null,
@@ -2433,6 +2449,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -2572,6 +2589,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -2753,6 +2771,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -2938,6 +2957,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -3117,6 +3137,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -3161,6 +3182,7 @@
     "n/unused.txt": "u\n",
     "n/.git/inside.txt": "never claimed\n",
     "code/more.py": "print(3)\n",
+    "code/more-lib.py": "lib\n",
     "intents/2.md": "i2\n",
     "intents/3.md": "i3\n"
    },
@@ -3322,7 +3344,8 @@
     },
     "t.more": {
      "code": [
-      "code/more.py"
+      "code/more.py",
+      "code/more-lib.py"
      ],
      "answers": {
       "manifest": {
@@ -3408,6 +3431,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -3585,6 +3609,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -3720,6 +3745,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -3855,6 +3881,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -3998,6 +4025,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -4141,6 +4169,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -4286,6 +4315,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -4431,6 +4461,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -4573,6 +4604,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -4707,6 +4739,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -4841,6 +4874,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -4975,6 +5009,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -5109,6 +5144,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -5243,6 +5279,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -5377,6 +5414,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -5511,6 +5549,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -5645,6 +5684,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -5779,6 +5819,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -5913,6 +5954,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -5994,6 +6036,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -6109,6 +6152,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -6239,6 +6283,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -6370,6 +6415,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -6504,6 +6550,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -6639,6 +6686,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -6774,6 +6822,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -6908,6 +6957,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -7041,6 +7091,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -7193,6 +7244,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -7332,6 +7384,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -7493,6 +7546,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -7627,6 +7681,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -7766,6 +7821,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -7904,6 +7960,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -8040,7 +8097,8 @@
    "policy": {
     "required": {
      "intents": "i1"
-    }
+    },
+    "policy": "0.2"
    },
    "ledgers": [
     {
@@ -8186,7 +8244,8 @@
    "policy": {
     "gates": {
      "min_hard": -1
-    }
+    },
+    "policy": "0.2"
    },
    "ledgers": [],
    "owner_ledger": null,
@@ -8317,7 +8376,8 @@
      "floor": {
       "confirm-baseline": {}
      }
-    }
+    },
+    "policy": "0.2"
    },
    "ledgers": [],
    "owner_ledger": null,
@@ -8444,6 +8504,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -8579,6 +8640,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -8713,6 +8775,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -8847,6 +8910,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -8984,6 +9048,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -9118,6 +9183,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -9257,6 +9323,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -9400,6 +9467,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -9534,6 +9602,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -9668,6 +9737,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -9802,6 +9872,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -9936,6 +10007,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -10070,6 +10142,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -10204,6 +10277,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -10338,6 +10412,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -10472,6 +10547,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -10606,6 +10682,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -10740,6 +10817,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -10876,6 +10954,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -11015,6 +11094,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -11149,6 +11229,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -11316,6 +11397,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -11449,6 +11531,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -11635,6 +11718,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -11766,6 +11850,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -11898,6 +11983,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -12031,6 +12117,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -12164,6 +12251,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -12286,6 +12374,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -12431,6 +12520,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -12565,6 +12655,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -12757,6 +12848,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -12922,6 +13014,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -13057,6 +13150,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -13196,6 +13290,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -13381,6 +13476,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -13571,6 +13667,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -13705,6 +13802,7 @@
     }
    },
    "policy": {
+    "policy": "0.2",
     "required": {
      "intents": [
       "i1"
@@ -13723,6 +13821,5285 @@
    "why": "Every step of the path to the owner's ledger is reached without a link.",
    "expect": {
     "refused": "owner-ledger-link"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    },
+    "separation": {
+     "floor": {
+      "confirm_baseline": {
+       "level": "apart"
+      }
+     }
+    }
+   },
+   "ledgers": [],
+   "owner_ledger": {
+    "entries": [
+     {
+      "kind": "act",
+      "body": {
+       "ticket": "t-1",
+       "kind": "confirm-baseline",
+       "target": "$baseline:i1",
+       "lineage": {
+        "intent": "i1",
+        "kind": "confirm-baseline"
+       },
+       "result": "agreed",
+       "actor": {
+        "id": "owner"
+       },
+       "worker": {
+        "id": "worker"
+       }
+      }
+     }
+    ]
+   },
+   "name": "a floor kind with a typo",
+   "why": "A key policy.schema.json does not have is refused, not ignored: confirm_baseline is not confirm-baseline.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min-hard": 5
+    }
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "name": "a gate field with a typo",
+   "why": "min-hard is not min_hard.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    },
+    "separation": {
+     "floor": {
+      "confirm-baseline": {
+       "level": "Apart"
+      }
+     }
+    }
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "name": "a floor level not on the scale",
+   "why": "Apart is not a level; apart is.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "name": "a policy without its version",
+   "why": "policy.schema.json requires the policy's version.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    },
+    "strictness": "high"
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "name": "a policy field nobody has",
+   "why": "Only the fields of policy.schema.json.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ],
+     "obligations": [
+      {
+       "binding": "checks",
+       "name": "o1"
+      }
+     ]
+    },
+    "gates": {
+     "min_hard": 1,
+     "max_deferred_days": 90
+    },
+    "minimum": {
+     "strength_rank": "exhaustive"
+    },
+    "separation": {
+     "floor": {
+      "confirm-baseline": {
+       "level": "self",
+       "source": "declared"
+      }
+     }
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "entries": [
+      {
+       "kind": "evidence",
+       "body": {
+        "obligation": "o1",
+        "preimage": "$preimage:o1",
+        "core_key": "$key:o1",
+        "platform": "linux/x86_64",
+        "verdict": "passed",
+        "writer": "w"
+       }
+      }
+     ]
+    }
+   ],
+   "owner_ledger": {
+    "entries": [
+     {
+      "kind": "act",
+      "body": {
+       "ticket": "t-1",
+       "kind": "confirm-baseline",
+       "target": "$baseline:i1",
+       "lineage": {
+        "intent": "i1",
+        "kind": "confirm-baseline"
+       },
+       "result": "agreed",
+       "actor": {
+        "id": "owner"
+       },
+       "worker": {
+        "id": "worker"
+       }
+      }
+     }
+    ]
+   },
+   "name": "policy the status rules do not apply is named",
+   "why": "Required obligations, a least strength, a deferred limit and a floor's source are valid policy that no status rule applies yet: each is named, never dropped.",
+   "expect": {
+    "status": {
+     "intents": {
+      "i1": "fulfilled"
+     },
+     "project": "passed"
+    },
+    "policy_not_applied": [
+     "gates.max_deferred_days",
+     "minimum.strength_rank",
+     "required.obligations",
+     "separation.floor.confirm-baseline.source"
+    ]
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    },
+    "separation": {
+     "floor": {
+      "match-check": {
+       "level": "self"
+      }
+     }
+    }
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "name": "a floor left out takes the schema's default",
+   "why": "grant-amendment, change-policy and close-deferred have defaults (apart, apart, helper); what is judged carries them.",
+   "expect": {
+    "status": {
+     "intents": {
+      "i1": "draft"
+     }
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/[à-ÿ].txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "name": "a range outside ASCII",
+   "why": "A range's ends are printable ASCII characters.",
+   "expect": {
+    "refused": "bad-project"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "C:x"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "name": "a code path with a drive",
+   "why": "A relative path holds no colon, so no drive letter.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/hard.ledger",
+     "hardlink_to_owner": true
+    }
+   ],
+   "owner_ledger": {
+    "entries": [
+     {
+      "kind": "evidence",
+      "body": {
+       "obligation": "o1",
+       "preimage": "$preimage:o1",
+       "core_key": "$key:o1",
+       "platform": "linux/x86_64",
+       "verdict": "passed",
+       "writer": "w"
+      }
+     }
+    ]
+   },
+   "name": "the owner's ledger named again through a hard link",
+   "why": "The same file as the owner's ledger, however its path is spelled, is not read a second time.",
+   "expect": {
+    "status": {
+     "obligations": {
+      "o1": "unknown"
+     }
+    },
+    "ledger": {
+     "entries": 0,
+     "torn": false
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n",
+    "m/locked/a.txt": "x\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "unreadable": [
+    "m/locked"
+   ],
+   "name": "an unreadable folder",
+   "why": "A folder under the root that cannot be listed stops the command: a status from part of the files would look whole.",
+   "expect": {
+    "refused": "unreadable-file"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a byte changed in the body of the last entry, the chain untouched",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: The payload is still canonical and nothing follows it, so only the checksum can notice.",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 153 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a length that is not the payload's",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: The checksum is right. Only the length is wrong.",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 0152 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a length with a leading zero",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a length with a leading zero",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 +152 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a length with a plus sign",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a length with a plus sign",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 152 9B455882FE5A9DC07986F853DAC4BB50E710E2B78617DDEBCC94AB1E1EE49EE5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a checksum in uppercase",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a checksum in uppercase",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1  152  9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5  {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: two spaces between fields",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: two spaces between fields",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1  152 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: two spaces after the format marker only",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: two spaces after the format marker only",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 152  9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: two spaces after the length only",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: two spaces after the length only",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 152 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5  {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: two spaces after the checksum only",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: A reader that takes everything after the third space as the payload sees a payload that starts with a space: the length and the checksum no longer fit it.",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1\t152 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a tab in place of a space",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a tab in place of a space",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 152 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"} \n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a space after the payload",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a space after the payload",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "﻿dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a byte-order mark before the first entry",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a byte-order mark before the first entry",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\n\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a blank line between entries",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a blank line between entries",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\n\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a blank line at the end",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a blank line at the end",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a file that is one line feed",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: An empty file has no entries. This one has a line, and the line is empty.",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: the last entry written twice",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: The repeated line names the entry before the last as its previous.",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 152 4fe9daf458cfe4ec84d44833c5735dc02c614a92452b035ca63e41e9778c4ab9 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: an entry whose previous is the entry before the last",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: an entry whose previous is the entry before the last",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: the first entry removed",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: The first entry of a ledger has previous null.",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 83 bca9838fbaf7491c3ab973c7417749e4ba031eb3d31e17b0149b62ec8830b496 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a later entry whose previous is null",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a later entry whose previous is null",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 162 c131d4791dd10e537aa7417dc8f19b4684c5bb8a3a33059285649bf9f797fb11 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"extra\":1,\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: an entry with a fourth field",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: an entry with a fourth field",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 104 be2727fda352fe29cf472cd9c3e08f892b1d33d42498fd0a8ce307aaf12dd77f {\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: an entry with no body",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: an entry with no body",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 4 74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b null\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a payload that is null",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a payload that is null",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 89 5d64a419adb19dc9e9f0e85455e308392b684a0112601d5da11198d3e22796e6 [\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\",\"evidence\",{}]\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: a payload that is a list",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: a payload that is a list",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 143 1ac178da284999ff8f7ce6f15cea5fbb5c51eb351921b51bdb2b0a36bad3532e {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":7,\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: an entry whose kind is not a string",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: an entry whose kind is not a string",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "raw": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"zażółć\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona2 152 9b455882fe5a9dc07986f853dac4bb50e710e2b78617ddebcc94ab1e1ee49ee5 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n"
+    }
+   ],
+   "owner_ledger": null,
+   "name": "damaged ledger: another format marker",
+   "why": "The status command reads a ledger as protocol/ledger.md requires: another format marker",
+   "expect": {
+    "refused": "corrupt-ledger"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "policy": "0.2",
+    "required": {
+     "intents": [
+      "i1"
+     ]
+    },
+    "gates": {
+     "min_hard": 1
+    }
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "input_edit": [
+    [
+     [
+      "site",
+      "providers",
+      "t.check",
+      "command"
+     ],
+     [
+      "no-such-program-anywhere"
+     ]
+    ]
+   ],
+   "name": "a provider that cannot be started",
+   "why": "A command that names no program that can run is refused, never a crash.",
+   "expect": {
+    "refused": "provider-not-started"
    }
   }
  ]

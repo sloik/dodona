@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -47,7 +48,8 @@ def canonical_sorted(items) -> list[str]:
 
 
 def relpath_ok(rel) -> bool:
-    return isinstance(rel, str) and bool(rel) and not rel.startswith("/") and "\\" not in rel \
+    """Relative, and the same on every system: no drive (no `:`), no backslash, no empty, `.` or `..` segment."""
+    return isinstance(rel, str) and bool(rel) and not rel.startswith("/") and "\\" not in rel and ":" not in rel \
         and all(seg not in ("", ".", "..") for seg in rel.split("/"))
 
 
@@ -55,25 +57,74 @@ def reached_without_link(root: pathlib.Path, rel: str) -> bool:
     here = root
     for part in rel.split("/"):
         here = here / part
-        if here.is_symlink():
+        if here.is_symlink() or host.is_junction(here):
             return False
     return True
 
 
 # Step 1. The input.
 
-def policy_ok(policy) -> bool:
+LEVELS = ("self", "helper", "apart", "tested", "cross-make", "credentialed")
+FLOOR_KINDS = ("confirm-baseline", "match-check", "grant-amendment", "close-deferred", "change-policy")
+# A floor policy leaves out is the default of decision 0024, as policy.schema.json gives it.
+FLOOR_DEFAULTS = {"grant-amendment": "apart", "change-policy": "apart", "close-deferred": "helper"}
+POLICY_KEYS = {"policy": None, "reference": None, "platforms": None,
+               "required": {"obligations", "intents", "reproducibility"},
+               "minimum": {"strength_rank", "shown", "non_vacuity", "isolation"},
+               "gates": {"min_hard", "min_hard_percent", "max_deferred_days", "varying"},
+               "accept": {"providers", "executors", "record_origins", "attestors", "platform_independence"},
+               "separation": {"floor"}}
+# What the status rules apply. Anything else policy may hold is named in policy_not_applied, never dropped.
+APPLIED = {"policy", "reference", "required.intents", "gates.min_hard", "separation.floor"}
+
+
+def policy_problem(policy) -> str | None:
+    """Why the policy cannot be read, or None. Every key must be one policy.schema.json has, so a typo is refused
+    rather than ignored; the fields the status rules apply must have their type; a floor names a level on the scale."""
     if not isinstance(policy, dict):
-        return False
-    required, gates, separation = policy.get("required", {}), policy.get("gates", {}), policy.get("separation", {})
-    if not isinstance(required, dict) or not strings(required.get("intents", [])):
-        return False
-    if not isinstance(gates, dict) or ("min_hard" in gates and not (type(gates["min_hard"]) is int and gates["min_hard"] >= 0)):
-        return False
-    if not isinstance(separation, dict):
-        return False
-    floor = separation.get("floor", {})
-    return isinstance(floor, dict) and all(isinstance(v, dict) and isinstance(v.get("level"), str) for v in floor.values())
+        return "the policy is not an object"
+    if not isinstance(policy.get("policy"), str):
+        return "the policy must say its version, a string"
+    for key, value in policy.items():
+        if key not in POLICY_KEYS:
+            return f"policy has no field {key!r}"
+        inner = POLICY_KEYS[key]
+        if inner is not None:
+            if not isinstance(value, dict):
+                return f"policy.{key} is not an object"
+            unknown = sorted(set(value) - inner)
+            if unknown:
+                return f"policy.{key} has no field {unknown[0]!r}"
+    if "reference" in policy and not isinstance(policy["reference"], str):
+        return "policy.reference is not a string"
+    if not strings(policy.get("required", {}).get("intents", [])):
+        return "policy.required.intents is not a list of strings"
+    min_hard = policy.get("gates", {}).get("min_hard", 1)
+    if not (type(min_hard) is int and min_hard >= 0):
+        return "policy.gates.min_hard is not a whole number of at least 0"
+    floor = policy.get("separation", {}).get("floor", {})
+    if not isinstance(floor, dict):
+        return "policy.separation.floor is not an object"
+    for kind, entry in floor.items():
+        if kind not in FLOOR_KINDS:
+            return f"policy.separation.floor has no kind {kind!r}"
+        if not isinstance(entry, dict) or set(entry) - {"level", "source"} or entry.get("level") not in LEVELS \
+                or entry.get("source", "checked") not in ("checked", "attested", "declared"):
+            return f"policy.separation.floor.{kind} is not a level on the scale, with a source where given"
+    return None
+
+
+def not_applied(policy: dict) -> list[str]:
+    found = []
+    for key, value in policy.items():
+        if isinstance(value, dict) and key != "separation":
+            found += [f"{key}.{k}" for k in value if f"{key}.{k}" not in APPLIED]
+        elif key not in APPLIED and key != "separation":
+            found.append(key)
+    for kind, entry in policy.get("separation", {}).get("floor", {}).items():
+        if "source" in entry:
+            found.append(f"separation.floor.{kind}.source")
+    return sorted(found, key=sort_key)
 
 
 def check_input(asked) -> None:
@@ -81,7 +132,7 @@ def check_input(asked) -> None:
         raise Stop("bad-input", "the input is not an object")
     site = asked.get("site")
     ok = all(isinstance(asked.get(k), str) for k in ("root", "project", "policy_source", "owner_ledger")) \
-        and isinstance(site, dict) and policy_ok(asked.get("policy")) and strings(asked.get("ledgers")) \
+        and isinstance(site, dict) and strings(asked.get("ledgers")) \
         and relpath_ok(asked.get("project")) and relpath_ok(asked.get("owner_ledger")) and all(relpath_ok(p) for p in asked.get("ledgers", []))
     if ok:
         platform, tools, providers, deadline = site.get("platform"), site.get("tools"), site.get("providers"), site.get("deadline_ms")
@@ -93,6 +144,9 @@ def check_input(asked) -> None:
             and type(deadline) is int and deadline > 0
     if not ok:
         raise Stop("bad-input", "the input does not have the shape the contract gives")
+    problem = policy_problem(asked["policy"])
+    if problem:
+        raise Stop("bad-input", problem)
     root = pathlib.Path(asked["root"])
     if not root.is_dir():
         raise Stop("bad-input", "root is not a directory")
@@ -160,7 +214,10 @@ def read_project(raw: bytes) -> dict:
 # Steps 4 and 5. Files and obligations.
 
 def claimed(root: pathlib.Path, patterns: list[str]) -> list[dict]:
-    return [host.file_ref(root / p, root) for p in sorted(host.claimed(root, patterns), key=sort_key)]
+    try:
+        return [host.file_ref(root / p, root) for p in sorted(host.claimed(root, patterns), key=sort_key)]
+    except (host.Unreadable, OSError) as err:
+        raise Stop("unreadable-file", str(err)) from None
 
 
 def session(root: pathlib.Path, site: dict, binding: dict):
@@ -168,6 +225,8 @@ def session(root: pathlib.Path, site: dict, binding: dict):
         sess = host.Session(site["providers"][binding["provider"]]["command"], root, [], deadline_s=site["deadline_ms"] / 1000)
     except host.Refused as err:
         raise Stop(str(err), binding["provider"]) from None
+    except OSError as err:
+        raise Stop("provider-not-started", f"{binding['provider']}: {err}") from None
     manifest = sess.manifest
     if not all(isinstance(manifest.get(k), str) for k in ("name", "version", "protocol")):
         sess.close()
@@ -323,7 +382,8 @@ def entries_of(root: pathlib.Path, asked: dict) -> tuple[list, dict]:
     if not reached_without_link(root, owner_rel) or (owner.exists() and not owner.is_file()):
         raise Stop("owner-ledger-link", owner_rel)
     sources = [(owner_rel, True)] if owner.exists() else []
-    sources += [(p, False) for p in asked["ledgers"] if not (owner.exists() and (root / p).resolve() == owner.resolve())]
+    # The same file as the owner's ledger, however its path is spelled (case, links, hard links), is not read again.
+    sources += [(p, False) for p in asked["ledgers"] if not (owner.exists() and (root / p).exists() and os.path.samefile(root / p, owner))]
     entries, torn = [], False
     for rel, is_owner in sources:
         read = read_ledger(root, rel)
@@ -336,9 +396,10 @@ def entries_of(root: pathlib.Path, asked: dict) -> tuple[list, dict]:
 # Step 9. Policy.
 
 def policy_of(policy: dict) -> dict:
+    floors = dict(FLOOR_DEFAULTS)
+    floors.update({k: v["level"] for k, v in policy.get("separation", {}).get("floor", {}).items()})
     return {"min_hard_gates": policy.get("gates", {}).get("min_hard", 1), "required": policy.get("required", {}).get("intents", []),
-            "trusted_writers": [], "floors": {k: v["level"] for k, v in policy.get("separation", {}).get("floor", {}).items()},
-            "attestors": {}, "makes": []}
+            "trusted_writers": [], "floors": floors, "attestors": {}, "makes": []}
 
 
 # Step 11. Coverage.
@@ -410,7 +471,8 @@ def run(asked) -> dict:
               "policy": policy, "obligations": obligations, "intents": intents,
               "steps": [{"do": {"append": {"kind": e["kind"], "body": e["body"]}}} for e in entries] + [NOTHING]}
     return {"judged": judged, "coverage": coverage(intents, policy["min_hard_gates"]), "policy_source": asked["policy_source"],
-            "ledger": ledger_note, "not_served": not_served, "not_checkable": unchecked}
+            "ledger": ledger_note, "not_served": not_served, "not_checkable": unchecked,
+            "policy_not_applied": not_applied(asked["policy"])}
 
 
 def main() -> int:

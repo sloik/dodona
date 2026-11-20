@@ -442,12 +442,12 @@ REFUSED_BY_PROVIDER: list[str] = []
 DECLARED_INPUTS: dict = {}  # obligation name -> the paths its checks may read, as the provider listed them
 
 
-PATTERN_SEGMENT = re.compile(r"(?:[^\[\]\\*]|\*|\[[^\[\]\\/]-[^\[\]\\/]\])+")
+PATTERN_SEGMENT = re.compile(r"(?:[^\[\]\\*]|\*|\[[!-~]-[!-~]\])+")
 
 
 def pattern_ok(pattern) -> bool:
     """A match pattern as the project file may hold it: a relative path whose segments are not empty, `.` or
-    `..`, hold no backslash, and use `[` only as a range `[a-b]` with a no later than b."""
+    `..`, hold no backslash, and use `[` only as a range `[a-b]` of two printable ASCII characters, a no later than b."""
     if not isinstance(pattern, str) or not pattern or pattern.startswith("/"):
         return False
     for seg in pattern.split("/"):
@@ -472,11 +472,24 @@ def segment_matches(pattern: str, name: str) -> bool:
     return bool(name) and name[0] == pattern[0] and segment_matches(pattern[1:], name[1:])
 
 
+def is_junction(path) -> bool:
+    """A Windows junction, a link that is_symlink does not report."""
+    check = getattr(pathlib.Path(path), "is_junction", None)
+    return bool(check and check())
+
+
+class Unreadable(Exception):
+    """A folder or file under the root that cannot be read: a listing without it would look whole."""
+
+
 def regular_files(root: pathlib.Path) -> list[str]:
-    """Every regular file under root by relative path, reached without a link at any step, none with a segment `.git`."""
+    """Every regular file under root by relative path, reached without a link (a junction included) at any step, none
+    with a segment `.git`. A folder that cannot be listed raises Unreadable."""
+    def stop(err):
+        raise Unreadable(str(getattr(err, "filename", "") or err))
     found = []
-    for here, dirs, files in os.walk(root, followlinks=False):
-        dirs[:] = [d for d in dirs if d != ".git" and not os.path.islink(os.path.join(here, d))]
+    for here, dirs, files in os.walk(root, followlinks=False, onerror=stop):
+        dirs[:] = [d for d in dirs if d != ".git" and not os.path.islink(os.path.join(here, d)) and not is_junction(os.path.join(here, d))]
         for name in files:
             full = os.path.join(here, name)
             if name != ".git" and not os.path.islink(full) and os.path.isfile(full):
