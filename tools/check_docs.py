@@ -541,8 +541,10 @@ def docs_commands_name_real_flags(repo: Repo) -> list[str]:
         if tool not in clis:
             try:
                 clis[tool] = read_cli(repo.read(tool))
-            except SyntaxError:
-                clis[tool] = None  # reported by docs_usage_matches_the_parser, which reads every tool
+            except SyntaxError as err:
+                clis[tool] = None
+                if tool not in tool_files(repo):  # the usage check reports only the files it reads
+                    problems.append(f"{where}:{number}: names {tool}, which cannot be read as Python is ({err.msg}), so its flags cannot be checked")
         cli = clis[tool]
         if cli is None:
             continue
