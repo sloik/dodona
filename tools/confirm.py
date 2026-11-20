@@ -85,6 +85,9 @@ def main() -> int:
         if criterion["gate"] == "deferred":
             mine = written.get(name, {})
             print(f"    observed after delivery, within {mine.get('limit_days')} days: {mine.get('condition')}")
+            longest = policy.get("gates", {}).get("max_deferred_days")
+            if isinstance(longest, int) and isinstance(mine.get("limit_days"), int) and mine["limit_days"] > longest:
+                print(f"    its limit is longer than policy allows ({longest} days)")
     if intent["children"]:
         print("  children:", ", ".join(sorted(intent["children"])))
     # Where the hard gates sit (decision 0030): the floor is counted over the whole tree, so a

@@ -38,6 +38,9 @@ BEGIN = "<!-- criteria: written by tools/intents.py from the front matter; do no
 END = "<!-- end of criteria -->"
 
 
+KEYS = {"id", "title", "owner", "worker", "parent", "touches", "criteria"}
+
+
 class Unreadable(Exception):
     """The intent file could be read more than one way."""
 
@@ -65,17 +68,30 @@ def front(text: str) -> tuple[dict, str]:
         if key != "criteria" and not re.fullmatch(r"[A-Za-z0-9 .,;:'\"()/+?%-]*", value):
             raise Unreadable(f"the front-matter value of {key!r} is not plain text")
         fields[key] = value
+    # Only the keys a reader takes. Any other would show on GitHub's front-matter table and be read by nobody,
+    # so a key named like a field of a criterion could pass for one.
+    unknown = sorted(set(fields) - KEYS)
+    if unknown:
+        raise Unreadable(f"the front matter has keys no reader takes: {', '.join(unknown)}")
+    # An id and a parent are written one way only, so two spellings of one id cannot pass for two intents.
+    if not re.fullmatch(r'"[0-9]{4}"', fields.get("id", "")):
+        raise Unreadable('the id must be written as four digits in double quotes, such as id: "0004"')
+    if not re.fullmatch(r'"([0-9]{4})?"', fields.get("parent", '""')):
+        raise Unreadable('the parent must be written as four digits in double quotes, or as ""')
     return fields, body
 
 
-# GitHub shows :name: as an emoji, so plain text may not hold one.
-EMOJI = re.compile(r":[A-Za-z0-9_+-]+:")
+# GitHub shows :name: as an emoji, so plain text may not hold one. A time such as 02:00:00 is not one.
+EMOJI = re.compile(r"(?<![0-9]):[A-Za-z0-9_+-]+:(?![0-9])")
+# A deadline is the limit_days of a deferred criterion and nothing else: no other text may state one.
+DEADLINE = re.compile(r"\b[0-9]+\s*days?\b|\bdays?\b.*\bdelivery\b", re.I)
 
 
 def plain(text) -> bool:
     """Text that Markdown and HTML render as itself: allowed characters only, the whole of it (no line feed slips
     past the end), and no emoji code."""
-    return isinstance(text, str) and PLAIN.fullmatch(text) is not None and not EMOJI.search(text)
+    return isinstance(text, str) and PLAIN.fullmatch(text) is not None and not EMOJI.search(text) \
+        and not DEADLINE.search(text) and text == text.strip() and any(ch.isalpha() for ch in text)
 
 
 def no_repeats(pairs: list) -> dict:
@@ -146,6 +162,8 @@ def read(path: pathlib.Path) -> tuple[dict, list[dict], str]:
     """The front matter, the criteria, and the whole text; or Unreadable."""
     text = path.read_text(encoding="utf-8")
     fields, body = front(text)
+    if not path.name.startswith(fields["id"].strip('"') + "-"):
+        raise Unreadable(f"its id {fields['id']} is not the number its file name starts with")
     items = criteria_of(fields)
     if body.count(BEGIN) != 1 or body.count(END) != 1:
         raise Unreadable("the body must hold the written criteria table exactly once")

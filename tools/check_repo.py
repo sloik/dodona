@@ -467,12 +467,79 @@ def gap_an_intent_reads_one_way_only() -> None:
             problems.append("tools/intents.py accepts a criterion that names a field twice")
         except intents.Unreadable:
             pass
+        # The front matter: keys no reader takes, and an id or parent spelled another way.
+        for name, old, new in (("a key no reader takes, named like a criterion's field", "\ntitle: ", "\nlimit_days: 400\ntitle: "),
+                               ("an id in single quotes", 'id: "0001"', "id: '0001'"),
+                               ("an id with a space after it", 'id: "0001"', 'id: "0001" '),
+                               ("an id without quotes", 'id: "0001"', "id: 1"),
+                               ("an id that is not the file's number", 'id: "0001"', 'id: "0009"'),
+                               ("a parent in single quotes", 'parent: ""', "parent: ''")):
+            path.write_text(sample.replace(old, new, 1), encoding="utf-8")
+            try:
+                intents.read(path)
+                problems.append(f"tools/intents.py accepts {name}")
+            except intents.Unreadable:
+                pass
+        # An id of another form in a file named to match it: only the rule on how an id is written refuses it.
+        short = pathlib.Path(tmp) / "1-probe.md"
+        short.write_text(sample.replace('id: "0001"', 'id: "1"', 1), encoding="utf-8")
+        try:
+            intents.read(short)
+            problems.append("tools/intents.py accepts an id that is not four digits")
+        except intents.Unreadable:
+            pass
+        # Plain text that states a deadline of its own, says nothing, or is a time (which must still be read).
+        for name, change, refused in (("a condition stating a deadline", lambda c: c[deferred].update(condition="seen within 400 days"), True),
+                                      ("words stating a deadline", lambda c: c[deferred].update(words="Within 400 days of delivery, it is seen"), True),
+                                      ("words of a space", lambda c: c[deferred].update(words=" "), True),
+                                      ("a note holding a time, which is not an emoji", lambda c: c[deferred].update(checked_by="Runs at 02:00:00 in CI"), False)):
+            changed_items = json.loads(fields["criteria"])
+            change(changed_items)
+            changed = sample.replace(fields["criteria"], json.dumps(changed_items))
+            old_table = changed[changed.index(intents.BEGIN): changed.index(intents.END) + len(intents.END)]
+            path.write_text(changed.replace(old_table, intents.table(changed_items)), encoding="utf-8")
+            try:
+                intents.read(path)
+                if refused:
+                    problems.append(f"tools/intents.py accepts {name}")
+            except intents.Unreadable as err:
+                if not refused:
+                    problems.append(f"tools/intents.py refuses {name}: {err}")
         # Two files with one id: which one counts would depend on the order they are listed in.
         twin = pathlib.Path(tmp) / "0001-twin.md"
         twin.write_text(sample, encoding="utf-8")
         path.write_text(sample, encoding="utf-8")
         if not intents.check_all([path, twin]):
             problems.append("tools/intents.py accepts two intent files with one id")
+    # What the owner confirms shows each deferred criterion's observation and limit, in its own column, and the
+    # limit is one policy allows.
+    import tomllib
+    longest = tomllib.loads((ROOT / "policy.toml").read_text(encoding="utf-8")).get("gates", {}).get("max_deferred_days")
+    for path in sorted((ROOT / "intents").glob("[0-9]*.md")):
+        try:
+            _, items, text = intents.read(path)
+        except intents.Unreadable:
+            continue
+        for c in items:
+            if c["gate"] != "deferred":
+                continue
+            row = f"| {c['id']} | {c['words']} | deferred | {intents.shown_checks(c)} | within {c['limit_days']} days of delivery: {c['condition']} |"
+            if row not in text:
+                problems.append(f"{path.name}: criterion {c['id']}'s observation and limit are not shown in a column of their own")
+            if isinstance(longest, int) and c["limit_days"] > longest:
+                problems.append(f"{path.name}: criterion {c['id']} has a limit of {c['limit_days']} days; policy.toml allows at most {longest}")
+    if "observed after delivery" not in (ROOT / "tools" / "confirm.py").read_text(encoding="utf-8"):
+        problems.append("tools/confirm.py must show each deferred criterion's observation and limit before the owner agrees")
+    import status
+    with tempfile.TemporaryDirectory() as tmp:
+        sample = sorted((ROOT / "intents").glob("[0-9]*.md"))[0]
+        for name in (sample.name, sample.name[:5] + "twin.md"):
+            (pathlib.Path(tmp) / name).write_text(sample.read_text(encoding="utf-8"), encoding="utf-8")
+        try:
+            status.read_intents([], pathlib.Path(tmp))
+            problems.append("tools/status.py reports a status when two intent files have one id")
+        except SystemExit:
+            pass
     source = (ROOT / "tools" / "status.py").read_text(encoding="utf-8")
     if 'e.get("kind") == "act"' not in source or "OWNER_LEDGER.resolve()" not in source:
         problems.append("tools/status.py must read only acts from the owner's ledger, and compare ledger paths after resolving them")
