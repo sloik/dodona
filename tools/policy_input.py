@@ -21,7 +21,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # The floors the schema gives when the policy leaves a kind out (decision 0024).
 FLOOR_DEFAULTS = {"grant-amendment": "apart", "change-policy": "apart", "close-deferred": "helper"}
 # What the status rules apply. Every other field present is named in not_applied.
-APPLIED = {("policy",), ("reference",), ("required", "intents"), ("gates", "min_hard"),
+# `reference` (the line whose policy is the reference) is not compared with anything yet, so it is named too.
+APPLIED = {("policy",), ("required", "intents"), ("gates", "min_hard"),
            ("separation", "floor", "confirm-baseline", "level"), ("separation", "floor", "grant-amendment", "level")}
 
 
@@ -58,7 +59,12 @@ def leaves(value, path=()):
         yield path
 
 
+VERSION = "0.2"
+
+
 def reduce(policy: dict) -> dict:
+    if policy.get("policy") != VERSION:
+        raise NotValid(f"policy version {policy.get('policy')!r}: the status rules know {VERSION} only")
     floors = dict(FLOOR_DEFAULTS)
     floors.update({kind: entry["level"] for kind, entry in policy.get("separation", {}).get("floor", {}).items()})
     not_applied = sorted({".".join(p) for p in leaves(policy) if p not in APPLIED}, key=sort_key)
@@ -68,6 +74,10 @@ def reduce(policy: dict) -> dict:
 
 def self_test() -> list[str]:
     problems = []
+    try:
+        import jsonschema  # noqa: F401
+    except ImportError:
+        raise NotValid("the jsonschema package is needed to check the policy against its schema") from None
     good = {"policy": "0.2", "required": {"intents": ["i1"], "obligations": [{"binding": "b", "name": "o"}]},
             "gates": {"min_hard": 2, "max_deferred_days": 30}, "separation": {"floor": {"confirm-baseline": {"level": "apart"}}}}
     try:
@@ -94,6 +104,13 @@ def self_test() -> list[str]:
         problems.append("an empty policy does not reduce to its defaults")
     if reduce({"policy": "0.2", "x-note": "hi"})["not_applied"] != ["x-note"]:
         problems.append("an x- field is not named as not applied")
+    if reduce({"policy": "0.2", "reference": "main"})["not_applied"] != ["reference"]:
+        problems.append("reference, which nothing compares yet, is not named as not applied")
+    try:
+        reduce({"policy": "9.9"})
+        problems.append("a policy version the status rules do not know is reduced")
+    except NotValid:
+        pass
     return problems
 
 
@@ -111,10 +128,11 @@ def main() -> int:
     try:
         policy = tomllib.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
         validate(policy)
+        reduced = reduce(policy)
     except (OSError, tomllib.TOMLDecodeError, NotValid) as err:
         print(json.dumps({"refused": "bad-policy", "detail": str(err)}))
         return 1
-    print(json.dumps(reduce(policy), ensure_ascii=False))
+    print(json.dumps(reduced, ensure_ascii=False))
     return 0
 
 

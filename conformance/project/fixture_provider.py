@@ -4,7 +4,8 @@
 
 ANSWERS.json holds `manifest` (the manifest to send; its echo is copied from hello unless
 `wrong_echo` is true) and, for each capability, the body to answer with; under `raw`, for a
-capability, a line to send as it is instead, with %ID% replaced by the request's id. Every message the host
+capability, a line to send as it is instead, with %ID% replaced by the request's id; `delay_ms`, a
+wait before each answer; and `long_line`, an answer longer than any line limit a host sets. Every message the host
 sends is appended to RECORD.jsonl, so the judge can see what it was asked. A capability with no
 answer gets an `error`.
 """
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 
 
 def main() -> int:
@@ -37,11 +39,16 @@ def main() -> int:
             return 0
         elif kind == "request":
             capability = message.get("capability")
+            if answers.get("delay_ms"):
+                time.sleep(answers["delay_ms"] / 1000)
             raw = answers.get("raw", {}).get(capability)
             if raw is not None:
                 # Bytes as the case writes them, with the request's id put in: for answers no JSON writer makes.
                 sys.stdout.buffer.write(raw.replace("%ID%", str(message["id"])).encode("utf-8") + b"\n")
                 sys.stdout.buffer.flush()
+            elif answers.get("long_line"):
+                body = {"intents": [], "rejected": [], "x": "a" * 1100000}
+                send({"type": "result", "id": message["id"], "capability": capability, "body": body})
             elif capability in answers:
                 send({"type": "result", "id": message["id"], "capability": capability, "body": answers[capability]})
             else:

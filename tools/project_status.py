@@ -110,6 +110,8 @@ def check_input(asked) -> None:
     if not root.is_dir():
         raise Stop("bad-input", "root is not a directory")
     for name, provider in sorted(site["providers"].items()):
+        if len(set(provider["code"])) != len(provider["code"]):
+            raise Stop("bad-input", f"{name}: a code path listed twice")
         for rel in provider["code"]:
             if not relpath_ok(rel) or not reached_without_link(root, rel) or not (root / rel).is_file():
                 raise Stop("bad-input", f"{name}: code path {rel!r} is not a regular file under root reached without a link")
@@ -285,7 +287,7 @@ def intents_of(root: pathlib.Path, site: dict, bindings: list[dict], listed: lis
             sess.close()
         items, rejected = body.get("intents"), body.get("rejected", [])
         if not isinstance(items, list) or not isinstance(rejected, list) \
-                or not all(isinstance(r, dict) and isinstance(r.get("path"), str) for r in rejected) \
+                or not all(isinstance(r, dict) and isinstance(r.get("path"), str) and r["path"] != "" for r in rejected) \
                 or not all(intent_shape(it) for it in items):
             raise Stop("bad-answer", f"binding {binding['name']}: the answer does not have the shape the contract gives")
         if rejected:
@@ -330,6 +332,8 @@ def intents_of(root: pathlib.Path, site: dict, bindings: list[dict], listed: lis
 
 def read_ledger(root: pathlib.Path, rel: str) -> dict:
     path = root / rel
+    if os.path.lexists(path) and not path.exists():
+        raise Stop("unreadable-file", f"{rel} is a link to nothing")
     if path.exists() and not path.is_file():
         raise Stop("corrupt-ledger", f"{rel} is not a file")
     try:
@@ -367,7 +371,8 @@ def entries_of(root: pathlib.Path, asked: dict) -> tuple[list, dict]:
 # Step 9. Policy.
 
 def policy_of(policy: dict) -> dict:
-    return {"min_hard_gates": policy["min_hard_gates"], "required": policy["required"], "trusted_writers": [],
+    # A floor below 1 is handed over as 1: an intent with no hard gate is never delivered (decision 0018).
+    return {"min_hard_gates": max(policy["min_hard_gates"], 1), "required": policy["required"], "trusted_writers": [],
             "floors": dict(policy["floors"]), "attestors": {}, "makes": []}
 
 
@@ -406,17 +411,31 @@ def coverage(intents: dict, floor: int) -> dict:
     return {"intents": out, "thinnest": thinnest}
 
 
-def headline(status: str, not_applied: list) -> str:
-    """The project's status as the command states it: the report's, except that a project policy holds fields no
-    status rule applies cannot be passed or nothing-required, only unknown, since what is not applied could fail it."""
-    return "unknown" if not_applied and status in ("passed", "nothing-required") else status
+def doubts(out: dict) -> list[str]:
+    """What keeps the report's passed or nothing-required from being the project's: each could hide a failure."""
+    found = []
+    if out["policy_not_applied"]:
+        found.append("policy no status rule applies")
+    if any(out["judged"]["intents"].get(name, {}).get("children") for name in out["judged"]["policy"]["required"]):
+        found.append("a required intent has children, and no status rule reads descendants yet")
+    if out["not_checkable"]:
+        found.append("obligations the provider could not make into checks")
+    if out["ledger"]["torn"]:
+        found.append("a ledger ends in an entry cut short")
+    return found
+
+
+def headline(status: str, doubt: list) -> str:
+    """The project's status as the command states it: the report's, except unknown where the report says passed or
+    nothing-required while anything named in `doubts` is so: what was not applied or not read could fail it."""
+    return "unknown" if doubt and status in ("passed", "nothing-required") else status
 
 
 def run(asked) -> dict:
     check_input(asked)
     root = pathlib.Path(asked["root"])
     site = asked["site"]
-    if not reached_without_link(root, asked["project"]) or not (root / asked["project"]).is_file():
+    if not reached_without_link(root, asked["project"]) or not (root / asked["project"]).is_file():  # a link at any step, the last included
         raise Stop("bad-project", "the project file is not a regular file reached without a link")
     try:
         raw = (root / asked["project"]).read_bytes()
@@ -449,9 +468,11 @@ def run(asked) -> dict:
               "self": {"writer": site["writer"], "platform": f"{site['platform']['os']}/{site['platform']['arch']}"},
               "policy": policy, "obligations": obligations, "intents": intents,
               "steps": [{"do": {"append": {"kind": e["kind"], "body": e["body"]}}} for e in entries] + [NOTHING]}
-    return {"judged": judged, "coverage": coverage(intents, policy["min_hard_gates"]), "policy_source": asked["policy_source"],
-            "ledger": ledger_note, "not_served": not_served, "not_checkable": unchecked,
-            "policy_not_applied": asked["policy"]["not_applied"]}
+    out = {"judged": judged, "coverage": coverage(intents, policy["min_hard_gates"]), "policy_source": asked["policy_source"],
+           "ledger": ledger_note, "not_served": not_served, "not_checkable": unchecked,
+           "policy_not_applied": asked["policy"]["not_applied"]}
+    out["project_doubts"] = doubts(out)
+    return out
 
 
 def main() -> int:
@@ -468,7 +489,7 @@ def main() -> int:
     if kernel:
         answer = subprocess.run(kernel + ["scenario"], input=json.dumps(out["judged"]).encode("utf-8"), capture_output=True, check=True)
         out["report"] = json.loads(answer.stdout)["results"][-1]
-        out["project_status"] = headline(out["report"]["project"]["status"], out["policy_not_applied"])
+        out["project_status"] = headline(out["report"]["project"]["status"], out["project_doubts"])
     print(json.dumps(out, ensure_ascii=False, sort_keys=True))
     return 0
 

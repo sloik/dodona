@@ -33,6 +33,7 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import canonical  # noqa: E402
+import host  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CASES = ROOT / "conformance" / "project" / "cases.json"
@@ -47,7 +48,8 @@ def same(a, b) -> bool:
     return json.dumps(a, sort_keys=True, ensure_ascii=False) == json.dumps(b, sort_keys=True, ensure_ascii=False)
 
 
-COMPARED = ("judged", "coverage", "ledger", "not_served", "not_checkable", "policy_not_applied", "policy_source")
+COMPARED = ("judged", "coverage", "ledger", "not_served", "not_checkable", "policy_not_applied", "policy_source", "project_doubts")
+OUT_KEYS = set(COMPARED) | {"report", "project_status"}
 
 
 def ledger_bytes(entries: list[dict]) -> bytes:
@@ -132,6 +134,12 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
             continue
         path = root / item["path"]
         path.parent.mkdir(parents=True, exist_ok=True)
+        if item.get("dangling"):
+            try:
+                os.symlink(root / "l" / "nothing-here.ledger", path)
+            except (OSError, NotImplementedError):
+                raise Skip("this system cannot make a symbolic link") from None
+            continue
         if item.get("hardlink_to_owner"):
             try:
                 os.link(root / "records" / "owner.ledger", path)
@@ -151,7 +159,10 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
             except (OSError, NotImplementedError):
                 raise Skip("this system cannot make a symbolic link") from None
             continue
-        data = item["raw"].encode("utf-8") if "raw" in item else ledger_bytes(fill(item["entries"], preimages))
+        if "raw_entries" in item:  # entries the reference encoder writes whole, chained, whatever they hold
+            data = ledger_bytes(item["raw_entries"])
+        else:
+            data = item["raw"].encode("utf-8") if "raw" in item else ledger_bytes(fill(item["entries"], preimages))
         path.write_bytes(data + item.get("torn_tail", "").encode("utf-8"))
     if "raw_input" in case:
         return case["raw_input"].encode("utf-8"), root, aux
@@ -195,10 +206,13 @@ def run(command: list[str], case: dict, site: dict, preimages: dict, timeout: in
         finally:
             for rel in case.get("unreadable", []):
                 os.chmod(root / rel, 0o755)  # so the folder can be removed
-        try:
-            return json.loads(done.stdout), requests(aux), done.stderr.decode("utf-8", "replace")[-300:]
-        except ValueError:
+        if done.returncode != 0:
             return None, requests(aux), f"exit {done.returncode}: " + done.stderr.decode("utf-8", "replace")[-300:]
+        try:
+            # Read strictly: a key given twice would let a reader that takes the first see something else.
+            return host.strict_load(done.stdout.rstrip(b"\n")), requests(aux), done.stderr.decode("utf-8", "replace")[-300:]
+        except Exception as err:  # noqa: BLE001
+            return None, requests(aux), f"not one strict JSON object ({err}): " + done.stdout[:200].decode("utf-8", "replace")
 
 
 def _preimages(case: dict, site: dict) -> dict:
@@ -232,6 +246,8 @@ def judge(case: dict, site: dict, command: list[str], kernel: list[str]) -> list
         return problems
     if "refused" in got:
         return [f"refused {got['refused']} ({got.get('detail')}), expected a report"]
+    if set(got) != OUT_KEYS:
+        problems.append(f"the answer holds {sorted(set(got) ^ OUT_KEYS)} where it should not or does not")
     if ref is None or "refused" in ref:
         return [f"the kit is wrong: the reference gives {ref} ({ref_err})"]
     for field in COMPARED:
@@ -261,10 +277,10 @@ def judge(case: dict, site: dict, command: list[str], kernel: list[str]) -> list
     if "project_status" in expect and got.get("project_status") != expect["project_status"]:
         problems.append(f"project_status: expected {expect['project_status']}, got {got.get('project_status')}")
     if own is not None and got.get("project_status") != (
-            "unknown" if got.get("policy_not_applied") and own.get("project", {}).get("status") in ("passed", "nothing-required")
+            "unknown" if got.get("project_doubts") and own.get("project", {}).get("status") in ("passed", "nothing-required")
             else own.get("project", {}).get("status")):
-        problems.append("project_status is not the report's status as the policy not applied allows it")
-    for field in ("not_served", "not_checkable", "ledger", "policy_not_applied"):
+        problems.append("project_status is not the report's status as its doubts allow")
+    for field in ("not_served", "not_checkable", "ledger", "policy_not_applied", "project_doubts"):
         if field in expect and not same(got.get(field), expect[field]):
             problems.append(f"{field}: expected {expect[field]}, got {got.get(field)}")
     return problems
@@ -423,7 +439,7 @@ def main() -> int:
         print(("match    " if not problems else "MISMATCH ") + case["name"] + ("" if not problems else ": " + "; ".join(problems)))
     judged = len(spec["cases"]) - skipped
     print(json.dumps({"cases": len(spec["cases"]), "judged": judged, "skipped": skipped, "matched": matched, "all_matched": matched == judged}))
-    return 0 if matched == judged and not kit_problems else 1
+    return 0 if judged and matched == judged and not kit_problems else 1
 
 
 if __name__ == "__main__":
