@@ -38,7 +38,7 @@ The check stops a merge only once `main`'s ruleset requires it. Until then it re
 | `kit.session_cases` | `cases` in `conformance/provider/cases.json` | ratcheted, by mode |
 | `planted_defects.kernel`, `planted_defects.kernel2` | `defects` in `kernel/defects.json` and `kernel2/defects.json` | ratcheted, by name |
 | `claims.total` | rows `\| C<n> \|` in `spec/CLAIMS.md` | ratcheted, by claim id |
-| `claims.checked` | claims whose status is `**checked**, run <n>`, with a heading `### Run <n>` under `## Recorded runs`, outside any fenced block; a heading of level 1 or 2 ends that section, and a fence closes only on the same character, at least as long, with nothing after it | ratcheted, by claim id |
+| `claims.checked` | claims whose status is `**checked**, run <n>`, with a heading `### Run <n>` under `## Recorded runs`, outside any fenced block; a heading of level 1 or 2 ends that section, and a fence closes only on the same character, at least as long, with nothing after it. Markdown that could hide a line or end a section unseen (an HTML block or comment, a link reference definition, an indented or underlined heading) makes the file unreadable | ratcheted, by claim id |
 | `claims.unchecked` | every other claim | shown |
 | `claims.sampled_by_kit`, `claims.modelled_unchecked`, `claims.not_modelled` | the other statuses, and the section "Not yet modelled" | shown |
 | `decisions.total` | `decisions/[0-9]*.md` | ratcheted, by file name |
@@ -84,7 +84,7 @@ Each change is compared with its own base, so a removal that the owner merged ov
 
 - **Its own job name, taken by another workflow.** A required check is matched by its name. `tools/metrics.py jobs` fails the check when another workflow of the change defines a job with the gate's id or name, in a `.yml` or `.yaml` file. This is best effort. It reads plain block-style YAML. A name made by an expression or a matrix, written in flow style or with escapes, or a check run created through the API gets past it. The ruleset must pin the required check to the GitHub Actions app, or a status posted by anyone with write access, with no workflow at all, would count. Even pinned, a workflow of the change given `checks: write` could create a check run under the gate's name; that needs a workflow file in the change, which a reviewer sees.
 - **Unsafe edits of its own workflow.** The self-test reads `metrics.yml` for known ways of running or checking out the pull request's code and plants each one. That reading is advisory, because a determined edit could get past it. Any change to the workflow fails the check anyway.
-- **What a file means.** The tool counts what files state. A scenario must still be JSON, but one whose content is emptied, or a defect cut down to its name, keeps its identity and is not seen as taken away.
+- **What a file means.** The tool counts what files state. Only the host check cases and the ledger appends are tracked by their whole content. Anything tracked by a name (a scenario, which must still be JSON; a vector; a session case; a ledger damage case or bad request; a defect; a decision) can be cut down to its name and is not seen as taken away.
 
 ## The self-test
 

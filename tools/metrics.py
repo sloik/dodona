@@ -292,6 +292,15 @@ def _markdown(text: str, rel: str) -> list[tuple[str, bool]]:
             out.append((line, True))
             fence = None
             continue
+        if fence is None:
+            # Outside code, Markdown that can hide a line from a reader while this tool reads it, or end a section
+            # this tool does not see end, makes the file unreadable: an HTML block, a link reference definition
+            # (whose title can hold lines), a heading indented by one to three spaces, and a setext underline.
+            if re.match(r"^ {0,3}<[A-Za-z/!?]", line) or re.match(r"^ {0,3}\[[^\]]+\]:", line) \
+                    or re.match(r"^ {1,3}#{1,6}(\s|$)", line) or (out and out[-1][0].strip() and not out[-1][0].lstrip().startswith("|")
+                                                              and re.match(r"^ {0,3}(=+|-+)\s*$", line)):
+                raise Unmeasurable(f"{rel}: Markdown this tool does not read (an HTML block, a link reference definition, "
+                                   f"an indented or underlined heading): {line[:40]!r}")
         out.append((line, fence is not None))
     return out
 
@@ -460,8 +469,8 @@ def measure(tree) -> list[dict]:
         raise Unmeasurable(f"{rel}: a claim row inside a fenced block")
     runs, under = set(), False
     for line, fenced in _markdown(text, rel):
-        if not fenced and re.match(r"^#{1,2} ", line):
-            under = line.strip() == "## Recorded runs"
+        if not fenced and re.match(r"^#{1,2}(\s|$)", line):
+            under = re.sub(r"\s+#+\s*$", "", line.strip()) == "## Recorded runs"
         m = re.match(r"^### Run (\d+)\b", line)
         if m and under and not fenced:
             runs.add(m.group(1))
@@ -1163,6 +1172,8 @@ def self_test(mutants: bool) -> int:
               planted(lambda r: edit_json(r, "conformance/vectors/canonical.json", lambda d: d["accept"].__setitem__(0, {"value": 1}))),
               1, fails="kit.vectors", must_say="no longer told apart")
         judge("control: a scenario copied byte for byte under a new name (adds, takes nothing)", planted(add_scenario), 0)
+        judge("control: the Recorded runs heading with a closing sequence, as Markdown allows",
+              planted(lambda r: replace_once(r, "spec/CLAIMS.md", "\n## Recorded runs\n", "\n## Recorded runs ##\n")), 0)
 
         # What cannot be read is never counted as zero, and duplicates have no identity.
         unreadable = [
@@ -1182,6 +1193,19 @@ def self_test(mutants: bool) -> int:
              lambda r: (replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| **checked**, run 99 |"), append(r, "spec/CLAIMS.md", "\n# Appendix\n\n### Run 99: not a recorded run\n"))),
             ("a claim checked by a run under a Recorded runs heading that is fenced",
              lambda r: (replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| **checked**, run 99 |"), replace_once(r, "spec/CLAIMS.md", "\n## Not yet modelled", "\n```\n## Recorded runs\n```\n### Run 99: a lookalike\n\n## Not yet modelled"))),
+            ("an HTML comment inside a line of text",
+             lambda r: append(r, "spec/CLAIMS.md", "\nA note <!-- that hides this -->\n")),
+            ("a claim row hidden in a link reference title",
+             lambda r: replace_once(r, "spec/CLAIMS.md", "\n| C11 |", '\n[c11]: /x "\n| C11 |')),
+            ("a claim row hidden in an HTML block",
+             lambda r: replace_once(r, "spec/CLAIMS.md", "\n| C11 |", '\n<div title="\n| C11 |')),
+            ("a heading indented by a space",
+             lambda r: append(r, "spec/CLAIMS.md", "\n ## Unrelated notes\n")),
+            ("a heading written by underlining it",
+             lambda r: append(r, "spec/CLAIMS.md", "\nUnrelated notes\n---------------\n")),
+            ("a claim checked by a run whose heading is in a fence closed by a line with text after it",
+             lambda r: (replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| **checked**, run 99 |"),
+                        append(r, "spec/CLAIMS.md", "\n```\n``` not a close\n### Run 99: still fenced\n```\n"))),
             ("a scenario that is not JSON",
              lambda r: (r / "conformance/kernel/evidence/nothing_ran.json").write_text("not json", encoding="utf-8")),
             ("a claim with an unknown status", lambda r: replace_once(r, "spec/CLAIMS.md", "| **checked**, run 9 |", "| checked |")),
