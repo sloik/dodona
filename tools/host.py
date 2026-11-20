@@ -12,6 +12,10 @@ different machines:
     python tools/host.py collect  --site FILE --out DIR [--plan PLAN] [--dumps]
     python tools/host.py conclude --runs DIR --ledger FILE --writer NAME --kernel CMD...
 
+and, as the reference a kernel's `check` command is judged against (decision 0033):
+
+    python tools/host.py check    < INPUT.json
+
 `plan` reads the ledger kept from earlier runs and asks a kernel which checks
 still have a current result; only the others are sent.
 
@@ -33,6 +37,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -437,29 +442,55 @@ REFUSED_BY_PROVIDER: list[str] = []
 DECLARED_INPUTS: dict = {}  # obligation name -> the paths its checks may read, as the provider listed them
 
 
+PATTERN_SEGMENT = re.compile(r"(?:[^\[\]\\*]|\*|\[[^\[\]\\/]-[^\[\]\\/]\])+")
+
+
+def pattern_ok(pattern) -> bool:
+    """A match pattern as the project file may hold it: a relative path whose segments are not empty, `.` or
+    `..`, hold no backslash, and use `[` only as a range `[a-b]` with a no later than b."""
+    if not isinstance(pattern, str) or not pattern or pattern.startswith("/"):
+        return False
+    for seg in pattern.split("/"):
+        if seg in ("", ".", "..") or not PATTERN_SEGMENT.fullmatch(seg):
+            return False
+        for low, high in re.findall(r"\[(.)-(.)\]", seg):
+            if low > high:
+                return False
+    return True
+
+
 def segment_matches(pattern: str, name: str) -> bool:
-    """One path segment against one pattern segment: `*` is any run of characters, `[a-z]` one character
-    in the range, anything else itself. There is no `?`, no `**`, and no escape."""
+    """One path segment against one pattern segment: `*` is any run of characters, `[a-b]` one character from a
+    to b, anything else itself. There is no `?`, no `**`, and no escape. The pattern is one pattern_ok accepts."""
     if not pattern:
         return not name
     if pattern[0] == "*":
         return any(segment_matches(pattern[1:], name[i:]) for i in range(len(name) + 1))
     if pattern[0] == "[":
-        close = pattern.index("]")
-        low, _, high = pattern[1:close].partition("-")
-        return bool(name) and low <= name[0] <= (high or low) and segment_matches(pattern[close + 1:], name[1:])
+        low, high = pattern[1], pattern[3]
+        return bool(name) and low <= name[0] <= high and segment_matches(pattern[5:], name[1:])
     return bool(name) and name[0] == pattern[0] and segment_matches(pattern[1:], name[1:])
+
+
+def regular_files(root: pathlib.Path) -> list[str]:
+    """Every regular file under root by relative path, reached without a link at any step, none with a segment `.git`."""
+    found = []
+    for here, dirs, files in os.walk(root, followlinks=False):
+        dirs[:] = [d for d in dirs if d != ".git" and not os.path.islink(os.path.join(here, d))]
+        for name in files:
+            full = os.path.join(here, name)
+            if name != ".git" and not os.path.islink(full) and os.path.isfile(full):
+                found.append(pathlib.Path(full).relative_to(root).as_posix())
+    return found
 
 
 def claimed(root: pathlib.Path, patterns: list[str]) -> list[str]:
     """The regular files under root, by relative path, that one of the patterns matches segment by segment."""
     found = set()
-    for path in root.rglob("*"):
-        rel = path.relative_to(root).as_posix()
-        if path.is_file() and not path.is_symlink() and ".git" not in rel.split("/")[:1]:
-            parts = rel.split("/")
-            if any(len(p.split("/")) == len(parts) and all(segment_matches(a, b) for a, b in zip(p.split("/"), parts)) for p in patterns):
-                found.add(rel)
+    for rel in regular_files(root):
+        parts = rel.split("/")
+        if any(len(p.split("/")) == len(parts) and all(segment_matches(a, b) for a, b in zip(p.split("/"), parts)) for p in patterns):
+            found.add(rel)
     return sorted(found)
 
 
