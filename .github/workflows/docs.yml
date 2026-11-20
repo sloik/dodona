@@ -78,9 +78,9 @@ jobs:
             exit 1
           fi
           failed=0
-          # The guard reads workflows with a YAML parser, installed from the base, pinned by its hash.
+          # The guard reads workflows with a YAML parser: the wheel kept in the base, checked by its hash, no index.
           python3 -I -m venv "$RUNNER_TEMP/yaml"
-          "$RUNNER_TEMP/yaml/bin/python" -I -m pip install --quiet --no-deps --require-hashes --only-binary=:all: -r .github/yaml-reader.txt
+          "$RUNNER_TEMP/yaml/bin/python" -I -m pip install --quiet --no-index --no-deps --require-hashes -r .github/yaml-reader.txt
           "$RUNNER_TEMP/yaml/bin/python" -I tools/check_docs.py jobs --repo . --head "$HEAD" --own .github/workflows/docs.yml \
             --name documents-main-checker --name "documents follow code (judged by main)" || failed=1
           # An update that only moves pinned actions or runner images needs no document. The checker reads

@@ -1052,8 +1052,8 @@ def pin_lines_only(paths: list[str], patch: str, judging_allowed: bool = False) 
 
 def _yaml_reader():
     """A YAML parser, so that a workflow is read as GitHub reads it: anchors, aliases, tags, escapes, flow style,
-    explicit keys and block scalars all resolved. CI installs it pinned by hash (.github/yaml-reader.txt); without
-    it the guard cannot run, which is never a pass."""
+    explicit keys and block scalars all resolved. CI installs the wheel kept in .github/vendor/, checked by its hash, with no
+    package index (.github/yaml-reader.txt); without it the guard cannot run, which is never a pass."""
     try:
         from ruamel.yaml import YAML
     except ImportError:

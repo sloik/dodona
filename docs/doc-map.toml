@@ -101,7 +101,7 @@ why = "The configuration reference describes dodona.toml, and the data model the
 [[rule]]
 id = "repo-checks"
 code = ["tools/check_repo.py", "tools/check_docs.py", "tools/check_examples.py", "tools/check_transcript.py",
-        ".github/workflows/checks.yml", ".github/workflows/docs.yml", ".github/yaml-reader.txt", ".github/workflows/oracle-static.yml",
+        ".github/workflows/checks.yml", ".github/workflows/docs.yml", ".github/yaml-reader.txt", ".github/vendor/ruamel.yaml-0.18.10-py3-none-any.whl", ".github/workflows/oracle-static.yml",
         ".github/CODEOWNERS"]
 docs = ["docs/gap-checks.md"]
 why = "Every check is listed there with the gap behind it, and how the checks run."
