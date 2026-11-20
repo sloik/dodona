@@ -221,8 +221,9 @@ def run_with_sessions(asked) -> dict:
             finals[name] = {"refused": "no-check"}  # the binding or its provider does not check
             continue
         item = {k: v for k, v in ps.ENUMERATED[name]["item"].items() if k != "inputs"}
+        uses = {t.get("name") for t in sess.manifest.get("tools", []) if isinstance(t, dict)}  # the tools it says it uses
         gen = host.check_steps(sess, dict(item, binding=binding["name"]), ps.ENUMERATED[name]["inputs"],
-                               [dict(t) for t in site["tools"]], site["platform"], root)
+                               [dict(t) for t in site["tools"] if t["name"] in uses], site["platform"], root)
         advance(name, lambda gen=gen: next(gen), steps, waiting, finals, gen)
     # Step 12: batches until no check waits for a run.
     while waiting:

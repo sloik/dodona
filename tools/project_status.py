@@ -267,13 +267,16 @@ def obligations_of(root: pathlib.Path, site: dict, bindings: list[dict], claims:
             if item["name"] in found:
                 raise Stop("duplicate-obligation", item["name"])
             given = [{"path": p, "identity": identity[p]} for p in item["inputs"]]
+            uses = {t.get("name") for t in sess.manifest.get("tools", []) if isinstance(t, dict)}
             version = f"{sess.manifest['version']}+{site['providers'][binding['provider']]['digest']}+{site['runner']}"
             found[item["name"]] = {"preimage": {
                 "obligation": canonical.identity({"binding": binding["name"], "name": item["name"]}), "kind": "check",
                 "inputs": {"specified_by": canonical_sorted(f["identity"] for f in given if f["path"] in item["specified_by"]),
                            "targets": canonical_sorted(f["identity"] for f in given if f["path"] in item["targets"]),
                            "closure": canonical_sorted(canonical.identity({"path": f["path"], "identity": f["identity"]}) for f in given),
-                           "tools": [{"name": t["name"], "digest": t["digest"]} for t in site["tools"]],
+                           # Only the tools the provider's manifest says it uses: pinning another tool for another provider
+                           # changes no key of this one.
+                           "tools": [{"name": t["name"], "digest": t["digest"]} for t in site["tools"] if t["name"] in uses],
                            "config": canonical.identity(item["config"]), "expect": item["expect"]},
                 "provider": {"name": sess.manifest["name"], "version": version, "protocol": sess.manifest["protocol"]}}}
             listed.append({"binding": binding["name"], "name": item["name"]})
