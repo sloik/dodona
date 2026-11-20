@@ -5,25 +5,19 @@ Every number is counted from a file in this repository that a reader can open, a
 names that file. Nothing here runs a kernel, a model or a checker, and no number says that
 what a file states is true: a claim marked checked is counted as marked checked.
 
-    python tools/metrics.py                        the numbers, as a table
-    python tools/metrics.py --json                 the numbers, as JSON
-    python tools/metrics.py --rev REV              the numbers of a commit, read from git objects
-    python tools/metrics.py --base REV --head REV  the change from one commit to another;
-                                                   exits 1 if a ratcheted item was taken away
-    python tools/metrics.py --compare FILE         the change from an earlier --json output
-    python tools/metrics.py jobs --head REV --own FILE --name NAME ...
-                                                   exits 1 if another workflow of REV defines
-                                                   a job with one of these ids or names
-    python tools/metrics.py workflow-check FILE    exits 1 if the gate workflow is unsafe
-    python tools/metrics.py self-test              plants changes and requires each to be judged right
+    python tools/metrics.py [--root DIR] [--json] [--markdown] [--commit SHA]    # the numbers of a folder
+    python tools/metrics.py --rev REV [--repo DIR]                                 # the numbers of a commit
+    python tools/metrics.py --base REV --head REV [--repo DIR] [--markdown]       # the change; 1 if an item went
+    python tools/metrics.py --compare FILE [--messages FILE]                       # against an earlier --json
+    python tools/metrics.py workflow-check FILE                                    # 1 if the gate workflow is unsafe
+    python tools/metrics.py self-test [--no-mutants]                               # each planted change judged right
 
 A ratcheted metric is a set of identities (scenario names, claim ids, defect names, ...),
 or a count where the items have none. Taking any identity away fails, even if another was
 added. A line "Metrics-down: <metric>: <reason>" in a commit of the change is shown with
 the failure as the author's explanation; it never turns a failure into a pass.
 
-Exit codes: 0 fine, 1 a ratcheted item was taken away (or an unsafe workflow, or a job
-name clash), 2 something could not be measured or read. A file that is missing or does not
+Exit codes: 0 fine, 1 a ratcheted item was taken away (or an unsafe workflow), 2 something could not be measured or read. A file that is missing or does not
 read the way this tool expects is never counted as zero, and a crash is 2, never 1.
 
 Standard library only. Standard output is ASCII, so it prints on any console. Git trees
@@ -740,48 +734,6 @@ def comparison(title: str, rows, malformed, unused, failed, markdown: bool, judg
 # --------------------------------------------------------------------------- workflows
 
 
-def mentions(text: str, name: str) -> bool:
-    """Whether a workflow's text could give a job this id or name, read so as to fail closed: the name anywhere in
-    the text, in comments and quotes too, or once spacing and line breaks are folded (a folded or quoted scalar)."""
-    flat = " ".join(text.replace("\r\n", "\n").split())
-    return name in text or name in flat or name in flat.replace('"', "").replace("'", "")
-
-
-def escaped_names(text: str) -> bool:
-    """A backslash anywhere outside the commands of a run: step, or an explicit `?` key: what a key or a name
-    says could then differ from its letters (an escape in a quoted scalar, flow style or block style alike), and
-    this guard has no YAML reader to tell, so it fails."""
-    block = None
-    for line in text.replace("\r\n", "\n").split("\n"):
-        stripped = line.lstrip()
-        indent = len(line) - len(stripped)
-        if block is not None and stripped and indent <= block:
-            block = None
-        if block is not None:
-            continue  # a line of a run: block's commands
-        run = re.match(r"(?:-\s+)?run:\s*(.*)$", stripped)
-        if run:
-            if run.group(1).strip() in ("", "|", ">", "|-", ">-", "|+", ">+"):
-                block = indent
-            continue  # the command on the run: line itself
-        if "\\" in line or stripped.startswith("? ") or stripped == "?":
-            return True
-    return False
-
-
-def job_clashes(repo: pathlib.Path, head: str, own: str, names: set[str]) -> list[str]:
-    """Other workflows of head that could define a job with one of names as its id or name. Fails closed: a workflow
-    that mentions the name anywhere, or writes a key or name with escapes, is a clash."""
-    tree = GitTree(repo, head)
-    own = own.replace("\\", "/").removeprefix("./")
-    paths = [p for p in tree.entries if re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p) and p != own]
-    out = [f"{p} mentions {n!r}, which {own} uses as a job id or name: a required check of that name could be passed by it"
-           for p in sorted(paths) for n in sorted(names) if mentions(tree.read(p), n)]
-    out += [f"{p} writes a job key or name with escapes, which this guard cannot read; write it plainly"
-            for p in sorted(paths) if escaped_names(tree.read(p))]
-    return out
-
-
 def judge_changes(base, head) -> list[str]:
     """A change to the tool or its workflows changes how changes are judged, now or at the next step."""
     return [f"{path} changes how changes are judged; the owner merges over this failure"
@@ -849,10 +801,14 @@ def workflow_problems(text: str) -> list[str]:
         found.append("changes the checked-out files with git: nothing of the change may reach the working tree")
     if re.search(r"\|\s*(bash|sh|zsh|dash|python3?|perl|ruby|node|xargs|tar)\b|\b(eval|source|tar)\b|^\s*\.\s", runs, flags=re.M):
         found.append("pipes into a shell or interpreter, evaluates text, or unpacks files: nothing of the change may run")
-    if re.search(r"\bpython3?\s+-I\s+(?!\"\$TOOL\")", runs):
+    # Python runs the tool, or makes the environment for the documents gate's job-name guard, and nothing else.
+    if re.search(r"\bpython3?\s+-I\s+(?!\"\$TOOL\"|-m venv \"\$RUNNER_TEMP/yaml\"\n)", runs):
         found.append("runs Python on something other than \"$TOOL\", the tool taken from the trusted revision")
     shows = re.findall(r"git show (\S+)", runs)
-    if not shows or any(s != '"$TOOL_REV:tools/metrics.py"' for s in shows):
+    # The tool, and the documents gate's guard with its YAML reader, all from the trusted revision.
+    trusted = {'"$TOOL_REV:tools/metrics.py"', '"$TOOL_REV:tools/check_docs.py"', '"$TOOL_REV:.github/yaml-reader.txt"', '"$TOOL_REV:$wheel"'}
+    if '"$TOOL_REV:tools/metrics.py"' not in shows or any(s not in trusted for s in shows) \
+            or ('"$TOOL_REV:$wheel"' in shows and 'for wheel in $(git ls-tree --name-only "$TOOL_REV" .github/vendor/); do' not in runs):
         found.append("takes the tool from somewhere other than \"$TOOL_REV:tools/metrics.py\"")
     if sorted(set(re.findall(r"TOOL_REV=(\S+)", runs))) != ['"$MAIN_NOW"', '"$PUSH_BEFORE"']:
         found.append("sets TOOL_REV to something other than main now (pull request) or the commit before (push)")
@@ -914,12 +870,6 @@ MUTANTS = [
     ("identities are printed raw", "{printable(i)} taken away", "{i} taken away"),
     ("error messages are printed raw", "    print(_ascii(printable(message)), file=sys.stderr)", "    print(_ascii(message), file=sys.stderr)"),
     ("a crash reads as a failed ratchet", "        return 2\n\n\ndef complain(", "        return 1\n\n\ndef complain("),
-    ("a name folded or split across lines is not seen", '    return name in text or name in flat or name in flat.replace(\'"\', "").replace("\'", "")',
-     "    return name in text"),
-    ("escapes in other workflows are not refused", "for p in sorted(paths) if escaped_names(tree.read(p))]", "for p in sorted(paths) if False]"),
-    ("the jobs guard reads .yml only", 're.fullmatch(r"\\.github/workflows/[^/]+\\.ya?ml", p) and p != own]',
-     're.fullmatch(r"\\.github/workflows/[^/]+\\.yml", p) and p != own]'),
-    ("the jobs guard compares the gate with itself", "and p != own]", "]"),
     ("the workflow guard ignores Python without -I", 'if any(re.search(r"\\bpython3?(?! -I)\\s", line)', 'if False and any(re.search(r"\\bpython3?(?! -I)\\s", line)'),
     ("the workflow guard ignores write permissions and secrets",
      'if re.search(r"^\\s+[\\w-]+:\\s*write\\b", text, flags=re.M) or "secrets." in text:', "if False:"),
@@ -1143,7 +1093,13 @@ def self_test(mutants: bool) -> int:
             p.write_text(p.read_text(encoding="utf-8") + f"\n## More\n\n| Check | The gap behind it |\n|---|---|\n| `{listed}` | x |\n",
                          encoding="utf-8")
             if defined is not None:
-                (r / "tools/check_docs.py").write_text(f"def {defined}():\n    pass\n\n\nCHECKS = [{defined}]\n", encoding="utf-8")
+                tool = r / "tools/check_docs.py"
+                if tool.exists():
+                    # The real list gains one check, so the checks the real table names are still found.
+                    text = tool.read_text(encoding="utf-8")
+                    tool.write_text(text.replace("\nCHECKS = [", f"\ndef {defined}():\n    pass\n\n\nCHECKS = [{defined}, ", 1), encoding="utf-8")
+                else:
+                    tool.write_text(f"def {defined}():\n    pass\n\n\nCHECKS = [{defined}]\n", encoding="utf-8")
         judge("control: a second checks table naming a check of tools/check_docs.py",
               planted(lambda r: docs_checks(r, "docs_planted", "docs_planted")), 0)
         judge("a second checks table whose check is gone", planted(lambda r: docs_checks(r, "docs_planted", "docs_planted")), 1,
@@ -1459,46 +1415,6 @@ def self_test(mutants: bool) -> int:
             record(f"git: {label} named with line breaks forges no line",
                    not any(l.startswith(("Result:", "::")) for l in lines), out)
 
-        # Job names: no other workflow of the change may take the gate's name.
-        names = ["--name", "metrics-main-checker", "--name", "metrics only go up (judged by main)"]
-        g("checkout", "-q", "-f", "-B", "jobs-ok", base)
-        (repo / ".github/workflows").mkdir(parents=True, exist_ok=True)
-        (repo / ".github/workflows/other.yml").write_text("on: push\njobs:\n  build:\n    name: build\n    runs-on: x\n", encoding="utf-8")
-        g("add", "-A")
-        g("commit", "-q", "-m", "w")
-        code, out = cli("jobs", "--repo", str(repo), "--head", g("rev-parse", "HEAD"), "--own", GATE_WORKFLOW, *names)
-        check("jobs: another workflow with other job names", code, out, 0)
-        (repo / ".github/workflows/other.yml").write_text(
-            "on: pull_request\njobs:\n  fake:\n    name: metrics only go up (judged by main)\n    runs-on: x\n", encoding="utf-8")
-        g("add", "-A")
-        g("commit", "-q", "-m", "w2")
-        code, out = cli("jobs", "--repo", str(repo), "--head", g("rev-parse", "HEAD"), "--own", GATE_WORKFLOW, *names)
-        check("jobs: another workflow taking the gate's job name", code, out, 1, must_say="other.yml")
-        g("rm", "-q", "--cached", ".github/workflows/other.yml")
-        (repo / ".github/workflows/other.yml").unlink()
-        (repo / ".github/workflows/other.yaml").write_text(
-            "on: pull_request\njobs:\n  fake:\n    name: metrics only go up (judged by main)\n    runs-on: x\n", encoding="utf-8")
-        g("add", "-A")
-        g("commit", "-q", "-m", "w3")
-        code, out = cli("jobs", "--repo", str(repo), "--head", g("rev-parse", "HEAD"), "--own", GATE_WORKFLOW, *names)
-        check("jobs: a .yaml workflow taking the gate's job name", code, out, 1, must_say="other.yaml")
-        (repo / ".github/workflows/other.yaml").write_text(
-            "on: pull_request\njobs:\n  metrics-main-checker:\n    name: something else\n    runs-on: x\n", encoding="utf-8")
-        g("add", "-A")
-        g("commit", "-q", "-m", "w4")
-        code, out = cli("jobs", "--repo", str(repo), "--head", g("rev-parse", "HEAD"), "--own", GATE_WORKFLOW, *names)
-        check("jobs: another workflow taking the gate's job id", code, out, 1, must_say="'metrics-main-checker'")
-        for what, text in (("a name folded across lines", "jobs:\n  x:\n    name: >-\n      metrics only go up\n      (judged by main)\n"),
-                           ("a name in a flow mapping with an escape", 'jobs: {x: {name: "metrics only go up \\x28judged by main)"}}\n'),
-                           ("a job id written as an explicit key", 'jobs:\n  ? "metrics\\x2dmain-checker"\n  : {runs-on: x}\n')):
-            (repo / ".github/workflows/other.yaml").write_text("on: pull_request\n" + text, encoding="utf-8")
-            g("add", "-A")
-            g("commit", "-q", "-m", what)
-            code, out = cli("jobs", "--repo", str(repo), "--head", g("rev-parse", "HEAD"), "--own", GATE_WORKFLOW, *names)
-            check(f"jobs: {what}", code, out, 1, must_say="other.yaml")
-        code, out = cli("jobs", "--repo", str(repo), "--head", base, "--own", GATE_WORKFLOW, *names)
-        check("jobs: the gate's own workflow is not a clash with itself", code, out, 0)
-
         # The gate workflow: safe as it is, and each unsafe edit noticed.
         wf_path = ROOT / GATE_WORKFLOW
         wf = wf_path.read_text(encoding="utf-8").replace("\r\n", "\n") if wf_path.is_file() else ""
@@ -1554,20 +1470,18 @@ def self_test(mutants: bool) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("mode", nargs="?", choices=["self-test", "jobs", "workflow-check"])
+    parser.add_argument("mode", nargs="?", choices=["self-test", "workflow-check"])
     parser.add_argument("file", nargs="?", help="with workflow-check: the workflow file")
     parser.add_argument("--json", action="store_true", help="print the numbers as JSON")
     parser.add_argument("--rev", help="measure this commit, from git objects, instead of the working tree")
     parser.add_argument("--base", help="with --head: the commit to compare from")
-    parser.add_argument("--head", help="with --base: the commit to compare to; with jobs: the commit whose workflows are read")
-    parser.add_argument("--repo", default=".", help="the git repository for --rev, --base, --head and jobs")
+    parser.add_argument("--head", help="with --base: the commit to compare to")
+    parser.add_argument("--repo", default=".", help="the git repository for --rev, --base and --head")
     parser.add_argument("--compare", metavar="FILE", help="compare the measured tree with an earlier --json output")
     parser.add_argument("--messages", metavar="FILE", help="with --compare: commit messages to read explanations from")
     parser.add_argument("--markdown", action="store_true", help="print tables as Markdown")
     parser.add_argument("--commit", metavar="SHA", help="the commit measured, recorded in --json output")
     parser.add_argument("--root", metavar="DIR", default=str(ROOT), help="the folder to measure")
-    parser.add_argument("--own", help="with jobs: the workflow whose job names no other may use")
-    parser.add_argument("--name", action="append", default=[], help="with jobs: a job id or name (may be repeated)")
     parser.add_argument("--no-mutants", action="store_true", help="with self-test: do not plant faults in this tool")
     args = parser.parse_args(argv)
 
@@ -1606,20 +1520,6 @@ def run(args) -> int:
             print(_ascii(printable(f"PROBLEM {args.file}: {p}")))
         print("workflow guard:", "FAILED" if problems else "safe")
         return 1 if problems else 0
-    if args.mode == "jobs":
-        if not (args.head and args.own and args.name):
-            print("jobs needs --head, --own and --name", file=sys.stderr)
-            return 2
-        try:
-            clashes = job_clashes(repo, args.head, args.own, set(args.name))
-        except Unmeasurable as err:
-            complain(f"cannot read the workflows: {err}")
-            return 2
-        for line in clashes:
-            print(_ascii(printable(f"PROBLEM {line}")))
-        print("job names:", "FAILED" if clashes else "no other workflow uses them")
-        return 1 if clashes else 0
-
     if args.base or args.head:
         if not (args.base and args.head):
             print("--base and --head go together", file=sys.stderr)

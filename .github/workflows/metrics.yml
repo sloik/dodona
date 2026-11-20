@@ -54,7 +54,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 jobs:
   # A required check is matched by its name, so the name is distinctive, and the job fails if another
-  # workflow of the change defines a job with this id or name. That reading is best effort (docs/metrics.md).
+  # workflow of the change could define a job with this id or name, or post a check (tools/check_docs.py jobs).
   metrics-main-checker:
     name: metrics only go up (judged by main)
     runs-on: ubuntu-26.04
@@ -113,9 +113,23 @@ jobs:
           TOOL="$RUNNER_TEMP/metrics.py"
           git show "$TOOL_REV:tools/metrics.py" > "$TOOL"
           failed=0
-          python3 -I "$TOOL" jobs --repo . --head "$HEAD" --own .github/workflows/metrics.yml \
-            --name metrics-main-checker --name "metrics only go up (judged by main)" > "$RUNNER_TEMP/jobs.txt" 2>&1 || failed=1
+          # The job-name guard is the documents gate's (tools/check_docs.py jobs), which reads workflows with a YAML
+          # reader, taken from the same trusted revision with the reader's wheel kept there, checked by its hash.
+          if git cat-file -e "$TOOL_REV:tools/check_docs.py" 2>/dev/null; then
+            mkdir -p "$RUNNER_TEMP/guard/.github/vendor"
+            git show "$TOOL_REV:tools/check_docs.py" > "$RUNNER_TEMP/guard/check_docs.py"
+            git show "$TOOL_REV:.github/yaml-reader.txt" > "$RUNNER_TEMP/guard/.github/yaml-reader.txt"
+            for wheel in $(git ls-tree --name-only "$TOOL_REV" .github/vendor/); do
+              git show "$TOOL_REV:$wheel" > "$RUNNER_TEMP/guard/$wheel"
+            done
+            python3 -I -m venv "$RUNNER_TEMP/yaml"
+            (cd "$RUNNER_TEMP/guard" && "$RUNNER_TEMP/yaml/bin/python" -I -m pip install --quiet --no-index --no-deps --require-hashes -r .github/yaml-reader.txt)
+            "$RUNNER_TEMP/yaml/bin/python" -I "$RUNNER_TEMP/guard/check_docs.py" jobs --repo . --head "$HEAD" --own .github/workflows/metrics.yml \
+              --name metrics-main-checker --name "metrics only go up (judged by main)" > "$RUNNER_TEMP/jobs.txt" 2>&1 || failed=1
+          else
+            echo "PROBLEM cannot judge job names: $TOOL_REV has no tools/check_docs.py" > "$RUNNER_TEMP/jobs.txt"; failed=1
+          fi
           python3 -I "$TOOL" --repo . --base "$BASE" --head "$HEAD" --markdown > "$RUNNER_TEMP/compare.md" 2>&1 || failed=1
           cat "$RUNNER_TEMP/jobs.txt" "$RUNNER_TEMP/compare.md"
-          { echo "Judged by tools/metrics.py as of \`$TOOL_REV\`."; echo; cat "$RUNNER_TEMP/jobs.txt"; echo; cat "$RUNNER_TEMP/compare.md"; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "Judged by the metrics tool as of \`$TOOL_REV\`."; echo; cat "$RUNNER_TEMP/jobs.txt"; echo; cat "$RUNNER_TEMP/compare.md"; } >> "$GITHUB_STEP_SUMMARY"
           exit "$failed"
