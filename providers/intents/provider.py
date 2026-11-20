@@ -64,8 +64,11 @@ def index(body: dict) -> dict:
         criteria = []
         for item in items:
             links = sorted({(b, n) for pattern in item.get("checks", []) for b, n in obligations if fnmatch.fnmatchcase(n, pattern)})
-            criteria.append({"id": item["id"], "statement": item["words"], "gate": item["gate"],
-                             "links": [{"binding": b, "obligation": n} for b, n in links]})
+            criterion = {"id": item["id"], "statement": item["words"], "gate": item["gate"],
+                         "links": [{"binding": b, "obligation": n} for b, n in links]}
+            if item["gate"] == "deferred":  # the reader requires both on a deferred criterion
+                criterion["condition"], criterion["limit_days"] = item["condition"], item["limit_days"]
+            criteria.append(criterion)
         intent = {"name": ident, "file": path, "statement": fields.get("title", ""), "text": text,
                   "owner": {"id": fields.get("owner", "")}, "criteria": criteria, "children": [], "touches": touches_of(text)}
         if fields.get("worker"):

@@ -974,12 +974,12 @@
         },
         "condition": {
           "type": "string",
-          "description": "Deferred gates only: what is to be observed, in plain words. A deferred gate whose intent gives none is reported as having none; it can still be closed only by an observation."
+          "description": "Deferred gates only: what is to be observed, in plain words."
         },
         "limit_days": {
           "type": "integer",
           "minimum": 1,
-          "description": "Deferred gates only: days after the intent is first reported delivered by which the observation must be made. The kernel derives the due date; no date takes part in identity. A deferred gate whose intent gives none is reported as having no limit, which is longer than any limit policy allows."
+          "description": "Deferred gates only: days after the intent is first reported delivered by which the observation must be made. The kernel derives the due date; no date takes part in identity."
         },
         "not_applicable": {
           "type": "array",
@@ -990,18 +990,16 @@
         }
       },
       "if": {
-        "not": {
-          "properties": {
-            "gate": {
-              "const": "deferred"
-            }
-          },
-          "required": [
-            "gate"
-          ]
-        }
+        "properties": {
+          "gate": {
+            "const": "deferred"
+          }
+        },
+        "required": [
+          "gate"
+        ]
       },
-      "then": {
+      "else": {
         "not": {
           "anyOf": [
             {
@@ -1016,6 +1014,12 @@
             }
           ]
         }
+      },
+      "then": {
+        "required": [
+          "condition",
+          "limit_days"
+        ]
       }
     },
     "intent": {
