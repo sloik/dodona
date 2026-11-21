@@ -29,6 +29,7 @@ import check_models  # noqa: E402
 import kit_adequacy  # noqa: E402
 import pathcheck  # noqa: E402
 import run_kit  # noqa: E402
+import run_ledger_cases  # noqa: E402
 
 problems: list[str] = []
 
@@ -1060,6 +1061,115 @@ class KitAdequacyTests(unittest.TestCase):
             self.assertEqual(build[build.index("--target-dir") + 1], str(copy / "target"))
 
 
+class FakeWriter:
+    """A `--write` child as the ledger judge sees it; `code` is None while it runs."""
+
+    def __init__(self, code):
+        self.code, self.killed, self.reaped = code, False, False
+
+    def poll(self):
+        return self.code
+
+    def wait(self, timeout=None):
+        if self.code is None:
+            raise subprocess.TimeoutExpired("writer", timeout)
+        self.reaped = True
+        return self.code
+
+    def kill(self):
+        self.killed, self.code = True, -9
+
+
+class LedgerJudgeTests(unittest.TestCase):
+    """The ledger judge names a completed wrong answer, and never reports a run that did not finish as one (issue 41)."""
+
+    @staticmethod
+    def kernel(stdout=b"{}", code=0):
+        """A kernel that gives every request the same answer, without starting anything."""
+        return lambda command, **kwargs: subprocess.CompletedProcess(command, code, stdout, b"")
+
+    def judge(self, run, writers=()):
+        argv = ["run_ledger_cases.py", "--", "kernel"]
+        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_ledger_cases.sys, "argv", argv), \
+                patch.object(run_ledger_cases.subprocess, "run", side_effect=run), \
+                patch.object(run_ledger_cases.subprocess, "Popen", side_effect=list(writers)):
+            code = run_ledger_cases.main()
+        return code, json.loads(output.getvalue().splitlines()[-1])
+
+    def assertUnfinished(self, code, summary, rejected=None):
+        self.assertEqual((code, summary["unfinished"], summary["all_matched"]), (2, 1, False))
+        if rejected is not None:
+            self.assertEqual(summary["rejected"], rejected)
+
+    def test_a_kernel_that_could_not_answer_leaves_the_run_unfinished(self):
+        for failure in (OSError(errno.ENOSPC, "No space left on device"), FileNotFoundError(),
+                        subprocess.TimeoutExpired("kernel", 60), subprocess.CompletedProcess(["kernel"], -15, b"", b""),
+                        subprocess.CompletedProcess(["kernel"], 101, b"", b"panicked")):
+            with self.subTest(failure=failure):
+                self.assertUnfinished(*self.judge([failure]), rejected=[])
+
+    def test_a_completed_wrong_answer_is_a_named_rejection(self):
+        for stdout in (b"{}", b"[]", b"not json", b'{"entries": 5, "torn": false}', b'{"entries": ["x"], "torn": false}',
+                       b'{"entries": [{"body": [1]}, {"body": {"writer": null}}], "torn": false}'):
+            with self.subTest(stdout=stdout):
+                code, summary = self.judge(self.kernel(stdout), [FakeWriter(run_ledger_cases.WRITER_MISMATCH), FakeWriter(0)])
+                self.assertEqual((code, summary["unfinished"], summary["all_matched"]), (1, 0, False))
+                rejected = summary["rejected"]
+                self.assertIn("the file is byte for byte the reference file", rejected)
+                self.assertIn("two kernels appending at once lose nothing", rejected)
+                self.assertEqual(len(rejected), len(set(rejected)))
+                self.assertEqual(summary["checks"], summary["matched"] + len(rejected))
+
+    def test_a_mismatch_then_an_unfinished_answer_is_not_a_rejection(self):
+        appends = len(json.loads((ROOT / "conformance" / "ledger" / "cases.json").read_text(encoding="utf-8"))["append"])
+        answers = [subprocess.CompletedProcess(["kernel"], 0, b"{}", b"")] * (appends + 1) + [subprocess.TimeoutExpired("kernel", 60)]
+        code, summary = self.judge(answers)
+        self.assertUnfinished(code, summary)
+        self.assertIn("the file is byte for byte the reference file", summary["rejected"])
+
+    def test_two_writers_require_object_bodies(self):
+        wrong = {"torn": False, "entries": [{"body": [w, n]} for w in range(2) for n in range(20)]}
+        code, summary = self.judge(self.kernel(json.dumps(wrong).encode()), [FakeWriter(0), FakeWriter(0)])
+        self.assertEqual((code, summary["unfinished"]), (1, 0))
+        self.assertIn("two kernels appending at once lose nothing", summary["rejected"])
+
+    def test_a_writer_that_cannot_start_or_finish_is_reaped_and_unfinished(self):
+        for writers in ([FakeWriter(None), OSError(errno.EAGAIN, "Resource temporarily unavailable")],
+                        [FakeWriter(None), FakeWriter(0)], [FakeWriter(0), FakeWriter(2)],
+                        [FakeWriter(-15), FakeWriter(0)], [FakeWriter(1), FakeWriter(0)]):
+            running = [w for w in writers if isinstance(w, FakeWriter) and w.code is None]
+            with self.subTest(writers=writers):
+                self.assertUnfinished(*self.judge(self.kernel(), writers))
+                self.assertTrue(all(w.killed and w.reaped for w in running))
+
+    def test_a_failure_of_the_judge_itself_is_unfinished(self):
+        with patch.object(pathlib.Path, "write_bytes", side_effect=OSError(errno.ENOSPC, "No space left on device")):
+            self.assertUnfinished(*self.judge(self.kernel()))
+        real = tempfile.TemporaryDirectory.cleanup
+
+        def cleanup(directory):
+            real(directory)
+            raise OSError(errno.EBUSY, "Device or resource busy")
+
+        with patch.object(tempfile.TemporaryDirectory, "cleanup", cleanup):
+            self.assertUnfinished(*self.judge(self.kernel(), [FakeWriter(0), FakeWriter(0)]))
+
+    def test_a_writer_child_tells_a_wrong_answer_from_none(self):
+        def write(run):
+            argv = ["run_ledger_cases.py", "--write", "shared.ledger", "0", "2", "--", "kernel"]
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()), \
+                    patch.object(run_ledger_cases.sys, "argv", argv), \
+                    patch.object(run_ledger_cases.subprocess, "run", side_effect=run):
+                return run_ledger_cases.writer()
+
+        self.assertEqual(write(self.kernel(b'{"appended": "x"}')), 0)
+        for stdout in (b'{"refused": "locked"}', b"not json"):
+            self.assertEqual(write(self.kernel(stdout)), run_ledger_cases.WRITER_MISMATCH, stdout)
+        for failure in (OSError(errno.ENOSPC, "No space left on device"), subprocess.TimeoutExpired("kernel", 60),
+                        subprocess.CompletedProcess(["kernel"], -15, b"", b""), subprocess.CompletedProcess(["kernel"], 1, b"", b"")):
+            self.assertEqual(write([failure]), 2, failure)
+
+
 class PlantJsTests(unittest.TestCase):
     """Keep the standalone JavaScript runner tests registered in hosted CI."""
 
@@ -1151,6 +1261,7 @@ def main() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(JudgeTests)
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ToolPinTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitAdequacyTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(LedgerJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantJsTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
