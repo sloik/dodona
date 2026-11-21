@@ -1563,6 +1563,13 @@
       "replace": "                    .filter(|c| !c.is_empty());\n"
     },
     {
+      "name": "status step 1: a path holding a NUL is relative",
+      "model_case": null,
+      "file": "src/project_status.rs",
+      "find": "        && !p.contains('\\0')\n",
+      "replace": ""
+    },
+    {
       "name": "status step 2: control characters other than NUL are taken",
       "model_case": null,
       "file": "src/project_status.rs",

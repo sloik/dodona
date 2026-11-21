@@ -128,13 +128,14 @@ fn sorted_object(mut members: Vec<(String, Value)>) -> Value {
     Value::Object(members)
 }
 
-/// Relative: not empty, not starting with `/`, no `\` and no `:`, and no
+/// Relative: not empty, not starting with `/`, no `\`, no `:` and no NUL, and no
 /// segment that is empty, `.` or `..`.
 fn relative(p: &str) -> bool {
     !p.is_empty()
         && !p.starts_with('/')
         && !p.contains('\\')
         && !p.contains(':')
+        && !p.contains('\0')
         && p.split('/').all(|s| !matches!(s, "" | "." | ".."))
 }
 
