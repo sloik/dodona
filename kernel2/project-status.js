@@ -499,6 +499,7 @@ async function obligationsOf(root, site, digests, bindings, claims, kept = null)
         code: digests.get(binding.provider),
         tools: named.map((tool) => ({ name: tool.name, version: tool.version, digest: tool.digest })),
         platform: site.platform,
+        deadline_ms: site.deadline_ms,
         offers_check: manifest.capabilities.some((entry) => entry.capability === 'obligation.check'),
       });
     }

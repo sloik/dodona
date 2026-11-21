@@ -13,8 +13,9 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
-  preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing,
+  preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange,
 } = require('./project-run');
+const { runKey } = require('./check');
 const crypto = require('node:crypto');
 const { Stop, projectStatus } = require('./project-status');
 const ledgerFile = require('./ledger-file');
@@ -715,4 +716,181 @@ test('planted: a kept session never handed to its holder is left running after a
       fs.rmSync(root, { recursive: true, force: true });
     }
   }
+});
+
+// Step 11: checks on kept sessions, with a wire that stands in for a provider. Each
+// answer is made from the request it answers; no process is behind it.
+
+const FILE_A = { path: 'm/a.txt', identity: `sha256:${'a'.repeat(64)}` };
+const FILE_B = { path: 'm/b.txt', identity: `sha256:${'b'.repeat(64)}` };
+const PLATFORM = { os: 'linux', arch: 'x86_64' };
+
+function keptSession(binding, answers, change = {}, pending = false) {
+  const sent = [];
+  const wire = {
+    hasMore() {
+      return pending;
+    },
+    async send(message) {
+      sent.push(message);
+      return null;
+    },
+    async next() {
+      const answer = answers.shift();
+      return answer === undefined ? { reason: 'deadline' } : answer(sent[sent.length - 1]);
+    },
+  };
+  return {
+    binding: { name: binding },
+    wire,
+    sent,
+    child: { pid: undefined, exited: Promise.resolve() },
+    manifest: MANIFEST,
+    next_id: 2,
+    request: { binding, definitions: [], files: [FILE_A, FILE_B] },
+    obligations: [obligation('a1', 'm/a.txt'), { ...obligation('a2', 'm/b.txt'), defect_of: 'a1' }],
+    provider: { name: 't.check', version: '1.0.0+0123456789abcdef+r0', protocol: '0.2' },
+    tools: [CHECKER],
+    platform: PLATFORM,
+    deadline_ms: 1000,
+    offers_check: true,
+    ...change,
+  };
+}
+
+const answering = (body) => (request) => ({ message: { type: 'result', id: request.id, capability: 'obligation.check', body } });
+const RUN = {
+  program: { tool: 'checker', path: 'bin/check' }, args: ['m/a.txt'], inputs: [FILE_A], outputs: [], tools: [{ name: 'checker', digest: CHECKER.digest }], platform: PLATFORM,
+};
+const FINAL = { verdict: 'passed', strength: { class: 'c', rank: 'bounded' } };
+
+test('a check starts on its binding\'s kept session with what it was kept with, and its own inputs only', async () => {
+  const session = keptSession('zeta', [answering({ next: RUN }), answering({ final: FINAL })]);
+  const { check, step } = await startCheck([session], { binding: 'zeta', name: 'a1' }, os.tmpdir());
+  assert.equal(session.sent.length, 1);
+  const [start] = session.sent;
+  assert.deepEqual({ ...start, body: undefined }, { type: 'request', id: '2', deadline_ms: 1000, capability: 'obligation.check', body: undefined });
+  const { inputs: unused, ...enumerated } = obligation('a1', 'm/a.txt');
+  assert.deepEqual(start.body, { op: 'start', obligation: { ...enumerated, binding: 'zeta' }, inputs: [FILE_A], tools: [CHECKER], platform: PLATFORM });
+  assert.equal(Object.hasOwn(start.body.obligation, 'inputs'), false);
+  assert.equal(start.body.tools, session.tools, 'the tools the session was kept with');
+  assert.equal(start.body.platform, session.platform, 'the site\'s own platform object');
+  // A run that keeps every host rule is the next step, under its own run key.
+  const key = identityOf({ obligation: start.body.obligation, inputs: start.body.inputs });
+  assert.deepEqual(step, { outcome: 'next', number: 1, run_key: runKey(key, 1, RUN), run: RUN });
+  assert.equal(check.start_id, '2');
+  assert.equal(session.next_id, 3);
+  // The run's result passed back, and a final within the manifest's ceiling, its strength as given.
+  const final = await exchange(check, { op: 'run.result', check: check.start_id, run: 1, report: { end: 'exited' } });
+  assert.deepEqual(final, { outcome: 'final', verdict: 'passed', strength: { class: 'c', rank: 'bounded' } });
+  assert.equal(session.sent[1].id, '3');
+  // An enumerated field beyond the ones read (defect_of) is carried as it was.
+  const other = keptSession('zeta', [answering({ next: { ...RUN, args: ['m/b.txt'], inputs: [FILE_B] } })]);
+  await startCheck([other], { binding: 'zeta', name: 'a2' }, os.tmpdir());
+  assert.equal(other.sent[0].body.obligation.defect_of, 'a1');
+  assert.deepEqual(other.sent[0].body.inputs, [FILE_B]);
+});
+
+test('checks on two bindings take each its own session and its own ids', async () => {
+  const first = keptSession('alpha', [answering({ next: RUN }), answering({ next: RUN })]);
+  const second = keptSession('zeta', [answering({ next: RUN })]);
+  const sessions = [first, second];
+  await startCheck(sessions, { binding: 'zeta', name: 'a1' }, os.tmpdir());
+  await startCheck(sessions, { binding: 'alpha', name: 'a1' }, os.tmpdir());
+  await startCheck(sessions, { binding: 'alpha', name: 'a1' }, os.tmpdir());
+  assert.deepEqual(second.sent.map((m) => [m.id, m.body.obligation.binding]), [['2', 'zeta']]);
+  assert.deepEqual(first.sent.map((m) => [m.id, m.body.obligation.binding]), [['2', 'alpha'], ['3', 'alpha']]);
+  assert.deepEqual([first.next_id, second.next_id], [4, 3]);
+});
+
+test('a binding that does not check, or whose manifest does not offer it, is refused with nothing sent', async () => {
+  const offering = keptSession('alpha', []);
+  const unoffered = keptSession('zeta', [], { offers_check: false });
+  for (const planned of [{ binding: 'listonly', name: 'a1' }, { binding: 'zeta', name: 'a1' }]) {
+    assert.deepEqual(await startCheck([offering, unoffered], planned, os.tmpdir()), { check: null, step: { outcome: 'refused', reason: 'check-not-offered' } });
+  }
+  assert.deepEqual([offering.sent, unoffered.sent], [[], []]);
+  assert.deepEqual([offering.next_id, unoffered.next_id], [2, 2]);
+});
+
+test('a rule broken refuses one check; the session goes on', async () => {
+  for (const [body, reason, runsBefore] of [
+    [{}, 'neither-or-both'],
+    [{ next: RUN, final: FINAL }, 'neither-or-both'],
+    [{ final: FINAL }, 'verdict-without-run', 0],
+    [{ next: { ...RUN, env: {} } }, 'env-not-allowed'],
+    [{ next: { ...RUN, platform: { os: 'linux', arch: 'arm64' } } }, 'platform-mismatch'],
+    [{ next: { ...RUN, inputs: [FILE_B], args: ['m/b.txt'] } }, 'input-not-in-key'],
+    [{ next: RUN }, 'too-many-runs', 8],
+    [{ final: { verdict: 'passed', strength: { class: 'c', rank: 'exhaustive' } } }, 'strength-above-ceiling', 1],
+    [{ final: { verdict: 'unavailable' } }, 'bad-verdict'],
+  ]) {
+    const session = keptSession('zeta', [answering({ next: RUN }), answering(body)]);
+    const { check } = await startCheck([session], { binding: 'zeta', name: 'a1' }, os.tmpdir());
+    if (runsBefore !== undefined) check.rules.runs = runsBefore;
+    assert.deepEqual(await exchange(check, { op: 'run.result', check: '2', run: 1, report: {} }), { outcome: 'refused', reason }, JSON.stringify(body));
+    assert.equal(session.broken, undefined);
+    assert.equal(session.next_id, 4);
+  }
+});
+
+test('a session that breaks refuses the whole run, and is not used again', async () => {
+  for (const [answer, reason] of [
+    [(request) => ({ message: { type: 'result', id: '9', capability: 'obligation.check', body: { next: RUN } } }), 'wrong-id'],
+    [(request) => ({ message: { type: 'error', id: request.id } }), 'provider-error'],
+    [(request) => ({ message: { type: 'result', id: request.id, capability: 'obligation.enumerate', body: { next: RUN } } }), 'wrong-capability'],
+    [(request) => ({ message: { type: 'result', id: request.id, capability: 'obligation.check', body: 5 } }), 'unexpected'],
+    [() => ({ reason: 'deadline' }), 'deadline'],
+    [() => ({ reason: 'closed' }), 'closed'],
+  ]) {
+    const session = keptSession('zeta', [answer]);
+    await assert.rejects(startCheck([session], { binding: 'zeta', name: 'a1' }, os.tmpdir()), (error) => error instanceof Stop && error.reason === reason);
+    assert.equal(session.broken, reason);
+    await assert.rejects(startCheck([session], { binding: 'zeta', name: 'a1' }, os.tmpdir()), /already broken/);
+    assert.equal(session.sent.length, 1, 'nothing more is sent on it');
+  }
+});
+
+test('a provider that spoke while its session was idle breaks it, and nothing is sent', async () => {
+  const { PassThrough } = require('node:stream');
+  const { Wire } = require('./wire');
+  for (const [unsolicited, what] of [
+    ['{"type":"result","id":"2","capability":"obligation.check","body":{"next":{}}}\n', 'a whole message, even one that looks like the answer'],
+    ['{"type":"res', 'part of a message'],
+  ]) {
+    const child = { stdout: new PassThrough(), stderr: new PassThrough(), stdin: new PassThrough() };
+    const written = [];
+    child.stdin.on('data', (data) => written.push(data));
+    const wire = new Wire(child, { maxLine: 1048576, maxLog: 1048576, strict: true });
+    child.stdout.write(unsolicited);
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(wire.hasMore(), true, what);
+    const session = keptSession('zeta', [], { wire });
+    await assert.rejects(startCheck([session], { binding: 'zeta', name: 'a1' }, os.tmpdir()), (error) => error instanceof Stop && error.reason === 'unexpected', what);
+    assert.equal(session.broken, 'unexpected');
+    assert.equal(session.next_id, 2, 'no id taken');
+    assert.deepEqual(written, [], `nothing written to the provider: ${what}`);
+  }
+  // With nothing waiting, the answer to the request is read as before.
+  const quiet = keptSession('zeta', [answering({ next: RUN })], {}, false);
+  assert.equal((await startCheck([quiet], { binding: 'zeta', name: 'a1' }, os.tmpdir())).step.outcome, 'next');
+});
+
+test('planted: a session that is not looked at before sending takes an unsolicited frame for its answer', async () => {
+  const damaged = planted("  if (session.wire.hasMore()) brokeOff(session, 'unexpected');\n", '');
+  const pending = () => keptSession('zeta', [answering({ next: RUN })], {}, true);
+  const kept = pending();
+  await assert.rejects(startCheck([kept], { binding: 'zeta', name: 'a1' }, os.tmpdir()), (error) => error instanceof Stop && error.reason === 'unexpected');
+  assert.equal(kept.sent.length, 0);
+  const missed = pending();
+  assert.equal((await damaged.startCheck([missed], { binding: 'zeta', name: 'a1' }, os.tmpdir())).step.outcome, 'next');
+  assert.equal(missed.sent.length, 1, 'the damaged copy sent a request');
+});
+
+test('planted: every claimed file given as a check\'s inputs, not its own', async () => {
+  const damaged = planted('item.inputs.map((rel) => ({ path: rel, identity: files.get(rel) }))', 'session.request.files');
+  const session = keptSession('zeta', [answering({ next: RUN })]);
+  await damaged.startCheck([session], { binding: 'zeta', name: 'a1' }, os.tmpdir());
+  assert.notDeepEqual(session.sent[0].body.inputs, [FILE_A]);
 });

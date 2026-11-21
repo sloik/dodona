@@ -14,12 +14,21 @@ const path = require('node:path');
 const unicode = require('./unicode');
 const { isObject } = require('./wire');
 const { compareUnits } = require('./canonical');
+const { identityOf } = require('./identity');
+const rules = require('./host-rules');
+const {
+  answerProblem, runKey, isRegularFile, fileIdentity, namedFiles,
+} = require('./check');
 const {
   readInput, isRelative, checkInput, isDirectory, fileId, stepsOf, snapshotOf, endSession, Stop,
 } = require('./project-status');
 
 // The statuses that are a current result: reused, nothing sent for them.
 const CURRENT = ['passed', 'failed', 'conflict'];
+// A reason that says the session itself broke: every check on it is in doubt, and the
+// whole run is refused with it (step 11). Any other reason refuses one check.
+const SESSION_BROKE = ['deadline', 'closed', 'framing', 'too-long', 'encoding', 'malformed', 'not-an-integer', 'duplicate-key',
+  'too-deep', 'wrong-id', 'wrong-capability', 'unexpected', 'provider-error'];
 // What a checked obligation can end as, in the order `counts` gives them.
 const OUTCOMES = ['passed', 'failed', 'error', 'unavailable', 'unsupported', 'refused'];
 
@@ -232,6 +241,97 @@ async function afterClosing(error, sessions) {
   return error;
 }
 
+// Step 11: checks on the sessions kept at step 5. A step of a check is one of
+//   {outcome: 'next', number, run_key, run}       a run to be given to the executor
+//   {outcome: 'final', verdict, strength}          the final, as the provider gave it
+//   {outcome: 'refused', reason}                   this check ends with no verdict
+// and a reason that says the session broke is thrown as a Stop: the whole run is refused.
+
+// The obligation as enumerated, without `inputs` and with its binding: each own field
+// copied as data, whatever its name.
+function asEnumerated(item, binding) {
+  const out = {};
+  const put = (key, value) => Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true });
+  for (const key of Object.keys(item)) if (key !== 'inputs') put(key, item[key]);
+  put('binding', binding);
+  return out;
+}
+
+// The start of a check of `name` on its binding's kept session: its inputs are F, the
+// obligation's own `inputs` with the identities the enumeration request gave them; its
+// tools and platform those the session was kept with.
+function startBody(session, name) {
+  const item = session.obligations.find((each) => each.name === name);
+  if (item === undefined) throw new Error(`${JSON.stringify(name)} was not enumerated on binding ${session.binding.name}`);
+  const files = new Map(session.request.files.map((file) => [file.path, file.identity]));
+  const inputs = item.inputs.map((rel) => ({ path: rel, identity: files.get(rel) }));
+  return { op: 'start', obligation: asEnumerated(item, session.binding.name), inputs, tools: session.tools, platform: session.platform };
+}
+
+function brokeOff(session, reason) {
+  if (!SESSION_BROKE.includes(reason)) throw new Error(`${reason} is not a reason a session breaks with`);
+  session.broken = reason;
+  throw new Stop(reason, `binding ${session.binding.name}: the session broke`);
+}
+
+// One request of a check on its session, under the session's next id, and what its
+// answer makes of the check, by the host checks' rules.
+async function exchange(check, body) {
+  const { session } = check;
+  if (session.broken !== undefined) throw new Error(`binding ${session.binding.name}: the session has already broken (${session.broken})`);
+  // A provider speaks only to answer. Anything it sent while the session waited idle, a
+  // whole message or part of one, is `unexpected`, and nothing more is sent to it.
+  if (session.wire.hasMore()) brokeOff(session, 'unexpected');
+  const id = String(session.next_id);
+  session.next_id += 1;
+  if (check.start_id === null) check.start_id = id;
+  const deadline = session.deadline_ms;
+  const sent = await session.wire.send({ type: 'request', id, deadline_ms: deadline, capability: 'obligation.check', body }, performance.now() + deadline);
+  if (sent !== null) brokeOff(session, sent);
+  const answer = await session.wire.next(performance.now() + deadline);
+  if (answer.reason !== undefined) brokeOff(session, answer.reason);
+  const wrong = answerProblem(answer.message, id);
+  if (wrong !== null) brokeOff(session, wrong);
+  const reply = answer.message.body;
+  if (('next' in reply) === ('final' in reply)) return { outcome: 'refused', reason: 'neither-or-both' };
+  if ('final' in reply) {
+    const problem = rules.finalProblem(reply.final, check.rules);
+    return problem === null ? { outcome: 'final', verdict: reply.final.verdict, strength: reply.final.strength } : { outcome: 'refused', reason: problem };
+  }
+  const problem = rules.runProblem(reply.next, check.rules);
+  if (problem !== null) return { outcome: 'refused', reason: problem };
+  check.rules.runs += 1;
+  const number = check.rules.runs;
+  return { outcome: 'next', number, run_key: runKey(check.key, number, reply.next), run: reply.next };
+}
+
+// Starts the check of one planned obligation on its binding's kept session. A binding
+// with no kept session (it does not list obligation.check), or whose manifest does not
+// offer obligation.check, is refused, and nothing is sent.
+async function startCheck(sessions, planned, root) {
+  const session = sessions.find((each) => each.binding.name === planned.binding);
+  if (session === undefined || !session.offers_check) return { check: null, step: { outcome: 'refused', reason: 'check-not-offered' } };
+  const body = startBody(session, planned.name);
+  const check = {
+    session,
+    name: planned.name,
+    start_id: null,
+    key: identityOf({ obligation: body.obligation, inputs: body.inputs }),
+    rules: {
+      platform: session.platform,
+      declared: rules.declaredTools(session.manifest),
+      given: new Map(session.tools.map((tool) => [tool.name, tool.digest])),
+      inputs: new Map(body.inputs.map((input) => [input.path, input.identity])),
+      named: namedFiles(body.obligation),
+      runs: 0,
+      ceiling: rules.ceilingOf(session.manifest),
+      isRegularFile: (relative) => isRegularFile(root, relative),
+      identityOf: (relative) => fileIdentity(root, relative),
+    },
+  };
+  return { check, step: await exchange(check, body) };
+}
+
 // The bytes of standard input to `{ready: digests}`, or the refusal the command would print.
 function preflightBytes(bytes) {
   try {
@@ -242,4 +342,6 @@ function preflightBytes(bytes) {
   }
 }
 
-module.exports = { preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing };
+module.exports = {
+  preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange, SESSION_BROKE,
+};
