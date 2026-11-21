@@ -317,56 +317,28 @@ def answer_problems(case: dict, answer: dict, took: float, limits: dict) -> list
     return problems
 
 
-def judge_case(host: list[str], case: dict, limits: dict, tmp: pathlib.Path) -> tuple[list[str], list[str]]:
-    """Run one case in its private folder `tmp`: what the host got wrong, and what left the case unfinished."""
+def fixture_env(tmp: pathlib.Path, nonce: str) -> dict:
+    """The files through which a case's cooperative fixture is probed and stopped. The folder `tmp/ack` is made here."""
+    (tmp / "ack").mkdir(mode=0o700)
+    return {"DODONA_TEST_ACK": str(tmp / "ack"), "DODONA_TEST_PROBE": str(tmp / "probe"),
+            "DODONA_TEST_STOP": str(tmp / "stop"), "DODONA_TEST_NONCE": nonce}
+
+
+def watch_fixture(tmp: pathlib.Path, nonce: str, work) -> tuple[list[str], list[str]]:
+    """The one probe-and-stop of every judge of a cooperative fixture. `work()` runs the host and reads the records,
+    returning (pids, deadline), deadline None if it ended before observation began. Then the probe, the snapshot taken
+    before the stop file exists, and, in a `finally` even when `work` or observation failed, the stop file. Returns
+    the mismatches and what left the case unfinished. A recorded id is only asked about, never signalled."""
     wrong: list[str] = []
     unfinished: list[str] = []
-    nonce = secrets.token_hex(16)  # this case's: an acknowledgment left by any other case or run is not this one's
-    pidfile, seen, ack = tmp / "pids", tmp / "seen", tmp / "ack"
-    probe, stop = tmp / "probe", tmp / "stop"
-    ack.mkdir(mode=0o700)
-    env = dict(os.environ, DODONA_TEST_PIDFILE=str(pidfile), DODONA_TEST_SEEN=str(seen), DODONA_TEST_ACK=str(ack),
-               DODONA_TEST_PROBE=str(probe), DODONA_TEST_STOP=str(stop), DODONA_TEST_NONCE=nonce)
-    command = host + ["--deadline-ms", str(limits["deadline_ms"]), "--max-line", str(limits["max_line_bytes"]),
-                      "--max-log", str(limits["max_log_bytes"]), "--", sys.executable, str(PROVIDER), case["mode"]]
-    allowed = (limits["deadline_ms"] + limits["grace_ms"]) / 1000 + 20
+    ack, probe, stop = tmp / "ack", tmp / "probe", tmp / "stop"
     pids: list[int] = []
     present: list[int] = []
     before_stop: set = set()  # acknowledged before the stop file existed: the only survival a mismatch rests on
     deadline = None
     try:
-        started = time.monotonic()
-        try:
-            # On a timeout, subprocess.run ends the host through its own handle on the process it started.
-            done = subprocess.run(command, capture_output=True, env=env, timeout=allowed)
-        except subprocess.TimeoutExpired:
-            unfinished.append(f"the host did not return within {allowed:.0f} s")
-        except OSError as err:
-            unfinished.append(f"the host could not be started: {type(err).__name__}: {err}")
-        else:
-            took = (time.monotonic() - started) * 1000
-            if done.returncode != 0:
-                unfinished.append(f"the host exited with {done.returncode}, so it gave no answer")
-            else:
-                try:
-                    wrong += answer_problems(case, read_answer(done.stdout), took, limits)
-                except Unobserved as err:
-                    unfinished.append(str(err))
-        deadline = time.monotonic() + OBSERVE_SECONDS
-        time.sleep(0.3)
-        got = None
-        try:
-            got = read_transcript(seen)
-        except Unobserved as err:
-            unfinished.append(str(err))
-        try:
-            pids = read_pids(pidfile)
-        except Unobserved as err:
-            unfinished.append(str(err))
-            pids = []
-        if got is not None and pids:
-            wrong += sent_problems(case, got, limits)
-        if pids:
+        pids, deadline = work()
+        if pids and deadline is not None:
             why = create(probe, nonce)
             if why:
                 unfinished.append(f"the probe file could not be created: {why}")
@@ -408,6 +380,56 @@ def judge_case(host: list[str], case: dict, limits: dict, tmp: pathlib.Path) -> 
     if waiting:
         unfinished.append(f"process(es) {waiting} were not seen to stop before the deadline; nothing was signalled")
     return wrong, unfinished
+
+
+def judge_case(host: list[str], case: dict, limits: dict, tmp: pathlib.Path) -> tuple[list[str], list[str]]:
+    """Run one case in its private folder `tmp`: what the host got wrong, and what left the case unfinished."""
+    wrong: list[str] = []
+    unfinished: list[str] = []
+    nonce = secrets.token_hex(16)  # this case's: an acknowledgment left by any other case or run is not this one's
+    pidfile, seen = tmp / "pids", tmp / "seen"
+    env = dict(os.environ, DODONA_TEST_PIDFILE=str(pidfile), DODONA_TEST_SEEN=str(seen), **fixture_env(tmp, nonce))
+    command = host + ["--deadline-ms", str(limits["deadline_ms"]), "--max-line", str(limits["max_line_bytes"]),
+                      "--max-log", str(limits["max_log_bytes"]), "--", sys.executable, str(PROVIDER), case["mode"]]
+    allowed = (limits["deadline_ms"] + limits["grace_ms"]) / 1000 + 20
+
+    def work():
+        nonlocal wrong
+        started = time.monotonic()
+        try:
+            # On a timeout, subprocess.run ends the host through its own handle on the process it started.
+            done = subprocess.run(command, capture_output=True, env=env, timeout=allowed)
+        except subprocess.TimeoutExpired:
+            unfinished.append(f"the host did not return within {allowed:.0f} s")
+        except OSError as err:
+            unfinished.append(f"the host could not be started: {type(err).__name__}: {err}")
+        else:
+            took = (time.monotonic() - started) * 1000
+            if done.returncode != 0:
+                unfinished.append(f"the host exited with {done.returncode}, so it gave no answer")
+            else:
+                try:
+                    wrong += answer_problems(case, read_answer(done.stdout), took, limits)
+                except Unobserved as err:
+                    unfinished.append(str(err))
+        deadline = time.monotonic() + OBSERVE_SECONDS
+        time.sleep(0.3)
+        got = None
+        try:
+            got = read_transcript(seen)
+        except Unobserved as err:
+            unfinished.append(str(err))
+        try:
+            pids = read_pids(pidfile)
+        except Unobserved as err:
+            unfinished.append(str(err))
+            pids = []
+        if got is not None and pids:
+            wrong += sent_problems(case, got, limits)
+        return pids, deadline
+
+    seen_wrong, seen_unfinished = watch_fixture(tmp, nonce, work)
+    return wrong + seen_wrong, unfinished + seen_unfinished
 
 
 def main() -> int:

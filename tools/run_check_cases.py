@@ -23,7 +23,31 @@ described, in order, under the key and number the contract gives, every run
 that exited was passed back to the provider under the start request's id, no
 run that must not start was started, and no process the provider started is
 still running. The mode and the way a run ends are given in the environment,
-not on any command line. Exit status is 0 only if every case matched.
+not on any command line.
+
+Only a completed answer is judged: the host exited 0 within its time and
+printed one JSON object with a string `outcome`. A host that could not start,
+ran out of time (it is ended through subprocess.run's own handle on the process
+this judge started, and nothing else is ever ended), exited other than 0, or
+printed anything else has answered nothing, and the case is `UNFINISHED`. So is
+a case whose records cannot be observed: a transcript, run record or
+process-id file that is not a regular file the judge created, too large, or
+malformed; a missing transcript or process id, except for the cases whose
+curated expectation is a refusal before the provider starts (outcome
+`refused`, reason `bad-input` or `unknown-file`, zero runs: ten cases), where
+the provider must never have been started; this is read from the curated case,
+never from the answer. An empty run record, created by the judge, proves that
+no run was given. The host reads its standard input from a private regular
+file and writes its standard output to another, read back capped; no pipe is
+shared with anything the host leaves behind. Survival is told by the
+cooperative fixture through the one probe-and-stop of
+tools/run_provider_cases.py (`watch_fixture`): a fresh nonce per case, a probe
+file, then always a stop file; a recorded id is only asked about, never
+signalled. A case is named by its mode, run ending and a
+digest of its whole curated content, so two cases with the same label differ.
+
+Exit status is 0 if every judged case matched, 1 if the run completed with
+mismatches, and 2 if any case did not finish or no case was judged.
 
 The reference host is `python tools/host.py check`.
 """
@@ -33,6 +57,8 @@ import hashlib
 import json
 import os
 import pathlib
+import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -41,26 +67,58 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import canonical  # noqa: E402
+import run_provider_cases as observing  # noqa: E402  the capped reads, id checks and cooperative stop
 
 KIT = ROOT / "conformance" / "provider"
 OBLIGATION = {"binding": "b", "name": "o", "kind": "check", "specified_by": ["a.txt"], "targets": ["a.txt"], "expect": "holds", "config": {}}
 TOOLS = [{"name": "checker", "version": "1", "digest": "sha256:" + "c" * 64}]
 PLATFORM = {"os": "linux", "arch": "aarch64", "libc": "gnu"}
+HOST_SECONDS = 120
+RECORD_LIMIT = 1 << 26  # the largest transcript or run record the fixture writes, with every many_inputs entry
+ANSWER_LIMIT = 1 << 20  # the most of the host's standard output that is ever read
+Unobserved = observing.Unobserved
 
 
-def alive(pid: int) -> bool:
-    if sys.platform == "win32":
-        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
-        return str(pid) in out
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
+def preflight(case: dict) -> bool:
+    """A case whose curated expectation is a refusal before the provider starts. Read from the fixture only,
+    never from what the host answered."""
+    return (case.get("outcome") == "refused" and case.get("reason") in ("unknown-file", "bad-input")
+            and type(case.get("runs")) is int and case.get("runs") == 0)
+
+
+def case_id(case: dict) -> str:
+    """A stable identifier of the whole curated case, beside its readable label."""
+    return hashlib.sha256(json.dumps(case, sort_keys=True, ensure_ascii=True).encode("ascii")).hexdigest()[:16]
 
 
 def records(path: pathlib.Path) -> list:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    """The JSON lines the fixture wrote to a file the judge created. Missing, not regular, too large, not UTF-8,
+    or holding anything but JSON objects: Unobserved."""
+    data = observing.read_private(path, RECORD_LIMIT)
+    if data is None:
+        raise Unobserved(f"{path.name}, created by the judge, is gone")
+    try:
+        lines = [json.loads(line, parse_constant=observing.not_json) for line in data.decode("utf-8").splitlines() if line]
+    except ValueError as err:
+        raise Unobserved(f"{path.name} could not be read: {type(err).__name__}: {err}") from err
+    if not all(isinstance(line, dict) for line in lines):
+        raise Unobserved(f"{path.name} holds a line that is not a JSON object")
+    return lines
+
+
+def read_answer(path: pathlib.Path) -> dict:
+    """The host's answer, from the private regular file its standard output went to: one JSON object with a string
+    outcome. Anything else, an oversized or vanished file included, is no answer."""
+    stdout = observing.read_private(path, ANSWER_LIMIT)
+    if stdout is None:
+        raise Unobserved("the host's standard output file, created by the judge, is gone")
+    try:
+        answer = json.loads(stdout.decode("utf-8"), parse_constant=observing.not_json)
+    except ValueError as err:
+        raise Unobserved(f"the host exited 0 without a JSON answer: {type(err).__name__}") from err
+    if not isinstance(answer, dict) or not isinstance(answer.get("outcome"), str):
+        raise Unobserved("the host exited 0 without a JSON object naming an outcome")
+    return answer
 
 
 def same(a, b) -> bool:
@@ -73,9 +131,12 @@ def same(a, b) -> bool:
 CANNOT_SEE_SHUTDOWN = {"stops-reading", "too-slow"}
 
 
-def judge(case: dict, host: list[str]) -> list[str]:
+def judge(case: dict, host: list[str], tmp: pathlib.Path) -> tuple[list[str], list[str]]:
+    """Run one case in its private folder: what the host got wrong, and what left the case unfinished."""
     problems: list[str] = []
-    with tempfile.TemporaryDirectory() as tmp:
+    unfinished: list[str] = []
+    nonce = secrets.token_hex(16)  # this case's: an acknowledgment left by any other case or run is not this one's
+    if True:
         project = pathlib.Path(tmp) / "project"
         (project / "work").mkdir(parents=True)
         (project / "a.txt").write_bytes(b"a\n")
@@ -122,29 +183,67 @@ def judge(case: dict, host: list[str]) -> list[str]:
         if "input_text" in case:
             sent = case["input_text"]  # text that is not JSON at all
         env = dict(os.environ, DODONA_CHECKER_MODE=case["mode"], DODONA_TEST_SEEN=str(seen), DODONA_TEST_PIDFILE=str(pidfile),
-                   DODONA_EXECUTOR_END=case["run"], DODONA_EXECUTOR_RECORD=str(record), DODONA_EXECUTOR_ROOT=str(project))
-        proc = subprocess.Popen(host, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
-        try:
-            out, _ = proc.communicate(sent.encode("utf-8"), timeout=120)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            out = b""
-            problems.append("the host did not return")
-        try:
-            answer = json.loads(out.decode("utf-8"))
-        except ValueError:
-            answer = None
-        time.sleep(0.3)
-        got_msgs = [r for r in records(seen) if "got" in r]
-        described = [r["described"] for r in records(seen) if "described" in r]
-        given_and_printed = records(record)
-        started = [r for r in given_and_printed if "number" in r]
-        printed = [r["printed"] for r in given_and_printed if "printed" in r]
-        leftover = [int(p) for p in pidfile.read_text(encoding="utf-8").split() if p.strip() and alive(int(p))]
+                   DODONA_EXECUTOR_END=case["run"], DODONA_EXECUTOR_RECORD=str(record), DODONA_EXECUTOR_ROOT=str(project),
+                   **observing.fixture_env(tmp, nonce))
+        # The exact text sent, from a private regular file; the answer, into another. No pipe: a pipe inherited by
+        # something the host left behind would hold subprocess.run past its own timeout on Windows.
+        stdin_path, stdout_path = tmp / "stdin", tmp / "stdout"
+        with open(stdin_path, "xb") as handle:
+            handle.write(sent.encode("utf-8"))
+        seen_by = {"answer": None}
+
+        def work():
+            with open(stdin_path, "rb") as given, open(stdout_path, "xb") as answered:
+                try:
+                    # On a timeout, subprocess.run ends the host through its own handle on the process it started.
+                    done = subprocess.run(host, stdin=given, stdout=answered, stderr=subprocess.DEVNULL, env=env,
+                                          timeout=HOST_SECONDS)
+                except subprocess.TimeoutExpired:
+                    done = None
+                    unfinished.append(f"the host did not return within {HOST_SECONDS} s")
+                except OSError as err:
+                    done = None
+                    unfinished.append(f"the host could not be started: {type(err).__name__}: {err}")
+            if done is not None:
+                if done.returncode != 0:
+                    unfinished.append(f"the host exited with {done.returncode}, so it gave no answer")
+                else:
+                    try:
+                        seen_by["answer"] = read_answer(stdout_path)
+                    except Unobserved as err:
+                        unfinished.append(str(err))
+            deadline = time.monotonic() + observing.OBSERVE_SECONDS
+            time.sleep(0.3)
+            pids: list[int] = []
+            try:
+                seen_by["transcript"] = records(seen)
+                seen_by["given"] = records(record)  # created empty by the judge: empty proves no run was given
+                data = observing.read_private(pidfile, observing.LIMITS["pids"])
+                if data is None:
+                    raise Unobserved("the process-id file, created by the judge, is gone")
+                if data.strip() or not preflight(case):
+                    pids = observing.read_pids(pidfile)
+            except Unobserved as err:
+                unfinished.append(str(err))
+                seen_by["answer"] = None  # nothing about the host follows from records that could not be read
+            if seen_by.get("transcript") == [] and not preflight(case):
+                unfinished.append("the checker's transcript is empty, and only a refusal before the provider starts may leave it so")
+                seen_by["answer"] = None
+            return pids, deadline
+
+        gone_wrong, gone_unfinished = observing.watch_fixture(tmp, nonce, work)
+        problems += gone_wrong
+        unfinished += gone_unfinished
+    answer = seen_by["answer"]
+    if answer is None:
+        return problems, unfinished  # no completed answer: nothing below is judged
+    transcript, given_and_printed = seen_by["transcript"], seen_by["given"]
+    got_msgs = [r for r in transcript if "got" in r]
+    described = [r["described"] for r in transcript if "described" in r]
+    started = [r for r in given_and_printed if "number" in r]
+    printed = [r["printed"] for r in given_and_printed if "printed" in r]
     want = {k: case[k] for k in ("outcome", "verdict", "reason") if k in case}
-    if not isinstance(answer, dict):
-        problems.append("the host printed no JSON object")
-    elif {k: answer.get(k) for k in want} != want:
+    if {k: answer.get(k) for k in want} != want:
         problems.append(f"expected {want}, got {{{', '.join(f'{k!r}: {answer.get(k)!r}' for k in want)}}}")
     if case.get("reason") in ("unknown-file", "bad-input"):
         if got_msgs:
@@ -192,14 +291,7 @@ def judge(case: dict, host: list[str]) -> list[str]:
         problems.append("the provider was asked to interpret a run that did not exit")
     if "distinct_run_keys" in case and len({g.get("run_key") for g in started}) != case["distinct_run_keys"]:
         problems.append(f"expected {case['distinct_run_keys']} runs each under its own key")
-    if leftover:
-        problems.append(f"processes the provider started are still running: {leftover}")
-        for pid in leftover:
-            try:
-                os.kill(pid, 9)
-            except OSError:
-                pass
-    return problems
+    return problems, unfinished
 
 
 def main() -> int:
@@ -207,26 +299,62 @@ def main() -> int:
         print(__doc__)
         return 2
     host = sys.argv[sys.argv.index("--") + 1:]
-    spec = json.loads((KIT / "check-cases.json").read_text(encoding="utf-8"))
-    failed = skipped = 0
-    for case in spec["cases"]:
+    try:
+        spec = json.loads((KIT / "check-cases.json").read_text(encoding="utf-8"))
+        cases = spec["cases"]
+        if not isinstance(cases, list) or not all(isinstance(c, dict) and isinstance(c.get("mode"), str)
+                                                  and isinstance(c.get("run"), str) for c in cases):
+            raise ValueError("cases is not a list of modes with run endings")
+    except (OSError, ValueError, KeyError, TypeError) as err:
+        print(f"UNFINISHED the cases could not be read: {type(err).__name__}: {err}")
+        print(json.dumps({"cases": 0, "judged": 0, "skipped": 0, "matched": 0, "all_matched": False,
+                          "unfinished": 1, "rejected": []}))
+        return 2
+    rejected: list[str] = []
+    unfinished = skipped = 0
+    for case in cases:
+        label = f"{case['mode']} ({case['run']}) [{case_id(case)}]"
         if sys.platform in case.get("not_on", []):
             skipped += 1
-            print(f"skip     {case['mode']} ({case['run']}): not on {sys.platform}, where the provider cannot make what the case needs")
+            print(f"skip     {label}: not on {sys.platform}, where the provider cannot make what the case needs")
             continue
-        problems = judge(case, host)
-        label = f"{case['mode']} ({case['run']})"
-        if problems:
-            failed += 1
-            print(f"MISMATCH {label}: {'; '.join(problems)}")
+        wrong: list[str] = []
+        broken: list[str] = []
+        try:
+            tmp = pathlib.Path(tempfile.mkdtemp(prefix="dodona-check-case-"))  # private: mode 0700, this case only
+        except OSError as err:
+            broken.append(f"no temporary folder could be made: {err}")
+        else:
+            try:
+                wrong, broken = judge(case, host, tmp)
+            except Exception as err:  # the judge itself failed: the case is unfinished, never a match
+                broken.append(f"the judge failed: {type(err).__name__}: {err}")
+            finally:
+                if broken:
+                    broken.append(f"the case's folder {tmp} is kept as evidence, with its stop file")
+                else:
+                    try:
+                        shutil.rmtree(tmp)
+                    except OSError as err:
+                        broken.append(f"the case's temporary folder could not be removed: {err}")
+        if broken:
+            unfinished += 1
+            print(f"UNFINISHED {label}: " + "; ".join(broken + wrong))
+        elif wrong:
+            rejected.append(label)
+            print(f"MISMATCH {label}: {'; '.join(wrong)}")
         else:
             print(f"match    {label}")
-    total = len(spec["cases"])
+    total = len(cases)
     judged = total - skipped
     # A case skipped on this platform is reported as skipped, never as matched.
-    print(json.dumps({"cases": total, "judged": judged, "skipped": skipped, "matched": judged - failed,
-                      "all_matched": failed == 0 and judged > 0}))
-    return 0 if failed == 0 and judged else 1
+    print(json.dumps({"cases": total, "judged": judged, "skipped": skipped,
+                      "matched": judged - len(rejected) - unfinished,
+                      "all_matched": not rejected and not unfinished and judged > 0,
+                      "unfinished": unfinished, "rejected": rejected}))
+    if unfinished or not judged:
+        return 2
+    return 1 if rejected else 0
 
 
 if __name__ == "__main__":
