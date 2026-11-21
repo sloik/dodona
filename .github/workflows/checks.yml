@@ -46,6 +46,10 @@ jobs:
           persist-credentials: false
       - name: Run repository checks
         run: ${{ matrix.python }} tools/check_repo.py
+      # A step of its own, before anything is built: tools/check_repo.py only reads that it is here, because it
+      # also runs where Node is not installed. Fakes every process the planted-defect runner would start (issue 41).
+      - name: Test the second kernel's planted-defect runner
+        run: node --test kernel2/test-plant.js
       - name: Plant a fault for every document check, and judge a throwaway repository through git
         shell: bash
         run: |

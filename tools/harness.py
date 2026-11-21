@@ -58,24 +58,37 @@ def identity(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def ask(checker: list[str], material: dict[str, bytes], log: list[bytes]) -> str:
-    """Start the checker in a new directory holding only `material`; return its last line."""
+class CheckerUnfinished(Exception):
+    """In strict mode: the checker did not finish with exit 0 and a last line of `agreed` or `refused`."""
+
+
+def ask(checker: list[str], material: dict[str, bytes], log: list[bytes], strict: bool = False) -> str:
+    """Start the checker in a new directory holding only `material`; return its last line.
+    Ordinarily anything but a final `agreed` is `refused`. With `strict`, a checker that could not start, timed out,
+    exited other than 0 or gave no verdict raises CheckerUnfinished instead, so it is never read as a refusal."""
     with tempfile.TemporaryDirectory(prefix="dodona-harness-") as room:
         for name, data in material.items():
             pathlib.Path(room, name).write_bytes(data)
         env = {k: os.environ[k] for k in ("PATH", "SYSTEMROOT", "TEMP", "TMP") if k in os.environ}
+        code = None
         try:
             done = subprocess.run(checker, cwd=room, env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=600)
-            said = done.stdout + done.stderr
+            said, code = done.stdout + done.stderr, done.returncode
         except (OSError, subprocess.TimeoutExpired) as err:
             said = f"the checker did not finish: {type(err).__name__}\n".encode("utf-8")
+            if strict:
+                raise CheckerUnfinished(f"{type(err).__name__}: {err}") from err
         log.append(b"--- " + ", ".join(sorted(material)).encode("utf-8") + b"\n" + said)
         lines = [line.strip() for line in said.decode("utf-8", "replace").splitlines() if line.strip()]
-        return lines[-1] if lines and lines[-1] in ("agreed", "refused") else "refused"
+        verdict = lines[-1] if lines and lines[-1] in ("agreed", "refused") else None
+        if strict and (code != 0 or verdict is None):
+            raise CheckerUnfinished(f"the checker exited with {code} and its last line was {lines[-1] if lines else None!r}")
+        return verdict or "refused"
 
 
-def run(args, checker: list[str]) -> dict:
+def run(args, checker: list[str], strict: bool = False) -> dict:
     read = lambda path: pathlib.Path(path).read_bytes()  # noqa: E731
+    ask_ = lambda checker, material, log: ask(checker, material, log, strict)  # noqa: E731
     work, criteria, brief = read(args.work), read(args.criteria), read(args.brief)
     log: list[bytes] = []
     given = [{"role": "brief", "content": identity(brief)}, {"role": "criteria", "content": identity(criteria)}]
@@ -83,12 +96,12 @@ def run(args, checker: list[str]) -> dict:
     if args.known_wrong and args.known_right:
         wrong, right = read(args.known_wrong), read(args.known_right)
         known = {"wrong": identity(wrong), "right": identity(right), "supplied_by": args.known_from,
-                 "rejected_wrong": ask(checker, {"work": wrong, "criteria": criteria, "brief": brief}, log) == "refused",
-                 "accepted_right": ask(checker, {"work": right, "criteria": criteria, "brief": brief}, log) == "agreed"}
+                 "rejected_wrong": ask_(checker, {"work": wrong, "criteria": criteria, "brief": brief}, log) == "refused",
+                 "accepted_right": ask_(checker, {"work": right, "criteria": criteria, "brief": brief}, log) == "agreed"}
         if args.criterion:
             known["criterion"] = args.criterion
         given += [{"role": "known-right", "content": identity(right)}, {"role": "known-wrong", "content": identity(wrong)}]
-    result = ask(checker, {"work": work, "criteria": criteria, "brief": brief}, log)
+    result = ask_(checker, {"work": work, "criteria": criteria, "brief": brief}, log)
     given.append({"role": "work", "content": identity(work)})
     lineage = {"intent": args.intent, "kind": args.kind}
     if args.criterion:
