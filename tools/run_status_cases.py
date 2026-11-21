@@ -219,9 +219,10 @@ def requests(aux: pathlib.Path) -> dict:
     return seen
 
 
-def answer(command: list[str], stdin: bytes, role: str, *, cwd: pathlib.Path | None = None, env: dict | None = None) -> dict:
+def answer(command: list[str], stdin: bytes, role: str, *, cwd: pathlib.Path | None = None,
+           env: dict | None = None, timeout: int = 120) -> dict:
     try:
-        done = subprocess.run(command, input=stdin, capture_output=True, timeout=120, cwd=cwd, env=env)
+        done = subprocess.run(command, input=stdin, capture_output=True, timeout=timeout, cwd=cwd, env=env)
     except OSError as err:
         raise Unfinished(f"{role} could not start: {err}") from err
     except subprocess.TimeoutExpired as err:
@@ -294,8 +295,8 @@ def _preimages(case: dict, site: dict) -> dict:
     return found
 
 
-def scenario_report(kernel: list[str], view: dict) -> dict:
-    got = answer(kernel + ["scenario"], json.dumps(view).encode("utf-8"), "independent scenario")
+def scenario_report(kernel: list[str], view: dict, *, timeout: int = 120) -> dict:
+    got = answer(kernel + ["scenario"], json.dumps(view).encode("utf-8"), "independent scenario", timeout=timeout)
     results = got.get("results")
     if (set(got) != {"results"} or not isinstance(results, list) or len(results) != len(view["steps"])
             or any(not isinstance(item, dict) for item in results)):

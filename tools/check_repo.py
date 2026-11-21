@@ -36,6 +36,7 @@ import run_key_vectors  # noqa: E402
 import run_kit  # noqa: E402
 import run_ledger_cases  # noqa: E402
 import run_provider_cases  # noqa: E402
+import run_run_cases  # noqa: E402
 import run_status_cases  # noqa: E402
 
 problems: list[str] = []
@@ -2394,6 +2395,126 @@ class StatusJudgeTests(unittest.TestCase):
         self.assertEqual((code, summary["judged"], summary["skipped"], summary["matched"], summary["unfinished"]), (2, 2, 0, 1, 1))
 
 
+class RunJudgeTests(unittest.TestCase):
+    """A project run mismatch requires completed commands and a sound reference premise."""
+
+    case = StatusJudgeTests.case
+    answered = staticmethod(StatusJudgeTests.answered)
+
+    def exercise(self, answers, cases=None):
+        argv = ["run_run_cases.py", "--jobs", "1", "--kernel", "peer", "--status", "kernel status", "--", "kernel", "run"]
+        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_run_cases.sys, "argv", argv), \
+                patch.object(run_run_cases, "CASES") as spec, patch.object(run_status_cases.subprocess, "run", side_effect=answers):
+            spec.read_text.return_value = json.dumps({"cases": [self.case] if cases is None else cases, "site": {}})
+            code = run_run_cases.main()
+        lines = output.getvalue().splitlines()
+        return code, json.loads(lines[-1]), lines[:-1]
+
+    def test_refusal_text_from_a_failed_command_is_unfinished(self):
+        case = dict(self.case, expect={"refused": "bad-input"})
+        refusal = {"refused": "bad-input", "detail": "fixture"}
+        code, summary, lines = self.exercise([
+            self.answered(refusal, 1, b"No space left on device"), self.answered(refusal),
+        ], [case])
+        self.assertEqual(code, 2)
+        self.assertEqual((summary["matched"], summary["unfinished"], summary["rejected"]), (0, 1, []))
+        self.assertIn("UNFINISHED " + case["name"], lines[0])
+
+
+    @classmethod
+    def report_answers(cls):
+        report = StatusJudgeTests.right
+        counts = dict.fromkeys(run_run_cases.COUNT_KEYS, 0)
+        run = dict(report, counts=counts)
+        return [cls.answered(payload) for payload in
+                (run, report, run, run, report, run, {"results": [report["report"]]})]
+
+    def test_complete_reports_and_expected_refusals_match(self):
+        code, summary, _ = self.exercise(self.report_answers())
+        self.assertEqual(code, 0)
+        self.assertEqual(summary, {"cases": 1, "judged": 1, "skipped": 0, "matched": 1, "all_matched": True,
+                                   "rejected": [], "unfinished": 0})
+        refusal = self.answered({"refused": "bad-input", "detail": "fixture"})
+        code, summary, _ = self.exercise([refusal, refusal], [dict(self.case, expect={"refused": "bad-input"})])
+        self.assertEqual(code, 0)
+        self.assertTrue(summary["all_matched"])
+
+    def test_launch_timeout_exit_and_invalid_json_are_unfinished_for_each_role(self):
+        failures = [FileNotFoundError("missing command"), subprocess.TimeoutExpired("command", 300),
+                    OSError(errno.ENOSPC, "No space left on device"), self.answered({}, -15),
+                    self.answered({}, 0xC0000005), self.answered({}, 1, b"No space left on device"),
+                    subprocess.CompletedProcess([], 0, b'{"x":1,"x":2}', b""), self.answered([])]
+        roles = ("run command", "run command's status command", "run command's second run",
+                 "reference run", "reference run's status command", "reference run's second run", "independent scenario")
+        for index, role in enumerate(roles):
+            for failure in failures:
+                with self.subTest(role=role, failure=failure):
+                    answers = self.report_answers()
+                    answers[index] = failure
+                    code, summary, lines = self.exercise(answers)
+                    self.assertEqual(code, 2)
+                    self.assertEqual((summary["matched"], summary["unfinished"], summary["rejected"]), (0, 1, []))
+                    self.assertIn(role, lines[0])
+
+    def test_broken_reference_premises_are_unfinished(self):
+        report = StatusJudgeTests.right
+        cases = [
+            (3, self.answered({"refused": "bad-input", "detail": "unexpected"})),
+            (3, self.answered(dict(report, counts=dict.fromkeys(run_run_cases.COUNT_KEYS, 0), judged={}))),
+            (3, self.answered(dict(report, counts=dict.fromkeys(run_run_cases.COUNT_KEYS, 0), project_status="failed"))),
+            (6, self.answered({"results": []})),
+        ]
+        for index, failure in cases:
+            with self.subTest(index=index, failure=failure):
+                answers = self.report_answers()
+                answers[index] = failure
+                code, summary, lines = self.exercise(answers)
+                self.assertEqual(code, 2)
+                self.assertEqual((summary["matched"], summary["unfinished"], summary["rejected"]), (0, 1, []))
+                self.assertIn("UNFINISHED " + self.case["name"], lines[0])
+
+    def test_completed_wrong_run_and_wrong_second_count_are_named(self):
+        report = StatusJudgeTests.right
+        zero = dict.fromkeys(run_run_cases.COUNT_KEYS, 0)
+        failures = [
+            (0, self.answered(dict(report, counts=dict(zero, passed=1)))),
+            (0, self.answered(dict(report, counts=zero, judged={}))),
+            (2, self.answered(dict(report, counts=dict(zero, checked=False)))),
+        ]
+        for index, failure in failures:
+            with self.subTest(index=index, failure=failure):
+                answers = self.report_answers()
+                answers[index] = failure
+                code, summary, lines = self.exercise(answers)
+                self.assertEqual(code, 1)
+                self.assertEqual((summary["matched"], summary["unfinished"], summary["rejected"]), (0, 0, [self.case["name"]]))
+                self.assertIn("MISMATCH " + self.case["name"], lines[0])
+
+    def test_unfinished_takes_precedence_but_keeps_completed_names(self):
+        rejected = dict(self.case, expect={"refused": "bad-input"})
+        unfinished = dict(rejected, name="unfinished case")
+        good = self.answered({"refused": "bad-input", "detail": "fixture"})
+        wrong = self.answered({"refused": "bad-project", "detail": "wrong"})
+        code, summary, _ = self.exercise([wrong, good, subprocess.TimeoutExpired("run", 300)], [rejected, unfinished])
+        self.assertEqual(code, 2)
+        self.assertEqual((summary["judged"], summary["unfinished"], summary["rejected"]), (2, 1, [rejected["name"]]))
+
+    def test_platform_skip_never_counts_as_a_match(self):
+        case = dict(self.case, name="unsupported link", links={"link": "file"})
+        with patch.object(run_status_cases, "make_link", side_effect=run_status_cases.Skip("link unavailable")):
+            code, summary, lines = self.exercise(self.report_answers(), [case, self.case])
+        self.assertEqual(code, 0)
+        self.assertEqual((summary["cases"], summary["judged"], summary["skipped"], summary["matched"]), (2, 1, 1, 1))
+        self.assertIn("skipped  " + case["name"], lines[0])
+
+    def test_no_judged_cases_or_ambiguous_names_cannot_match(self):
+        for cases in ([], [self.case, self.case]):
+            with self.subTest(cases=cases):
+                code, summary, _ = self.exercise([], cases)
+                self.assertEqual(code, 2)
+                self.assertEqual((summary["judged"], summary["matched"], summary["all_matched"]), (0, 0, False))
+
+
 class JudgeTests(unittest.TestCase):
     """The judge must never turn an unfinished or wrong run into a match."""
 
@@ -2464,6 +2585,7 @@ def main() -> int:
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(HarnessJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ProviderJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(StatusJudgeTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(RunJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantJsTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
