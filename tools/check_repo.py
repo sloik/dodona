@@ -1851,6 +1851,7 @@ def main() -> int:
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(InputJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KeyVectorJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(AttestJudgeTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(HarnessJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantJsTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
