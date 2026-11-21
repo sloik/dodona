@@ -293,6 +293,14 @@ def acts() -> None:
 
 
 # ---------------------------------------------------------------- ledger
+def nested(levels: int) -> dict:
+    """An object nested `levels` deep, itself counted."""
+    value: dict = {}
+    for _ in range(levels - 1):
+        value = {"x": value}
+    return value
+
+
 def line(entry: dict) -> str:
     payload = canonical.encode(entry)
     raw = payload.encode("utf-8")
@@ -370,7 +378,11 @@ def ledger() -> None:
         ("another format marker", text + f"dodona2 {size} {checksum} {payload}\n", corrupt(4), None),
         ("a final line ended by a carriage return alone", text + line(extra)[:-1] + "\r", {"torn": True, "entries": 3},
          "There is no line feed after it, so it is a torn ending like any other."),
-        ("a well-formed entry of a kind the reader gives no meaning", text + line(note), {"torn": False, "entries": 4}, "A reader keeps entries of every kind.")]
+        ("a well-formed entry of a kind the reader gives no meaning", text + line(note), {"torn": False, "entries": 4}, "A reader keeps entries of every kind."),
+        ("an entry nested 64 levels deep", text + line({"previous": last, "kind": "note", "body": nested(63)}), {"torn": False, "entries": 4},
+         "The entry itself is the first level. 64 levels is the limit, and is read."),
+        ("an entry nested 65 levels deep", text + line({"previous": last, "kind": "note", "body": nested(64)}), corrupt(4),
+         "Every reader must be able to read every entry: nesting deeper than 64, the entry itself counted, makes the line corrupt.")]
     put("conformance/ledger/more-damage.json", {
         "about": "More damage for conformance/ledger/cases.json. Each case gives the whole file as text (UTF-8) and what protocol/ledger.md says `ledger-read` must answer. Where the answer is corrupt, `ledger-append` must answer corrupt too and leave the file as it was. `unlisted_kind` is an entry of a kind no rule gives a meaning: it is appended through the kernel, kept by the reader, and an append after it works. `bad_requests` are requests to `ledger-append`, given without the ledger's name, that must be answered {\"refused\": \"bad-request\"} with nothing written. Built with the reference encoder; no kernel produced any of it.",
         "damage": [dict({"name": n, "file": f, "expect": e}, **({"note": why} if why else {})) for n, f, e, why in cases],
