@@ -1182,7 +1182,7 @@ test('executor: a first line of any length is read; an output that fails or clos
 });
 
 test('planted: an answer taken before the command\'s output has closed', async () => {
-  const damaged = planted('Promise.all([written, child.exited, outputClosed])', 'Promise.all([written, child.exited])');
+  const damaged = planted('Promise.all([written, child.exited, outputClosed])', "Promise.all([written, child.exited, 'eof'])");
   const kept = () => standInExecutor(answers(ANSWER_LINE, 0));
   assert.deepEqual(await executeBatch(['run-batch'], 'the-root', { runs: [] }, 40, kept()), { timedOut: true });
   assert.deepEqual(await damaged.executeBatch(['run-batch'], 'the-root', { runs: [] }, 40, kept()), { answer: { ended: true, reports: [] } });
