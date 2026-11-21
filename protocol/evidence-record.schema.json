@@ -18,6 +18,34 @@
     "runs",
     "kind"
   ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": ["check", "conformance"]
+          }
+        }
+      },
+      "then": {
+        "required": ["strength"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "build"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": ["strength"]
+        }
+      }
+    }
+  ],
   "patternProperties": {
     "^x-": {}
   },
