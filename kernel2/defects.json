@@ -1797,8 +1797,8 @@
       "name": "status step 2: the project file reached through a link is read",
       "model_case": "(project status)",
       "file": "project-status.js",
-      "find": "if (how !== 'file' && how !== 'unknown') throw new Stop('bad-project'",
-      "replace": "if (how === 'other' || how === 'missing') throw new Stop('bad-project'"
+      "find": "if (how !== 'file') throw new Stop('bad-project'",
+      "replace": "if (how !== 'file' && how !== 'link') throw new Stop('bad-project'"
     },
     {
       "name": "status step 2: two bindings with one name are accepted",
@@ -2219,6 +2219,20 @@
       "file": "ledger-file.js",
       "find": "  if (ledger.tooDeep({ previous: null, kind: request.kind, body: request.body })) return { refused: 'bad-request' };\n",
       "replace": ""
+    },
+    {
+      "name": "status step 1: a relative path may hold a NUL",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": " && !rel.includes('\\u0000')",
+      "replace": ""
+    },
+    {
+      "name": "status step 1: a code path behind a folder that cannot be entered is unreadable, not bad input",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    } catch (error) {\n      return 'missing';\n    }",
+      "replace": "    } catch (error) {\n      return error.code === 'EACCES' ? 'file' : 'missing';\n    }"
     }
   ]
 }

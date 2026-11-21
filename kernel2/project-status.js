@@ -87,10 +87,10 @@ function sha256Hex(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
 
-// A path that is relative: not empty, not starting with `/`, no `\` and no `:`, and
-// no segment that is empty, `.` or `..`.
+// A path that is relative: not empty, not starting with `/`, no `\`, no `:` and no NUL,
+// and no segment that is empty, `.` or `..`.
 function isRelative(rel) {
-  return isString(rel) && rel !== '' && !rel.startsWith('/') && !rel.includes('\\') && !rel.includes(':')
+  return isString(rel) && rel !== '' && !rel.startsWith('/') && !rel.includes('\\') && !rel.includes(':') && !rel.includes('\u0000')
     && rel.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..');
 }
 
@@ -105,9 +105,8 @@ function stepsOf(root, rel) {
 }
 
 // How `rel` is reached from the root, looking at each step without following it:
-// 'link' if a step is a symbolic link; 'unknown' if a step cannot be looked at for want
-// of permission (what reads the path then finds it unreadable); 'missing' if a step is
-// not there or cannot name a file at all; otherwise
+// 'link' if a step is a symbolic link; 'missing' if a step is not there or cannot be
+// looked at (a path such a step of which is not shown to be a regular file); otherwise
 // 'file' or 'other' by what the last step is.
 function reach(root, rel) {
   const steps = stepsOf(root, rel);
@@ -116,7 +115,7 @@ function reach(root, rel) {
     try {
       status = fs.lstatSync(steps[i]);
     } catch (error) {
-      return error.code === 'EACCES' || error.code === 'EPERM' ? 'unknown' : 'missing';
+      return 'missing';
     }
     if (status.isSymbolicLink()) return 'link';
     if (i === steps.length - 1) return status.isFile() ? 'file' : 'other';
@@ -194,13 +193,10 @@ function checkInput(asked) {
   const root = asked.root;
   if (!isDirectory(root)) throw new Stop('bad-input', 'root is not a directory');
   const providers = Object.entries(asked.site.providers).sort(([a], [b]) => compareUnits(a, b));
-  const unknown = [];
   for (const [name, provider] of providers) {
     if (new Set(provider.code).size !== provider.code.length) throw new Stop('bad-input', `${name}: a code path listed twice`);
     for (const rel of provider.code) {
-      const how = isRelative(rel) ? reach(root, rel) : 'missing';
-      if (how === 'unknown') unknown.push(rel);
-      else if (how !== 'file') throw new Stop('bad-input', `${name}: code path ${JSON.stringify(rel)} is not a regular file under root reached without a link`);
+      if (!isRelative(rel) || reach(root, rel) !== 'file') throw new Stop('bad-input', `${name}: code path ${JSON.stringify(rel)} is not a regular file under root reached without a link`);
     }
   }
   // Then every provider's code is read, before any provider is started.
@@ -711,7 +707,7 @@ async function judge(asked) {
   const site = asked.site;
   // Step 2.
   const how = reach(root, asked.project);
-  if (how !== 'file' && how !== 'unknown') throw new Stop('bad-project', 'the project file is not a regular file reached without a link');
+  if (how !== 'file') throw new Stop('bad-project', 'the project file is not a regular file reached without a link');
   let raw;
   try {
     raw = fs.readFileSync(path.join(root, asked.project));

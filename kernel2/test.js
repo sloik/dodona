@@ -766,7 +766,7 @@ test('the status command reads its input as one JSON object, with at most one li
 test('relative paths and match patterns of the status command', () => {
   const { isRelative, isPattern, segmentMatches } = require('./project-status');
   for (const ok of ['a', 'a/b.txt', '.git/x', 'a..b']) assert.equal(isRelative(ok), true, ok);
-  for (const bad of ['', '/a', 'a/', 'a//b', './a', 'a/../b', 'c:x', 'a\\b', 7]) assert.equal(isRelative(bad), false, String(bad));
+  for (const bad of ['', '/a', 'a/', 'a//b', './a', 'a/../b', 'c:x', 'a\\b', 'a\u0000b', 7]) assert.equal(isRelative(bad), false, String(bad));
   for (const ok of ['m/*.txt', 'intents/[0-9]*.md', '[---]', 'é/*']) assert.equal(isPattern(ok), true, ok);
   for (const bad of ['', '/m', 'm/../x', 'a:b', '[9-0]', '[a]', '[a-]]', 'a\\b', '[é-z]', '[a-b', 'a]']) assert.equal(isPattern(bad), false, bad);
   assert.equal(segmentMatches('*.txt', 'a.txt'), true);
