@@ -6,8 +6,8 @@
 //! The command reads the project file, asks the providers the site names for
 //! the obligations and the intents, reads the ledgers and the policy it is
 //! given, and builds the status scenario J it judges. Its report is the last
-//! result `status::run` gives for J: the same code as the `scenario` command,
-//! so the report cannot say anything J does not. It runs nothing.
+//! result of J, computed with the transition and report rules of `scenario`.
+//! The project command applies the full scenario and constructs its final report.
 //!
 //! The steps are numbered as in the contract. The first rule broken gives the
 //! reason, and nothing after it is done: no provider is started before the
@@ -1684,7 +1684,7 @@ fn run(raw: &[u8]) -> Step<Value> {
         ("steps", Value::Array(steps)),
     ]);
     // The report is what the status rules give for J, and nothing else.
-    let report = status::run(&judged).pop().unwrap_or(Value::Null);
+    let report = status::run_final(&judged).unwrap_or(Value::Null);
     // Step 11.
     let coverage = coverage(&intents.judged, input.min_hard_gates);
     // What could hide a failure the report does not show, in the contract's order and words.

@@ -235,7 +235,21 @@ fn gate_of<'a>(intents: &'a mut Value, step: &Value) -> Option<&'a mut Value> {
 fn count(n: usize) -> Value {
     Value::Number(n as i64)
 }
+
+enum ReportMode {
+    EachStep,
+    FinalOnly,
+}
+
 pub fn run(v: &Value) -> Vec<Value> {
+    evaluate(v, ReportMode::EachStep)
+}
+
+pub(super) fn run_final(v: &Value) -> Option<Value> {
+    evaluate(v, ReportMode::FinalOnly).pop()
+}
+
+fn evaluate(v: &Value, report_mode: ReportMode) -> Vec<Value> {
     let mut obligations = v.get("obligations").clone();
     let mut intents = v.get("intents").clone();
     let policy = v.get("policy");
@@ -244,7 +258,8 @@ pub fn run(v: &Value) -> Vec<Value> {
     let min = policy.get("min_hard_gates").number();
     let mut ledger: Vec<(String, Value)> = Vec::new();
     let mut out = Vec::new();
-    for step in v.get("steps").array() {
+    let steps = v.get("steps").array();
+    for (index, step) in steps.iter().enumerate() {
         let a = step.get("do");
         if let Some(x) = a.opt("append") {
             if let (Some(kind), Some(body)) = (x.text("kind"), x.opt("body")) {
@@ -265,6 +280,11 @@ pub fn run(v: &Value) -> Vec<Value> {
                 *g = json::string(to);
             }
         }
+        if matches!(report_mode, ReportMode::FinalOnly) && index + 1 < steps.len() {
+            continue;
+        }
+        #[cfg(test)]
+        tests::record_report_construction();
         let evidence = || {
             ledger
                 .iter()
@@ -393,9 +413,97 @@ pub fn run(v: &Value) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
+
+    std::thread_local! {
+        static REPORTS_CONSTRUCTED: Cell<usize> = const { Cell::new(0) };
+    }
+
+    pub(super) fn record_report_construction() {
+        REPORTS_CONSTRUCTED.with(|count| count.set(count.get() + 1));
+    }
+
     fn value(s: &str) -> Value {
         json::parse(s.as_bytes()).unwrap()
     }
+
+    #[test]
+    fn final_report_applies_all_steps_and_constructs_one_report() {
+        let scenario = value(
+            r#"{
+                "self":{"writer":"k","platform":"p"},
+                "policy":{"required":["i"],"min_hard_gates":1},
+                "obligations":{"a":{"preimage":{"inputs":{"targets":["sha256:old"]}}}},
+                "intents":{"i":{"owner":"o","worker":"w","children":[],"criteria":{"c":{"gate":"hard","checked_by":["a"]}}}},
+                "steps":[
+                    {"do":{"append":{"kind":"evidence","body":{"obligation":"a","platform":"p","writer":"k","verdict":"passed",
+                        "preimage":{"inputs":{"targets":["sha256:old"]}},
+                        "core_key":"sha256:cea6d07c59362e23525c8cea73662268fe70cfd008cc8e1b594b195ef6999ec8"}}}},
+                    {"do":{"change":{"obligation":"a","preimage":{"inputs":{"targets":["sha256:new"]}}}}},
+                    {"do":{"append":{"kind":"evidence","body":{"obligation":"a","platform":"p","writer":"k","verdict":"failed",
+                        "preimage":{"inputs":{"targets":["sha256:new"]}},
+                        "core_key":"sha256:6d3996733f34f97f92b237a002f75daf7656f8a7c048dfca619d1cb119b2e75e"}}}},
+                    {"do":{"set_gate":{"intent":"i","criterion":"c","to":"soft"}}},
+                    {"do":{"append":{"kind":42,"body":{}},"change":{"obligation":false,"preimage":{}},
+                        "set_gate":{"intent":"i","criterion":"c","to":42}}},
+                    {"do":{"change":{"obligation":"missing","preimage":{}},
+                        "set_gate":{"intent":"i","criterion":"missing","to":"hard"}}},
+                    {"do":{"set_gate":{"intent":"","criterion":"","to":"hard"}}}
+                ]
+            }"#,
+        );
+        REPORTS_CONSTRUCTED.with(|count| count.set(0));
+        let prefix_reports = run(&scenario);
+        assert_eq!(prefix_reports.len(), 7);
+        assert_eq!(REPORTS_CONSTRUCTED.with(|count| count.replace(0)), 7);
+        fn obligation(report: &Value) -> &Value {
+            report.get("obligations").get("a")
+        }
+        assert_eq!(obligation(&prefix_reports[0]).get("status").str(), "passed");
+        assert_eq!(
+            json::encode(obligation(&prefix_reports[1])),
+            r#"{"reason":"never-run","status":"unknown"}"#
+        );
+        assert_eq!(
+            prefix_reports[2].get("project").get("status").str(),
+            "failed"
+        );
+
+        let final_report = run_final(&scenario).unwrap();
+        assert_eq!(REPORTS_CONSTRUCTED.with(|count| count.replace(0)), 1);
+        assert_eq!(obligation(&final_report).get("status").str(), "failed");
+        assert_eq!(final_report.get("project").get("status").str(), "unknown");
+        assert_eq!(
+            json::encode(final_report.get("intents").get("i").get("gates")),
+            r#"{"deferred":0,"deferred_open":0,"hard":0,"soft":1}"#
+        );
+        assert_eq!(final_report.get("rejected").number(), 0);
+        for report in &prefix_reports[3..] {
+            assert_eq!(json::encode(report), json::encode(&final_report));
+        }
+
+        let mut empty = scenario.clone();
+        *empty.opt_mut("steps").unwrap() = Value::Array(Vec::new());
+        assert!(run_final(&empty).is_none());
+        assert_eq!(REPORTS_CONSTRUCTED.with(Cell::get), 0);
+
+        // Omitting a transition must change the observed result.
+        for (omitted, expected_obligation, expected_project) in [
+            (1, "passed", "unknown"),
+            (2, "unknown", "unknown"),
+            (3, "failed", "failed"),
+        ] {
+            let mut control = scenario.clone();
+            let Value::Array(steps) = control.opt_mut("steps").unwrap() else {
+                panic!("expected steps")
+            };
+            steps.remove(omitted);
+            let report = run_final(&control).unwrap();
+            assert_eq!(obligation(&report).get("status").str(), expected_obligation);
+            assert_eq!(report.get("project").get("status").str(), expected_project);
+        }
+    }
+
     #[test]
     fn baseline_sorts_sets() {
         let a = value(
