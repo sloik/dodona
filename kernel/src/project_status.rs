@@ -1562,9 +1562,21 @@ fn children_of(i: &Value) -> Vec<String> {
 
 // The whole command.
 
-fn run(raw: &[u8]) -> Step<Value> {
-    // Step 1.
-    let input = read_input(raw)?;
+/// What the status command reads of a project and judges, steps 2 to 10. The
+/// run command plans from the same, so the two read a project one way.
+struct Snapshot {
+    not_served: Vec<(String, String)>,
+    obligations: Obligations,
+    intents: Intents,
+    read: Ledgers,
+    /// J, the status scenario of step 10.
+    judged: Value,
+    /// The last result the status rules give for J.
+    report: Value,
+}
+
+/// Steps 2 to 10, on an input step 1 has read.
+fn snapshot(input: &Input) -> Step<Snapshot> {
     let root = &input.root;
     // Step 2.
     if !plain_file(root, &input.project) {
@@ -1679,12 +1691,33 @@ fn run(raw: &[u8]) -> Step<Value> {
             ]),
         ),
         ("policy", policy),
-        ("obligations", sorted_object(obligations.found)),
+        ("obligations", sorted_object(obligations.found.clone())),
         ("intents", sorted_object(intents.judged.clone())),
         ("steps", Value::Array(steps)),
     ]);
     // The report is what the status rules give for J, and nothing else.
     let report = status::run(&judged).pop().unwrap_or(Value::Null);
+    Ok(Snapshot {
+        not_served,
+        obligations,
+        intents,
+        read,
+        judged,
+        report,
+    })
+}
+
+fn run(raw: &[u8]) -> Step<Value> {
+    // Step 1.
+    let input = read_input(raw)?;
+    let Snapshot {
+        not_served,
+        obligations,
+        intents,
+        read,
+        judged,
+        report,
+    } = snapshot(&input)?;
     // Step 11.
     let coverage = coverage(&intents.judged, input.min_hard_gates);
     // What could hide a failure the report does not show, in the contract's order and words.
@@ -1877,6 +1910,189 @@ mod run_input {
             executor,
             transcript,
         })
+    }
+
+    /// What step 10 of the run command plans, and what the counts of step 14
+    /// will be made from.
+    pub(super) struct Plan {
+        /// To be checked: every listed obligation whose status is not a current
+        /// result, as (binding, name), sorted by binding and then name.
+        pub(super) to_check: Vec<(String, String)>,
+        /// Reused: listed obligations that are `passed`, `failed` or `conflict`,
+        /// sorted the same way. Nothing is sent for them.
+        pub(super) reused: Vec<(String, String)>,
+        /// How many obligations the providers listed. A name both listed and
+        /// rejected is listed; a name only rejected is not one.
+        pub(super) obligations: usize,
+        /// How many names are not checkable, those both listed and rejected included.
+        pub(super) not_checkable: usize,
+    }
+
+    /// Step 10. The status of each obligation is the report's, from the status
+    /// rules applied to the scenario of the status command's step 10; this
+    /// applies no rule of its own. Only `passed`, `failed` and `conflict` are
+    /// current results: anything else, `unknown` above all, is checked.
+    pub(super) fn plan(listed: &[(String, String)], not_checkable: &[String], report: &Value) -> Plan {
+        let status = |name: &str| {
+            report
+                .opt("obligations")
+                .and_then(|o| o.opt(name))
+                .and_then(|o| o.text("status"))
+        };
+        let mut sorted = listed.to_vec();
+        sorted.sort_by(|a, b| order(&a.0, &b.0).then_with(|| order(&a.1, &b.1)));
+        let (reused, to_check): (Vec<_>, Vec<_>) = sorted.into_iter().partition(|(_, name)| {
+            matches!(status(name.as_str()), Some("passed" | "failed" | "conflict"))
+        });
+        Plan {
+            to_check,
+            reused,
+            obligations: listed.len(),
+            not_checkable: not_checkable.len(),
+        }
+    }
+
+    /// Steps 1 to 10 of the run command: the run's input, the project as the
+    /// status command reads it, and the plan. Not served: the sessions of step
+    /// 5 are not kept open for checks yet, and nothing after step 10 is done.
+    pub(super) fn prepare(raw: &[u8]) -> Step<(RunInput, Snapshot, Plan)> {
+        let input = read(raw)?;
+        let snapshot = snapshot(&input.status)?;
+        let plan = plan(
+            &snapshot.obligations.listed,
+            &snapshot.obligations.not_checkable,
+            &snapshot.report,
+        );
+        Ok((input, snapshot, plan))
+    }
+
+    #[cfg(test)]
+    mod plan_tests {
+        use super::*;
+
+        fn pair(b: &str, n: &str) -> (String, String) {
+            (b.to_owned(), n.to_owned())
+        }
+
+        /// A report giving each name its status, as the status rules write one.
+        fn report(statuses: &[(&str, &str)]) -> Value {
+            let obligations = statuses
+                .iter()
+                .map(|(n, s)| (n.to_string(), json::object(vec![("status", json::string(s))])))
+                .collect();
+            json::object(vec![("obligations", Value::Object(obligations))])
+        }
+
+        #[test]
+        fn nothing_listed_plans_nothing() {
+            // As in the cases where the executor is sent nothing.
+            let p = plan(&[], &[], &report(&[]));
+            assert!(p.to_check.is_empty() && p.reused.is_empty());
+            assert_eq!((p.obligations, p.not_checkable), (0, 0));
+        }
+
+        #[test]
+        fn current_results_are_reused_and_unknown_is_checked() {
+            let listed = [
+                pair("t.check", "o4"),
+                pair("b", "o9"),
+                pair("t.check", "o1"),
+                pair("t.check", "o2"),
+                pair("t.check", "o3"),
+                pair("t.check", "o5"),
+            ];
+            let r = report(&[
+                ("o1", "passed"),
+                ("o2", "failed"),
+                ("o3", "conflict"),
+                ("o4", "unknown"),
+                ("o9", "unknown"),
+            ]);
+            let p = plan(&listed, &["o5".to_owned()], &r);
+            assert_eq!(p.reused, vec![pair("t.check", "o1"), pair("t.check", "o2"), pair("t.check", "o3")]);
+            // Sorted by binding, then name; o5, absent from the report, is no current result.
+            assert_eq!(p.to_check, vec![pair("b", "o9"), pair("t.check", "o4"), pair("t.check", "o5")]);
+            assert_eq!(p.reused.len() + p.to_check.len(), p.obligations);
+            // A name listed and rejected is checked as listed, and counted as not checkable.
+            assert_eq!((p.obligations, p.not_checkable), (6, 1));
+        }
+
+        #[test]
+        fn a_planted_selection_is_caught() {
+            // Two wrong readings of "current": only `passed`, or anything not
+            // `failed`. Each misplaces an obligation the test above places.
+            let r = report(&[("o1", "passed"), ("o2", "failed"), ("o3", "conflict"), ("o4", "unknown")]);
+            let listed = [pair("t", "o1"), pair("t", "o2"), pair("t", "o3"), pair("t", "o4")];
+            let right = plan(&listed, &[], &r).to_check;
+            let only_passed: Vec<_> = listed
+                .iter()
+                .filter(|(_, n)| r.get("obligations").get(n).text("status") != Some("passed"))
+                .cloned()
+                .collect();
+            let not_failed: Vec<_> = listed
+                .iter()
+                .filter(|(_, n)| r.get("obligations").get(n).text("status") == Some("failed"))
+                .cloned()
+                .collect();
+            assert_eq!(right, vec![pair("t", "o4")]);
+            assert_ne!(right, only_passed);
+            assert_ne!(right, not_failed);
+        }
+
+        #[test]
+        fn an_empty_ledger_plans_every_listed_obligation() {
+            // The real status rules on a scenario with no ledger entries:
+            // every obligation is unknown, never-run, so every one is checked.
+            let judged = json::object(vec![
+                ("kind", json::string("status")),
+                ("name", json::string("this-project")),
+                (
+                    "self",
+                    json::object(vec![
+                        ("writer", json::string("w")),
+                        ("platform", json::string("linux/x86_64")),
+                    ]),
+                ),
+                (
+                    "policy",
+                    json::object(vec![
+                        ("min_hard_gates", Value::Number(1)),
+                        ("required", Value::Array(vec![])),
+                        ("trusted_writers", Value::Array(vec![])),
+                        ("floors", Value::Object(vec![])),
+                        ("attestors", Value::Object(vec![])),
+                        ("makes", Value::Array(vec![])),
+                    ]),
+                ),
+                (
+                    "obligations",
+                    json::object(vec![
+                        ("o1", json::object(vec![("preimage", Value::Object(vec![]))])),
+                        ("o2", json::object(vec![("preimage", Value::Object(vec![]))])),
+                    ]),
+                ),
+                ("intents", Value::Object(vec![])),
+                (
+                    "steps",
+                    Value::Array(vec![json::object(vec![(
+                        "do",
+                        json::object(vec![(
+                            "set_gate",
+                            json::object(vec![
+                                ("intent", json::string("")),
+                                ("criterion", json::string("")),
+                                ("to", json::string("hard")),
+                            ]),
+                        )]),
+                    )])]),
+                ),
+            ]);
+            let report = status::run(&judged).pop().unwrap();
+            assert_eq!(report.get("obligations").get("o1").text("status"), Some("unknown"));
+            let p = plan(&[pair("t", "o2"), pair("t", "o1")], &[], &report);
+            assert_eq!(p.to_check, vec![pair("t", "o1"), pair("t", "o2")]);
+            assert!(p.reused.is_empty());
+        }
     }
 
     #[cfg(test)]
@@ -2090,7 +2306,9 @@ mod run_input {
             let _ = fs::remove_dir_all(&root);
         }
 
-        #[cfg(unix)]
+        // Hard links and `same_file` exist on both; only links of the other
+        // kind need privileges on Windows.
+        #[cfg(any(unix, windows))]
         #[test]
         fn a_hard_link_to_the_owners_ledger_is_the_owners() {
             // Case: "the run's ledger a hard link to the owner's". The names
