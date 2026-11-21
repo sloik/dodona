@@ -201,6 +201,40 @@ A `get` request uses that identity and gives the destination path in `into`. The
 {"type":"result","id":"2","capability":"store.blob","body":{"file":"work/message.txt"}}
 ```
 
+## Example: tool.resolve
+
+These draft messages use a synthetic release. Its only file is the program `bin/sheetc`, with the bytes `fixture sheetc` followed by a line feed. The toolchain returns the published digest of those bytes and the [digest of the tree listing](../protocol/tool-tree-digest.md). The request's `tree_into` names the destination for the tree.
+
+```json
+{"type":"request","id":"1","deadline_ms":30000,"capability":"tool.resolve","body":{"name":"sheetc","constraint":"=1.0.0","platform":{"os":"linux","arch":"x86_64"},"tree_into":"tools/sheetc"}}
+{"type":"result","id":"1","capability":"tool.resolve","body":{"resolved":{"name":"sheetc","version":"1.0.0","platform":{"os":"linux","arch":"x86_64"},"digest":"sha256:31b45b96ab37d93b6eb6e9327768f2e59b1e36bcdc8207a9901bb53593a085a5","requires":[],"upstream":{"source":"https://example.com/sheetc/1.0.0/linux-x86_64/sheetc","published_digest":"sha256:08249184cb7b2bea25821a755fb3bf075c49dbfc9e8971644a74dddcead646b1"},"entry":"bin/sheetc","tree":"tools/sheetc"}}}
+```
+
+The same release has no Windows build in this example.
+
+```json
+{"type":"request","id":"2","deadline_ms":30000,"capability":"tool.resolve","body":{"name":"sheetc","constraint":"=1.0.0","platform":{"os":"windows","arch":"x86_64"},"tree_into":"tools/sheetc"}}
+{"type":"result","id":"2","capability":"tool.resolve","body":{"unresolved":{"code":"no-build-for-platform"}}}
+```
+
+## Example: artifact.build
+
+This draft exchange uses the pinned `sheetc` tree above. The fixture's configuration, source and output files contain `format=object`, `area: 12` and `fixture object` respectively, each followed by a line feed.
+
+The kernel starts the build obligation. The builder describes a run that reads the two inputs and declares `out/demo.o`.
+
+```json
+{"type":"request","id":"1","deadline_ms":30000,"capability":"artifact.build","body":{"op":"start","obligation":{"binding":"builds","name":"build/demo","kind":"build","specified_by":["rules/demo.cfg"],"targets":["src/demo.sheet"],"expect":"holds","config":{}},"inputs":[{"path":"rules/demo.cfg","identity":"sha256:58be2095a5f2dd75c3d6e928154de473bfdf982165e8e2eef4e25a0995485452"},{"path":"src/demo.sheet","identity":"sha256:b9a1815f4f1bcba0585246c9f3bc224dd3ef84d3d6efc6a95c27e76ef2112eb5"}],"tools":[{"name":"sheetc","digest":"sha256:31b45b96ab37d93b6eb6e9327768f2e59b1e36bcdc8207a9901bb53593a085a5","version":"1.0.0","root":"tools/sheetc"}],"platform":{"os":"linux","arch":"x86_64"}}}
+{"type":"result","id":"1","capability":"artifact.build","body":{"next":{"program":{"tool":"sheetc","path":"bin/sheetc"},"args":["--rules","rules/demo.cfg","--output","out/demo.o","src/demo.sheet"],"inputs":[{"path":"rules/demo.cfg","identity":"sha256:58be2095a5f2dd75c3d6e928154de473bfdf982165e8e2eef4e25a0995485452"},{"path":"src/demo.sheet","identity":"sha256:b9a1815f4f1bcba0585246c9f3bc224dd3ef84d3d6efc6a95c27e76ef2112eb5"}],"outputs":[{"path":"out/demo.o"}],"limits":{"wall_ms":20000,"output_bytes":65536},"platform":{"os":"linux","arch":"x86_64"},"tools":[{"name":"sheetc","digest":"sha256:31b45b96ab37d93b6eb6e9327768f2e59b1e36bcdc8207a9901bb53593a085a5"}]}}}
+```
+
+The kernel returns the executor's report under the original check ID. The builder returns a successful build with the output identity and its determinism declaration. The captured log is empty.
+
+```json
+{"type":"request","id":"2","deadline_ms":30000,"capability":"artifact.build","body":{"op":"run.result","check":"1","run":1,"report":{"handle":"build-0001","end":"exited","exit_status":0,"platform":{"os":"linux","arch":"x86_64"},"tools_ran":[{"name":"sheetc","digest":"sha256:31b45b96ab37d93b6eb6e9327768f2e59b1e36bcdc8207a9901bb53593a085a5"}],"isolation":"best-effort","captured_output":{"path":"out/captured.log","identity":"sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"outputs":[{"path":"out/demo.o","identity":"sha256:6cb54a97f497e7b39f196e09ff5a80126822b5a948c307aeb9c91401b4d86a52"}]}}}
+{"type":"result","id":"2","capability":"artifact.build","body":{"final":{"verdict":"passed","outputs":[{"path":"out/demo.o","identity":"sha256:6cb54a97f497e7b39f196e09ff5a80126822b5a948c307aeb9c91401b4d86a52"}],"deterministic":true}}}
+```
+
 ## Where to look for the exact shape
 
 | You need | Look at |
