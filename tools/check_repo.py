@@ -1582,20 +1582,27 @@ class LedgerJudgeTests(unittest.TestCase):
     def judge_held_lock(self, answer):
         reference = json.loads((ROOT / "conformance" / "ledger" / "cases.json").read_text(encoding="utf-8"))["file"].encode("utf-8")
         output = io.StringIO()
+        fixture = tempfile.TemporaryDirectory()
+        self.addCleanup(fixture.cleanup)
+        held = pathlib.Path(fixture.name) / "held.ledger"
+        lock = held.with_suffix(".ledger.lock")
+        request = json.dumps({"ledger": str(held), "kind": "evidence", "body": {}, "wait_ms": 300}).encode("utf-8")
+        answered = 0
 
         def run(command, **kwargs):
-            request = json.loads(kwargs["input"])
-            held = pathlib.Path(request["ledger"])
-            if command[-1] != "ledger-append" or held.name != "held.ledger":
+            nonlocal answered
+            # All other requests, including the deliberately deep input, stay opaque.
+            if command[-1] != "ledger-append" or kwargs["input"] != request:
                 return subprocess.CompletedProcess(command, 0, b"{}", b"")
-            lock = held.with_suffix(".ledger.lock")
-            self.assertEqual(request, {"ledger": str(held), "kind": "evidence", "body": {}, "wait_ms": 300})
+            answered += 1
             self.assertEqual(held.read_bytes(), reference)
             self.assertEqual(lock.read_text(encoding="ascii"), "held by the judge\n")
             reply = answer(held, lock)
             return subprocess.CompletedProcess(command, 0, json.dumps(reply).encode(), b"")
 
-        code, receipt = self.judge(run, [FakeWriter(0), FakeWriter(0)], output=output)
+        with patch.object(run_ledger_cases.tempfile, "TemporaryDirectory", return_value=fixture):
+            code, receipt = self.judge(run, [FakeWriter(0), FakeWriter(0)], output=output)
+        self.assertEqual(answered, 1, "\n".join(output.getvalue().splitlines()[-3:-1]))
         return code, receipt, output.getvalue()
 
     def test_wrong_held_append_remains_a_named_rejection_when_it_removes_the_marker(self):
@@ -1604,12 +1611,24 @@ class LedgerJudgeTests(unittest.TestCase):
             lock.unlink()
             return {"appended": "mock"}
 
-        code, receipt, log = self.judge_held_lock(wrong)
+        decode = json.loads
+        deepest = b'{"body": ' + b'{"x": ' * 4999
+
+        def bounded_decoder(data, *args, **kwargs):
+            if isinstance(data, bytes) and data.startswith(deepest):
+                raise RecursionError("mock decoder cannot read the 5,000-level request")
+            return decode(data, *args, **kwargs)
+
+        with patch.object(json, "loads", side_effect=bounded_decoder):
+            code, receipt, log = self.judge_held_lock(wrong)
         name = "a held lock refuses an append"
+        self.assertEqual((code, receipt["checks"], receipt["unfinished"], receipt["all_matched"]),
+                         (1, 110, 0, False), "\n".join(log.splitlines()[-3:-1]))
         self.assertIn(f"MISMATCH {name}:", log)
         self.assertIn(name, receipt["rejected"])
-        self.assertEqual((code, receipt["unfinished"], receipt["all_matched"]), (1, 0, False),
-                         "\n".join(log.splitlines()[-3:-1]))
+        for location in ("new ledger", "existing ledger", "corrupt ledger", "held lock"):
+            self.assertIn(f"a request to append with a body nested 5000 levels deep is refused, {location}",
+                          receipt["rejected"])
         self.assertIn("two kernels appending at once lose nothing", log)
 
     def test_held_lock_requires_both_the_ledger_and_marker_to_be_intact(self):
