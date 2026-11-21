@@ -835,6 +835,11 @@ impl Session {
             closed: false,
             recorder: input.recorder.clone(),
         };
+        // A provider closed by a project is given its whole moment to exit on
+        // its own after `shutdown`, even if it first writes a late answer: a
+        // session refused at its deadline is closed while that answer may
+        // still be on its way. The late answer is never read as one.
+        s.peer.wait_out_grace();
         match s.greet(binding) {
             Ok(()) => Ok(s),
             Err(reason) => {
