@@ -2824,25 +2824,26 @@ mod run_input {
 
     // Step 12. The site's executor, run as a process.
 
-    use std::io::{Read as IoRead, Write as IoWrite};
+    use crate::proc::batch::BatchChild;
+    use std::io::{self, Read as IoRead, Write as IoWrite};
     use std::sync::mpsc;
 
-    /// A started executor as a batch waits for it: whether it has exited, and
-    /// if so whether with status 0; and ending it with all it started.
+    /// The batch observes exit readiness during the protocol wait. It decides
+    /// on group cleanup before collecting the actual direct-child status.
     pub(super) trait Started {
-        fn exit_status(&mut self) -> Option<bool>;
-        fn end_tree(&mut self);
+        fn observe_exit(&mut self) -> io::Result<bool>;
+        fn request_end(&mut self) -> io::Result<()>;
+        fn try_collect(&mut self) -> io::Result<Option<bool>>;
     }
-    impl Started for Tree {
-        fn exit_status(&mut self) -> Option<bool> {
-            match self.child.try_wait() {
-                Ok(Some(status)) => Some(status.success()),
-                Ok(None) => None,
-                Err(_) => Some(false),
-            }
+    impl Started for BatchChild {
+        fn observe_exit(&mut self) -> io::Result<bool> {
+            BatchChild::observe_exit(self)
         }
-        fn end_tree(&mut self) {
-            self.end();
+        fn request_end(&mut self) -> io::Result<()> {
+            BatchChild::request_end(self)
+        }
+        fn try_collect(&mut self) -> io::Result<Option<bool>> {
+            BatchChild::try_collect(self).map(|status| status.map(|s| s.success()))
         }
     }
 
@@ -2895,9 +2896,8 @@ mod run_input {
     /// of it, for both its own exit and the end of its output. Writing the
     /// input and reading the output run beside the wait, so neither can hold
     /// it past `until`: an executor that does not read, or a process it
-    /// started that keeps its output open, ends the batch as `TimedOut`. On
-    /// every way out the executor is ended with everything it started, and
-    /// nothing else.
+    /// started that keeps its output open, ends the batch as `TimedOut`. Once
+    /// the protocol wait ends, request cleanup only through the batch's owner.
     pub(super) fn await_batch(
         started: &mut dyn Started,
         stdin: Option<Box<dyn IoWrite + Send>>,
@@ -2908,20 +2908,14 @@ mod run_input {
         await_batch_reaped(started, stdin, stdout, input, until, REAP_LIMIT).0
     }
 
-    /// How long, once the executor's own group or job has been ended, the
-    /// threads that wrote its input and read its output are waited for. Ending
-    /// the group or job closes every end of the two pipes its processes held,
-    /// so each thread then finishes at once: its write fails or its read ends.
-    /// One still blocked after this means a process that left the group or job
-    /// holds a pipe, which the contract puts beyond what a host can promise to
-    /// end; waiting for it could last for ever, so the thread is left to finish
-    /// on its own. It owns only its pipe end and a sender nobody reads.
+    /// One cleanup budget for waiting on the direct child and the pipe
+    /// workers after the shutdown request. A worker still blocked at the
+    /// cleanup deadline owns only its pipe and a sender nobody reads.
     const REAP_LIMIT: Duration = Duration::from_secs(2);
 
     /// Wait up to `limit` for every worker, and join each that has finished.
     /// Whether all of them were joined.
-    fn reap(workers: Vec<std::thread::JoinHandle<()>>, limit: Duration) -> bool {
-        let until = Instant::now() + limit;
+    fn reap(workers: Vec<std::thread::JoinHandle<()>>, until: Instant) -> bool {
         while workers.iter().any(|w| !w.is_finished()) && Instant::now() < until {
             std::thread::sleep(Duration::from_millis(2));
         }
@@ -2934,6 +2928,26 @@ mod run_input {
             }
         }
         all
+    }
+
+    fn collect(started: &mut dyn Started, until: Instant) -> io::Result<Option<bool>> {
+        loop {
+            let status = started.try_collect()?;
+            let now = Instant::now();
+            if now > until {
+                return Ok(None);
+            }
+            if status.is_some() {
+                return Ok(status);
+            }
+            std::thread::sleep(Duration::from_millis(2).min(until - now));
+        }
+    }
+
+    enum BatchObservation {
+        Failed,
+        TimedOut,
+        Exited(Option<Vec<u8>>),
     }
 
     /// `await_batch`, and whether every worker thread was joined.
@@ -2969,9 +2983,10 @@ mod run_input {
             let _ = otx.send(first_line_of(stdout));
         }));
         let mut written: Option<bool> = None;
-        let mut status: Option<bool> = None;
+        // Some(false) is an unconfirmed observation, not a nonzero exit.
+        let mut exited: Option<bool> = None;
         let mut line: Option<Option<Vec<u8>>> = None;
-        let outcome = loop {
+        let observed = loop {
             if written.is_none() {
                 match wrx.try_recv() {
                     Ok(ok) => written = Some(ok),
@@ -2980,8 +2995,12 @@ mod run_input {
                     Err(mpsc::TryRecvError::Empty) => {}
                 }
             }
-            if status.is_none() {
-                status = started.exit_status();
+            if exited.is_none() {
+                exited = match started.observe_exit() {
+                    Ok(false) => None,
+                    Ok(true) => Some(true),
+                    Err(_) => Some(false),
+                };
             }
             if line.is_none() {
                 match orx.try_recv() {
@@ -2993,18 +3012,35 @@ mod run_input {
             // What was seen counts only if it was seen by the deadline.
             let seen_at = Instant::now();
             if seen_at > until {
-                break Batch::TimedOut;
+                break BatchObservation::TimedOut;
             }
             if written == Some(false) {
-                break Batch::Failed;
+                break BatchObservation::Failed;
             }
-            if let (Some(true), Some(success), Some(l)) = (written, status, &line) {
-                break judge_output(success, l.as_deref());
+            if let (Some(true), Some(confirmed), Some(line)) = (written, exited, line.as_mut()) {
+                break if confirmed {
+                    BatchObservation::Exited(line.take())
+                } else {
+                    BatchObservation::Failed
+                };
             }
             std::thread::sleep(Duration::from_millis(5).min(until - seen_at));
         };
-        started.end_tree();
-        (outcome, reap(workers, limit))
+
+        // Preserve both results separately. A cleanup failure or an unknown
+        // status cannot turn a well-formed stdout line into an answer.
+        let cleanup = started.request_end();
+        let cleanup_until = Instant::now() + limit;
+        let status = collect(started, cleanup_until);
+        let outcome = match observed {
+            BatchObservation::Failed => Batch::Failed,
+            BatchObservation::TimedOut => Batch::TimedOut,
+            BatchObservation::Exited(line) => {
+                let success = cleanup.is_ok() && matches!(status, Ok(Some(true)));
+                judge_output(success, line.as_deref())
+            }
+        };
+        (outcome, reap(workers, cleanup_until))
     }
 
     /// The executor command, started once per batch in `root`, in a process
@@ -3020,7 +3056,7 @@ mod run_input {
                 Some(p) => p,
                 None => return Batch::Failed,
             };
-            let spawned = Tree::spawn(
+            let spawned = BatchChild::spawn(
                 Command::new(program)
                     .args(args)
                     .current_dir(self.root)
@@ -3034,12 +3070,8 @@ mod run_input {
                 Ok(t) => t,
                 Err(_) => return Batch::Failed,
             };
-            let stdin = tree
-                .child
-                .stdin
-                .take()
-                .map(|w| Box::new(w) as Box<dyn IoWrite + Send>);
-            let stdout = match tree.child.stdout.take() {
+            let stdin = tree.take_stdin().map(|w| Box::new(w) as Box<dyn IoWrite + Send>);
+            let stdout = match tree.take_stdout() {
                 Some(r) => r,
                 None => return Batch::Failed, // `tree` is ended as it is dropped
             };
@@ -3830,14 +3862,28 @@ mod run_input {
             exits: Option<(Instant, bool)>,
             ended: Arc<AtomicBool>,
             gate: Gate,
+            refuse_end: bool,
+            fail_collect: bool,
         }
         impl Started for Fake {
-            fn exit_status(&mut self) -> Option<bool> {
-                self.exits.filter(|(at, _)| Instant::now() >= *at).map(|(_, ok)| ok)
+            fn observe_exit(&mut self) -> io::Result<bool> {
+                assert!(!self.ended.load(AtomicOrdering::SeqCst));
+                Ok(self.exits.is_some_and(|(at, _)| Instant::now() >= at))
             }
-            fn end_tree(&mut self) {
-                self.ended.store(true, AtomicOrdering::SeqCst);
+            fn request_end(&mut self) -> io::Result<()> {
+                assert!(!self.ended.swap(true, AtomicOrdering::SeqCst));
                 self.gate.open();
+                if self.refuse_end {
+                    return Err(io::Error::other("cleanup refused"));
+                }
+                Ok(())
+            }
+            fn try_collect(&mut self) -> io::Result<Option<bool>> {
+                assert!(self.ended.load(AtomicOrdering::SeqCst));
+                if self.fail_collect {
+                    return Err(io::Error::other("wait failed"));
+                }
+                Ok(Some(self.exits.is_some_and(|(at, ok)| Instant::now() >= at && ok)))
             }
         }
         fn fake(exits: Option<(Duration, bool)>) -> (Fake, Arc<AtomicBool>, Gate) {
@@ -3847,6 +3893,8 @@ mod run_input {
                 exits: exits.map(|(after, ok)| (Instant::now() + after, ok)),
                 ended: ended.clone(),
                 gate: gate.clone(),
+                refuse_end: false,
+                fail_collect: false,
             };
             (f, ended, gate)
         }
@@ -4043,6 +4091,19 @@ mod run_input {
             let (b, joined) = awaited(&mut f, stdin, out(ANSWER), b"{}", soon());
             assert_eq!(b, "failed");
             assert!(ended.load(AtomicOrdering::SeqCst) && joined);
+        }
+
+        #[test]
+        fn an_unconfirmed_cleanup_or_status_cannot_supply_a_report() {
+            for (refuse_end, fail_collect) in [(true, false), (false, true)] {
+                let (mut f, ended, _) = fake(Some((Duration::ZERO, true)));
+                f.refuse_end = refuse_end;
+                f.fail_collect = fail_collect;
+                let (stdin, _) = kept();
+                let (b, joined) = awaited(&mut f, stdin, out(ANSWER), b"{}", soon());
+                assert_eq!(b, "failed");
+                assert!(ended.load(AtomicOrdering::SeqCst) && joined);
+            }
         }
 
         #[test]

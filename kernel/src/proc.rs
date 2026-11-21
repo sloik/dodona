@@ -3,10 +3,13 @@
 //! the group is killed; on Windows the process is started suspended, placed in a
 //! job object and only then let run, and the job is terminated.
 //!
-//! This is the one module with unsafe code: three calls to the operating system,
-//! declared here, that the standard library does not offer.
+//! The platform operations in this module and its batch module use operating
+//! system interfaces that the standard library does not expose.
 use std::io;
 use std::process::{Child, Command};
+
+// The project batch owns its wait/cleanup path separately from legacy Tree.
+pub(crate) mod batch;
 
 /// A process that was started but could not be confined to a tree of its own.
 /// It has been ended; a host must not go on as if it had been confined.
@@ -194,6 +197,43 @@ mod windows {
             Ok(job)
         }
     }
+    pub(super) fn confine_batch(child: &Child) -> std::io::Result<std::os::windows::io::OwnedHandle> {
+        use std::os::windows::io::{FromRawHandle, OwnedHandle};
+        use std::os::windows::process::ChildExt;
+
+        // SAFETY: null attributes and name create an owned anonymous Job.
+        let raw = unsafe { CreateJobObjectW(std::ptr::null_mut(), std::ptr::null()) };
+        if invalid(raw) {
+            return Err(std::io::Error::last_os_error());
+        }
+        // SAFETY: creation returned an owned, valid Job handle.
+        let job = unsafe { OwnedHandle::from_raw_handle(raw) };
+        // SAFETY: the Job and suspended direct child both still own their handles.
+        if unsafe { AssignProcessToJobObject(job.as_raw_handle(), child.as_raw_handle()) } == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        // SAFETY: this is the original thread handle borrowed from this Child.
+        let count = unsafe { ResumeThread(child.main_thread_handle().as_raw_handle()) };
+        if count != 1 {
+            let error = if count == u32::MAX {
+                std::io::Error::last_os_error()
+            } else {
+                std::io::Error::other("unexpected suspend count for the batch executor")
+            };
+            let _ = request_batch_end(&job);
+            return Err(error);
+        }
+        Ok(job)
+    }
+
+    pub(super) fn request_batch_end(job: &std::os::windows::io::OwnedHandle) -> std::io::Result<()> {
+        // SAFETY: job holds the valid Job we created for this batch.
+        if unsafe { TerminateJobObject(job.as_raw_handle(), 1) } == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
     pub fn terminate(job: Handle) {
         if !invalid(job) {
             // SAFETY: the handle was opened by `confine` and is closed once, here.
