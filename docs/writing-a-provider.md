@@ -94,11 +94,32 @@ The provider in this example is imaginary. It is called `example.verifier.widthc
 {"type":"result","id":"e1","capability":"run.submit","body":{"handle":"run-0001"}}
 ```
 
-The kernel polls by handle. When the run has ended, the answer carries the final report: the platform and tool digests actually run, which the kernel compares with what was asked.
+The kernel polls the executor with the handle returned by `submit`. These messages follow the draft `run.submit` schema.
+
+```json
+{"type":"request","id":"e2","deadline_ms":10000,"capability":"run.submit","body":{"op":"poll","handle":"run-0001"}}
+```
+
+When the run has ended, the answer carries the platform and tool digests actually run. The kernel compares them with what was asked.
 
 ```json
 {"type":"result","id":"e2","capability":"run.submit","body":{"state":"finished","report":{"handle":"run-0001","end":"exited","exit_status":0,"platform":{"os":"macos","arch":"aarch64"},"tools_ran":[{"name":"widthcheck","digest":"sha256:28c66bbc4e7ec2364490efd88fba85548b5779434bb4252643db9371af5d1e12"}],"isolation":"best-effort","captured_output":{"path":"out/captured.log","identity":"sha256:836ff184e7b41b1e13cb5fd89fa1de98dbbab99e9d2918913ff43b86a5c7c213"},"outputs":[{"path":"out/report.txt","identity":"sha256:762069bc07a6e1b5df123a5ae7bd91c10daa04694fbaa17fba0cd6a8dcce8f22"}]}}}
 ```
+
+If the executor is still running the job, it answers the same poll with `running`.
+
+```json
+{"type":"result","id":"e2","capability":"run.submit","body":{"state":"running"}}
+```
+
+In that branch, the kernel can poll again or ask to cancel the run. This example shows a cancellation with an empty captured log and no output files.
+
+```json
+{"type":"request","id":"e3","deadline_ms":10000,"capability":"run.submit","body":{"op":"cancel","handle":"run-0001"}}
+{"type":"result","id":"e3","capability":"run.submit","body":{"state":"cancelled","report":{"handle":"run-0001","end":"cancelled","platform":{"os":"macos","arch":"aarch64"},"tools_ran":[{"name":"widthcheck","digest":"sha256:28c66bbc4e7ec2364490efd88fba85548b5779434bb4252643db9371af5d1e12"}],"isolation":"best-effort","captured_output":{"path":"out/captured.log","identity":"sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"outputs":[]}}}
+```
+
+The walkthrough continues with the `finished` answer above.
 
 **8. Kernel to provider: the run result.** The kernel passes the report to you as a request with `op` set to `run.result`. The output files are now in your working directory at the paths the report gives.
 
@@ -164,6 +185,22 @@ A decision provider maps its own status words onto `proposed`, `accepted`, `supe
 
 `intent.index` follows the same pattern. Its result is described in [messages.schema.json](../protocol/messages.schema.json) under `res_intent_index`.
 
+## Example: store.blob
+
+This exchange illustrates the draft message schema. The file `out/message.txt` contains the five bytes `hello`. A `put` request stores the file and returns its content identity.
+
+```json
+{"type":"request","id":"1","deadline_ms":30000,"capability":"store.blob","body":{"op":"put","file":"out/message.txt"}}
+{"type":"result","id":"1","capability":"store.blob","body":{"identity":"sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"}}
+```
+
+A `get` request uses that identity and gives the destination path in `into`. The result names the retrieved file.
+
+```json
+{"type":"request","id":"2","deadline_ms":30000,"capability":"store.blob","body":{"op":"get","identity":"sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824","into":"work/message.txt"}}
+{"type":"result","id":"2","capability":"store.blob","body":{"file":"work/message.txt"}}
+```
+
 ## Where to look for the exact shape
 
 | You need | Look at |
@@ -174,6 +211,7 @@ A decision provider maps its own status words onto `proposed`, `accepted`, `supe
 | What gets pinned for your tools | [lock.schema.json](../protocol/lock.schema.json) |
 | What the kernel writes after you answer | [evidence-record.schema.json](../protocol/evidence-record.schema.json) |
 | How a project is configured to use you | [configuration.md](configuration.md) |
+| What the project requires to pass | [policy.schema.json](../protocol/policy.schema.json) and the [policy configuration](configuration.md#policy) |
 
 ## What is not yet written
 
