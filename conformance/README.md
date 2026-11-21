@@ -265,9 +265,9 @@ Two more things are judged, each by its own tool.
 
 - `kind` is any non-empty string. A reader keeps entries of every kind, and an append after an entry of a kind it gives no meaning works as after any other.
 - A line is exactly `dodona1`, one space, the length in decimal with no sign and no leading zero, one space, 64 lowercase hexadecimal digits, one space, the payload, and a line feed. Anything else is corrupt at that line: two spaces, a tab, a byte-order mark, an empty line, bytes after the payload, an uppercase digit, another first word.
-- The length and the checksum are both compared with the payload. `previous` must be exactly the identity of the entry before, and null in the first entry only. A payload that is not an object with exactly `previous`, `kind` and `body` is corrupt.
+- The length and the checksum are both compared with the payload. `previous` must be exactly the identity of the entry before, and null in the first entry only. A payload that is not an object with exactly `previous`, `kind` and `body`, or that nests deeper than 64 levels (the entry itself is the first), is corrupt.
 - An append to a corrupt ledger answers `{"refused": "corrupt"}` and leaves the file as it was.
-- A `ledger-append` with no string `kind`, or with no `body`, answers `{"refused": "bad-request"}` and writes nothing: no entry, no file, no lock left behind.
+- A `ledger-append` with no string `kind`, with no `body`, or whose entry would nest deeper than 64 levels, answers `{"refused": "bad-request"}` and writes nothing: no entry, no file, no lock left behind. An entry of exactly 64 levels is appended, and an append after it works.
 
 ## How a host is judged
 

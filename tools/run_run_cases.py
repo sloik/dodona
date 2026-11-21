@@ -74,7 +74,7 @@ def call(command: list[str], stdin: bytes) -> tuple[dict | None, str]:
     if done.returncode != 0:
         return None, f"exit {done.returncode}: " + done.stderr.decode("utf-8", "replace")[-300:]
     try:
-        return rsc.host.strict_load(done.stdout.rstrip(b"\n")), ""
+        return rsc.host.strict_load(done.stdout.rstrip(b"\n"), limit=None), ""  # answers hold ledger entries up to 64 deep
     except Exception as err:  # noqa: BLE001
         return None, f"not one strict JSON object ({err})"
 

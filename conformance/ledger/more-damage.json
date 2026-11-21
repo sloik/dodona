@@ -1,5 +1,5 @@
 {
-  "about": "More damage for conformance/ledger/cases.json. Each case gives the whole file as text (UTF-8) and what protocol/ledger.md says `ledger-read` must answer. Where the answer is corrupt, `ledger-append` must answer corrupt too and leave the file as it was. `unlisted_kind` is an entry of a kind no rule gives a meaning: it is appended through the kernel, kept by the reader, and an append after it works. `bad_requests` are requests to `ledger-append`, given without the ledger's name, that must be answered {\"refused\": \"bad-request\"} with nothing written. Built with the reference encoder; no kernel produced any of it.",
+  "about": "More damage for conformance/ledger/cases.json. Each case gives the whole file as text (UTF-8) and what protocol/ledger.md says `ledger-read` must answer. Where the answer is corrupt, `ledger-append` must answer corrupt too and leave the file as it was. `unlisted_kind` is an entry of a kind no rule gives a meaning: it is appended through the kernel, kept by the reader, and an append after it works. `deepest` is an entry nested 64 levels deep, the most a ledger allows: it is appended through the kernel, and an append after it works. `bad_requests` are requests to `ledger-append`, given without the ledger's name, that must be answered {\"refused\": \"bad-request\"} with nothing written. Built with the reference encoder; no kernel produced any of it.",
   "damage": [
     {
       "name": "a byte changed in the body of the last entry, the chain untouched",
@@ -263,6 +263,148 @@
         }
       },
       "file": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 148 c321a221cb744a81b430d196a6b2ae62b2df9506cb6d0e65948048786f93bd85 {\"body\":{\"obligation\":\"ob-9\",\"verdict\":\"passed\"},\"kind\":\"note\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\ndodona1 153 fb5a3f231446523855a17e41d5d97ca71db87d0c5b799f15cb7d1fa3250659c5 {\"body\":{\"obligation\":\"ob-10\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:c321a221cb744a81b430d196a6b2ae62b2df9506cb6d0e65948048786f93bd85\"}\n"
+    }
+  },
+  "deepest": {
+    "append": {
+      "kind": "note",
+      "body": {
+        "x": {
+          "x": {
+            "x": {
+              "x": {
+                "x": {
+                  "x": {
+                    "x": {
+                      "x": {
+                        "x": {
+                          "x": {
+                            "x": {
+                              "x": {
+                                "x": {
+                                  "x": {
+                                    "x": {
+                                      "x": {
+                                        "x": {
+                                          "x": {
+                                            "x": {
+                                              "x": {
+                                                "x": {
+                                                  "x": {
+                                                    "x": {
+                                                      "x": {
+                                                        "x": {
+                                                          "x": {
+                                                            "x": {
+                                                              "x": {
+                                                                "x": {
+                                                                  "x": {
+                                                                    "x": {
+                                                                      "x": {
+                                                                        "x": {
+                                                                          "x": {
+                                                                            "x": {
+                                                                              "x": {
+                                                                                "x": {
+                                                                                  "x": {
+                                                                                    "x": {
+                                                                                      "x": {
+                                                                                        "x": {
+                                                                                          "x": {
+                                                                                            "x": {
+                                                                                              "x": {
+                                                                                                "x": {
+                                                                                                  "x": {
+                                                                                                    "x": {
+                                                                                                      "x": {
+                                                                                                        "x": {
+                                                                                                          "x": {
+                                                                                                            "x": {
+                                                                                                              "x": {
+                                                                                                                "x": {
+                                                                                                                  "x": {
+                                                                                                                    "x": {
+                                                                                                                      "x": {
+                                                                                                                        "x": {
+                                                                                                                          "x": {
+                                                                                                                            "x": {
+                                                                                                                              "x": {
+                                                                                                                                "x": {
+                                                                                                                                  "x": {}
+                                                                                                                                }
+                                                                                                                              }
+                                                                                                                            }
+                                                                                                                          }
+                                                                                                                        }
+                                                                                                                      }
+                                                                                                                    }
+                                                                                                                  }
+                                                                                                                }
+                                                                                                              }
+                                                                                                            }
+                                                                                                          }
+                                                                                                        }
+                                                                                                      }
+                                                                                                    }
+                                                                                                  }
+                                                                                                }
+                                                                                              }
+                                                                                            }
+                                                                                          }
+                                                                                        }
+                                                                                      }
+                                                                                    }
+                                                                                  }
+                                                                                }
+                                                                              }
+                                                                            }
+                                                                          }
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                }
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "identity": "sha256:9bbf53a6c7eb58a46647414829f7bf0369fc3b3b19a05516799d194ad65fbab1",
+    "file": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 482 9bbf53a6c7eb58a46647414829f7bf0369fc3b3b19a05516799d194ad65fbab1 {\"body\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}},\"kind\":\"note\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n",
+    "then": {
+      "append": {
+        "kind": "evidence",
+        "body": {
+          "obligation": "ob-11",
+          "verdict": "passed"
+        }
+      },
+      "file": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 482 9bbf53a6c7eb58a46647414829f7bf0369fc3b3b19a05516799d194ad65fbab1 {\"body\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}},\"kind\":\"note\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\ndodona1 153 2067bfd067b3d7a09bc2a9fff0823f28b27de1d109d9eac8bd54f5f1921325e3 {\"body\":{\"obligation\":\"ob-11\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":\"sha256:9bbf53a6c7eb58a46647414829f7bf0369fc3b3b19a05516799d194ad65fbab1\"}\n"
     }
   },
   "bad_requests": [

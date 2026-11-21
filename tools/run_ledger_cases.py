@@ -143,6 +143,15 @@ def main() -> int:
         check("an append after an entry of an unlisted kind works", isinstance(answer, dict) and "appended" in answer
               and path.read_bytes() == other["then"]["file"].encode("utf-8"), str(answer))
 
+        # An entry as deep as a ledger allows: written, and followed like any other.
+        deepest = more["deepest"]
+        path = fresh("deepest.ledger", good)
+        answer = ask(command, "ledger-append", dict(deepest["append"], ledger=str(path), wait_ms=2000))
+        check("an entry nested 64 levels deep is appended", answer == {"appended": deepest["identity"]} and path.read_bytes() == deepest["file"].encode("utf-8"), str(answer)[:200])
+        answer = ask(command, "ledger-append", dict(deepest["then"]["append"], ledger=str(path), wait_ms=2000))
+        check("an append after an entry nested 64 levels deep works", isinstance(answer, dict) and "appended" in answer
+              and path.read_bytes() == deepest["then"]["file"].encode("utf-8"), str(answer)[:200])
+
         # Requests that are not requests: refused, and nothing written.
         for case in more["bad_requests"]:
             absent = folder / "bad-request.ledger"

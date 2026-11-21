@@ -75,6 +75,14 @@ def reached_without_link(root: pathlib.Path, rel: str) -> bool:
     return True
 
 
+def is_file(path: pathlib.Path) -> bool:
+    """A regular file, shown to be one: a path a step of which cannot be looked at is not (some Pythons raise there)."""
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
 # Step 1. The input.
 
 LEVELS = ("self", "helper", "apart", "tested", "cross-make", "credentialed")
@@ -126,7 +134,7 @@ def check_input(asked) -> None:
         if len(set(provider["code"])) != len(provider["code"]):
             raise Stop("bad-input", f"{name}: a code path listed twice")
         for rel in provider["code"]:
-            if not relpath_ok(rel) or not reached_without_link(root, rel) or not (root / rel).is_file():
+            if not relpath_ok(rel) or not reached_without_link(root, rel) or not is_file(root / rel):
                 raise Stop("bad-input", f"{name}: code path {rel!r} is not a regular file under root reached without a link")
     # Then every provider's code is read, before any provider is started.
     for name, provider in sorted(site["providers"].items()):
@@ -510,7 +518,7 @@ def run(asked) -> dict:
     check_input(asked)
     root = pathlib.Path(asked["root"])
     site = asked["site"]
-    if not reached_without_link(root, asked["project"]) or not (root / asked["project"]).is_file():  # a link at any step, the last included
+    if not reached_without_link(root, asked["project"]) or not is_file(root / asked["project"]):  # a link at any step, the last included
         raise Stop("bad-project", "the project file is not a regular file reached without a link")
     try:
         raw = (root / asked["project"]).read_bytes()
