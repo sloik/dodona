@@ -2,7 +2,7 @@
 'use strict';
 // The second dodona kernel. Reads standard input, prints one JSON object.
 //
-//     node dodona-kernel2.js scenario | canonical | key | path | path-set | states | ledger-append | ledger-read | check
+//     node dodona-kernel2.js scenario | canonical | key | path | path-set | states | ledger-append | ledger-read | check | status
 //     node dodona-kernel2.js session --deadline-ms N --max-line N --max-log N -- <provider command>
 //
 // The rules are pure functions. This file reads the kernel's own input and output;
@@ -20,6 +20,7 @@ const strictJson = require('./strict-json');
 const { plain } = require('./plain');
 const { runSession } = require('./session');
 const { runCheck } = require('./check');
+const { projectStatus } = require('./project-status');
 
 function decodeText(bytes) {
   try {
@@ -73,6 +74,8 @@ const commands = {
   'ledger-read': (bytes) => ledgerFile.read(readInput(bytes)),
   'path-set': (bytes) => ({ collisions: findCollisions(readInput(bytes).paths) }),
   check: (bytes) => runCheck(readCheckInput(bytes)),
+  // Reads its own input: whatever it is given, it answers with one object and exits 0.
+  status: (bytes) => projectStatus(bytes),
 };
 
 // Commands that read no standard input, given the rest of the command line.
@@ -80,7 +83,7 @@ const noInput = {
   session: (argv) => runSession(argv),
 };
 
-const USAGE = 'usage: dodona-kernel2.js scenario | canonical | key | path | path-set | states | ledger-append | ledger-read | check\n'
+const USAGE = 'usage: dodona-kernel2.js scenario | canonical | key | path | path-set | states | ledger-append | ledger-read | check | status\n'
   + '       dodona-kernel2.js session --deadline-ms N --max-line N --max-log N -- <provider command>\n';
 
 // Prints the answer, then ends the process: a process a provider left behind and that

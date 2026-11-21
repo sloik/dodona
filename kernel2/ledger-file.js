@@ -72,6 +72,8 @@ function append(request) {
   } catch (error) {
     return { refused: 'bad-request' };
   }
+  // No entry nested deeper than a reader reads (protocol/ledger.md): it is never written.
+  if (ledger.tooDeep({ previous: null, kind: request.kind, body: request.body })) return { refused: 'bad-request' };
   const path = request.ledger;
   const waitMs = Number(request.wait_ms) || 0;
   const lockPath = `${path}.lock`;
