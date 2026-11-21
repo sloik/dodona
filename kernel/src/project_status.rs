@@ -1865,8 +1865,40 @@ fn snapshot(input: &Input, keep: bool) -> Step<Snapshot> {
         ("makes", Value::Array(vec![])),
     ]);
     // Step 10.
-    let mut steps: Vec<Value> = read
-        .entries
+    let steps = steps_of(&read.entries);
+    let judged = json::object(vec![
+        ("kind", json::string("status")),
+        ("name", json::string("this-project")),
+        (
+            "self",
+            json::object(vec![
+                ("writer", json::string(&input.writer)),
+                ("platform", json::string(&input.platform)),
+            ]),
+        ),
+        ("policy", policy),
+        // Moved, not copied: nothing reads `found` after J is made.
+        ("obligations", sorted_object(std::mem::take(&mut obligations.found))),
+        ("intents", sorted_object(intents.judged.clone())),
+        ("steps", steps),
+    ]);
+    // The report is what the status rules give for J, and nothing else.
+    let report = status::run(&judged).pop().unwrap_or(Value::Null);
+    Ok(Snapshot {
+        not_served,
+        obligations,
+        intents,
+        read,
+        judged,
+        report,
+    })
+}
+
+/// The steps of J (step 10): one `append` for each entry read, in order, and
+/// then one step that names nothing, so a project with an empty ledger has a
+/// report too.
+fn steps_of(entries: &[Value]) -> Value {
+    let mut steps: Vec<Value> = entries
         .iter()
         .map(|e| {
             json::object(vec![(
@@ -1892,37 +1924,20 @@ fn snapshot(input: &Input, keep: bool) -> Step<Snapshot> {
             ]),
         )]),
     )]));
-    let judged = json::object(vec![
-        ("kind", json::string("status")),
-        ("name", json::string("this-project")),
-        (
-            "self",
-            json::object(vec![
-                ("writer", json::string(&input.writer)),
-                ("platform", json::string(&input.platform)),
-            ]),
-        ),
-        ("policy", policy),
-        // Moved, not copied: nothing reads `found` after J is made.
-        ("obligations", sorted_object(std::mem::take(&mut obligations.found))),
-        ("intents", sorted_object(intents.judged.clone())),
-        ("steps", Value::Array(steps)),
-    ]);
-    // The report is what the status rules give for J, and nothing else.
-    let report = status::run(&judged).pop().unwrap_or(Value::Null);
-    Ok(Snapshot {
-        not_served,
-        obligations,
-        intents,
-        read,
-        judged,
-        report,
-    })
+    Value::Array(steps)
 }
 
 fn run(raw: &[u8]) -> Step<Value> {
     // Step 1.
     let input = read_input(raw)?;
+    let snapshot = snapshot(&input, false)?;
+    Ok(output(&input, snapshot))
+}
+
+/// Step 11 and the answer, from what steps 2 to 10 read and judged. The run
+/// command's report (its step 14) is made here too, from a snapshot judged
+/// again after the ledgers are read again.
+fn output(input: &Input, snapshot: Snapshot) -> Value {
     let Snapshot {
         not_served,
         obligations,
@@ -1930,7 +1945,7 @@ fn run(raw: &[u8]) -> Step<Value> {
         read,
         judged,
         report,
-    } = snapshot(&input, false)?;
+    } = snapshot;
     // Step 11.
     let coverage = coverage(&intents.judged, input.min_hard_gates);
     // What could hide a failure the report does not show, in the contract's order and words.
@@ -1971,7 +1986,7 @@ fn run(raw: &[u8]) -> Step<Value> {
         } else {
             stated.as_str()
         };
-    Ok(json::object(vec![
+    json::object(vec![
         ("judged", judged),
         ("report", report),
         ("coverage", coverage),
@@ -2004,7 +2019,7 @@ fn run(raw: &[u8]) -> Step<Value> {
             Value::Array(doubts.into_iter().map(json::string).collect()),
         ),
         ("project_status", json::string(project_status)),
-    ]))
+    ])
 }
 
 /// The run command's input (conformance/README.md, "How a project's run is
@@ -2895,7 +2910,19 @@ mod run_input {
     /// in one append. With none, nothing is touched. Any failure is
     /// `ledger-not-written`, after which nothing is done: nothing was written,
     /// and the next run checks those obligations again.
-    pub(super) fn record(root: &Path, ledger: &str, bodies: &[Value], wait: Duration) -> Step<Vec<String>> {
+    ///
+    /// Once the ledger's lock is held, `still_permitted` is asked again before
+    /// the ledger is read: a ledger that has become the owner's, or is now
+    /// reached through a link, is not written. A write that fails is undone
+    /// under the same lock; one whose undoing cannot be confirmed says so in
+    /// the detail.
+    pub(super) fn record(
+        root: &Path,
+        ledger: &str,
+        owner: &str,
+        bodies: &[Value],
+        wait: Duration,
+    ) -> Step<Vec<String>> {
         if bodies.is_empty() {
             return Ok(Vec::new());
         }
@@ -2903,8 +2930,143 @@ mod run_input {
         let Some(text) = path.to_str() else {
             return stop("ledger-not-written", format!("{ledger}: a path that is not UTF-8"));
         };
-        crate::ledger::append_entries(text, "evidence", bodies, wait)
-            .or_else(|e| stop("ledger-not-written", format!("{ledger}: {e:?}")))
+        let permitted = || still_permitted(root, ledger, owner);
+        crate::ledger::append_entries_if(text, "evidence", bodies, wait, &permitted).or_else(|e| {
+            let why = match e {
+                crate::ledger::NotWritten::Unconfirmed(d) => {
+                    format!("{d}; the ledger may hold part of this run's entries")
+                }
+                other => format!("{other:?}"),
+            };
+            stop("ledger-not-written", format!("{ledger}: {why}"))
+        })
+    }
+
+    // Steps 11 to 14 together.
+
+    /// Whether the run's ledger is still one it may write, checked again just
+    /// before the write, with the checks step 1 made: reached without a link,
+    /// and not the owner's ledger by name or, where both exist, as one file.
+    /// Between this and the append nothing more is looked at: a link made in
+    /// that moment is not seen.
+    fn still_permitted(root: &Path, ledger: &str, owner: &str) -> bool {
+        disk_name(ledger) != disk_name(owner)
+            && !link_on_the_way(root, ledger)
+            && !same_file(&root.join(ledger), &root.join(owner))
+    }
+
+    /// Steps 11 to 13: every planned check on its binding's session, the runs
+    /// to the executor in batches, and the verdicts that stand appended to the
+    /// run's ledger. A session that breaks refuses the run before anything is
+    /// written. The re-reading of inputs is `identity_of` (`reread` in a run).
+    pub(super) fn finish(
+        run: &RunInput,
+        plan: &Plan,
+        checks: &[Checkable],
+        lanes: &mut [Lane],
+        executor: &mut dyn Executor,
+        identity_of: &mut dyn FnMut(&str) -> Option<String>,
+    ) -> Step<Vec<Finished>> {
+        let input = &run.status;
+        let root = input.root.as_path();
+        let mut finished = schedule(lanes, &plan.to_check, checks, executor, root)
+            .or_else(|reason| stop(reason, "a session broke during the checks: nothing is recorded"))?;
+        let bodies = evidence(&mut finished, checks, &input.platform, &input.writer, identity_of);
+        if !bodies.is_empty() && !still_permitted(root, &run.ledger, &input.owner_ledger) {
+            return stop(
+                "ledger-not-written",
+                format!("{}: no longer a ledger this run may write", run.ledger),
+            );
+        }
+        record(root, &run.ledger, &input.owner_ledger, &bodies, LEDGER_WAIT)?;
+        Ok(finished)
+    }
+
+    /// The counts of step 14. `reused` and `checked` add up to `obligations`,
+    /// and the verdicts and `refused` to `checked`.
+    pub(super) fn counts(plan: &Plan, finished: &[Finished]) -> Value {
+        let verdicts = |v: &str| {
+            finished
+                .iter()
+                .filter(|f| matches!(&f.ended, Ended::Verdict { verdict, .. } if verdict == v))
+                .count()
+        };
+        let refused = finished
+            .iter()
+            .filter(|f| matches!(f.ended, Ended::Refused(_)))
+            .count();
+        let n = |k: usize| Value::Number(k as i64);
+        json::object(vec![
+            ("obligations", n(plan.obligations)),
+            ("reused", n(plan.reused.len())),
+            ("checked", n(plan.to_check.len())),
+            ("passed", n(verdicts("passed"))),
+            ("failed", n(verdicts("failed"))),
+            ("error", n(verdicts("error"))),
+            ("unavailable", n(verdicts("unavailable"))),
+            ("unsupported", n(verdicts("unsupported"))),
+            ("refused", n(refused)),
+            ("not_checkable", n(plan.not_checkable)),
+        ])
+    }
+
+    /// Step 14's reading: the ledgers read again as in step 8, and J judged
+    /// again with their entries. Nothing is asked of a provider. A refusal here
+    /// leaves what step 13 appended where it is.
+    pub(super) fn rejudge(input: &Input, mut s: Snapshot) -> Step<Snapshot> {
+        let read = ledgers(input)?;
+        if let Some(steps) = s.judged.opt_mut("steps") {
+            *steps = steps_of(&read.entries);
+        }
+        s.report = status::run(&s.judged).pop().unwrap_or(Value::Null);
+        s.read = read;
+        Ok(s)
+    }
+
+    /// Steps 11 to 14 on what `prepare` gave. The sessions kept in the
+    /// snapshot stay open until the report is made, and are closed as it is
+    /// dropped, on every way out.
+    pub(super) fn complete(
+        run: &RunInput,
+        mut snapshot: Snapshot,
+        plan: &Plan,
+        executor: &mut dyn Executor,
+    ) -> Step<Value> {
+        let root = run.status.root.clone();
+        let finished = {
+            let mut lanes: Vec<Lane> = snapshot
+                .obligations
+                .kept
+                .iter_mut()
+                .map(|k| Lane {
+                    binding: k.binding.clone(),
+                    channel: &mut k.session,
+                    offers_check: k.offers_check,
+                    declared: k.declared.clone(),
+                    ceiling: k.ceiling.clone(),
+                })
+                .collect();
+            let mut now = reread(&root);
+            finish(run, plan, &snapshot.obligations.checks, &mut lanes, executor, &mut now)?
+        };
+        let counts = counts(plan, &finished);
+        let snapshot = rejudge(&run.status, snapshot)?;
+        let mut answer = output(&run.status, snapshot);
+        if let Value::Object(fields) = &mut answer {
+            fields.push(("counts".to_owned(), counts));
+        }
+        Ok(answer)
+    }
+
+    /// A whole run with the site's executor. Not served: `main` does not call
+    /// it, and no transcript is written.
+    pub(super) fn run_native(raw: &[u8]) -> Step<Value> {
+        let (run, snapshot, plan) = prepare(raw)?;
+        let mut executor = Native {
+            command: &run.executor,
+            root: &run.status.root,
+        };
+        complete(&run, snapshot, &plan, &mut executor)
     }
 
     #[cfg(test)]
@@ -2913,6 +3075,7 @@ mod run_input {
 
         const A: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         const B: &str = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const OWNER: &str = "records/owner.ledger";
 
         fn v(s: &str) -> Value {
             json::parse(s.as_bytes()).unwrap()
@@ -3022,7 +3185,7 @@ mod run_input {
             assert_eq!(verdict_of(&finished[0]), "error");
             // With nothing to record, nothing is touched: not even the ledger's folder.
             let root = scratch("nothing");
-            assert_eq!(record(&root, "l/run.ledger", &[], Duration::from_millis(10)).ok(), Some(vec![]));
+            assert_eq!(record(&root, "l/run.ledger", OWNER, &[], Duration::from_millis(10)).ok(), Some(vec![]));
             assert!(!root.join("l").exists());
             let _ = fs::remove_dir_all(&root);
         }
@@ -3033,7 +3196,7 @@ mod run_input {
             let mut now = files(&[("a.txt", Some(A)), ("b.txt", Some(B))]);
             let bodies = evidence(&mut finished, &checks, "linux/x86_64", "w", &mut now);
             let root = scratch("two");
-            let ids = match record(&root, "l/run.ledger", &bodies, Duration::from_millis(100)) {
+            let ids = match record(&root, "l/run.ledger", OWNER, &bodies, Duration::from_millis(100)) {
                 Ok(ids) => ids,
                 Err(s) => panic!("{} {}", s.reason, s.detail),
             };
@@ -3063,7 +3226,7 @@ mod run_input {
             bytes.extend_from_slice(b"dodona1 99 abc {\"previ");
             fs::write(&ledger, &bytes).unwrap();
             assert!(matches!(read_back(&ledger).get("torn"), Value::Bool(true)));
-            record(&root, "run.ledger", &[v(r#"{"n":2}"#), v(r#"{"n":3}"#)], Duration::ZERO).ok().unwrap();
+            record(&root, "run.ledger", OWNER, &[v(r#"{"n":2}"#), v(r#"{"n":3}"#)], Duration::ZERO).ok().unwrap();
             let read = read_back(&ledger);
             let entries = read.get("entries").array();
             assert!(matches!(read.get("torn"), Value::Bool(false)));
@@ -3079,7 +3242,7 @@ mod run_input {
             let root = scratch("corrupt");
             let ledger = root.join("run.ledger");
             fs::write(&ledger, b"garbage\n").unwrap();
-            let got = record(&root, "run.ledger", &[v("{}")], Duration::ZERO);
+            let got = record(&root, "run.ledger", OWNER, &[v("{}")], Duration::ZERO);
             assert_eq!(got.err().map(|s| s.reason), Some("ledger-not-written"));
             assert_eq!(fs::read(&ledger).unwrap(), b"garbage\n");
             assert!(!root.join("run.ledger.lock").exists());
@@ -3096,12 +3259,118 @@ mod run_input {
             let lock = root.join("run.ledger.lock");
             fs::write(&lock, b"").unwrap();
             let begun = Instant::now();
-            let got = record(&root, "run.ledger", &[v("{}")], Duration::from_millis(50));
+            let got = record(&root, "run.ledger", OWNER, &[v("{}")], Duration::from_millis(50));
             assert_eq!(got.err().map(|s| s.reason), Some("ledger-not-written"));
             assert!(begun.elapsed() >= Duration::from_millis(50));
             // Nothing written, and the other holder's lock still there.
             assert!(!root.join("run.ledger").exists());
             assert!(lock.exists());
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        /// A disk standing in for the ledger file, failing as it is told.
+        struct Disk {
+            data: Vec<u8>,
+            /// An append writes only this many bytes and then fails.
+            short_write: Option<usize>,
+            /// How many syncs fail, from the first.
+            failing_syncs: usize,
+            /// Cutting the file fails once anything has been appended.
+            cut_fails_after_write: bool,
+            wrote: bool,
+        }
+        impl crate::ledger::LedgerFile for Disk {
+            fn set_len(&mut self, len: u64) -> std::io::Result<()> {
+                if self.wrote && self.cut_fails_after_write {
+                    return Err(std::io::ErrorKind::Other.into());
+                }
+                self.data.truncate(len as usize);
+                Ok(())
+            }
+            fn append(&mut self, bytes: &[u8]) -> std::io::Result<()> {
+                self.wrote = true;
+                match self.short_write {
+                    Some(k) => {
+                        self.data.extend_from_slice(&bytes[..k.min(bytes.len())]);
+                        Err(std::io::ErrorKind::WriteZero.into())
+                    }
+                    None => {
+                        self.data.extend_from_slice(bytes);
+                        Ok(())
+                    }
+                }
+            }
+            fn sync(&mut self) -> std::io::Result<()> {
+                if self.failing_syncs > 0 {
+                    self.failing_syncs -= 1;
+                    return Err(std::io::ErrorKind::Other.into());
+                }
+                Ok(())
+            }
+        }
+        /// A ledger of one whole entry and a torn ending.
+        fn disk() -> Disk {
+            Disk {
+                data: b"AAA\nTORN".to_vec(),
+                short_write: None,
+                failing_syncs: 0,
+                cut_fails_after_write: false,
+                wrote: false,
+            }
+        }
+        const LINES: &[u8] = b"L1\nL2\n";
+
+        #[test]
+        fn a_write_that_fails_leaves_none_of_its_entries() {
+            use crate::ledger::{write_lines, NotWritten};
+            // Control: a write that succeeds cuts the torn ending and adds both lines.
+            let mut ok = disk();
+            assert_eq!(write_lines(&mut ok, 4, LINES), Ok(()));
+            assert_eq!(ok.data, b"AAA\nL1\nL2\n");
+            // A short write: cut back to the last whole entry before this append.
+            let mut short = Disk { short_write: Some(4), ..disk() };
+            assert!(matches!(write_lines(&mut short, 4, LINES), Err(NotWritten::Failed(_))));
+            assert_eq!(short.data, b"AAA\n");
+            // Everything written but the sync fails: cut back too, and synced.
+            let mut unsynced = Disk { failing_syncs: 1, ..disk() };
+            assert!(matches!(write_lines(&mut unsynced, 4, LINES), Err(NotWritten::Failed(_))));
+            assert_eq!(unsynced.data, b"AAA\n");
+            // Red: when cutting back fails too, a complete first entry of this
+            // append stays, which is what the cut-back above prevents; and the
+            // answer says the ledger's state is not known.
+            let mut stuck = Disk { short_write: Some(4), cut_fails_after_write: true, ..disk() };
+            assert!(matches!(write_lines(&mut stuck, 4, LINES), Err(NotWritten::Unconfirmed(_))));
+            assert_eq!(stuck.data, b"AAA\nL1\nL");
+            // And when the sync after cutting back fails, it is not confirmed either.
+            let mut twice = Disk { failing_syncs: 2, ..disk() };
+            assert!(matches!(write_lines(&mut twice, 4, LINES), Err(NotWritten::Unconfirmed(_))));
+        }
+
+        #[test]
+        fn the_ledger_is_judged_again_once_its_lock_is_held() {
+            use crate::ledger::{append_entries_if, NotWritten};
+            let root = scratch("in-lock");
+            let ledger = root.join("run.ledger");
+            let path = ledger.to_str().unwrap().to_owned();
+            let lock = format!("{path}.lock");
+            // The check is asked while the lock is held.
+            let asked_under_lock = std::cell::Cell::new(false);
+            let ids = append_entries_if(&path, "evidence", &[v("{}")], Duration::ZERO, &|| {
+                asked_under_lock.set(Path::new(&lock).exists());
+                true
+            });
+            assert_eq!(ids.map(|i| i.len()), Ok(1));
+            assert!(asked_under_lock.get());
+            // A check that fails under the lock: nothing read or written, lock released.
+            let before = fs::read(&ledger).unwrap();
+            let refused = append_entries_if(&path, "evidence", &[v("{}")], Duration::ZERO, &|| false);
+            assert_eq!(refused, Err(NotWritten::NotPermitted));
+            assert_eq!(fs::read(&ledger).unwrap(), before);
+            assert!(!Path::new(&lock).exists());
+            // Through `record`: a run's ledger that is the owner's by name is refused under the lock.
+            let got = record(&root, "run.ledger", "Run.Ledger", &[v("{}")], Duration::ZERO);
+            assert_eq!(got.err().map(|s| s.reason), Some("ledger-not-written"));
+            assert_eq!(fs::read(&ledger).unwrap(), before);
             let _ = fs::remove_dir_all(&root);
         }
     }
@@ -3872,6 +4141,182 @@ mod run_input {
             };
             assert_eq!(ex.sent.len(), 8);
             assert_eq!((verdict(&done[0]), done[0].runs), (("too-many-runs", None), 8));
+        }
+
+        // Steps 11 to 14 composed, with the executor and the re-reading of inputs
+        // injected; the ledgers are real files under a folder of the test's own.
+
+        fn scratch_root(name: &str) -> PathBuf {
+            let dir = std::env::temp_dir().join(format!("dodona-compose-{}-{name}", std::process::id()));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            dir
+        }
+        fn run_input_at(root: &Path, ledgers: &[&str], ledger: &str) -> RunInput {
+            let site = v(r#"{"platform":{"os":"linux","arch":"x86_64"},"writer":"w","runner":"r","tools":[],"providers":{},"deadline_ms":1000}"#);
+            let policy = v(r#"{"required":[],"min_hard_gates":1,"floors":{},"not_applied":[]}"#);
+            let input = json::object(vec![
+                ("root", json::string(root.to_str().unwrap())),
+                ("project", json::string("dodona.toml")),
+                ("site", site),
+                ("policy", policy),
+                ("policy_source", json::string("test")),
+                ("ledgers", Value::Array(ledgers.iter().map(|l| json::string(l)).collect())),
+                ("owner_ledger", json::string("records/owner.ledger")),
+                ("ledger", json::string(ledger)),
+                ("executor", Value::Array(vec![json::string("x")])),
+            ]);
+            match read(json::encode(&input).as_bytes()) {
+                Ok(r) => r,
+                Err(s) => panic!("refused: {} {}", s.reason, s.detail),
+            }
+        }
+        fn two_checks() -> (Plan, [Checkable; 2]) {
+            let plan = Plan {
+                to_check: vec![pair("a", "o1"), pair("b", "o2")],
+                reused: vec![pair("a", "o0")],
+                obligations: 3,
+                not_checkable: 0,
+            };
+            (plan, [checkable("a", "o1"), checkable("b", "o2")])
+        }
+        /// Two bindings' sessions, each taking its check through one run to a final.
+        fn two_sessions() -> (Scripted, Scripted) {
+            (
+                Scripted::after_enumerate(vec![reply("2", &next()), reply("3", PASS)]),
+                Scripted::after_enumerate(vec![reply("2", &next()), reply("3", FAIL)]),
+            )
+        }
+        fn finished_with(
+            run: &RunInput,
+            identity_of: &mut dyn FnMut(&str) -> Option<String>,
+        ) -> (Step<Vec<Finished>>, Plan) {
+            let (plan, checks) = two_checks();
+            let (mut a, mut b) = two_sessions();
+            let mut ex = FakeExecutor::new(vec![]);
+            let mut lanes = vec![lane("a", &mut a), lane("b", &mut b)];
+            let done = finish(run, &plan, &checks, &mut lanes, &mut ex, identity_of);
+            (done, plan)
+        }
+        fn unchanged(path: &str) -> Option<String> {
+            (path == "a.txt").then(|| A.to_owned())
+        }
+        fn entries_in(root: &Path, rel: &str) -> Vec<Value> {
+            let asked = json::object(vec![("ledger", json::string(root.join(rel).to_str().unwrap()))]);
+            crate::ledger::read(&asked).unwrap().get("entries").array().to_vec()
+        }
+
+        #[test]
+        fn a_run_records_its_verdicts_and_its_counts_add_up() {
+            let root = scratch_root("two");
+            let run = run_input_at(&root, &["l/run.ledger"], "l/run.ledger");
+            let (done, plan) = finished_with(&run, &mut unchanged);
+            let done = match done {
+                Ok(d) => d,
+                Err(s) => panic!("refused: {} {}", s.reason, s.detail),
+            };
+            let entries = entries_in(&root, "l/run.ledger");
+            let recorded: Vec<(&str, &str)> = entries
+                .iter()
+                .map(|e| (e.get("body").text("obligation").unwrap(), e.get("body").text("verdict").unwrap()))
+                .collect();
+            assert_eq!(recorded, [("o1", "passed"), ("o2", "failed")]);
+            assert_eq!(entries[0].get("body").text("platform"), Some("linux/x86_64"));
+            assert_eq!(entries[0].get("body").text("writer"), Some("w"));
+            let c = counts(&plan, &done);
+            let n = |k: &str| c.get(k).number();
+            assert_eq!((n("obligations"), n("reused"), n("checked")), (3, 1, 2));
+            assert_eq!((n("passed"), n("failed"), n("refused")), (1, 1, 0));
+            assert_eq!(n("reused") + n("checked"), n("obligations"));
+            let ended = ["passed", "failed", "error", "unavailable", "unsupported", "refused"];
+            assert_eq!(ended.iter().map(|k| n(*k)).sum::<i64>(), n("checked"));
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn an_input_changed_before_recording_is_counted_as_an_error_and_nothing_is_written() {
+            let root = scratch_root("changed");
+            let run = run_input_at(&root, &["l/run.ledger"], "l/run.ledger");
+            let mut changed = |_: &str| Some("sha256:changed".to_owned());
+            let (done, plan) = finished_with(&run, &mut changed);
+            let done = done.ok().unwrap();
+            let c = counts(&plan, &done);
+            assert_eq!((c.get("error").number(), c.get("passed").number(), c.get("failed").number()), (2, 0, 0));
+            // Nothing to record: not the ledger, not its folder.
+            assert!(!root.join("l").exists());
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[cfg(any(unix, windows))]
+        #[test]
+        fn a_ledger_that_has_become_the_owners_is_not_written() {
+            let root = scratch_root("owner");
+            let run = run_input_at(&root, &["l/run.ledger"], "l/run.ledger");
+            // After step 1, the run's ledger becomes another name for the owner's.
+            fs::create_dir_all(root.join("records")).unwrap();
+            fs::create_dir_all(root.join("l")).unwrap();
+            fs::write(root.join("records/owner.ledger"), b"").unwrap();
+            fs::hard_link(root.join("records/owner.ledger"), root.join("l/run.ledger")).unwrap();
+            let (done, _) = finished_with(&run, &mut unchanged);
+            assert_eq!(done.err().map(|s| s.reason), Some("ledger-not-written"));
+            assert_eq!(fs::read(root.join("records/owner.ledger")).unwrap(), b"");
+            assert!(!root.join("l/run.ledger.lock").exists());
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn a_ledger_now_reached_through_a_link_is_not_written() {
+            let root = scratch_root("link");
+            let run = run_input_at(&root, &["lk/run.ledger"], "lk/run.ledger");
+            fs::create_dir_all(root.join("real")).unwrap();
+            std::os::unix::fs::symlink(root.join("real"), root.join("lk")).unwrap();
+            let (done, _) = finished_with(&run, &mut unchanged);
+            assert_eq!(done.err().map(|s| s.reason), Some("ledger-not-written"));
+            assert!(!root.join("real/run.ledger").exists());
+            assert!(!root.join("real/run.ledger.lock").exists());
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        fn empty_snapshot() -> Snapshot {
+            Snapshot {
+                not_served: vec![],
+                obligations: Obligations {
+                    found: vec![],
+                    listed: vec![],
+                    not_checkable: vec![],
+                    kept: vec![],
+                    checks: vec![],
+                },
+                intents: Intents { judged: vec![], unread: false },
+                read: Ledgers { entries: vec![], torn: false, absent: false },
+                judged: v(r#"{"kind":"status","name":"this-project","self":{"writer":"w","platform":"linux/x86_64"},"policy":{"min_hard_gates":1,"required":[],"trusted_writers":[],"floors":{},"attestors":{},"makes":[]},"obligations":{},"intents":{},"steps":[]}"#),
+                report: Value::Null,
+            }
+        }
+
+        #[test]
+        fn a_refusal_after_recording_keeps_what_was_appended() {
+            let root = scratch_root("after");
+            let run = run_input_at(&root, &["l/run.ledger", "l/other.ledger"], "l/run.ledger");
+            let (done, _) = finished_with(&run, &mut unchanged);
+            assert!(done.is_ok());
+            // Another listed ledger turns out corrupt when step 14 reads them again.
+            fs::write(root.join("l/other.ledger"), b"garbage\n").unwrap();
+            let got = rejudge(&run.status, empty_snapshot());
+            assert_eq!(got.err().map(|s| s.reason), Some("corrupt-ledger"));
+            assert_eq!(entries_in(&root, "l/run.ledger").len(), 2);
+            // Read again without it, the recorded entries are what is judged.
+            fs::remove_file(root.join("l/other.ledger")).unwrap();
+            let s = match rejudge(&run.status, empty_snapshot()) {
+                Ok(s) => s,
+                Err(e) => panic!("refused: {} {}", e.reason, e.detail),
+            };
+            assert_eq!(s.read.entries.len(), 2);
+            assert!(s.read.absent);
+            assert_eq!(s.judged.get("steps").array().len(), 3);
+            assert!(s.report.opt("obligations").is_some());
+            let _ = fs::remove_dir_all(&root);
         }
     }
 

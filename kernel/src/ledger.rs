@@ -223,20 +223,66 @@ pub enum NotWritten {
     Locked,
     /// The ledger is corrupt at this line, counting from 1.
     Corrupt(usize),
-    /// A folder could not be made, the ledger read, or the lock taken.
+    /// A folder could not be made, the ledger read, the lock taken, or the
+    /// write made; in the last case the ledger was cut back to the length it
+    /// had before, and that was synced.
     Failed(String),
+    /// Once the lock was held, the caller's check said this is no longer a
+    /// ledger it may write. Nothing was read or written.
+    NotPermitted,
+    /// The write failed, and cutting the ledger back to the length it had
+    /// before failed too: what the ledger now holds is not known.
+    Unconfirmed(String),
 }
 
-/// Append one entry of `kind` for each body, in order, all in one append, as
-/// a run records its verdicts: the folders on the ledger's path that are not
-/// there made, the lock beside the ledger taken (waiting up to `wait`), the
-/// ledger read as `ledger-read` reads it and refused if corrupt, an ending cut
-/// short cut off, every entry added as one line after the last, the file
-/// synced to disk, and the lock released. The identities of the entries
-/// appended. With no bodies nothing is touched, not even a folder.
-///
-/// A write failure can leave complete entries and a torn ending. The next
-/// append reads the complete prefix and cuts off any torn ending.
+fn failed(what: &str, e: impl std::fmt::Display) -> NotWritten {
+    NotWritten::Failed(format!("{what}: {e}"))
+}
+
+/// The file operations an append makes, so that a failing disk can be stood in
+/// for in a test.
+pub(crate) trait LedgerFile {
+    /// Make the file this long, cutting off what lies beyond.
+    fn set_len(&mut self, len: u64) -> std::io::Result<()>;
+    /// Write all these bytes at the end of the file.
+    fn append(&mut self, bytes: &[u8]) -> std::io::Result<()>;
+    /// Write the file's data to disk.
+    fn sync(&mut self) -> std::io::Result<()>;
+}
+impl LedgerFile for fs::File {
+    fn set_len(&mut self, len: u64) -> std::io::Result<()> {
+        fs::File::set_len(self, len)
+    }
+    fn append(&mut self, bytes: &[u8]) -> std::io::Result<()> {
+        self.seek(SeekFrom::End(0))?;
+        self.write_all(bytes)
+    }
+    fn sync(&mut self) -> std::io::Result<()> {
+        self.sync_all()
+    }
+}
+
+/// Cut the file to `keep` bytes (the end of its last whole entry), add
+/// `lines`, and sync. If adding or syncing fails, the file is cut back to
+/// `keep` and synced again, so that no entry of this append stays, not even
+/// some of them: `Failed`. If that fails as well, `Unconfirmed`.
+pub(crate) fn write_lines(f: &mut dyn LedgerFile, keep: u64, lines: &[u8]) -> Result<(), NotWritten> {
+    f.set_len(keep)
+        .map_err(|e| failed("cannot cut the ledger to its last whole entry", e))?;
+    let Err(e) = f.append(lines).and_then(|_| f.sync()) else {
+        return Ok(());
+    };
+    match f.set_len(keep).and_then(|_| f.sync()) {
+        Ok(()) => Err(NotWritten::Failed(format!(
+            "cannot write the ledger: {e}; cut back to its last whole entry before this append"
+        ))),
+        Err(back) => Err(NotWritten::Unconfirmed(format!(
+            "cannot write the ledger: {e}; cutting it back failed too: {back}"
+        ))),
+    }
+}
+
+/// `append_entries_if` with no check of the caller's.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn append_entries(
     path: &str,
@@ -244,11 +290,35 @@ pub fn append_entries(
     bodies: &[Value],
     wait: Duration,
 ) -> Result<Vec<String>, NotWritten> {
+    append_entries_if(path, kind, bodies, wait, &|| true)
+}
+
+/// Append one entry of `kind` for each body, in order, all in one append, as
+/// a run records its verdicts: the folders on the ledger's path that are not
+/// there made, the lock beside the ledger taken (waiting up to `wait`), the
+/// caller's `permitted` asked again now that the lock is held, the ledger read
+/// as `ledger-read` reads it and refused if corrupt, an ending cut short cut
+/// off, every entry added as one line after the last, the file synced to disk,
+/// and the lock released. The identities of the entries appended. With no
+/// bodies nothing is touched, not even a folder.
+///
+/// A write or sync that fails is undone (`write_lines`): the ledger is left
+/// at the end of its last whole entry before this append, so none of this
+/// append's entries stays. A torn ending that was there before is not put
+/// back; any append would have cut it off. Bounds: the folders and the lock
+/// file are made before `permitted` is asked, so a link made after the
+/// caller's own earlier check is followed for those two; and a ledger that
+/// did not exist is left as an empty file when its write is undone.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn append_entries_if(
+    path: &str,
+    kind: &str,
+    bodies: &[Value],
+    wait: Duration,
+    permitted: &dyn Fn() -> bool,
+) -> Result<Vec<String>, NotWritten> {
     if bodies.is_empty() {
         return Ok(Vec::new());
-    }
-    fn failed(what: &str, e: impl std::fmt::Display) -> NotWritten {
-        NotWritten::Failed(format!("{what}: {e}"))
     }
     if let Some(folder) = std::path::Path::new(path)
         .parent()
@@ -261,6 +331,9 @@ pub fn append_entries(
     };
     // From here the lock is held, and released when `_lock` is dropped,
     // after the file has been written, synced and closed.
+    if !permitted() {
+        return Err(NotWritten::NotPermitted);
+    }
     let data = load(path).map_err(NotWritten::Failed)?;
     let contents = parse(&data).map_err(NotWritten::Corrupt)?;
     let mut previous = contents.entries.last().map(canonical::identity);
@@ -277,19 +350,14 @@ pub fn append_entries(
         previous = Some(id.clone());
         appended.push(id);
     }
-    let write = || -> std::io::Result<()> {
-        let mut f = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(path)?;
-        let prefix_len = contents.end as u64;
-        f.set_len(prefix_len)?;
-        f.seek(SeekFrom::End(0))?;
-        f.write_all(lines.as_bytes())?;
-        f.sync_all()
-    };
-    write().map_err(|e| failed("cannot write the ledger", e))?;
+    let mut f = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)
+        .map_err(|e| failed("cannot open the ledger", e))?;
+    let prefix_len = contents.end as u64;
+    write_lines(&mut f, prefix_len, lines.as_bytes())?;
     Ok(appended)
 }
 
