@@ -13,7 +13,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
-  preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange,
+  preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange, checkAll, batchWait,
 } = require('./project-run');
 const { runKey } = require('./check');
 const crypto = require('node:crypto');
@@ -893,4 +893,173 @@ test('planted: every claimed file given as a check\'s inputs, not its own', asyn
   const session = keptSession('zeta', [answering({ next: RUN })]);
   await damaged.startCheck([session], { binding: 'zeta', name: 'a1' }, os.tmpdir());
   assert.notDeepEqual(session.sent[0].body.inputs, [FILE_A]);
+});
+
+// Step 12: batches, with an executor that answers from a script and records each batch.
+
+const RUN_B = { ...RUN, args: ['m/b.txt'], inputs: [FILE_B] };
+const EXITED = { end: 'exited', platform: PLATFORM, tools_ran: [{ name: 'checker', digest: CHECKER.digest }] };
+const PLAN_TWO = { check: [{ binding: 'alpha', name: 'a1' }, { binding: 'zeta', name: 'a2' }] };
+
+// Two sessions answering in turn, every message they are sent logged in one order.
+function twoSessions(alphaAnswers, zetaAnswers) {
+  const order = [];
+  const sessions = [keptSession('alpha', alphaAnswers), keptSession('zeta', zetaAnswers)];
+  for (const session of sessions) {
+    const send = session.wire.send;
+    session.wire.send = async (message) => {
+      order.push([session.binding.name, message.id, message.body.op]);
+      return send(message);
+    };
+  }
+  return { sessions, order };
+}
+
+// An executor answering each batch with `answer(runs)`, the batches it was given kept.
+function scripted(answer) {
+  const batches = [];
+  const execute = async (batch, waitMs) => {
+    batches.push({ batch, waitMs });
+    return answer(batch.runs, batches.length);
+  };
+  return { execute, batches };
+}
+
+const reportsFor = (runs, report = EXITED) => ({ answer: { ended: true, reports: runs.map((run) => ({ run_key: run.run_key, report })) } });
+
+test('batches: two bindings, two rounds, reports in any order, passed back in the order the checks started', async () => {
+  const { sessions, order } = twoSessions(
+    [answering({ next: RUN }), answering({ next: RUN }), answering({ final: FINAL })],
+    [answering({ next: RUN_B }), answering({ final: { verdict: 'failed', strength: { class: 'c', rank: 'sampled' } } })],
+  );
+  // Each run its own valid report, told apart by fields a host does not judge, and the
+  // reports given in reverse: each must reach the check whose run_key it names.
+  const reportOf = (round, at) => ({ ...EXITED, exit_status: 10 * round + at, log: `round ${round} run ${at}` });
+  const { execute, batches } = scripted((runs, round) => ({
+    answer: { ended: true, reports: runs.map((run, at) => ({ run_key: run.run_key, report: reportOf(round, at) })).reverse() },
+  }));
+  const ends = await checkAll(sessions, PLAN_TWO, os.tmpdir(), execute);
+  assert.deepEqual(ends, [
+    { binding: 'alpha', name: 'a1', outcome: 'passed', strength: { class: 'c', rank: 'bounded' } },
+    { binding: 'zeta', name: 'a2', outcome: 'failed', strength: { class: 'c', rank: 'sampled' } },
+  ]);
+  // One executor call per round: both first runs, in the order the checks started; then alpha's second.
+  assert.deepEqual(batches.map(({ batch }) => batch.runs.map((run) => run.number)), [[1, 1], [2]]);
+  assert.deepEqual(batches[0].batch.runs.map((run) => run.run), [RUN, RUN_B]);
+  assert.equal(batches[0].waitMs, 24 * 60 * 60 * 1000, 'no wall_ms: a day');
+  assert.deepEqual(order, [
+    ['alpha', '2', 'start'], ['zeta', '2', 'start'],
+    ['alpha', '3', 'run.result'], ['zeta', '3', 'run.result'],
+    ['alpha', '4', 'run.result'],
+  ]);
+  // The batch's first run was alpha's, its second zeta's; alpha's second round was alone.
+  assert.deepEqual(sessions[0].sent[1].body, { op: 'run.result', check: '2', run: 1, report: reportOf(1, 0) });
+  assert.deepEqual(sessions[1].sent[1].body, { op: 'run.result', check: '2', run: 1, report: reportOf(1, 1) });
+  assert.deepEqual(sessions[0].sent[2].body, { op: 'run.result', check: '2', run: 2, report: reportOf(2, 0) });
+  // Each run's key is its own check's, from what that check was started with.
+  const keyOf = (start, number, run) => runKey(identityOf({ obligation: start.body.obligation, inputs: start.body.inputs }), number, run);
+  assert.deepEqual(batches[0].batch.runs.map((run) => run.run_key), [keyOf(sessions[0].sent[0], 1, RUN), keyOf(sessions[1].sent[0], 1, RUN_B)]);
+  assert.deepEqual(batches[1].batch.runs.map((run) => run.run_key), [keyOf(sessions[0].sent[0], 2, RUN)]);
+  assert.notEqual(batches[0].batch.runs[0].run_key, batches[0].batch.runs[1].run_key);
+});
+
+test('batches: two checks on one kept session take its ids in turn, each report to its own check', async () => {
+  const session = keptSession('alpha', [
+    answering({ next: RUN }),
+    answering({ next: RUN_B }),
+    answering({ final: FINAL }),
+    answering({ final: { verdict: 'failed', strength: { class: 'c', rank: 'sampled' } } }),
+  ]);
+  const reportFor = (at) => ({ ...EXITED, exit_status: at, log: `run ${at}` });
+  const { execute, batches } = scripted((runs) => ({
+    answer: { ended: true, reports: runs.map((run, at) => ({ run_key: run.run_key, report: reportFor(at) })).reverse() },
+  }));
+  const ends = await checkAll([session], { check: [{ binding: 'alpha', name: 'a1' }, { binding: 'alpha', name: 'a2' }] }, os.tmpdir(), execute);
+  assert.deepEqual(ends, [
+    { binding: 'alpha', name: 'a1', outcome: 'passed', strength: { class: 'c', rank: 'bounded' } },
+    { binding: 'alpha', name: 'a2', outcome: 'failed', strength: { class: 'c', rank: 'sampled' } },
+  ]);
+  assert.equal(batches.length, 1);
+  assert.deepEqual(batches[0].batch.runs.map((run) => run.run), [RUN, RUN_B]);
+  assert.deepEqual(session.sent.map((message) => [message.id, message.body.op, message.body.op === 'start' ? message.body.obligation.name : message.body.check]),
+    [['2', 'start', 'a1'], ['3', 'start', 'a2'], ['4', 'run.result', '2'], ['5', 'run.result', '3']]);
+  assert.deepEqual(session.sent[2].body, { op: 'run.result', check: '2', run: 1, report: reportFor(0) });
+  assert.deepEqual(session.sent[3].body, { op: 'run.result', check: '3', run: 1, report: reportFor(1) });
+  assert.equal(session.next_id, 6);
+});
+
+test('batches: an answer that is no answer, or that breaks the batch, ends every check in it; one run\'s gap ends its own', async () => {
+  const run = (answer) => {
+    const { sessions, order } = twoSessions([answering({ next: RUN }), answering({ final: FINAL })], [answering({ next: RUN_B }), answering({ final: FINAL })]);
+    return checkAll(sessions, PLAN_TWO, os.tmpdir(), scripted(answer).execute).then((ends) => ({ ends: ends.map((end) => end.outcome), sent: order.length }));
+  };
+  for (const [answer, outcomes, why] of [
+    [() => ({ timedOut: true }), ['error', 'error'], 'not answered in time'],
+    [() => ({}), ['unavailable', 'unavailable'], 'could not start, or exited otherwise'],
+    [() => ({ answer: [] }), ['unavailable', 'unavailable'], 'not an object'],
+    [(runs) => ({ answer: { ended: false, reports: reportsFor(runs).answer.reports } }), ['unavailable', 'unavailable'], 'did not end'],
+    [() => ({ answer: { ended: 1, reports: [] } }), ['unavailable', 'unavailable'], 'ended is not true'],
+    [() => ({ answer: { ended: true, reports: {} } }), ['unavailable', 'unavailable'], 'reports not a list'],
+    [(runs) => ({ answer: { ended: true, reports: [...reportsFor(runs).answer.reports, { run_key: 'sha256:other', report: EXITED }] } }), ['error', 'error'], 'a run not in the batch'],
+    [(runs) => ({ answer: { ended: true, reports: [...reportsFor(runs).answer.reports, reportsFor(runs).answer.reports[0]] } }), ['error', 'error'], 'a run twice'],
+    [(runs) => ({ answer: { ended: true, reports: [{ run_key: runs[0].run_key }] } }), ['error', 'error'], 'an item without a report'],
+    [(runs) => ({ answer: { ended: true, reports: [5, ...reportsFor(runs).answer.reports] } }), ['error', 'error'], 'an item not an object'],
+    [(runs) => ({ answer: { ended: true, reports: [{ run_key: runs[1].run_key, report: EXITED }] } }), ['error', 'passed'], 'one run without a report'],
+    [(runs) => ({ answer: { ended: true, reports: [{ run_key: runs[0].run_key, report: 'exited' }, { run_key: runs[1].run_key, report: EXITED }] } }), ['error', 'passed'], 'a report not an object'],
+    [(runs) => ({ answer: { ended: true, reports: [{ run_key: runs[0].run_key, report: { end: 'unavailable' } }, { run_key: runs[1].run_key, report: EXITED }] } }), ['unavailable', 'passed'], 'a run the executor could not run'],
+    [(runs) => ({ answer: { ended: true, reports: [{ run_key: runs[0].run_key, report: { end: 'timed-out' } }, { run_key: runs[1].run_key, report: EXITED }] } }), ['error', 'passed'], 'a run that timed out'],
+    [(runs) => reportsFor(runs, { ...EXITED, platform: { os: 'linux', arch: 'arm64' } }), ['error', 'error'], 'another platform'],
+    [(runs) => reportsFor(runs, { ...EXITED, tools_ran: [{ name: 'checker', digest: `sha256:${'e'.repeat(64)}` }] }), ['error', 'error'], 'other tools'],
+  ]) {
+    const { ends, sent } = await run(answer);
+    assert.deepEqual(ends, outcomes, why);
+    // Only the runs whose report was read as exited were passed back.
+    assert.equal(sent, 2 + outcomes.filter((outcome) => outcome === 'passed').length, why);
+  }
+});
+
+test('batches: a check gets at most eight runs; the ninth it asks for refuses it', async () => {
+  const session = keptSession('alpha', Array.from({ length: 9 }, () => answering({ next: RUN })));
+  const { execute, batches } = scripted((runs) => reportsFor(runs));
+  const ends = await checkAll([session], { check: [{ binding: 'alpha', name: 'a1' }] }, os.tmpdir(), execute);
+  assert.deepEqual(ends, [{ binding: 'alpha', name: 'a1', outcome: 'refused', reason: 'too-many-runs' }]);
+  assert.deepEqual(batches.map(({ batch }) => batch.runs[0].number), [1, 2, 3, 4, 5, 6, 7, 8]);
+});
+
+test('batches: a check refused at its start, or by a rule, takes no run; a session that breaks refuses all', async () => {
+  // Not offered, and a final with no run: neither is in any batch.
+  const { sessions } = twoSessions([answering({ final: FINAL })], []);
+  sessions[1].offers_check = false;
+  const { execute, batches } = scripted((runs) => reportsFor(runs));
+  assert.deepEqual(await checkAll(sessions, PLAN_TWO, os.tmpdir(), execute), [
+    { binding: 'alpha', name: 'a1', outcome: 'refused', reason: 'verdict-without-run' },
+    { binding: 'zeta', name: 'a2', outcome: 'refused', reason: 'check-not-offered' },
+  ]);
+  assert.equal(batches.length, 0, 'nothing to run, no executor');
+  // alpha's answer to its report has the wrong id: the run is refused, and zeta is sent nothing more.
+  const broken = twoSessions([answering({ next: RUN }), () => ({ message: { type: 'result', id: '9', capability: 'obligation.check', body: { final: FINAL } } })],
+    [answering({ next: RUN_B }), answering({ final: FINAL })]);
+  await assert.rejects(checkAll(broken.sessions, PLAN_TWO, os.tmpdir(), scripted((runs) => reportsFor(runs)).execute),
+    (error) => error instanceof Stop && error.reason === 'wrong-id');
+  assert.deepEqual(broken.order, [['alpha', '2', 'start'], ['zeta', '2', 'start'], ['alpha', '3', 'run.result']]);
+});
+
+test('batches: the wait is the longest wall_ms, below 0 read as 0, and 60 seconds more, at most a day', () => {
+  const runWith = (wall) => ({ run: wall === undefined ? {} : { limits: { wall_ms: wall } } });
+  assert.equal(batchWait([runWith(1000), runWith(5000)]), 65000);
+  assert.equal(batchWait([runWith(-5)]), 60000);
+  assert.equal(batchWait([runWith(1000), runWith(undefined)]), 24 * 60 * 60 * 1000);
+  assert.equal(batchWait([runWith(24 * 60 * 60 * 1000)]), 24 * 60 * 60 * 1000);
+  assert.equal(batchWait([runWith(1.5)]), 24 * 60 * 60 * 1000);
+});
+
+test('planted: a run reported twice taken as reported once', async () => {
+  const damaged = planted("    if (reports.has(item.run_key)) return all('error');\n", '');
+  const answer = (runs) => ({ answer: { ended: true, reports: [...reportsFor(runs).answer.reports, reportsFor(runs).answer.reports[0]] } });
+  const ends = async (module) => {
+    const { sessions } = twoSessions([answering({ next: RUN }), answering({ final: FINAL })], [answering({ next: RUN_B }), answering({ final: FINAL })]);
+    return (await module.checkAll(sessions, PLAN_TWO, os.tmpdir(), scripted(answer).execute)).map((end) => end.outcome);
+  };
+  assert.deepEqual(await ends({ checkAll }), ['error', 'error']);
+  assert.deepEqual(await ends(damaged), ['passed', 'passed']);
 });

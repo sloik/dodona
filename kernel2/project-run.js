@@ -17,8 +17,13 @@ const { compareUnits } = require('./canonical');
 const { identityOf } = require('./identity');
 const rules = require('./host-rules');
 const {
-  answerProblem, runKey, isRegularFile, fileIdentity, namedFiles,
+  answerProblem, runKey, isRegularFile, fileIdentity, namedFiles, reportEnding,
 } = require('./check');
+
+// How long the executor is waited for (step 12): the longest `wall_ms` of the batch,
+// below 0 read as 0, and 60 seconds more; a day if a run states none; never more.
+const EXECUTOR_MARGIN_MS = 60000;
+const EXECUTOR_MOST_MS = 24 * 60 * 60 * 1000;
 const {
   readInput, isRelative, checkInput, isDirectory, fileId, stepsOf, snapshotOf, endSession, Stop,
 } = require('./project-status');
@@ -332,6 +337,76 @@ async function startCheck(sessions, planned, root) {
   return { check, step: await exchange(check, body) };
 }
 
+// Step 12: batches.
+
+function batchWait(runs) {
+  let longest = 0;
+  for (const { run } of runs) {
+    const wall = isObject(run.limits) ? run.limits.wall_ms : undefined;
+    if (!Number.isSafeInteger(wall)) return EXECUTOR_MOST_MS;
+    longest = Math.max(longest, wall, 0);
+  }
+  return Math.min(longest + EXECUTOR_MARGIN_MS, EXECUTOR_MOST_MS);
+}
+
+// What the executor's answer to one batch gives each run of it, in the batch's order:
+// `{report}` to be read as the host checks read one, or `{verdict}` for its check. The
+// executor's outcome is `{timedOut: true}`, `{answer}` (one object read strictly from
+// its first line, the executor having exited with 0), or anything else (it could not
+// start, exited otherwise, or printed nothing that can be read).
+function batchReports(runs, outcome) {
+  const all = (verdict) => runs.map(() => ({ verdict }));
+  if (isObject(outcome) && outcome.timedOut === true) return all('error');
+  const answer = isObject(outcome) ? outcome.answer : undefined;
+  if (!isObject(answer) || answer.ended !== true || !Array.isArray(answer.reports)) return all('unavailable');
+  const keys = new Set(runs.map((run) => run.run_key));
+  const reports = new Map();
+  for (const item of answer.reports) {
+    if (!isObject(item) || !isString(item.run_key) || !keys.has(item.run_key) || !Object.hasOwn(item, 'report')) return all('error');
+    if (reports.has(item.run_key)) return all('error');
+    reports.set(item.run_key, item.report);
+  }
+  return runs.map((run) => (reports.has(run.run_key) ? { report: reports.get(run.run_key) } : { verdict: 'error' }));
+}
+
+// Every planned check, from its start to its end, on the sessions kept at step 5: the
+// runs every open check asks for at one time form one batch, given to `execute(batch,
+// waitMs)` once; each report is read and passed back to its provider one at a time, in
+// the order the checks were started; a check that asks for another run gets it in the
+// next batch. Returns, in the order of the plan, each check's end: `{binding, name,
+// outcome}` with `outcome` a verdict or `refused`, and for a provider's final its
+// `strength` as given. A session that breaks refuses the whole run (a Stop is thrown).
+async function checkAll(sessions, plan, root, execute) {
+  const open = [];
+  for (const planned of plan.check) {
+    const { check, step } = await startCheck(sessions, planned, root);
+    open.push({ planned, check, step, end: null });
+  }
+  const endOf = (record) => {
+    const { step } = record;
+    if (step.outcome === 'final') record.end = { outcome: step.verdict, strength: step.strength };
+    else if (step.outcome === 'refused') record.end = { outcome: 'refused', reason: step.reason };
+  };
+  open.forEach(endOf);
+  for (;;) {
+    const waiting = open.filter((record) => record.end === null);
+    if (waiting.length === 0) break;
+    const runs = waiting.map((record) => ({ number: record.step.number, run_key: record.step.run_key, run: record.step.run }));
+    const given = batchReports(runs, await execute({ runs }, batchWait(runs)));
+    for (let at = 0; at < waiting.length; at += 1) {
+      const record = waiting[at];
+      const ending = given[at].verdict !== undefined ? { verdict: given[at].verdict } : reportEnding(given[at].report, record.step.run);
+      if (ending !== null) {
+        record.end = { outcome: ending.verdict };
+        continue;
+      }
+      record.step = await exchange(record.check, { op: 'run.result', check: record.check.start_id, run: record.step.number, report: given[at].report });
+      endOf(record);
+    }
+  }
+  return open.map(({ planned, end }) => ({ binding: planned.binding, name: planned.name, ...end }));
+}
+
 // The bytes of standard input to `{ready: digests}`, or the refusal the command would print.
 function preflightBytes(bytes) {
   try {
@@ -344,4 +419,5 @@ function preflightBytes(bytes) {
 
 module.exports = {
   preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange, SESSION_BROKE,
+  checkAll, batchWait,
 };
