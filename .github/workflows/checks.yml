@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-aux-conformance-proof'
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -123,6 +124,7 @@ jobs:
   # planted in each kernel in turn and the kit must reject it. Slow, so it has
   # its own job.
   planted-defects:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-aux-conformance-proof'
     strategy:
       fail-fast: false
       matrix:
@@ -143,3 +145,40 @@ jobs:
           persist-credentials: false
       - name: Plant every listed defect and check some judge rejects each
         run: ${{ matrix.run }}
+
+  auxiliary-conformance:
+    name: Tool-tree and path conformance (${{ matrix.system }})
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
+      && github.ref == 'refs/heads/dodona-eight-aux-conformance-proof'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: linux
+            runner: ubuntu-26.04
+            python: python3
+            kernel: kernel/target/release/dodona-kernel
+          - system: macos
+            runner: macos-26
+            python: python3
+            kernel: kernel/target/release/dodona-kernel
+          - system: windows
+            runner: windows-2025
+            python: python
+            kernel: kernel/target/release/dodona-kernel.exe
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # pinned as in the regular workflow
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Run the repository and tool-tree checks
+        run: ${{ matrix.python }} tools/check_repo.py
+      - name: Build the first kernel
+        run: cargo build --locked --release --manifest-path kernel/Cargo.toml
+      - name: Match the first kernel's exact path collision pairs
+        run: ${{ matrix.python }} tools/run_path_vectors.py -- ${{ matrix.kernel }} path path-set
+      - name: Match the second kernel's exact path collision pairs
+        run: ${{ matrix.python }} tools/run_path_vectors.py -- node kernel2/dodona-kernel2.js path path-set
