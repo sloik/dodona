@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-41-producer-proof'
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -153,6 +154,7 @@ jobs:
   # planted in each kernel in turn and the kit must reject it. Slow, so it has
   # its own job.
   planted-defects:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-41-producer-proof'
     strategy:
       fail-fast: false
       matrix:
@@ -177,3 +179,53 @@ jobs:
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every listed defect and check some judge rejects each
         run: ${{ matrix.run }}
+
+  typed-producer-proof:
+    name: Typed status and provider judges (${{ matrix.system }})
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
+      && github.ref == 'refs/heads/dodona-eight-41-producer-proof'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: linux
+            runner: ubuntu-26.04
+            python: python3
+            kernel: kernel/target/release/dodona-kernel
+          - system: macos
+            runner: macos-26
+            python: python3
+            kernel: kernel/target/release/dodona-kernel
+          - system: windows
+            runner: windows-2025
+            python: python
+            kernel: kernel/target/release/dodona-kernel.exe
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # pinned in the regular workflow
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Run repository checks and mocked repeat judgments
+        run: ${{ matrix.python }} tools/check_repo.py
+      - name: Run the JavaScript planted-runner mocks
+        run: node --test kernel2/test-plant.js
+      - name: Build the first kernel
+        run: cargo build --locked --release --manifest-path kernel/Cargo.toml
+      - name: Judge the reference provider host
+        if: ${{ !cancelled() }}
+        run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.python }} tools/provider_host.py
+      - name: Judge the first kernel provider host
+        if: ${{ !cancelled() }}
+        run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.kernel }} session
+      - name: Judge the second kernel provider host
+        if: ${{ !cancelled() }}
+        run: ${{ matrix.python }} tools/run_provider_cases.py -- node kernel2/dodona-kernel2.js session
+      - name: Judge the first kernel project status
+        if: ${{ !cancelled() }}
+        run: ${{ matrix.python }} tools/run_status_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js -- ${{ matrix.kernel }} status
+      - name: Judge the second kernel project status
+        if: ${{ !cancelled() }}
+        run: ${{ matrix.python }} tools/run_status_cases.py --jobs 2 --kernel ${{ matrix.kernel }} -- node kernel2/dodona-kernel2.js status
