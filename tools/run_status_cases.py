@@ -224,7 +224,11 @@ def run(command: list[str], case: dict, site: dict, preimages: dict, timeout: in
     with tempfile.TemporaryDirectory() as tmp:
         stdin, root, aux = set_up(case, site, pathlib.Path(tmp), preimages)
         try:
-            done = subprocess.run(command, input=stdin, capture_output=True, timeout=timeout)
+            where = None
+            if case.get("started_in_root"):  # so that a root read as "wherever the command was started" finds the project
+                command = [str(pathlib.Path(arg).resolve()) if pathlib.Path(arg).is_file() else arg for arg in command]
+                where = root
+            done = subprocess.run(command, input=stdin, capture_output=True, timeout=timeout, cwd=where)
         except subprocess.TimeoutExpired:
             return None, requests(aux), "timed out"
         finally:

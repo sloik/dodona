@@ -120,7 +120,7 @@ def check_input(asked) -> None:
     if problem:
         raise Stop("bad-input", problem)
     root = pathlib.Path(asked["root"])
-    if not root.is_dir():
+    if asked["root"] == "" or "\0" in asked["root"] or not root.is_dir():  # "" would be wherever the command was started
         raise Stop("bad-input", "root is not a directory")
     for name, provider in sorted(site["providers"].items()):
         if len(set(provider["code"])) != len(provider["code"]):
