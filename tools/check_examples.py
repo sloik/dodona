@@ -1,4 +1,4 @@
-"""Validate the schemas, the provider guide's examples and dodona's own policy.
+"""Validate the schemas, provider guide examples, draft lock fixtures and dodona's policy.
 
     python tools/check_examples.py
 
@@ -10,6 +10,7 @@ Three status controls exercise the draft requirement that a project pass names i
 
 Exit status is 0 only if every schema is valid, every JSON line in
 docs/writing-a-provider.md is a valid message, and policy.toml is a valid policy.
+The draft lock fixtures must also give the expected result.
 """
 from __future__ import annotations
 
@@ -19,6 +20,62 @@ import sys
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+
+def lock_platform_problems(lock: dict) -> list[str]:
+    """Report repeated exact platforms within each structurally valid lock entry."""
+    problems = []
+    for entry in lock["entries"]:
+        seen = set()
+        for pin in entry["platforms"]:
+            platform = json.dumps(pin["platform"], sort_keys=True)
+            if platform in seen:
+                problems.append(f"{entry['kind']} {entry['name']}: repeated platform {platform}")
+            seen.add(platform)
+    return problems
+
+
+def check_lock_platform_fixtures(validator=None) -> list[str]:
+    """Judge the same offline fixtures with or without the optional schema validator."""
+    vectors = json.loads((ROOT / "conformance/vectors/tool-tree.json").read_text(encoding="utf-8"))
+    digests = {case["name"]: case["digest"] for case in vectors["accept"]}
+    linux = {"os": "linux", "arch": "x86_64"}
+    linux_gnu = dict(linux, libc="gnu")
+    windows = {"os": "windows", "arch": "x86_64"}
+    duplicate = 'tool sample-tool: repeated platform {"arch": "x86_64", "libc": "gnu", "os": "linux"}'
+    fixtures = [
+        ("different operating systems", linux_gnu, windows, []),
+        ("different libc values", linux_gnu, dict(linux, libc="musl"), []),
+        ("omitted libc", linux, linux_gnu, []),
+        ("omitted emulation", windows, dict(windows, emulated_on="aarch64"), []),
+        ("conflicting digests on one exact platform", linux_gnu, {"libc": "gnu", **linux}, [duplicate]),
+    ]
+    problems = []
+    for label, first, second, expected in fixtures:
+        lock = {
+            "lock": "0.2",
+            "entries": [{
+                "kind": "tool",
+                "name": "sample-tool",
+                "version": "1.0.0",
+                "requires": [],
+                "platforms": [
+                    {"platform": first, "digest": digests["two files"],
+                     "upstream": {"source": "fixture:sample-tool-a", "published_digest": "sha256:" + "a" * 64}},
+                    {"platform": second, "digest": digests["with a link inside the tree"],
+                     "upstream": {"source": "fixture:sample-tool-b", "published_digest": "sha256:" + "b" * 64}},
+                ],
+            }],
+        }
+        if validator is not None:
+            error = next(validator.iter_errors(lock), None)
+            if error is not None:
+                problems.append(f"lock fixture {label}: draft schema rejects the shape: {error.message}")
+                continue
+        actual = lock_platform_problems(lock)
+        if actual != expected:
+            problems.append(f"lock fixture {label}: expected {expected}, got {actual}")
+    return problems
 
 
 def main() -> int:
@@ -57,6 +114,8 @@ def main() -> int:
             break
     if examples == 0:
         problems.append("docs/writing-a-provider.md: no examples found")
+    lock_schema = jsonschema.Draft202012Validator(schemas["lock.schema.json"], registry=registry)
+    problems.extend(check_lock_platform_fixtures(lock_schema))
     policy = tomllib.loads((ROOT / "policy.toml").read_text(encoding="utf-8"))
     for err in jsonschema.Draft202012Validator(schemas["policy.schema.json"], registry=registry).iter_errors(policy):
         problems.append(f"policy.toml: {err.message[:160]}")

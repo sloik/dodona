@@ -928,6 +928,12 @@ def gap_provider_cases_match_the_provider() -> None:
         problems.append("conformance/provider/cases.json: a mode is listed twice")
 
 
+def gap_lock_platform_pins_are_unique() -> None:
+    """A draft lock entry may only pin one digest per exact platform."""
+    import check_examples
+    problems.extend(check_examples.check_lock_platform_fixtures())
+
+
 def gap_documents_follow_the_code() -> None:
     """Code changed and the documents describing it did not. The checks live in tools/check_docs.py."""
     import check_docs
@@ -940,7 +946,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
               gap_workflows_are_safe, gap_path_check_matches_its_vectors,
-              gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
+              gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_every_check_is_listed,

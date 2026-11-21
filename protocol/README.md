@@ -89,6 +89,8 @@ Validating a message against its schema is a first filter. The kernel also holds
 
 A tool is pinned as a whole tree. How the digest of a tree is computed, and which trees have none, is in [tool-tree-digest.md](tool-tree-digest.md), with vectors. A check request may carry the listing of a tool tree, and a run may declare a directory as an output. The stage-0 host passes neither yet.
 
+A draft lock entry lists one pin for each exact platform it covers. The offline fixtures check the full platform object, including whether `libc` or `emulated_on` is present. [Draft lock schema](lock.schema.json).
+
 ## The ledger
 
 What a kernel records, it appends to one file. The format, what counts as an entry cut short and what counts as damage, and how two kernels take turns, are in [ledger.md](ledger.md). The conformance kit holds the exact bytes.
