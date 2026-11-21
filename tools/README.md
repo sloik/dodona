@@ -45,3 +45,13 @@ Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with
 | [run_vectors.py](run_vectors.py) | Judges a kernel against the canonical-encoding vectors |
 | [status.py](status.py) | Reports the status of this project from its ledger, worked out by a kernel |
 | [tooltree.py](tooltree.py) | Reference for the [digest of a tool tree](../protocol/tool-tree-digest.md) |
+
+## Qualifying an isolated harness
+
+A qualification record for the deployment in [issue 26](https://github.com/sloik/dodona/issues/26) needs evidence from the party that operates the harness and the verifier.
+
+- **Control of the key and policy.** Identify the harness that makes the shared-key check value and the kernel that verifies it. Record who controls each and the evidence that neither the working agent nor the checker can reach the key or control either key holder. Record the protected policy revision the verifier actually used, including its allowed key names and separation floors. A working-copy fallback leaves the policy anchor unestablished. [Decision 0027](../decisions/0027-vouching-is-a-keyed-check-value-and-nothing-vouches-yet.md)
+- **Provenance of the act.** Keep the ticket, exact target, kind, result and lineage with the attested record. Record who chose and started the checker, issued its brief and supplied its known-wrong and known-right cases. Keep the role and content hash of each item the checker received, the fresh-session evidence and the outcomes of all attempts. The sources for those facts must be independent of the worker. [Decision 0024](../decisions/0024-separation-is-graded-not-enforced.md)
+- **Transcript.** Retain the checker output bytes in the qualification record or in an artifact it identifies. Check that their digest equals the transcript digest in the attested act. The reference harness collects the output during the run and returns its digest in the act record. [Reference harness](harness.py)
+
+The reference harness starts a new process with named inputs and a small environment. It runs under the same system user, reads the key from a file and accepts several provenance facts from its caller. The public fixture run at `5a53a8b` completed eight harness cases per kernel on Linux, macOS and Windows, including the control that required the real checker to accept the known-right case and refuse the known-wrong case, and confirmed the always-accepting checker failed the control. Those results cover fixture grading. Deployment isolation and independently sourced provenance remain open. [Reference harness](harness.py) · [Hosted fixture run](https://github.com/sloik/dodona/actions/runs/44913578774)

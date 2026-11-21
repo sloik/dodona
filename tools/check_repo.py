@@ -22,6 +22,7 @@ import sys
 import tomllib
 import types
 import unittest
+from unittest import mock
 from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -348,6 +349,73 @@ def gap_tool_tree_digest_matches_its_vectors() -> None:
                 problems.append(f"tool-tree vectors: '{item['name']}' must be refused as {item['reason']}, not {err}")
     if len(vectors["accept"]) < 5 or len(vectors["reject"]) < 5:
         problems.append("tool-tree vectors: too few to mean anything")
+
+
+def gap_tool_tree_refuses_an_incomplete_listing() -> None:
+    """A review denied the listing of one directory inside a tree: the reference walked past it without a word
+    and printed a digest for the rest. A listing that misses part of the tree must be refused, not digested."""
+    import runpy
+    import tooltree
+    real_scandir, real_read_bytes = os.scandir, pathlib.Path.read_bytes
+
+    def denying(name: str):
+        def scandir(path="."):
+            if not isinstance(path, int) and os.path.basename(os.fspath(path)) == name:
+                raise PermissionError(13, "denied by the repository check", os.fspath(path))
+            return real_scandir(path)
+        return scandir
+
+    def refusing(name: str):
+        def read_bytes(self):
+            if self.name == name:
+                raise PermissionError(13, "denied by the repository check", str(self))
+            return real_read_bytes(self)
+        return read_bytes
+
+    def outcome(root: pathlib.Path) -> str:
+        try:
+            return f"the digest {tooltree.digest(tooltree.listing(root))}"
+        except tooltree.Unusable as err:
+            return f"refused: {err}"
+        except OSError as err:
+            return f"an unhandled {type(err).__name__}"
+
+    def command(root: pathlib.Path) -> str:
+        out, argv = io.StringIO(), sys.argv
+        try:
+            sys.argv = ["tooltree.py", str(root)]
+            with contextlib.redirect_stdout(out):
+                runpy.run_path(str(ROOT / "tools" / "tooltree.py"), run_name="__main__")
+            code = 0
+        except SystemExit as stop:
+            code = stop.code
+        except Exception as err:  # an error the command line lets escape, Unusable included
+            code = f"an unhandled {type(err).__name__}"
+        finally:
+            sys.argv = argv
+        return f"exit {code}, printing {out.getvalue().strip()}"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp) / "tree"
+        (root / "sub").mkdir(parents=True)
+        contents = {"top.txt": b"top", "sub/inner.txt": b"inner"}
+        for path, data in contents.items():
+            (root / path).write_bytes(data)
+        whole = [{"path": p, "kind": "file", "identity": "sha256:" + hashlib.sha256(d).hexdigest()} for p, d in contents.items()]
+        # The controls: a tree read in full keeps its digest, and a directory that is not there is still an empty tree.
+        if outcome(root) != f"the digest {tooltree.digest(whole)}":
+            problems.append(f"tools/tooltree.py gives a tree it can read in full {outcome(root)}, not the digest of its two files")
+        if outcome(root / "missing") != "refused: empty":
+            problems.append(f"tools/tooltree.py gives a directory that does not exist {outcome(root / 'missing')}, not refused: empty")
+        for name, patch in (("a child directory it may not list", mock.patch("os.scandir", denying("sub"))),
+                            ("a root directory it may not list", mock.patch("os.scandir", denying("tree"))),
+                            ("a file it may not read", mock.patch.object(pathlib.Path, "read_bytes", refusing("inner.txt")))):
+            with patch:
+                got, shown = outcome(root), command(root)
+            if got != "refused: unreadable":
+                problems.append(f"tools/tooltree.py: a tree with {name} must be refused as unreadable; the reference gives {got}")
+            if shown != 'exit 1, printing {"refused": "unreadable"}':
+                problems.append(f"tools/tooltree.py: a tree with {name} must be refused as unreadable on its command line; it gives {shown}")
 
 
 def gap_thin_coverage_is_shown() -> None:
@@ -1037,6 +1105,18 @@ def gap_own_policy_fits_the_schema() -> None:
     _fits(policy, schema, schema.get("$defs", {}), "policy")
 
 
+def gap_evidence_strength_follows_kind() -> None:
+    """The evidence schema once described the strength rule without expressing it."""
+    schema = json.loads((ROOT / "protocol" / "evidence-record.schema.json").read_text(encoding="utf-8"))
+    conditions = schema.get("allOf", [])
+    for kinds, requirement in (
+        ({"enum": ["check", "conformance"]}, {"required": ["strength"]}),
+        ({"const": "build"}, {"not": {"required": ["strength"]}}),
+    ):
+        if {"if": {"properties": {"kind": kinds}}, "then": requirement} not in conditions:
+            problems.append(f"evidence-record.schema.json: no strength condition for {kinds}")
+
+
 def gap_no_generated_files_are_tracked() -> None:
     """Compiled caches were once committed by mistake."""
     import shutil
@@ -1079,12 +1159,13 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_workflows_are_safe, gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
-              gap_own_policy_fits_the_schema, gap_no_generated_files_are_tracked,
+              gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_js_planted_defect_anchors_exist, gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
-              gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
+              gap_tool_tree_refuses_an_incomplete_listing, gap_every_tool_compiles,
+              gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
               gap_status_keeps_literal_obligation_names,
               gap_thin_coverage_is_shown, gap_documents_follow_the_code]

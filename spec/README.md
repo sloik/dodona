@@ -1,6 +1,6 @@
 # Formal models
 
-Models of the kernel, written before any kernel exists. TLA+ is the initial binding ([decision 0013](../decisions/0013-initial-binding-for-kernel-models.md)).
+On 17 November 2026, the evidence model's [Run 2](https://github.com/sloik/dodona/commit/37b82ec4f823176252c63b8745e20d62df3324d4) completed the design case left unfinished by Run 1. The intent model's [Run 3](https://github.com/sloik/dodona/commit/ef34657292b4de665694283a7c7ccab2fcadb0ad) recorded 13 matching cases. Both records precede [the first seed-kernel commit](https://github.com/sloik/dodona/commit/682041f0aeae9e0d87c4bbeb6ac9cde7ad0bf0c8). [Seven more models followed later that day](https://github.com/sloik/dodona/commit/13e928c7c6c8c7a540e0650b42ce6265950f3f5b). TLA+ is the initial binding ([decision 0013](../decisions/0013-initial-binding-for-kernel-models.md)).
 
 | Model | Covers |
 |---|---|
