@@ -903,3 +903,184 @@ mod tests {
         }
     }
 }
+
+#[cfg(all(
+    test,
+    any(
+        windows,
+        all(
+            target_pointer_width = "64",
+            any(target_arch = "x86_64", target_arch = "aarch64"),
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+        )
+    )
+))]
+mod owned_descendant_fixture {
+    use super::BatchChild;
+    use std::io::{self, BufRead, BufReader, ErrorKind, Read, Write};
+    use std::process::{Command, Stdio};
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    const HELPER: &str = "proc::batch::owned_descendant_fixture::run_role";
+    const ROLE: &str = "DODONA_OWNED_BATCH_FIXTURE_ROLE";
+    const INPUT: &[u8] = b"{\"runs\":[]}\n";
+    const READY: &[u8] = b"owned-descendant-ready\n";
+    const START_LIMIT: Duration = Duration::from_secs(5);
+    const PROTOCOL_LIMIT: Duration = Duration::from_millis(100);
+    const CLEANUP_LIMIT: Duration = Duration::from_secs(2);
+
+    fn fixture_command(role: &str) -> io::Result<Command> {
+        let mut command = Command::new(std::env::current_exe()?);
+        command
+            .args(["--ignored", "--exact", HELPER, "--nocapture"])
+            .env(ROLE, role);
+        Ok(command)
+    }
+
+    #[test]
+    #[ignore = "helper invoked by the owned descendant fixture"]
+    fn run_role() -> io::Result<()> {
+        match std::env::var(ROLE).as_deref() {
+            Ok("executor") => {
+                let mut request = Vec::new();
+                io::stdin().read_to_end(&mut request)?;
+                assert_eq!(request, INPUT);
+                let mut stdout = io::stdout().lock();
+                stdout.write_all(b"{\"ended\":true,\"reports\":[]}\n")?;
+                stdout.flush()?;
+                drop(stdout);
+                // Ordinary descendants inherit these pipes and the executor's
+                // group or Job. The executor itself returns successfully.
+                drop(
+                    fixture_command("descendant")?
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::inherit())
+                        .stderr(Stdio::inherit())
+                        .spawn()?,
+                );
+            }
+            Ok("descendant") => {
+                io::stdout().write_all(READY)?;
+                io::stdout().flush()?;
+                io::stderr().write_all(READY)?;
+                io::stderr().flush()?;
+                // Finite even when the fixture fails to clean up the group.
+                thread::sleep(Duration::from_secs(15));
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    enum PipeEvent {
+        Ready,
+        Eof,
+    }
+
+    fn watch_pipe(
+        pipe: impl Read + Send + 'static,
+    ) -> io::Result<mpsc::Receiver<io::Result<PipeEvent>>> {
+        let (events, received) = mpsc::channel();
+        drop(thread::Builder::new().spawn(move || {
+            let result = (|| -> io::Result<PipeEvent> {
+                let mut pipe = BufReader::new(pipe);
+                let mut line = Vec::new();
+                loop {
+                    line.clear();
+                    if pipe.read_until(b'\n', &mut line)? == 0 {
+                        return Err(io::Error::new(
+                            ErrorKind::UnexpectedEof,
+                            "descendant marker missing",
+                        ));
+                    }
+                    if line.ends_with(READY) {
+                        break;
+                    }
+                }
+                if events.send(Ok(PipeEvent::Ready)).is_ok() {
+                    io::copy(&mut pipe, &mut io::sink())?;
+                }
+                Ok(PipeEvent::Eof)
+            })();
+            let _ = events.send(result);
+        })?);
+        Ok(received)
+    }
+
+    fn before<T>(
+        deadline: Instant,
+        stage: &'static str,
+        mut inspect: impl FnMut() -> io::Result<Option<T>>,
+    ) -> io::Result<T> {
+        loop {
+            let observation = inspect()?;
+            let now = Instant::now();
+            if let Some(value) = observation.filter(|_| now <= deadline) {
+                return Ok(value);
+            }
+            if now >= deadline {
+                return Err(io::Error::new(ErrorKind::TimedOut, stage));
+            }
+            thread::sleep((deadline - now).min(Duration::from_millis(5)));
+        }
+    }
+
+    #[test]
+    #[ignore = "native owned descendant fixture, run explicitly"]
+    fn collects_returned_executor_and_closes_inherited_output() -> io::Result<()> {
+        let mut child = BatchChild::spawn(
+            fixture_command("executor")?
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped()),
+        )?;
+        let stderr = child.child.as_mut().unwrap().stderr.take().unwrap();
+        let pipes = [
+            watch_pipe(child.take_stdout().unwrap())?,
+            watch_pipe(stderr)?,
+        ];
+        child.take_stdin().unwrap().write_all(INPUT)?;
+
+        let started_by = Instant::now() + START_LIMIT;
+        for pipe in &pipes {
+            assert_eq!(
+                pipe.recv_timeout(started_by.saturating_duration_since(Instant::now()))
+                    .map_err(io::Error::other)??,
+                PipeEvent::Ready,
+            );
+        }
+        before(started_by, "executor exit was not observed", || {
+            Ok(child.observe_exit()?.then_some(()))
+        })?;
+
+        let protocol_end = Instant::now() + PROTOCOL_LIMIT;
+        for pipe in &pipes {
+            assert!(matches!(
+                pipe.recv_timeout(protocol_end.saturating_duration_since(Instant::now())),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            ));
+        }
+
+        let cleanup_end = Instant::now() + CLEANUP_LIMIT;
+        child.request_end()?;
+        let status = before(cleanup_end, "executor was not collected", || {
+            child.try_collect()
+        })?;
+        assert!(status.success());
+        for pipe in &pipes {
+            assert_eq!(
+                pipe.recv_timeout(cleanup_end.saturating_duration_since(Instant::now()))
+                    .map_err(io::Error::other)??,
+                PipeEvent::Eof,
+            );
+            assert!(
+                Instant::now() <= cleanup_end,
+                "pipe EOF was observed after cleanup"
+            );
+        }
+        Ok(())
+    }
+}
