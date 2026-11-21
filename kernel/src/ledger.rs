@@ -283,7 +283,8 @@ pub fn append_entries(
             .truncate(false)
             .write(true)
             .open(path)?;
-        f.set_len(contents.end as u64)?;
+        let prefix_len = contents.end as u64;
+        f.set_len(prefix_len)?;
         f.seek(SeekFrom::End(0))?;
         f.write_all(lines.as_bytes())?;
         f.sync_all()
