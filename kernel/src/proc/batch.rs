@@ -2,35 +2,49 @@
 //! module, but only this owner can observe or collect the child.
 use std::io;
 use std::process::{Child, ChildStdin, ChildStdout, Command, ExitStatus};
+use std::sync::mpsc::{self, SyncSender};
 
 pub(crate) struct BatchChild {
-    child: Child,
+    child: Option<Child>,
     control: platform::Control,
+    reaper: SyncSender<Child>,
     end_requested: bool,
+    wait_failed: bool,
 }
 
 impl BatchChild {
     pub(crate) fn spawn(command: &mut Command) -> io::Result<Self> {
-        let (child, control) = platform::Control::spawn(command)?;
+        // Reserve the collector before starting a child. A one-element channel
+        // lets us give the same Child to it without waiting on the receiver.
+        let (reaper, pending) = mpsc::sync_channel::<Child>(1);
+        drop(std::thread::Builder::new().spawn(move || {
+            if let Ok(mut child) = pending.recv() {
+                let _ = child.wait(); // one owned direct child; this worker never signals
+            }
+        })?);
+        let (child, control) = platform::Control::spawn(command, &reaper)?;
         Ok(Self {
-            child,
+            child: Some(child),
             control,
+            reaper,
             end_requested: false,
+            wait_failed: false,
         })
     }
 
     pub(crate) fn take_stdin(&mut self) -> Option<ChildStdin> {
-        self.child.stdin.take()
+        self.child.as_mut()?.stdin.take()
     }
 
     pub(crate) fn take_stdout(&mut self) -> Option<ChildStdout> {
-        self.child.stdout.take()
+        self.child.as_mut()?.stdout.take()
     }
 
     /// On Unix this leaves a waitable child in place. On Windows the Job is
     /// owned by its handle independently of collecting the direct child.
     pub(crate) fn observe_exit(&mut self) -> io::Result<bool> {
-        self.control.observe_exit(&mut self.child)
+        let child = self.child.as_mut().ok_or_else(no_child)?;
+        self.control.observe_exit(child)
     }
 
     /// Requests cleanup at most once. A successful request does not mean
@@ -42,13 +56,30 @@ impl BatchChild {
         self.control.request_end()
     }
 
-    pub(crate) fn try_collect(&mut self) -> io::Result<Option<ExitStatus>> {
-        if !self.end_requested {
-            return Err(io::Error::other(
-                "the batch cleanup must be decided before collecting",
-            ));
+    fn verify_collection(&mut self) -> io::Result<()> {
+        if !self.end_requested || self.wait_failed {
+            return Err(io::Error::other("batch child collection is unconfirmed"));
         }
-        self.child.try_wait()
+        let ownership = self.control.verify_collection();
+        self.wait_failed = ownership.is_err();
+        ownership
+    }
+
+    pub(crate) fn try_collect(&mut self) -> io::Result<Option<ExitStatus>> {
+        self.verify_collection()?;
+        let status = self.child.as_mut().ok_or_else(no_child)?.try_wait();
+        self.wait_failed = status.is_err();
+        if matches!(&status, Ok(Some(_))) {
+            self.child = None;
+        }
+        status
+    }
+
+    pub(crate) fn defer_collection(&mut self) -> io::Result<()> {
+        self.verify_collection()?;
+        let transferred = try_transfer(&self.reaper, &mut self.child);
+        self.wait_failed = transferred.is_err();
+        transferred
     }
 }
 
@@ -56,9 +87,60 @@ impl Drop for BatchChild {
     fn drop(&mut self) {
         if !self.end_requested {
             let _ = self.request_end();
-            let _ = self.try_collect();
+        }
+        if self.child.is_some() && !self.wait_failed {
+            let _ = self.defer_collection();
         }
     }
+}
+
+fn no_child() -> io::Error {
+    io::Error::other("the batch child is no longer held")
+}
+
+fn try_transfer<T>(reaper: &SyncSender<T>, child: &mut Option<T>) -> io::Result<()> {
+    let owned = child.take().ok_or_else(no_child)?;
+    match reaper.try_send(owned) {
+        Ok(()) => Ok(()),
+        Err(mpsc::TrySendError::Full(owned) | mpsc::TrySendError::Disconnected(owned)) => {
+            *child = Some(owned);
+            Err(io::Error::other(
+                "the batch child reaper could not take ownership",
+            ))
+        }
+    }
+}
+
+#[cfg(any(test, windows))]
+const KILL_ON_JOB_CLOSE: u32 = 0x2000;
+
+#[cfg(any(test, windows))]
+pub(super) fn prepare_job(
+    set: impl FnOnce(u32) -> io::Result<()>,
+    read: impl FnOnce() -> io::Result<u32>,
+    assign: impl FnOnce() -> io::Result<()>,
+    resume: impl FnOnce() -> io::Result<()>,
+) -> io::Result<()> {
+    set(KILL_ON_JOB_CLOSE)?;
+    if read()? & KILL_ON_JOB_CLOSE == 0 {
+        return Err(io::Error::other(
+            "the batch Job does not have kill-on-close",
+        ));
+    }
+    assign()?;
+    resume()
+}
+
+#[cfg(any(test, windows))]
+fn close_job_after_request<T>(
+    job: &mut Option<T>,
+    terminate: impl FnOnce(&T) -> io::Result<()>,
+) -> io::Result<()> {
+    let owned = job
+        .take()
+        .ok_or_else(|| io::Error::other("the batch Job has closed"))?;
+    // The last owned handle closes on either result, before the bounded wait.
+    terminate(&owned)
 }
 
 #[cfg(any(test, unix))]
@@ -66,7 +148,7 @@ struct HeldGroup<T>(Option<T>);
 
 #[cfg(any(test, unix))]
 impl<T: Copy> HeldGroup<T> {
-    fn observe(&mut self, look: impl FnOnce(T) -> io::Result<bool>) -> io::Result<bool> {
+    fn observe<R>(&mut self, look: impl FnOnce(T) -> io::Result<R>) -> io::Result<R> {
         let leader = self.0.ok_or_else(Self::lost)?;
         let seen = look(leader);
         if seen.is_err() {
@@ -79,10 +161,11 @@ impl<T: Copy> HeldGroup<T> {
         &mut self,
         verify: impl FnOnce(T) -> io::Result<()>,
         signal: impl FnOnce(T) -> io::Result<()>,
-    ) -> io::Result<()> {
+    ) -> io::Result<T> {
         let leader = self.0.take().ok_or_else(Self::lost)?;
         verify(leader)?;
-        signal(leader)
+        signal(leader)?;
+        Ok(leader)
     }
 
     fn lost() -> io::Error {
@@ -96,7 +179,7 @@ impl<T: Copy> HeldGroup<T> {
     any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
 ))]
 mod platform {
-    use super::{io, Child, Command, HeldGroup};
+    use super::{io, Child, Command, HeldGroup, SyncSender};
     use std::os::unix::process::CommandExt;
 
     #[cfg(target_os = "macos")]
@@ -159,39 +242,53 @@ mod platform {
     #[derive(Clone, Copy)]
     struct Leader(i32);
 
-    pub(super) struct Control(HeldGroup<Leader>);
+    pub(super) struct Control {
+        group: HeldGroup<Leader>,
+        waitable: HeldGroup<Leader>,
+    }
 
     impl Control {
-        pub(super) fn spawn(command: &mut Command) -> io::Result<(Child, Self)> {
+        pub(super) fn spawn(
+            command: &mut Command,
+            _reaper: &SyncSender<Child>,
+        ) -> io::Result<(Child, Self)> {
             require_waitable_exits()?;
             CommandExt::process_group(command, 0);
-            let mut child = command.spawn()?;
+            let child = command.spawn()?;
             let leader = match i32::try_from(child.id()) {
                 Ok(pid) if pid > 1 => Leader(pid),
-                _ => {
-                    // Impossible for an ordinary direct child on these targets.
-                    // Reject without signalling an unverified number.
-                    let _ = child.try_wait();
-                    return Err(io::Error::other("invalid batch process group leader"));
-                }
+                // There is no valid authority to signal or wait on this number.
+                _ => return Err(io::Error::other("invalid batch process group leader")),
             };
-            Ok((child, Self(HeldGroup(Some(leader)))))
+            Ok((
+                child,
+                Self {
+                    group: HeldGroup(Some(leader)),
+                    waitable: HeldGroup(None),
+                },
+            ))
         }
 
         pub(super) fn observe_exit(&mut self, _child: &mut Child) -> io::Result<bool> {
-            self.0.observe(peek)
+            self.group.observe(peek)
         }
 
         pub(super) fn request_end(&mut self) -> io::Result<()> {
-            self.0.request(
-                |leader| {
-                    require_waitable_exits()?;
-                    peek(leader)?;
-                    Ok(())
-                },
-                request_group_end,
-            )
+            self.waitable = HeldGroup(Some(
+                self.group
+                    .request(verify_waitable_child, request_group_end)?,
+            ));
+            Ok(())
         }
+
+        pub(super) fn verify_collection(&mut self) -> io::Result<()> {
+            self.waitable.observe(verify_waitable_child)
+        }
+    }
+
+    fn verify_waitable_child(leader: Leader) -> io::Result<()> {
+        require_waitable_exits()?;
+        peek(leader).map(|_| ())
     }
 
     fn allows_retained_wait(handler: usize, flags: i32) -> bool {
@@ -279,13 +376,16 @@ mod platform {
     ))
 ))]
 mod platform {
-    use super::{io, Child, Command};
+    use super::{io, Child, Command, SyncSender};
 
     #[derive(Clone, Copy)]
     pub(super) enum Control {}
 
     impl Control {
-        pub(super) fn spawn(_command: &mut Command) -> io::Result<(Child, Self)> {
+        pub(super) fn spawn(
+            _command: &mut Command,
+            _reaper: &SyncSender<Child>,
+        ) -> io::Result<(Child, Self)> {
             Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "batch process ownership is unavailable",
@@ -299,28 +399,36 @@ mod platform {
         pub(super) fn request_end(&mut self) -> io::Result<()> {
             match *self {}
         }
+
+        pub(super) fn verify_collection(&mut self) -> io::Result<()> {
+            match *self {}
+        }
     }
 }
 
 #[cfg(windows)]
 mod platform {
     use super::super::windows;
-    use super::{io, Child, Command};
+    use super::{close_job_after_request, io, try_transfer, Child, Command, SyncSender};
     use std::os::windows::io::OwnedHandle;
     use std::os::windows::process::CommandExt;
 
-    pub(super) struct Control(OwnedHandle);
+    pub(super) struct Control(Option<OwnedHandle>);
 
     impl Control {
-        pub(super) fn spawn(command: &mut Command) -> io::Result<(Child, Self)> {
+        pub(super) fn spawn(
+            command: &mut Command,
+            reaper: &SyncSender<Child>,
+        ) -> io::Result<(Child, Self)> {
             command.creation_flags(windows::CREATE_SUSPENDED);
             let mut child = command.spawn()?;
             match windows::confine_batch(&child) {
-                Ok(job) => Ok((child, Self(job))),
+                Ok(job) => Ok((child, Self(Some(job)))),
                 Err(error) => {
-                    // This only addresses the direct child via its own handle.
+                    // Assignment may have failed. Address only the suspended
+                    // direct child via its original process handle.
                     let _ = child.kill();
-                    let _ = child.try_wait();
+                    try_transfer(reaper, &mut Some(child))?;
                     Err(error)
                 }
             }
@@ -331,16 +439,112 @@ mod platform {
         }
 
         pub(super) fn request_end(&mut self) -> io::Result<()> {
-            windows::request_batch_end(&self.0)
+            close_job_after_request(&mut self.0, windows::request_batch_end)
+        }
+
+        pub(super) fn verify_collection(&mut self) -> io::Result<()> {
+            // Child holds the original process handle, independently of the Job.
+            Ok(())
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::HeldGroup;
+    use super::{close_job_after_request, prepare_job, try_transfer, HeldGroup, KILL_ON_JOB_CLOSE};
     use std::cell::RefCell;
     use std::io;
+    use std::sync::mpsc;
+
+    #[test]
+    fn job_close_fallback_is_verified_before_assignment_and_resume() {
+        let steps = ["set", "read", "assign", "resume"];
+        for (rejected, count) in [
+            (None, 4),
+            (Some("set"), 1),
+            (Some("read"), 2),
+            (Some("missing flag"), 2),
+            (Some("assign"), 3),
+            (Some("resume"), 4),
+        ] {
+            let calls = RefCell::new(Vec::new());
+            let step = |name: &'static str| {
+                calls.borrow_mut().push(name);
+                if rejected == Some(name) {
+                    return Err(io::Error::other(name));
+                }
+                Ok(())
+            };
+            let result = prepare_job(
+                |flags| {
+                    assert_eq!(flags, KILL_ON_JOB_CLOSE);
+                    step("set")
+                },
+                || {
+                    step("read")?;
+                    Ok(if rejected == Some("missing flag") {
+                        0
+                    } else {
+                        KILL_ON_JOB_CLOSE
+                    })
+                },
+                || step("assign"),
+                || step("resume"),
+            );
+            assert_eq!(result.is_err(), rejected.is_some());
+            assert_eq!(calls.into_inner(), steps[..count]);
+        }
+    }
+
+    #[test]
+    fn job_handle_closes_even_when_the_termination_request_fails() {
+        struct Job<'a>(&'a RefCell<Vec<&'static str>>);
+        impl Drop for Job<'_> {
+            fn drop(&mut self) {
+                self.0.borrow_mut().push("close");
+            }
+        }
+        for refused in [false, true] {
+            let calls = RefCell::new(Vec::new());
+            let mut job = Some(Job(&calls));
+            let result = close_job_after_request(&mut job, |_| {
+                calls.borrow_mut().push("request");
+                if refused {
+                    return Err(io::Error::other("request refused"));
+                }
+                Ok(())
+            });
+            assert_eq!(result.is_err(), refused);
+            assert!(job.is_none());
+            assert_eq!(*calls.borrow(), ["request", "close"]);
+        }
+    }
+
+    #[test]
+    fn transfer_returns_before_receive_and_preserves_ownership_on_refusal() {
+        let (reaper, waiting) = mpsc::sync_channel(1);
+        let mut child = Some("owned child");
+        try_transfer(&reaper, &mut child).unwrap();
+        assert!(child.is_none());
+        assert_eq!(waiting.try_recv().unwrap(), "owned child");
+        drop(waiting);
+        let mut child = Some("still owned");
+        assert!(try_transfer(&reaper, &mut child).is_err());
+        assert_eq!(child, Some("still owned"));
+    }
+
+    #[test]
+    fn losing_the_verified_wait_authority_rules_out_collection_or_transfer() {
+        let mut group = HeldGroup(Some(()));
+        let authority = group.request(|()| Ok(()), |()| Ok(())).unwrap();
+        let mut waitable = HeldGroup(Some(authority));
+        assert!(waitable
+            .observe(|()| Err::<(), _>(io::Error::other("ownership lost")))
+            .is_err());
+        assert!(waitable
+            .observe::<()>(|()| panic!("no repeat observation"))
+            .is_err());
+    }
 
     #[test]
     fn a_fresh_check_precedes_the_only_group_request() {
@@ -375,7 +579,9 @@ mod tests {
     #[test]
     fn observation_loss_revokes_the_group_before_cleanup() {
         let mut group = HeldGroup(Some(()));
-        assert!(group.observe(|()| Err(io::Error::other("lost"))).is_err());
+        assert!(group
+            .observe::<bool>(|()| Err(io::Error::other("lost")))
+            .is_err());
         assert!(group
             .request(|()| panic!("no new look"), |()| panic!("no signal"))
             .is_err());

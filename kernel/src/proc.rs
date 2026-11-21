@@ -131,6 +131,40 @@ mod windows {
         delta_priority: i32,
         flags: u32,
     }
+    // JOBOBJECT_EXTENDED_LIMIT_INFORMATION, including its two embedded
+    // structures. LARGE_INTEGER and the IO_COUNTERS fields are 64-bit.
+    #[repr(C)]
+    #[derive(Default)]
+    struct BasicJobLimits {
+        process_time: i64,
+        job_time: i64,
+        flags: u32,
+        minimum_working_set: usize,
+        maximum_working_set: usize,
+        active_process_count: u32,
+        affinity: usize,
+        priority_class: u32,
+        scheduling_class: u32,
+    }
+
+    #[repr(C)]
+    #[derive(Default)]
+    struct ExtendedJobLimits {
+        basic: BasicJobLimits,
+        io_counters: [u64; 6],
+        process_memory_limit: usize,
+        job_memory_limit: usize,
+        peak_process_memory: usize,
+        peak_job_memory: usize,
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    const _: () = {
+        assert!(std::mem::size_of::<BasicJobLimits>() == 64);
+        assert!(std::mem::size_of::<ExtendedJobLimits>() == 144);
+        assert!(std::mem::offset_of!(BasicJobLimits, flags) == 16);
+    };
+
     #[link(name = "kernel32")]
     extern "system" {
         fn CreateJobObjectW(attributes: *mut std::ffi::c_void, name: *const u16) -> Handle;
@@ -142,6 +176,12 @@ mod windows {
         fn Thread32Next(snapshot: Handle, entry: *mut ThreadEntry32) -> i32;
         fn OpenThread(access: u32, inherit: i32, thread: u32) -> Handle;
         fn ResumeThread(thread: Handle) -> u32;
+        fn SetInformationJobObject(
+            job: Handle, class: i32, limits: *const ExtendedJobLimits, size: u32,
+        ) -> i32;
+        fn QueryInformationJobObject(
+            job: Handle, class: i32, limits: *mut ExtendedJobLimits, size: u32, written: *mut u32,
+        ) -> i32;
     }
     fn invalid(h: Handle) -> bool {
         h.is_null() || h as isize == -1
@@ -208,22 +248,55 @@ mod windows {
         }
         // SAFETY: creation returned an owned, valid Job handle.
         let job = unsafe { OwnedHandle::from_raw_handle(raw) };
-        // SAFETY: the Job and suspended direct child both still own their handles.
-        if unsafe { AssignProcessToJobObject(job.as_raw_handle(), child.as_raw_handle()) } == 0 {
+        super::batch::prepare_job(
+            |flags| set_batch_limits(job.as_raw_handle(), flags),
+            || batch_limit_flags(job.as_raw_handle()),
+            || {
+                // SAFETY: the Job and suspended child both own their handles.
+                if unsafe { AssignProcessToJobObject(job.as_raw_handle(), child.as_raw_handle()) } == 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            },
+            || {
+                // SAFETY: this is the original thread handle borrowed from this Child.
+                match unsafe { ResumeThread(child.main_thread_handle().as_raw_handle()) } {
+                    1 => Ok(()),
+                    u32::MAX => Err(std::io::Error::last_os_error()),
+                    _ => Err(std::io::Error::other("unexpected suspend count for the batch executor")),
+                }
+            },
+        )?;
+        Ok(job)
+    }
+
+    const EXTENDED_JOB_LIMIT_INFORMATION: i32 = 9;
+    const JOB_LIMIT_SIZE: u32 = std::mem::size_of::<ExtendedJobLimits>() as u32;
+
+    fn set_batch_limits(job: Handle, flags: u32) -> std::io::Result<()> {
+        let mut limits = ExtendedJobLimits::default();
+        limits.basic.flags = flags;
+        // SAFETY: the borrowed Job is still owned and the input layout and size
+        // match the extended limit information class.
+        if unsafe { SetInformationJobObject(job, EXTENDED_JOB_LIMIT_INFORMATION, &limits, JOB_LIMIT_SIZE) } == 0 {
             return Err(std::io::Error::last_os_error());
         }
-        // SAFETY: this is the original thread handle borrowed from this Child.
-        let count = unsafe { ResumeThread(child.main_thread_handle().as_raw_handle()) };
-        if count != 1 {
-            let error = if count == u32::MAX {
-                std::io::Error::last_os_error()
-            } else {
-                std::io::Error::other("unexpected suspend count for the batch executor")
-            };
-            let _ = request_batch_end(&job);
-            return Err(error);
+        Ok(())
+    }
+
+    fn batch_limit_flags(job: Handle) -> std::io::Result<u32> {
+        let mut limits = ExtendedJobLimits::default();
+        let mut written = 0;
+        // SAFETY: the Job is still owned and both outputs live for the call.
+        if unsafe {
+            QueryInformationJobObject(job, EXTENDED_JOB_LIMIT_INFORMATION, &mut limits, JOB_LIMIT_SIZE, &mut written)
+        } == 0 {
+            return Err(std::io::Error::last_os_error());
         }
-        Ok(job)
+        if written != JOB_LIMIT_SIZE {
+            return Err(std::io::Error::other("incomplete batch Job limit readback"));
+        }
+        Ok(limits.basic.flags)
     }
 
     pub(super) fn request_batch_end(job: &std::os::windows::io::OwnedHandle) -> std::io::Result<()> {

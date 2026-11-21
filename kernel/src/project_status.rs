@@ -2834,6 +2834,7 @@ mod run_input {
         fn observe_exit(&mut self) -> io::Result<bool>;
         fn request_end(&mut self) -> io::Result<()>;
         fn try_collect(&mut self) -> io::Result<Option<bool>>;
+        fn defer_collection(&mut self) -> io::Result<()>;
     }
     impl Started for BatchChild {
         fn observe_exit(&mut self) -> io::Result<bool> {
@@ -2844,6 +2845,9 @@ mod run_input {
         }
         fn try_collect(&mut self) -> io::Result<Option<bool>> {
             BatchChild::try_collect(self).map(|status| status.map(|s| s.success()))
+        }
+        fn defer_collection(&mut self) -> io::Result<()> {
+            BatchChild::defer_collection(self)
         }
     }
 
@@ -2905,7 +2909,7 @@ mod run_input {
         input: Vec<u8>,
         until: Instant,
     ) -> Batch {
-        await_batch_reaped(started, stdin, stdout, input, until, REAP_LIMIT).0
+        await_batch_reaped(started, stdin, stdout, input, until, REAP_LIMIT).0.into_batch()
     }
 
     /// One cleanup budget for waiting on the direct child and the pipe
@@ -2930,17 +2934,25 @@ mod run_input {
         all
     }
 
-    fn collect(started: &mut dyn Started, until: Instant) -> io::Result<Option<bool>> {
+    #[derive(Debug, PartialEq, Eq)]
+    enum Collection {
+        Confirmed(bool),
+        Deferred,
+    }
+
+    fn collect(started: &mut dyn Started, until: Instant) -> io::Result<Collection> {
         loop {
             let status = started.try_collect()?;
             let now = Instant::now();
-            if now > until {
-                return Ok(None);
+            match status {
+                Some(success) if now <= until => return Ok(Collection::Confirmed(success)),
+                Some(_) => return Err(io::Error::new(ErrorKind::TimedOut, "exit status was seen after cleanup")),
+                None if now >= until => {
+                    started.defer_collection()?;
+                    return Ok(Collection::Deferred);
+                }
+                None => std::thread::sleep(Duration::from_millis(2).min(until - now)),
             }
-            if status.is_some() {
-                return Ok(status);
-            }
-            std::thread::sleep(Duration::from_millis(2).min(until - now));
         }
     }
 
@@ -2950,7 +2962,27 @@ mod run_input {
         Exited(Option<Vec<u8>>),
     }
 
-    /// `await_batch`, and whether every worker thread was joined.
+    struct BatchCompletion {
+        observed: BatchObservation,
+        cleanup: io::Result<()>,
+        collection: io::Result<Collection>,
+    }
+
+    impl BatchCompletion {
+        fn into_batch(self) -> Batch {
+            match self.observed {
+                BatchObservation::Failed => Batch::Failed,
+                BatchObservation::TimedOut => Batch::TimedOut,
+                BatchObservation::Exited(line) => {
+                    let success = self.cleanup.is_ok()
+                        && matches!(self.collection, Ok(Collection::Confirmed(true)));
+                    judge_output(success, line.as_deref())
+                }
+            }
+        }
+    }
+
+    /// The protocol and supervision observations, and whether all workers joined.
     ///
     /// A batch is answered only when, all observed no later than `until`:
     /// the whole input was written and the executor's input closed; the
@@ -2965,7 +2997,7 @@ mod run_input {
         input: Vec<u8>,
         until: Instant,
         limit: Duration,
-    ) -> (Batch, bool) {
+    ) -> (BatchCompletion, bool) {
         let mut workers = Vec::new();
         let (wtx, wrx) = mpsc::channel();
         match stdin {
@@ -3027,20 +3059,11 @@ mod run_input {
             std::thread::sleep(Duration::from_millis(5).min(until - seen_at));
         };
 
-        // Preserve both results separately. A cleanup failure or an unknown
-        // status cannot turn a well-formed stdout line into an answer.
         let cleanup = started.request_end();
         let cleanup_until = Instant::now() + limit;
-        let status = collect(started, cleanup_until);
-        let outcome = match observed {
-            BatchObservation::Failed => Batch::Failed,
-            BatchObservation::TimedOut => Batch::TimedOut,
-            BatchObservation::Exited(line) => {
-                let success = cleanup.is_ok() && matches!(status, Ok(Some(true)));
-                judge_output(success, line.as_deref())
-            }
-        };
-        (outcome, reap(workers, cleanup_until))
+        let collection = collect(started, cleanup_until);
+        let completion = BatchCompletion { observed, cleanup, collection };
+        (completion, reap(workers, cleanup_until))
     }
 
     /// The executor command, started once per batch in `root`, in a process
@@ -3864,6 +3887,9 @@ mod run_input {
             gate: Gate,
             refuse_end: bool,
             fail_collect: bool,
+            pending_collect: bool,
+            refuse_transfer: bool,
+            transfers: usize,
         }
         impl Started for Fake {
             fn observe_exit(&mut self) -> io::Result<bool> {
@@ -3883,7 +3909,18 @@ mod run_input {
                 if self.fail_collect {
                     return Err(io::Error::other("wait failed"));
                 }
+                if self.pending_collect {
+                    return Ok(None);
+                }
                 Ok(Some(self.exits.is_some_and(|(at, ok)| Instant::now() >= at && ok)))
+            }
+            fn defer_collection(&mut self) -> io::Result<()> {
+                assert!(self.ended.load(AtomicOrdering::SeqCst));
+                self.transfers += 1;
+                if self.refuse_transfer {
+                    return Err(io::Error::other("collector refused"));
+                }
+                Ok(())
             }
         }
         fn fake(exits: Option<(Duration, bool)>) -> (Fake, Arc<AtomicBool>, Gate) {
@@ -3895,6 +3932,9 @@ mod run_input {
                 gate: gate.clone(),
                 refuse_end: false,
                 fail_collect: false,
+                pending_collect: false,
+                refuse_transfer: false,
+                transfers: 0,
             };
             (f, ended, gate)
         }
@@ -3958,7 +3998,7 @@ mod run_input {
             until: Instant,
         ) -> (String, bool) {
             let (b, joined) = await_batch_reaped(f, stdin, stdout, input.to_vec(), until, REAP_LIMIT);
-            (kind(&b), joined)
+            (kind(&b.into_batch()), joined)
         }
         /// Input that keeps what it is given.
         struct Kept(Arc<Mutex<Vec<u8>>>);
@@ -4107,6 +4147,51 @@ mod run_input {
         }
 
         #[test]
+        fn bounded_collection_hands_off_once_and_keeps_protocol_outcomes() {
+            for timing in ["ready", "failed", "timed-out"] {
+                let (mut f, _, _) = fake(Some((Duration::ZERO, true)));
+                f.pending_collect = true;
+                let mut deadline = soon();
+                let stdin = match timing {
+                    "failed" => None,
+                    "timed-out" => {
+                        deadline = Instant::now() - Duration::from_millis(1);
+                        kept().0
+                    }
+                    _ => kept().0,
+                };
+                let begun = Instant::now();
+                let (b, _) = await_batch_reaped(
+                    &mut f, stdin, out(ANSWER), b"{}".to_vec(), deadline, Duration::from_millis(10),
+                );
+                assert!(begun.elapsed() < Duration::from_secs(2));
+                assert_eq!(f.transfers, 1);
+                assert!(b.cleanup.is_ok());
+                assert!(matches!(&b.collection, Ok(Collection::Deferred)));
+                match timing {
+                    "ready" => assert!(matches!(&b.observed, BatchObservation::Exited(Some(_)))),
+                    "failed" => assert!(matches!(&b.observed, BatchObservation::Failed)),
+                    _ => assert!(matches!(&b.observed, BatchObservation::TimedOut)),
+                }
+                assert_eq!(kind(&b.into_batch()), if timing == "timed-out" { "timed-out" } else { "failed" });
+            }
+        }
+
+        #[test]
+        fn rejected_handoff_and_late_collection_are_unconfirmed() {
+            let (mut f, _, _) = fake(Some((Duration::ZERO, true)));
+            f.request_end().unwrap();
+            f.pending_collect = true;
+            f.refuse_transfer = true;
+            let past = Instant::now() - Duration::from_millis(1);
+            assert_eq!(collect(&mut f, past).unwrap_err().to_string(), "collector refused");
+            assert_eq!(f.transfers, 1);
+            f.pending_collect = false;
+            assert_eq!(collect(&mut f, past).unwrap_err().kind(), ErrorKind::TimedOut);
+            assert_eq!(f.transfers, 1);
+        }
+
+        #[test]
         fn an_executor_that_does_not_exit_in_time_is_an_error_for_the_batch() {
             let (mut f, ended, _) = fake(None);
             let (stdin, _) = kept();
@@ -4161,7 +4246,7 @@ mod run_input {
                 Instant::now() + Duration::from_millis(50),
                 Duration::from_millis(100),
             );
-            assert_eq!(kind(&b), "timed-out");
+            assert_eq!(kind(&b.into_batch()), "timed-out");
             assert!(!joined);
             assert!(begun.elapsed() < Duration::from_secs(2));
             // Let the one worker this test leaves go, so it does not outlive the test.
