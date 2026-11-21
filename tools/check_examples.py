@@ -8,7 +8,7 @@ the standard library. It runs in CI with a pinned version. Without the package
 it says so and fails: a check that silently does nothing is not a check.
 
 Exit status is 0 only if the schemas, messages, policy, and criteria validate
-and the project criteria schema accepts the positive and refuses the negative control.
+and the project criteria schema accepts the positive control and refuses the negative controls.
 """
 from __future__ import annotations
 
@@ -41,10 +41,13 @@ def check_intent_criteria(validator) -> tuple[int, list[str]]:
             problems.append(f"{name}: criteria{err.json_path[1:]}: {err.message}")
 
     deferred = {"id": "1", "words": "Replay the sample", "gate": "deferred", "condition": "the sample is replayed"}
-    if not validator.is_valid([dict(deferred, limit_days=90)]):
+    valid_deferred = dict(deferred, limit_days=90)
+    if not validator.is_valid([valid_deferred]):
         problems.append("project intent criteria schema refuses a deferred criterion with a valid observation and limit")
     if validator.is_valid([deferred]):
         problems.append("project intent criteria schema accepts a deferred criterion without limit_days")
+    if validator.is_valid([dict(valid_deferred, id="abc")]):
+        problems.append("project intent criteria schema accepts a criterion ID with letters")
     return len(paths), problems
 
 
