@@ -76,6 +76,20 @@ pub fn answer(input: &[u8]) -> Value {
     }
 }
 
+/// The answer of the run command (conformance/README.md, "How a project's run
+/// is judged"): the status command's report after the project's unrecorded
+/// checks were run and their verdicts recorded, with `counts`; or a refusal,
+/// in the status command's form. Never anything else.
+pub fn run_answer(input: &[u8]) -> Value {
+    match run_input::run_native(input) {
+        Ok(v) => v,
+        Err(s) => json::object(vec![
+            ("refused", json::string(s.reason)),
+            ("detail", json::string(&s.detail)),
+        ]),
+    }
+}
+
 // Small readers of JSON that never panic.
 
 /// A list of strings, or None.
@@ -2070,9 +2084,149 @@ fn output(input: &Input, snapshot: Snapshot) -> Value {
     ])
 }
 
-/// The run command's input (conformance/README.md, "How a project's run is
-/// judged", step 1). The run command is not served yet: `main` does not call
-/// this, and nothing here plans, checks, records or reports.
+#[cfg(test)]
+mod run_cli_tests {
+    use super::*;
+
+    // The probe is this test program, run in the case's temporary project.
+    // A relative marker avoids modifying process-wide environment from a test.
+    #[test]
+    #[ignore = "the probe a run test starts; not a test of its own"]
+    fn leave_a_mark() {
+        assert!(Path::new("probe-root").is_file());
+        fs::write("probe-started", b"started").unwrap();
+    }
+    fn probe() -> Vec<String> {
+        vec![
+            std::env::current_exe().unwrap().to_str().unwrap().to_owned(),
+            "--ignored".to_owned(),
+            "--exact".to_owned(),
+            "project_status::run_cli_tests::leave_a_mark".to_owned(),
+            "--quiet".to_owned(),
+        ]
+    }
+    fn strings_of(items: &[String]) -> Value {
+        Value::Array(items.iter().map(|s| json::string(s)).collect())
+    }
+    fn v(s: &str) -> Value {
+        json::parse(s.as_bytes()).unwrap()
+    }
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("dodona-run-cli-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+    /// A status input for `root`, its one provider started as `provider`.
+    fn status_input(root: &Path, provider: &[String]) -> Vec<(String, Value)> {
+        let site = json::object(vec![
+            ("platform", v(r#"{"os":"linux","arch":"x86_64"}"#)),
+            ("writer", json::string("w")),
+            ("runner", json::string("r")),
+            ("tools", Value::Array(vec![])),
+            (
+                "providers",
+                json::object(vec![(
+                    "p",
+                    json::object(vec![("command", strings_of(provider)), ("code", Value::Array(vec![]))]),
+                )]),
+            ),
+            ("deadline_ms", Value::Number(5000)),
+        ]);
+        vec![
+            ("root", json::string(root.to_str().unwrap())),
+            ("project", json::string("dodona.toml")),
+            ("site", site),
+            ("policy", v(r#"{"required":[],"min_hard_gates":1,"floors":{},"not_applied":[]}"#)),
+            ("policy_source", json::string("test")),
+            ("ledgers", v(r#"["l/run.ledger"]"#)),
+            ("owner_ledger", json::string("records/owner.ledger")),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_owned(), v))
+        .collect()
+    }
+    fn bytes(fields: &[(String, Value)]) -> Vec<u8> {
+        json::encode(&Value::Object(fields.to_vec())).into_bytes()
+    }
+
+    #[test]
+    fn a_run_refused_at_step_1_starts_no_process() {
+        let root = scratch("refused");
+        let mark = root.join("probe-started");
+        fs::write(root.join("probe-root"), b"").unwrap();
+        // Control: the probe leaves a mark when started in the project.
+        let p = probe();
+        assert!(std::process::Command::new(&p[0])
+            .args(&p[1..])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        assert!(mark.exists());
+        fs::remove_file(&mark).unwrap();
+        // A project whose one binding would start the probe as its provider.
+        fs::write(
+            root.join("dodona.toml"),
+            "[[binding]]\nname = \"b\"\nprovider = \"p\"\ncapabilities = [\"obligation.enumerate\"]\nmatch = [\"*.txt\"]\n",
+        )
+        .unwrap();
+        fs::write(root.join("a.txt"), b"a").unwrap();
+        // Step 1 refuses: the run's ledger is not one of `ledgers`.
+        let mut fields = status_input(&root, &p);
+        fields.push(("ledger".to_owned(), json::string("l/other.ledger")));
+        fields.push(("executor".to_owned(), strings_of(&p)));
+        let answer = run_answer(&bytes(&fields));
+        assert_eq!(answer.text("refused"), Some("bad-input"));
+        assert_eq!(answer.object().len(), 2);
+        assert!(answer.text("detail").is_some());
+        // Neither the provider nor the executor was started.
+        assert!(!mark.exists());
+        // Input that is not JSON at all is refused the same way, never a crash.
+        assert_eq!(run_answer(b"not json").text("refused"), Some("bad-input"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_run_with_nothing_to_check_reports_as_status_does_and_starts_nothing() {
+        let root = scratch("nothing");
+        let mark = root.join("probe-started");
+        fs::write(root.join("probe-root"), b"").unwrap();
+        let p = probe();
+        // A project with no binding: nothing to enumerate, nothing to check.
+        fs::write(root.join("dodona.toml"), "[project]\nname = \"empty\"\n").unwrap();
+        let status = status_input(&root, &p);
+        let mut fields = status.clone();
+        fields.push(("ledger".to_owned(), json::string("l/run.ledger")));
+        fields.push(("executor".to_owned(), strings_of(&p)));
+        fields.push(("transcript".to_owned(), json::string("t.json")));
+        let answer = run_answer(&bytes(&fields));
+        assert!(answer.opt("refused").is_none(), "{}", json::encode(&answer));
+        // Every count is 0, and no executor and no provider was started.
+        for (_, n) in answer.get("counts").object() {
+            assert_eq!(n.number(), 0);
+        }
+        assert!(!mark.exists());
+        // Nothing to record: no ledger written.
+        assert!(!root.join("l").exists());
+        // The report is what `status` reports straight afterwards.
+        let mut without_counts = answer.clone();
+        if let Value::Object(f) = &mut without_counts {
+            f.retain(|(k, _)| k != "counts");
+        }
+        assert_eq!(json::encode(&without_counts), json::encode(&answer_of(&bytes(&status))));
+        // The transcript is a new file holding every message: none here.
+        assert_eq!(fs::read(root.join("t.json")).unwrap(), b"[]");
+        let _ = fs::remove_dir_all(&root);
+    }
+    fn answer_of(input: &[u8]) -> Value {
+        answer(input)
+    }
+}
+
+/// The run command (conformance/README.md, "How a project's run is judged"):
+/// its input, plan, checks, batches, record, report and transcript. `main`
+/// reaches it through `run_answer` alone.
 #[cfg_attr(not(test), allow(dead_code))]
 mod run_input {
     use super::*;
@@ -3213,7 +3367,7 @@ mod run_input {
     }
 
     /// A whole run with the site's executor, writing the transcript when the
-    /// input names one. Not served: `main` does not call it.
+    /// input names one: what `run_answer` answers.
     pub(super) fn run_native(raw: &[u8]) -> Step<Value> {
         let (run, snapshot, plan) = prepare(raw)?;
         let mut executor = Native {
