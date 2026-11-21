@@ -28,6 +28,8 @@ A tree is refused, and has no digest, if:
 - it contains anything that is not a regular file or a symbolic link (a device, a socket, a named pipe);
 - it is empty.
 
+A listing holds every file and link in the tree, so one that cannot be made whole is no listing. When a tree is read from disk and a directory in it cannot be listed, or a file or link in it cannot be examined or read, the tree is refused (`tools/tooltree.py` gives the reason `unreadable`) rather than digested without the part it could not read.
+
 ## What is left out, on purpose
 
 Owner, group, timestamps and permission bits other than "the owner may execute" take no part. On a platform with no such bit, `kind` comes from the listing the tree was pinned with, not from the file system.
