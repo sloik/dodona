@@ -228,7 +228,8 @@ def run(command: list[str], case: dict, site: dict, preimages: dict, timeout: in
             if case.get("started_in_root"):  # so that a root read as "wherever the command was started" finds the project
                 command = [str(pathlib.Path(arg).resolve()) if pathlib.Path(arg).is_file() else arg for arg in command]
                 where = root
-            done = subprocess.run(command, input=stdin, capture_output=True, timeout=timeout, cwd=where)
+            env = dict(os.environ, PWD=str(root)) if where else None  # so a command that reads $PWD finds the project too
+            done = subprocess.run(command, input=stdin, capture_output=True, timeout=timeout, cwd=where, env=env)
         except subprocess.TimeoutExpired:
             return None, requests(aux), "timed out"
         finally:

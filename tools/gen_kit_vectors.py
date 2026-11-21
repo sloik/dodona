@@ -385,7 +385,7 @@ def ledger() -> None:
          "Every reader must be able to read every entry: nesting deeper than 64, the entry itself counted, makes the line corrupt.")]
     deep = {"previous": last, "kind": "note", "body": nested(63)}  # 64 levels, the most a ledger allows
     put("conformance/ledger/more-damage.json", {
-        "about": "More damage for conformance/ledger/cases.json. Each case gives the whole file as text (UTF-8) and what protocol/ledger.md says `ledger-read` must answer. Where the answer is corrupt, `ledger-append` must answer corrupt too and leave the file as it was. `unlisted_kind` is an entry of a kind no rule gives a meaning: it is appended through the kernel, kept by the reader, and an append after it works. `deepest` is an entry nested 64 levels deep, the most a ledger allows: it is appended through the kernel, and an append after it works. `bad_requests` are requests to `ledger-append`, given without the ledger's name, that must be answered {\"refused\": \"bad-request\"} with nothing written. Built with the reference encoder; no kernel produced any of it.",
+        "about": "More damage for conformance/ledger/cases.json. Each case gives the whole file as text (UTF-8) and what protocol/ledger.md says `ledger-read` must answer. Where the answer is corrupt, `ledger-append` must answer corrupt too and leave the file as it was. `unlisted_kind` is an entry of a kind no rule gives a meaning: it is appended through the kernel, kept by the reader, and an append after it works. `deepest` is an entry nested 64 levels deep, the most a ledger allows: it is appended through the kernel, and an append after it works. `bad_requests` are requests to `ledger-append`, given without the ledger's name, that must be answered {\"refused\": \"bad-request\"} with nothing written, whether the ledger is new, well formed, corrupt or locked; where `body_levels` is given, the request's `body` is an object nested that many levels deep, `{\"x\": {\"x\": ... {}}}`. Built with the reference encoder; no kernel produced any of it.",
         "damage": [dict({"name": n, "file": f, "expect": e}, **({"note": why} if why else {})) for n, f, e, why in cases],
         "unlisted_kind": {"append": {"kind": "note", "body": note["body"]}, "identity": canonical.identity(note), "file": text + line(note),
                           "then": {"append": {"kind": "evidence", "body": {"obligation": "ob-10", "verdict": "failed"}},
@@ -395,6 +395,7 @@ def ledger() -> None:
                              "file": text + line(deep) + line({"previous": canonical.identity(deep), "kind": "evidence", "body": {"obligation": "ob-11", "verdict": "passed"}})}},
         "bad_requests": [{"name": "no kind", "request": {"body": {"obligation": "ob-9"}}},
                          {"name": "a body that would nest the entry 65 levels deep", "request": {"kind": "note", "body": nested(64)}},
+                         {"name": "a body nested 5000 levels deep", "request": {"kind": "note"}, "body_levels": 5000},
                          {"name": "a kind that is a number", "request": {"kind": 7, "body": {"obligation": "ob-9"}}},
                          {"name": "a kind that is null", "request": {"kind": None, "body": {"obligation": "ob-9"}}},
                          {"name": "no body", "request": {"kind": "evidence"}}]})

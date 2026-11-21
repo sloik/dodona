@@ -1,5 +1,5 @@
 {
-  "about": "More damage for conformance/ledger/cases.json. Each case gives the whole file as text (UTF-8) and what protocol/ledger.md says `ledger-read` must answer. Where the answer is corrupt, `ledger-append` must answer corrupt too and leave the file as it was. `unlisted_kind` is an entry of a kind no rule gives a meaning: it is appended through the kernel, kept by the reader, and an append after it works. `deepest` is an entry nested 64 levels deep, the most a ledger allows: it is appended through the kernel, and an append after it works. `bad_requests` are requests to `ledger-append`, given without the ledger's name, that must be answered {\"refused\": \"bad-request\"} with nothing written. Built with the reference encoder; no kernel produced any of it.",
+  "about": "More damage for conformance/ledger/cases.json. Each case gives the whole file as text (UTF-8) and what protocol/ledger.md says `ledger-read` must answer. Where the answer is corrupt, `ledger-append` must answer corrupt too and leave the file as it was. `unlisted_kind` is an entry of a kind no rule gives a meaning: it is appended through the kernel, kept by the reader, and an append after it works. `deepest` is an entry nested 64 levels deep, the most a ledger allows: it is appended through the kernel, and an append after it works. `bad_requests` are requests to `ledger-append`, given without the ledger's name, that must be answered {\"refused\": \"bad-request\"} with nothing written, whether the ledger is new, well formed, corrupt or locked; where `body_levels` is given, the request's `body` is an object nested that many levels deep, `{\"x\": {\"x\": ... {}}}`. Built with the reference encoder; no kernel produced any of it.",
   "damage": [
     {
       "name": "a byte changed in the body of the last entry, the chain untouched",
@@ -548,6 +548,13 @@
           }
         }
       }
+    },
+    {
+      "name": "a body nested 5000 levels deep",
+      "request": {
+        "kind": "note"
+      },
+      "body_levels": 5000
     },
     {
       "name": "a kind that is a number",

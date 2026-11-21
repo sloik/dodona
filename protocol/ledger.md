@@ -48,7 +48,7 @@ A torn ending is the mark of a crash and is safe to drop. Anything else wrong is
 4. Build the entry with `previous` set to the identity of the last entry, write its line, and make sure it has reached the disk.
 5. Release the lock by removing the lock file.
 
-The caller supplies `kind` and `body`. A request with no `kind` that is a string, with no `body`, or whose entry would nest deeper than 64 levels (so that no reader could read it), is refused with `bad-request` and nothing is written: no entry, no file and no lock left behind. The request is judged before the ledger is read, so `bad-request` comes before `corrupt`, and a request nested too deep to be read at all is `bad-request` too. The kernel supplies `previous`; a caller cannot choose it. A kernel reports a result to anyone only after the entry behind it has been written.
+The caller supplies `kind` and `body`. A request with no `kind` that is a string, with no `body`, or whose entry would nest deeper than 64 levels (so that no reader could read it), is refused with `bad-request` and nothing is written: no entry, no file and no lock left behind. The request is judged before the lock is taken and the ledger read, so `bad-request` comes before `locked` and `corrupt`, and a request nested too deep to be read at all is `bad-request` too. The kernel supplies `previous`; a caller cannot choose it. A kernel reports a result to anyone only after the entry behind it has been written.
 
 A lock file left behind by a kernel that crashed stays until someone removes it. That is deliberate: a kernel cannot tell a crashed writer from a slow one.
 

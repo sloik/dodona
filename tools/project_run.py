@@ -57,7 +57,7 @@ def check_run_input(asked) -> None:
                                          for x in [*listed, *[l + ".lock" for l in [*listed, owner] if isinstance(l, str)], owner, asked.get("project")])):
         raise Stop("bad-input", "transcript, where given, is a relative path that is no ledger, no ledger's lock and not the project file")
     root = pathlib.Path(asked["root"]) if isinstance(asked.get("root"), str) else None
-    if root is None or not root.is_dir():
+    if root is None or not ps.is_dir(root):
         return
     if not ps.reached_without_link(root, rel):
         raise Stop("bad-input", "the ledger a run appends to is reached without a link")
@@ -68,7 +68,7 @@ def check_run_input(asked) -> None:
         where = root / asked["transcript"]
         parent = asked["transcript"].rpartition("/")[0]
         if os.path.lexists(where) or not ps.reached_without_link(root, asked["transcript"]) \
-                or not (parent == "" or (where.parent.is_dir() and not where.parent.is_symlink())):
+                or not (parent == "" or (ps.is_dir(where.parent) and not where.parent.is_symlink())):
             raise Stop("bad-input", "transcript must be a new file in a folder that is there, reached without a link")
 
 

@@ -75,6 +75,14 @@ def reached_without_link(root: pathlib.Path, rel: str) -> bool:
     return True
 
 
+def is_dir(path: pathlib.Path) -> bool:
+    """A folder, shown to be one: a path a step of which cannot be looked at is not (some Pythons raise there)."""
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
 def is_file(path: pathlib.Path) -> bool:
     """A regular file, shown to be one: a path a step of which cannot be looked at is not (some Pythons raise there)."""
     try:
@@ -128,7 +136,7 @@ def check_input(asked) -> None:
     if problem:
         raise Stop("bad-input", problem)
     root = pathlib.Path(asked["root"])
-    if asked["root"] == "" or "\0" in asked["root"] or not root.is_dir():  # "" would be wherever the command was started
+    if asked["root"] == "" or "\0" in asked["root"] or not is_dir(root):  # "" would be wherever the command was started
         raise Stop("bad-input", "root is not a directory")
     for name, provider in sorted(site["providers"].items()):
         if len(set(provider["code"])) != len(provider["code"]):
