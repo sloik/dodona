@@ -1,6 +1,7 @@
 """One hosted project status replay for issue 3, from an identified main artifact.
 
     python .github/site/replay_retained_status.py --check-checkout
+    python .github/site/replay_retained_status.py --check-js-report
     python .github/site/replay_retained_status.py RETAINED RECEIPT
 """
 from __future__ import annotations
@@ -15,6 +16,7 @@ from pathlib import Path
 import platform
 import subprocess
 import sys
+import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -43,7 +45,95 @@ INTENTS = {f"{number:04}" for number in range(1, 7)}
 LEDGER_PATH = ".retained-status-proof/dodona.ledger"
 OWNER_LEDGER = "records/owner.ledger"
 RUST_BINARY = ROOT / "kernel/target/release/dodona-kernel"
-JS_PROGRAM = "kernel2/dodona-kernel2.js"
+JS_REPLAY = r"""
+'use strict';
+// This proof's scenarios contain only the archived evidence appends and the
+// final no-op. Apply that sequence and use the unchanged JS status judge once.
+// The supported scenario command computes a full report after every step.
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { plain } = require('./kernel2/plain');
+const { read } = require('./kernel2/strict-json');
+const { report } = require('./kernel2/status');
+
+const NOTHING = { do: { set_gate: { intent: '', criterion: '', to: 'hard' } } };
+const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const strings = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string');
+const fields = (value, names) => object(value) && Object.keys(value).length === names.length
+  && names.every((name) => Object.hasOwn(value, name));
+
+function scenarioFrom(bytes) {
+  const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  const parsed = read(text);
+  if (parsed.refused !== undefined) throw new Error(`scenario refused: ${parsed.refused}`);
+  return plain(parsed.value);
+}
+
+function retainedReport(scenario) {
+  const { kind, name, self, policy, obligations, intents, steps } = scenario;
+  assert.equal(kind, 'status');
+  assert.equal(name, 'this-project');
+  assert(fields(self, ['writer', 'platform']) && strings([self.writer, self.platform]), 'missing scenario identity');
+  // These are the fields runScenario would copy or fill in. The native project
+  // status input gives them explicitly, so this adapter has no defaults to add.
+  assert(object(policy) && strings(policy.required) && strings(policy.trusted_writers), 'missing status policy');
+  assert(object(obligations) && Object.values(obligations).every((item) => object(item) && object(item.preimage)),
+    'missing obligation preimage');
+  assert(object(intents) && !Object.hasOwn(intents, '') && Object.values(intents).every((intent) => (
+    object(intent) && strings(intent.children) && object(intent.criteria)
+      && Object.values(intent.criteria).every((criterion) => object(criterion) && strings(criterion.checked_by))
+  )), 'intent state is incomplete or reserves the final step name');
+  assert(Array.isArray(steps) && steps.length > 1, 'missing retained evidence steps');
+  assert.deepEqual(steps.at(-1), NOTHING, 'expected the exact final no-op');
+  const ledger = steps.slice(0, -1).map((step) => {
+    assert(fields(step, ['do']) && fields(step.do, ['append']), 'expected an evidence append');
+    const entry = step.do.append;
+    assert(fields(entry, ['kind', 'body']) && entry.kind === 'evidence' && object(entry.body),
+      'expected an evidence entry');
+    return entry;
+  });
+  return report({ self, policy, obligations, intents }, ledger);
+}
+
+function selfTest() {
+  const { runScenario } = require('./kernel2/scenario');
+  const { identityOf } = require('./kernel2/identity');
+  const preimage = { obligation: 'sha256:a', kind: 'check', inputs: { targets: ['target'] },
+    provider: { name: 'p', version: '1', protocol: '0.2' } };
+  const old = { ...preimage, inputs: { targets: ['old'] } };
+  const self = { writer: 'ci', platform: 'linux/aarch64' };
+  const evidence = (key, verdict) => ({ do: { append: { kind: 'evidence', body: {
+    ...self, obligation: 'a', preimage: key, core_key: identityOf(key), verdict, level: 'bounded',
+  } } } });
+  const scenario = {
+    kind: 'status', name: 'this-project', self, policy: { required: ['0001'], trusted_writers: [], min_hard_gates: 1 },
+    obligations: { a: { preimage } },
+    intents: { '0001': { owner: 'owner', worker: 'worker', children: [], criteria: { '1': { gate: 'hard', checked_by: ['a'] } } } },
+    steps: [evidence(old, 'failed'), evidence(preimage, 'passed'), NOTHING],
+  };
+  const open = (value) => scenarioFrom(Buffer.from(JSON.stringify(value)));
+  const full = runScenario(open(scenario)).results;
+  const final = retainedReport(open(scenario));
+  assert.deepEqual(final, full.at(-1));
+  assert.equal(full[0].obligations.a.status, 'unknown');
+  assert.equal(final.obligations.a.status, 'passed');
+  assert.equal(final.intents['0001'].shown.level, 'bounded');
+  const conflict = { ...scenario, steps: [...scenario.steps.slice(0, -1), evidence(preimage, 'failed'), NOTHING] };
+  assert.deepEqual(retainedReport(open(conflict)), runScenario(open(conflict)).results.at(-1));
+  assert.equal(retainedReport(open(conflict)).obligations.a.status, 'conflict');
+  assert.throws(() => retainedReport({ ...scenario, steps: [...scenario.steps.slice(0, -1)] }), /final no-op/);
+  const edit = { do: { set_gate: { intent: '0001', criterion: '1', to: 'soft' } } };
+  assert.throws(() => retainedReport({ ...scenario, steps: [edit, ...scenario.steps] }), /evidence append/);
+  assert.throws(() => retainedReport({ ...scenario, intents: { ...scenario.intents, '': {} } }), /final step name/);
+  assert.throws(() => retainedReport({ ...scenario, policy: { required: [] } }), /missing status policy/);
+  assert.throws(() => scenarioFrom(Buffer.from('{"kind":"status","kind":"status"}')), /scenario refused/);
+  console.log('retained report matches the full status scenario on the control cases');
+}
+
+if (process.argv[1] === '--self-test') selfTest();
+else process.stdout.write(`${JSON.stringify({ results: [retainedReport(scenarioFrom(fs.readFileSync(0)))] })}\n`);
+"""
 
 
 def require(condition: bool, reason: str) -> None:
@@ -61,6 +151,18 @@ def encode(value) -> bytes:
 
 def command(argv: list[str], data: bytes | None = None) -> bytes:
     return subprocess.run(argv, input=data, cwd=ROOT, timeout=120, capture_output=True, check=True).stdout
+
+
+def node_report(data: bytes = b"", *, control: bool = False) -> bytes:
+    argv = ["node", "-e", JS_REPLAY] + (["--", "--self-test"] if control else [])
+    try:
+        result = subprocess.run(argv, input=data, cwd=ROOT, timeout=120, capture_output=True)
+    except subprocess.TimeoutExpired:
+        raise ValueError("JavaScript final report exceeded the 120-second allowance") from None
+    if result.returncode != 0 or result.stderr:
+        detail = result.stderr.decode("utf-8", errors="replace")[-800:].strip()
+        raise ValueError(f"JavaScript final report subprocess exited {result.returncode}: {detail}")
+    return result.stdout
 
 
 def read_object(raw: bytes) -> dict:
@@ -187,7 +289,10 @@ def replay(retained: Path, output: Path) -> None:
     check_ledger(answer, members["dodona.ledger"])
     require(same(answer["policy_not_applied"], policy["not_applied"]), "native status did not preserve policy limitations")
     scenario_bytes = encode(answer["judged"])
-    recomputed_bytes = command(["node", JS_PROGRAM, "scenario"], scenario_bytes)
+    print(f"native status preserved {answer['ledger']['entries']} ledger entries, comparing final report", flush=True)
+    started = time.monotonic()
+    recomputed_bytes = node_report(scenario_bytes)
+    comparison_ms = round((time.monotonic() - started) * 1_000)
     check_report(answer, policy_source, read_object(recomputed_bytes))
     require(digest(ledger.read_bytes()) == MEMBER_DIGESTS["dodona.ledger"], "native status changed the retained ledger")
 
@@ -204,6 +309,8 @@ def replay(retained: Path, output: Path) -> None:
         "sha256": {"request": digest(request_bytes), "native_status": digest(native_bytes),
                    "scenario_input": digest(scenario_bytes), "scenario_result": digest(recomputed_bytes),
                    "rust_binary": digest(RUST_BINARY.read_bytes())},
+        "comparison": {"judge": "kernel2/status.js:report", "steps": len(answer["judged"]["steps"]),
+                       "reports_evaluated": 1, "elapsed_ms": comparison_ms},
         "intents": answer["report"]["intents"],
         "obligation_statuses": Counter(item["status"] for item in answer["report"]["obligations"].values()),
         "project": answer["report"]["project"], "project_status": answer["project_status"],
@@ -213,6 +320,7 @@ def replay(retained: Path, output: Path) -> None:
     output.mkdir()
     (output / "request.json").write_bytes(request_bytes)
     (output / "native-status.json").write_bytes(native_bytes)
+    (output / "js-final-report.json").write_bytes(recomputed_bytes)
     (output / "summary.json").write_bytes(encode(summary) + b"\n")
     (output / "complete.txt").write_text("native status replay completed and scenario report agreed\n", encoding="utf-8")
     print(encode(summary).decode())
@@ -221,16 +329,23 @@ def replay(retained: Path, output: Path) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--check-checkout", action="store_true")
+    checks = parser.add_mutually_exclusive_group()
+    checks.add_argument("--check-checkout", action="store_true")
+    checks.add_argument("--check-js-report", action="store_true")
     parser.add_argument("retained", type=Path, nargs="?")
     parser.add_argument("receipt", type=Path, nargs="?")
     args = parser.parse_args()
     try:
-        if args.check_checkout and args.retained is None and args.receipt is None:
-            print(checkout(os.environ["GITHUB_SHA"]))
-        elif not args.check_checkout and args.retained is not None and args.receipt is not None:
+        if args.check_checkout or args.check_js_report:
+            if args.retained is not None or args.receipt is not None:
+                parser.error("checks take no additional arguments")
+            if args.check_checkout:
+                print(checkout(os.environ["GITHUB_SHA"]))
+            else:
+                sys.stdout.buffer.write(node_report(control=True))
+        elif args.retained is not None and args.receipt is not None:
             replay(args.retained, args.receipt)
         else:
-            parser.error("give --check-checkout or both RETAINED and RECEIPT")
+            parser.error("choose a check or give both RETAINED and RECEIPT")
     except (ValueError, OSError, KeyError, IndexError, TypeError, zipfile.BadZipFile, host.Refused, subprocess.SubprocessError) as error:
         raise SystemExit(f"retained status replay stopped: {error}") from None

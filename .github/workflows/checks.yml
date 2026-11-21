@@ -196,6 +196,7 @@ jobs:
         run: |
           python3 -B .github/site/replay_retained_status.py --check-checkout
           python3 -B .github/site/test_replay_retained_status.py
+          python3 -B .github/site/replay_retained_status.py --check-js-report
       - name: Fetch the identified retained status archive
         env:
           GH_TOKEN: ${{ github.token }}
