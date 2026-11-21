@@ -47,25 +47,39 @@ def digest(items: list[dict]) -> str:
 
 
 def listing(root: pathlib.Path) -> list[dict]:
+    """Every file and link in the tree, or Unusable("unreadable") if any part of it could not be read.
+    A listing that left out what it could not read would get a digest that looks right and is not."""
+    def unreadable(err: OSError) -> None:
+        raise Unusable("unreadable") from err
+
+    if not os.path.isdir(root):
+        return []  # no directory there at all: nothing was left out, and the empty listing is refused as before
+
+    def is_link(path: str) -> bool:
+        return stat.S_ISLNK(os.lstat(path).st_mode)  # as os.path.islink, but a failure is not taken for "no"
+
     items = []
-    for folder, _, names in os.walk(root, followlinks=False):
-        for name in list(names) + [d for d in os.listdir(folder) if os.path.islink(os.path.join(folder, d)) and d not in names]:
-            full = pathlib.Path(folder, name)
-            path = full.relative_to(root).as_posix()
-            mode = full.lstat().st_mode
-            if stat.S_ISLNK(mode):
-                items.append({"path": path, "kind": "link", "target": os.readlink(full)})
-            elif stat.S_ISREG(mode):
-                items.append({"path": path, "kind": "program" if mode & stat.S_IXUSR else "file",
-                              "identity": "sha256:" + hashlib.sha256(full.read_bytes()).hexdigest()})
-            else:
-                items.append({"path": path, "kind": "other"})
+    try:
+        for folder, _, names in os.walk(root, followlinks=False, onerror=unreadable):
+            for name in list(names) + [d for d in os.listdir(folder) if is_link(os.path.join(folder, d)) and d not in names]:
+                full = pathlib.Path(folder, name)
+                path = full.relative_to(root).as_posix()
+                mode = full.lstat().st_mode
+                if stat.S_ISLNK(mode):
+                    items.append({"path": path, "kind": "link", "target": os.readlink(full)})
+                elif stat.S_ISREG(mode):
+                    items.append({"path": path, "kind": "program" if mode & stat.S_IXUSR else "file",
+                                  "identity": "sha256:" + hashlib.sha256(full.read_bytes()).hexdigest()})
+                else:
+                    items.append({"path": path, "kind": "other"})
+    except OSError as err:
+        raise Unusable("unreadable") from err
     return items
 
 
 if __name__ == "__main__":
-    found = listing(pathlib.Path(sys.argv[1]))
     try:
+        found = listing(pathlib.Path(sys.argv[1]))
         print(json.dumps({"digest": digest(found), "items": len(found)}))
     except Unusable as err:
         print(json.dumps({"refused": str(err)}))
