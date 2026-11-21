@@ -71,7 +71,7 @@ def reached_without_link(root: pathlib.Path, rel: str) -> bool:
             if here.is_symlink() or host.is_junction(here):
                 return False
         except OSError:
-            return True  # cannot be looked at; what reads the path then finds it unreadable
+            return True  # cannot be looked at: no link is seen here, and the step that reads or checks the path decides
     return True
 
 
