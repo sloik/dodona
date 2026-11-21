@@ -1,0 +1,135 @@
+name: Metrics
+# The project in numbers (tools/metrics.py, docs/metrics.md), and a ratchet. The
+# job fails when a change takes away a ratcheted item (a scenario, a vector, a
+# planted defect, a claim, a checked mark, a decision record, a gap check, ...),
+# and when it changes tools/metrics.py, this file or metrics-self-test.yml,
+# which changes how changes are judged. A line "Metrics-down: <metric>: <reason>"
+# in the change's commits is shown with a failure as the author's explanation;
+# it never makes the job pass. The owner decides whether to merge over a
+# failure. This job blocks a merge only once main's ruleset requires its check;
+# until then it reports and blocks nothing. The change that brings this file is
+# never judged by it, because pull_request_target runs main's copy.
+#
+# How a change is measured. Metrics are a function of the files, so nothing is
+# kept between runs: both sides are measured from git objects every time.
+# - A pull request: from merge-base(main, head) to the pull request's head,
+#   with tools/metrics.py as it is on main now.
+# - A push to main: from the commit before the push to the commit pushed, with
+#   tools/metrics.py as it was before the push.
+# The tool is taken with `git show` into a file outside the working tree and run
+# isolated (-I). It reads both trees with git ls-tree, cat-file and log.
+#
+# Pull requests use pull_request_target, which runs this file as it is on main.
+# That is safe here because nothing from the pull request runs or is checked
+# out. The checkout takes main's commit and is given no ref or repository. The
+# only command that names the pull request is the fetch of its head, which
+# brings its commits in as git objects and writes none of its files. The token
+# can only read contents, no secret is used, and credentials are not kept in
+# the checkout. tools/metrics.py self-test reads this file for these properties
+# (workflow_problems) and plants unsafe edits to see that reading fail. That
+# reading is advisory: it looks for known ways of breaking them, and a
+# determined edit could get past it. A change to this file fails the job anyway.
+#
+# When the change cannot be judged, the job fails and says why: the base or head
+# is not in the history (a force-push, a new branch), the tool is missing on the
+# trusted revision, or a tree cannot be measured. One case is a note, not a
+# failure: the trusted revision is no later than BOOTSTRAP_BEFORE, the last
+# commit of main before the tool, so there is no tool to judge with.
+# BOOTSTRAP_BEFORE is set in one place, the env of the step below; when this
+# branch is rebased before merging, it moves to main's tip at that time.
+#
+# The tool's self-test runs on every platform in metrics-self-test.yml.
+on:
+  push:
+    branches: [main]
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+permissions:
+  contents: read
+concurrency:
+  # Each push to main is judged on its own and never cancelled; a pull request's
+  # run is replaced by its next one.
+  group: metrics-${{ github.event_name == 'push' && github.sha || github.event.pull_request.number }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+jobs:
+  # A required check is matched by its name, so the name is distinctive, and the job fails if another
+  # workflow of the change could define a job with this id or name, or post a check (tools/check_docs.py jobs).
+  metrics-main-checker:
+    name: metrics only go up (judged by main)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Values from the event reach the commands through the environment only.
+      - name: Judge the change with the trusted copy of the tool
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          MAIN_NOW: ${{ github.sha }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          BOOTSTRAP_BEFORE: 1be9c8430bbca1a5fe2d1011686e49cca387a0c6
+        run: |
+          set -uo pipefail
+          say() { echo "$1"; printf '%s\n\n' "$1" >> "$GITHUB_STEP_SUMMARY"; }
+          printf '## Metrics\n\n' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$EVENT" = push ]; then
+            TOOL_REV="$PUSH_BEFORE"
+            HEAD="$MAIN_NOW"
+          else
+            TOOL_REV="$MAIN_NOW"
+            HEAD="$PR_HEAD"
+            # The pull request's commits, as objects only. Nothing of them is checked out.
+            if ! git fetch --no-tags --quiet "$REPO_URL" "+refs/pull/$PR_NUMBER/head:refs/remotes/pr/head"; then
+              say "PROBLEM cannot judge: the pull request's commits could not be fetched."
+              exit 1
+            fi
+          fi
+          for rev in "$TOOL_REV" "$HEAD"; do
+            if ! git cat-file -e "$rev^{commit}" 2>/dev/null; then
+              say "PROBLEM cannot judge: $rev is not in the history (main was force-pushed, a branch was created, or the commit is unknown). Judge this change by hand."
+              exit 1
+            fi
+          done
+          if [ "$EVENT" = push ]; then
+            BASE="$PUSH_BEFORE"
+          elif ! BASE=$(git merge-base "$MAIN_NOW" "$HEAD"); then
+            say "PROBLEM cannot judge: the pull request has no common history with main."
+            exit 1
+          fi
+          if ! git cat-file -e "$TOOL_REV:tools/metrics.py" 2>/dev/null; then
+            if git merge-base --is-ancestor "$TOOL_REV" "$BOOTSTRAP_BEFORE"; then
+              say "NOTE not judged: $TOOL_REV predates tools/metrics.py, so there is no trusted tool to judge this change with."
+              exit 0
+            fi
+            say "PROBLEM cannot judge: $TOOL_REV has no tools/metrics.py."
+            exit 1
+          fi
+          TOOL="$RUNNER_TEMP/metrics.py"
+          git show "$TOOL_REV:tools/metrics.py" > "$TOOL"
+          failed=0
+          # The job-name guard is the documents gate's (tools/check_docs.py jobs), which reads workflows with a YAML
+          # reader, taken from the same trusted revision with the reader's wheel kept there, checked by its hash.
+          if git cat-file -e "$TOOL_REV:tools/check_docs.py" 2>/dev/null; then
+            mkdir -p "$RUNNER_TEMP/guard/.github/vendor"
+            git show "$TOOL_REV:tools/check_docs.py" > "$RUNNER_TEMP/guard/check_docs.py"
+            git show "$TOOL_REV:.github/yaml-reader.txt" > "$RUNNER_TEMP/guard/.github/yaml-reader.txt"
+            for wheel in $(git ls-tree --name-only "$TOOL_REV" .github/vendor/); do
+              git show "$TOOL_REV:$wheel" > "$RUNNER_TEMP/guard/$wheel"
+            done
+            python3 -I -m venv "$RUNNER_TEMP/yaml"
+            (cd "$RUNNER_TEMP/guard" && "$RUNNER_TEMP/yaml/bin/python" -I -m pip install --quiet --no-index --no-deps --require-hashes -r .github/yaml-reader.txt)
+            "$RUNNER_TEMP/yaml/bin/python" -I "$RUNNER_TEMP/guard/check_docs.py" jobs --repo . --head "$HEAD" --own .github/workflows/metrics.yml \
+              --name metrics-main-checker --name "metrics only go up (judged by main)" > "$RUNNER_TEMP/jobs.txt" 2>&1 || failed=1
+          else
+            echo "PROBLEM cannot judge job names: $TOOL_REV has no tools/check_docs.py" > "$RUNNER_TEMP/jobs.txt"; failed=1
+          fi
+          python3 -I "$TOOL" --repo . --base "$BASE" --head "$HEAD" --markdown > "$RUNNER_TEMP/compare.md" 2>&1 || failed=1
+          cat "$RUNNER_TEMP/jobs.txt" "$RUNNER_TEMP/compare.md"
+          { echo "Judged by the metrics tool as of \`$TOOL_REV\`."; echo; cat "$RUNNER_TEMP/jobs.txt"; echo; cat "$RUNNER_TEMP/compare.md"; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$failed"

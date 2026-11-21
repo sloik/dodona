@@ -1,0 +1,34 @@
+name: Metrics tool self-test
+# tools/metrics.py plants changes in copies of the sources, in a scratch git
+# repository and in its own code, and requires each to be judged right. Runs the
+# change's own copy, on every platform dodona supports. The gate itself, judged
+# by main's copy, is metrics.yml.
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: metrics-self-test-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  self-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            python: python3
+          - os: ubuntu-26.04
+            python: python3
+          - os: windows-2025
+            python: python
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Plant changes and require each to be judged right
+        run: ${{ matrix.python }} -I tools/metrics.py self-test

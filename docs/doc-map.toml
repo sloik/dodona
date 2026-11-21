@@ -106,6 +106,12 @@ code = ["tools/check_repo.py", "tools/check_docs.py", "tools/check_examples.py",
 docs = ["docs/gap-checks.md"]
 why = "Every check is listed there with the gap behind it, and how the checks run."
 
+[[rule]]
+id = "metrics"
+code = ["tools/metrics.py", ".github/workflows/metrics.yml", ".github/workflows/metrics-self-test.yml"]
+docs = ["docs/metrics.md"]
+why = "What is counted, what may only go up, how a change is judged and what the gate cannot see are written there."
+
 [[exempt]]
 paths = ["spec/runs/**/*.txt", "spec/runs/**/*.exit", "spec/runs/index.json"]
 why = "Saved outputs of recorded runs: hashed in spec/runs/index.json and judged against the claims by check_claims_match_runs."
