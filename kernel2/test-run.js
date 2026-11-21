@@ -14,6 +14,7 @@ const path = require('node:path');
 
 const {
   preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange, checkAll, batchWait,
+  executeBatch,
 } = require('./project-run');
 const { runKey } = require('./check');
 const crypto = require('node:crypto');
@@ -1051,6 +1052,140 @@ test('batches: the wait is the longest wall_ms, below 0 read as 0, and 60 second
   assert.equal(batchWait([runWith(1000), runWith(undefined)]), 24 * 60 * 60 * 1000);
   assert.equal(batchWait([runWith(24 * 60 * 60 * 1000)]), 24 * 60 * 60 * 1000);
   assert.equal(batchWait([runWith(1.5)]), 24 * 60 * 60 * 1000);
+});
+
+// Step 12's executor command, with a stand-in for the process: no command is started.
+// `act(child)` plays the executor once it has been started; `stall` holds its standard
+// input unread, `fail` breaks it.
+function standInExecutor(act, { stall = false, fail = false, starts = true } = {}) {
+  const { PassThrough, Writable } = require('node:stream');
+  const started = [];
+  const ended = [];
+  const start = (argv, cwd) => {
+    if (!starts) return { pid: undefined, exited: Promise.resolve() };
+    const child = { pid: 4242, stdout: new PassThrough(), stderr: new PassThrough(), exitCode: null, received: [] };
+    child.exited = new Promise((resolve) => {
+      child.exit = (code) => {
+        child.exitCode = code;
+        resolve();
+      };
+    });
+    child.stdin = new Writable({
+      write(chunk, encoding, callback) {
+        child.received.push(chunk);
+        if (stall) return;
+        callback(fail ? new Error('EPIPE') : null);
+      },
+    });
+    child.stdin.on('error', () => {});
+    started.push({ argv, cwd, child });
+    setImmediate(() => act(child));
+    return child;
+  };
+  const end = async (child) => {
+    ended.push(child);
+  };
+  return { start, end, started, ended };
+}
+
+const ANSWER_LINE = '{"ended":true,"reports":[]}\n';
+const answers = (...writes) => (child) => {
+  for (const write of writes) {
+    if (write === 'eof') child.stdout.end();
+    else if (typeof write === 'number') child.exit(write);
+    else child.stdout.write(write);
+  }
+};
+
+test('executor: the batch written whole, the command exited and its output closed, the first line taken', async () => {
+  const batch = { runs: [{ number: 1, run_key: 'sha256:k', run: RUN }] };
+  const fake = standInExecutor(answers('{"ended":tr', `ue,"reports":[]}\n{"later": 1.5}\n${'x'.repeat(1 << 20)}\nnot json\n`, 'eof', 0));
+  const got = await executeBatch(['run-batch', '--flag'], 'the-root', batch, 1000, fake);
+  assert.deepEqual(got, { answer: { ended: true, reports: [] } }, 'lines after the first are not read');
+  assert.deepEqual(fake.started.map(({ argv, cwd }) => [argv, cwd]), [[['run-batch', '--flag'], 'the-root']]);
+  assert.equal(Buffer.concat(fake.started[0].child.received).toString('utf8'), `${JSON.stringify(batch)}\n`);
+  assert.deepEqual(fake.ended, [fake.started[0].child], 'its own process group ended, once');
+});
+
+test('executor: what does not all happen in time is a timeout', async () => {
+  for (const [act, options, why] of [
+    [answers(ANSWER_LINE, 0), {}, 'its output kept open (by a process it started)'],
+    [answers(ANSWER_LINE, 'eof'), {}, 'it does not exit'],
+    [answers(ANSWER_LINE, 'eof', 0), { stall: true }, 'it does not read the batch'],
+  ]) {
+    const fake = standInExecutor(act, options);
+    assert.deepEqual(await executeBatch(['run-batch'], 'the-root', { runs: [] }, 40, fake), { timedOut: true }, why);
+    assert.equal(fake.ended.length, 1, why);
+  }
+});
+
+test('executor: no start, a broken input, another exit status or an unreadable first line is no answer', async () => {
+  const notStarted = standInExecutor(() => {}, { starts: false });
+  assert.deepEqual(await executeBatch(['nothing-here'], 'the-root', { runs: [] }, 1000, notStarted), {});
+  assert.deepEqual(notStarted.ended, [], 'nothing of its own to end');
+  for (const [act, options, why] of [
+    [answers(ANSWER_LINE, 'eof', 0), { fail: true }, 'the batch could not be written'],
+    [answers(ANSWER_LINE, 'eof', 1), {}, 'exit status 1'],
+    [answers('{"ended":true,"reports":[]}\r\n', 'eof', 0), {}, 'a carriage return'],
+    [answers(Buffer.from('﻿{"ended":true,"reports":[]}\n', 'utf8'), 'eof', 0), {}, 'a byte-order mark'],
+    [answers('{"ended":true,"reports":[],"n":1.5}\n', 'eof', 0), {}, 'a fraction'],
+    [answers('{"ended":true,"ended":true,"reports":[]}\n', 'eof', 0), {}, 'a key twice'],
+    [answers('\n{"ended":true,"reports":[]}\n', 'eof', 0), {}, 'an empty first line'],
+    [answers('{"ended":true,"reports":[]}', 'eof', 0), {}, 'no line feed'],
+    [answers('[]\n', 'eof', 0), {}, 'not an object'],
+    [answers('', 'eof', 0), {}, 'nothing at all'],
+  ]) {
+    const fake = standInExecutor(act, options);
+    assert.deepEqual(await executeBatch(['run-batch'], 'the-root', { runs: [] }, 1000, fake), {}, why);
+    assert.equal(fake.ended.length, 1, why);
+  }
+});
+
+test('executor: a first line of any length is read; an output that fails or closes early is no answer', async () => {
+  // Longer than the 16 MiB limit this adapter once had, written in 1 MiB pieces.
+  const pad = 'x'.repeat(17 * 1048576);
+  const line = `{"ended":true,"reports":[],"pad":"${pad}"}\n`;
+  const pieces = [];
+  for (let at = 0; at < line.length; at += 1048576) pieces.push(line.slice(at, at + 1048576));
+  const long = standInExecutor(answers(...pieces, 'more after it\n', 'eof', 0));
+  const got = await executeBatch(['run-batch'], 'the-root', { runs: [] }, 5000, long);
+  assert.equal(got.answer && got.answer.pad.length, pad.length);
+  assert.equal(long.ended.length, 1);
+  for (const [act, why] of [
+    // The whole first line is read first, so only the way the output ends tells.
+    [(child) => {
+      child.stdout.write(ANSWER_LINE);
+      setImmediate(() => {
+        child.stdout.destroy(new Error('EIO'));
+        child.exit(0);
+      });
+    }, 'an output that fails after a whole first line'],
+    [(child) => {
+      child.stdout.write(ANSWER_LINE);
+      setImmediate(() => {
+        child.stdout.destroy();
+        child.exit(0);
+      });
+    }, 'an output closed without coming to its end'],
+  ]) {
+    const fake = standInExecutor(act);
+    assert.deepEqual(await executeBatch(['run-batch'], 'the-root', { runs: [] }, 1000, fake), {}, why);
+    assert.equal(fake.ended.length, 1, why);
+  }
+  // A failed output with no exit: the common deadline wins.
+  const hung = standInExecutor((child) => {
+    child.stdout.write(ANSWER_LINE);
+    setImmediate(() => child.stdout.destroy(new Error('EIO')));
+  });
+  assert.deepEqual(await executeBatch(['run-batch'], 'the-root', { runs: [] }, 40, hung), { timedOut: true });
+  assert.equal(hung.ended.length, 1);
+});
+
+test('planted: an answer taken before the command\'s output has closed', async () => {
+  const damaged = planted('Promise.all([written, child.exited, outputClosed])', 'Promise.all([written, child.exited])');
+  const kept = () => standInExecutor(answers(ANSWER_LINE, 0));
+  assert.deepEqual(await executeBatch(['run-batch'], 'the-root', { runs: [] }, 40, kept()), { timedOut: true });
+  assert.deepEqual(await damaged.executeBatch(['run-batch'], 'the-root', { runs: [] }, 40, kept()), { answer: { ended: true, reports: [] } });
 });
 
 test('planted: a run reported twice taken as reported once', async () => {

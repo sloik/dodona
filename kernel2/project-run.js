@@ -17,8 +17,9 @@ const { compareUnits } = require('./canonical');
 const { identityOf } = require('./identity');
 const rules = require('./host-rules');
 const {
-  answerProblem, runKey, isRegularFile, fileIdentity, namedFiles, reportEnding,
+  answerProblem, runKey, isRegularFile, fileIdentity, namedFiles, reportEnding, readReport,
 } = require('./check');
+const processes = require('./processes');
 
 // How long the executor is waited for (step 12): the longest `wall_ms` of the batch,
 // below 0 read as 0, and 60 seconds more; a day if a run states none; never more.
@@ -369,6 +370,63 @@ function batchReports(runs, outcome) {
   return runs.map((run) => (reports.has(run.run_key) ? { report: reports.get(run.run_key) } : { verdict: 'error' }));
 }
 
+// The executor command for one batch (step 12), in `root`, in a process group (job) of its
+// own, which is ended on every way out. Its answer is taken only once, within `waitMs`,
+// the batch has been written to it whole, it has exited, and its standard output has
+// come to its end. Only the first line is kept, however long; what follows is read and
+// dropped. An output that fails, or is closed without coming to its end, is no answer.
+// Returns what checkAll expects of `execute`: `{timedOut: true}` when that did not all
+// happen in time; `{answer}` when it exited with 0 and its first line is one object read
+// strictly (ended by a line feed alone, no byte-order mark, no fraction, no key twice);
+// `{}` when it could not start, could not be given the batch, exited otherwise, or
+// printed nothing that can be read. `start` and `end` are processes.start and
+// processes.endTree unless a test gives others.
+async function executeBatch(executor, root, batch, waitMs, { start = processes.start, end = processes.endTree } = {}) {
+  const child = start(executor, root);
+  if (child.pid === undefined) {
+    await child.exited;
+    return {};
+  }
+  let timer;
+  try {
+    const kept = [];
+    let lineDone = false;
+    child.stdout.on('data', (data) => {
+      if (lineDone) return;
+      const at = data.indexOf(0x0a);
+      kept.push(at < 0 ? data : data.subarray(0, at + 1));
+      if (at >= 0) lineDone = true;
+    });
+    child.stderr.on('data', () => {});
+    // 'eof' once the output has come to its end; 'broken' if it fails or closes first.
+    const outputClosed = new Promise((resolve) => {
+      let ended = false;
+      child.stdout.once('end', () => {
+        ended = true;
+        resolve('eof');
+      });
+      child.stdout.once('error', () => resolve('broken'));
+      child.stdout.once('close', () => resolve(ended ? 'eof' : 'broken'));
+    });
+    const written = new Promise((resolve) => {
+      child.stdin.once('error', () => resolve(false));
+      child.stdin.end(`${JSON.stringify(batch)}\n`, (error) => resolve(!error));
+    });
+    const deadline = new Promise((resolve) => {
+      timer = setTimeout(() => resolve('timed-out'), waitMs);
+    });
+    const done = Promise.all([written, child.exited, outputClosed]).then(([whole, , output]) => (!whole ? 'not-written' : output !== 'eof' ? 'not-read' : 'done'));
+    const how = await Promise.race([done, deadline]);
+    if (how === 'timed-out') return { timedOut: true };
+    if (how !== 'done' || child.exitCode !== 0 || !lineDone) return {};
+    const answer = readReport(Buffer.concat(kept));
+    return answer === null ? {} : { answer };
+  } finally {
+    clearTimeout(timer);
+    await end(child);
+  }
+}
+
 // Every planned check, from its start to its end, on the sessions kept at step 5: the
 // runs every open check asks for at one time form one batch, given to `execute(batch,
 // waitMs)` once; each report is read and passed back to its provider one at a time, in
@@ -419,5 +477,5 @@ function preflightBytes(bytes) {
 
 module.exports = {
   preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange, SESSION_BROKE,
-  checkAll, batchWait,
+  checkAll, batchWait, executeBatch,
 };
