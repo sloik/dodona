@@ -16,6 +16,7 @@ mod plan;
 mod platforms;
 #[allow(unsafe_code)]
 mod proc;
+mod project_status;
 mod session;
 mod status;
 mod tree;
@@ -83,6 +84,13 @@ fn main() -> ExitCode {
     // A session takes its limits and the provider as arguments and reads no input.
     let answer = if command == "session" {
         session::run(&args[2..])
+    } else if command == "status" {
+        // Every input gets one JSON object and the exit status 0, a refusal included.
+        let mut input = Vec::new();
+        match io::stdin().read_to_end(&mut input) {
+            Ok(_) => Ok(project_status::answer(&input)),
+            Err(_) => Ok(project_status::answer(b"")),
+        }
     } else {
         let mut input = Vec::new();
         match io::stdin().read_to_end(&mut input) {
