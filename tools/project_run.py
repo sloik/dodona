@@ -56,6 +56,11 @@ def check_run_input(asked) -> None:
                                   or any(isinstance(x, str) and same_name(asked["transcript"], x)
                                          for x in [*listed, *[l + ".lock" for l in [*listed, owner] if isinstance(l, str)], owner, asked.get("project")])):
         raise Stop("bad-input", "transcript, where given, is a relative path that is no ledger, no ledger's lock and not the project file")
+    # A disk that drops a trailing dot or space (decision 0009) takes records/owner.ledger. for records/owner.ledger,
+    # which no comparison of names above sees. Read from the strings alone, before anything on disk is looked at.
+    operands = [rel, owner] + ([asked["transcript"], *listed, asked.get("project")] if "transcript" in asked else [])
+    if any(ps.relpath_ok(x) and any(seg.endswith((".", " ")) for seg in x.split("/")) for x in operands):
+        raise Stop("bad-input", "no segment of a path a run writes, or compares with one, ends in a dot or a space")
     root = pathlib.Path(asked["root"]) if isinstance(asked.get("root"), str) else None
     if root is None or not ps.is_dir(root):
         return

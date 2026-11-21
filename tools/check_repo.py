@@ -763,6 +763,25 @@ def run_blocks(text: str) -> str:
     return "\n".join(out)
 
 
+def gap_run_refuses_ambiguous_write_paths() -> None:
+    """The run refuses names that can alias another file on a system that drops a trailing dot or space."""
+    import project_run
+    control = {"ledger": "l/run.ledger", "ledgers": ["l/run.ledger"], "owner_ledger": "l/owner.ledger",
+               "project": "project.json", "executor": ["fixture"], "transcript": "trace.json"}
+    variants = ({"ledger": "l/owner.ledger.", "ledgers": ["l/owner.ledger."]},
+                {"ledger": "l /run.ledger", "ledgers": ["l /run.ledger"]},
+                {"owner_ledger": "l/run.ledger."}, {"transcript": "l/run.ledger "},
+                {"ledgers": ["l/run.ledger", "trace.json."]}, {"project": "trace.json "})
+    project_run.check_run_input(control)
+    for changed in variants:
+        try:
+            project_run.check_run_input(control | changed)
+        except project_run.Stop as err:
+            if err.reason == "bad-input":
+                continue
+        problems.append(f"tools/project_run.py: must refuse ambiguous write paths in {changed}")
+
+
 def gap_every_check_is_listed() -> None:
     """A gap check that nobody can find the reason for will be deleted by mistake."""
     listed = (ROOT / "docs" / "gap-checks.md").read_text(encoding="utf-8")
@@ -937,7 +956,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
-              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown, gap_documents_follow_the_code]
+              gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
+              gap_thin_coverage_is_shown, gap_documents_follow_the_code]
 
 
 class ToolPinTests(unittest.TestCase):
