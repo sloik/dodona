@@ -112,7 +112,10 @@ def run_report(command: list[str], count: str) -> tuple[str, list[str]]:
         report = json.loads(result.stdout.splitlines()[-1])
     except (OSError, ValueError, IndexError):
         return "unfinished", []
-    if result.stderr or not isinstance(report, dict) or report.get("unfinished") != 0:
+    if result.stderr or not isinstance(report, dict):
+        return "unfinished", []
+    unfinished = report.get("unfinished")
+    if type(unfinished) is not int or unfinished != 0:
         return "unfinished", []
     total, matched, rejected = report.get(count), report.get("matched"), report.get("rejected")
     if (type(total) is not int or type(matched) is not int or not 0 <= matched <= total or total < 1

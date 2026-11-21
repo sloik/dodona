@@ -18,7 +18,8 @@ ended by the operating system has answered nothing, and that case is
 error range 0xC0000000 to 0xCFFFFFFF, which is how Windows reports a process
 ended by an exception such as an access violation. Other ways a process can
 be ended from outside, such as a Windows kill that sets an ordinary status,
-cannot be told apart and still count as a refusal. A case answered wrongly is
+cannot be told apart and still count as a refusal. A child that exits nonzero
+with a disk-full diagnostic on standard error leaves the case unfinished. A case answered wrongly is
 `MISMATCH`, named in `rejected`. Exit status is 0 if every case matched, 1 if
 the run completed with mismatches, and 2 if any case or the judge itself did
 not finish, after mismatches too, or no case ran.
@@ -51,9 +52,12 @@ def ended_by_the_system(code: int) -> bool:
 def run(command: list[str], data: bytes) -> tuple[int | None, str]:
     """The kernel's own exit status, or None and why when it gave none."""
     try:
-        code = subprocess.run(command + ["scenario"], input=data, capture_output=True, timeout=60).returncode
+        result = subprocess.run(command + ["scenario"], input=data, capture_output=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as err:
         return None, f"{type(err).__name__}: {err}"
+    code = result.returncode
+    if code != 0 and (b"No space left on device" in result.stderr or b"ENOSPC" in result.stderr):
+        return None, "disk full"
     if ended_by_the_system(code):
         return None, f"ended by the system (exit {code})"
     return code, ""

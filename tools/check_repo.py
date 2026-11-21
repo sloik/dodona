@@ -1131,6 +1131,13 @@ class KitAdequacyTests(unittest.TestCase):
             with self.subTest(answer=answer.stdout):
                 self.assertEqual(self.at_input(answer), (False, ["input-judge unfinished"]))
 
+    def test_structured_judge_requires_integer_unfinished_count(self):
+        for invalid in (False, 0.0):
+            with self.subTest(unfinished=invalid):
+                report = self.ledger(1, ["torn"], unfinished=invalid)
+                verdict = self.after_scenarios(report, report)
+                self.assertEqual(verdict, (False, ["ledger-judge unfinished"]))
+
     def test_a_batch_builds_into_its_own_copy(self):
         summary = {"scenarios": 1, "matched": 1, "all_matched": True, "unfinished": 0, "rejected": []}
         with tempfile.TemporaryDirectory() as tmp:
@@ -1305,6 +1312,14 @@ class InputJudgeTests(unittest.TestCase):
                 with self.subTest(failure=failure, at=at):
                     code, summary, _ = self.judge(answers)
                     self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["all_matched"]), (2, 1, [], False))
+
+    def test_explicit_disk_full_diagnostic_is_unfinished(self):
+        for code_at, message in ((0, b"No space left on device"), (1, b"ENOSPC: write")):
+            with self.subTest(case=code_at):
+                answers = [0, 2, 2, 2, 2, 2]
+                answers[code_at] = subprocess.CompletedProcess(["kernel", "scenario"], 1, b"", message)
+                code, summary, _ = self.judge(answers)
+                self.assertEqual((code, summary["unfinished"], summary["rejected"]), (2, 1, []))
 
     def test_a_mismatch_then_an_unfinished_case_leaves_the_run_unfinished(self):
         code, summary, _ = self.judge([0, 0, -15, 2, 2, 2])
