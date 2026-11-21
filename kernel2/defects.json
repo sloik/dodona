@@ -2161,8 +2161,8 @@
       "name": "status step 10: the report is the first result, not the last",
       "model_case": "(project status)",
       "file": "project-status.js",
-      "find": "  return results[results.length - 1];",
-      "replace": "  return results[0];"
+      "find": "    return status.runFinalReport(scenario);",
+      "replace": "    return runScenario(scenario).results[0];"
     },
     {
       "name": "status step 11: a root is said to meet its floor only over its tree",

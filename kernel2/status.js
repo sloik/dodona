@@ -259,20 +259,37 @@ function withDefaults(intents) {
   return intents;
 }
 
-function runScenario(scenario) {
-  const state = {
+function startOf(scenario) {
+  return {
     self: scenario.self,
     policy: { trusted_writers: [], required: [], ...scenario.policy },
     obligations: JSON.parse(JSON.stringify(scenario.obligations || {})),
     intents: withDefaults(JSON.parse(JSON.stringify(scenario.intents || {}))),
   };
+}
+
+function applyStep(state, ledger, { do: step }) {
+  if (step.append && typeof step.append.kind === 'string' && isObject(step.append.body)) ledger.push({ kind: step.append.kind, body: step.append.body });
+  else if (step.change && typeof step.change.obligation === 'string' && Object.hasOwn(state.obligations, step.change.obligation) && isObject(step.change.preimage)) state.obligations[step.change.obligation].preimage = step.change.preimage;
+  else if (step.set_gate && typeof step.set_gate.intent === 'string' && typeof step.set_gate.criterion === 'string' && vocabulary.GATES.includes(step.set_gate.to) && Object.hasOwn(state.intents, step.set_gate.intent) && Object.hasOwn(state.intents[step.set_gate.intent].criteria, step.set_gate.criterion)) state.intents[step.set_gate.intent].criteria[step.set_gate.criterion].gate = step.set_gate.to;
+}
+
+function runScenario(scenario) {
+  const state = startOf(scenario);
   const ledger = [];
-  return scenario.steps.map(({ do: step }) => {
-    if (step.append && typeof step.append.kind === 'string' && isObject(step.append.body)) ledger.push({ kind: step.append.kind, body: step.append.body });
-    else if (step.change && typeof step.change.obligation === 'string' && Object.hasOwn(state.obligations, step.change.obligation) && isObject(step.change.preimage)) state.obligations[step.change.obligation].preimage = step.change.preimage;
-    else if (step.set_gate && typeof step.set_gate.intent === 'string' && typeof step.set_gate.criterion === 'string' && vocabulary.GATES.includes(step.set_gate.to) && Object.hasOwn(state.intents, step.set_gate.intent) && Object.hasOwn(state.intents[step.set_gate.intent].criteria, step.set_gate.criterion)) state.intents[step.set_gate.intent].criteria[step.set_gate.criterion].gate = step.set_gate.to;
+  return scenario.steps.map((step) => {
+    applyStep(state, ledger, step);
     return report(state, ledger);
   });
 }
 
-module.exports = { baselineOf, pairingTarget, levelFor, report, runScenario };
+// The project supplies typed steps and uses only the report after all of them.
+function runFinalReport(scenario) {
+  if (scenario.steps.length === 0) return undefined;
+  const state = startOf(scenario);
+  const ledger = [];
+  for (const step of scenario.steps) applyStep(state, ledger, step);
+  return report(state, ledger);
+}
+
+module.exports = { baselineOf, pairingTarget, levelFor, report, runScenario, runFinalReport };

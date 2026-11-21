@@ -26,6 +26,7 @@ const { Wire, isObject, MAX_DEPTH } = require('./wire');
 const hostRules = require('./host-rules');
 const { ECHO } = require('./session');
 const { runScenario } = require('./scenario');
+const status = require('./status');
 
 const PROTOCOL = '0.2';
 const MAX_LINE_BYTES = 1048576;
@@ -691,8 +692,14 @@ function coverageOf(intents, parent, floor) {
 function ownReport(judged) {
   const read = strictJson.read(JSON.stringify(judged));
   if (read.refused !== undefined) throw new Error(`the judged scenario cannot be read back: ${read.refused}`);
-  const { results } = runScenario(plain(read.value));
-  return results[results.length - 1];
+  const scenario = plain(read.value);
+  try {
+    return status.runFinalReport(scenario);
+  } catch (error) {
+    // Recover the same way as the scenario command if judgment throws.
+    const { results } = runScenario(scenario);
+    return results[results.length - 1];
+  }
 }
 
 function objectOf(map) {

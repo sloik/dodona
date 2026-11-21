@@ -791,6 +791,23 @@ def gap_status_keeps_literal_obligation_names() -> None:
         problems.append("conformance/project/cases.json: no status case for a passed obligation named __proto__")
 
 
+def gap_js_final_status_controls_exist() -> None:
+    """The status report needs both an equivalence control and a count of work."""
+    tests = (ROOT / "kernel2" / "test.js").read_text(encoding="utf-8")
+    names = ("status project report uses the last result",
+             "status project report materializes only once for generated history",
+             "status project report falls back to scenario replay",
+             "status final report replays key and gate transitions")
+    for name in names:
+        if f"test('{name}'" not in tests:
+            problems.append(f"kernel2/test.js: missing final status control {name!r}")
+    path = ROOT / "kernel2" / "defects.json"
+    defects = json.loads(path.read_text(encoding="utf-8"))["defects"]
+    if not any(defect["name"] == "status step 10: the report is the first result, not the last"
+               and defect["file"] == "project-status.js" for defect in defects):
+        problems.append("kernel2/defects.json: missing first-result project status defect")
+
+
 def gap_js_planted_defect_anchors_exist() -> None:
     """A missing source anchor means the configured JavaScript defect is never planted."""
     kernel = ROOT / "kernel2"
@@ -983,7 +1000,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
-              gap_status_keeps_literal_obligation_names,
+              gap_status_keeps_literal_obligation_names, gap_js_final_status_controls_exist,
               gap_thin_coverage_is_shown, gap_documents_follow_the_code]
 
 

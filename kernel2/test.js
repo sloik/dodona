@@ -837,3 +837,113 @@ test('coverage: where each intent tree\'s hard gates sit', () => {
   assert.deepEqual(coverage.intents.a, { own_hard: 1, subtree_hard: 1, root: 'r', tree_hard: 2, floor: 2, floor_met_only_over_tree: true });
   assert.deepEqual(coverage.thinnest, { r: 'b' });
 });
+
+// A small typed project with no provider commands and a late rejected record.
+function projectHistory(t) {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kernel2-status-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'project.toml'), '[project]\nname = "p"\n');
+
+  const preimage = { obligation: 'sha256:a', kind: 'check', inputs: { targets: ['sha256:1'] }, provider: { name: 'p', version: '1', protocol: '0.2' } };
+  const coreKey = identity.identityOf(preimage);
+  const record = { obligation: 'o', preimage, platform: 'p1/arch', verdict: 'passed', writer: 'k' };
+  let previous = null;
+  const lines = [coreKey, coreKey, coreKey, coreKey, coreKey, 'sha256:wrong'].map((key) => {
+    const entry = ledger.encodeEntry({ previous, kind: 'evidence', body: { ...record, core_key: key } });
+    previous = entry.identity;
+    return entry.line;
+  });
+  fs.writeFileSync(path.join(root, 'history.ledger'), Buffer.concat(lines));
+  const asked = {
+    root, project: 'project.toml', policy_source: 'fixture', owner_ledger: 'owner.ledger', ledgers: ['history.ledger'],
+    policy: { min_hard_gates: 1, required: [], floors: {}, not_applied: [] },
+    site: { writer: 'k', runner: 'r', platform: { os: 'p1', arch: 'arch' }, tools: [], providers: {}, deadline_ms: 1 },
+  };
+  return { input: bytes(JSON.stringify(asked)), preimage };
+}
+
+test('status project report uses the last result', async (t) => {
+  const { projectStatus } = require('./project-status');
+  const { runScenario } = require('./scenario');
+  const { input } = projectHistory(t);
+  const answer = await projectStatus(input);
+  assert.equal(answer.report.rejected, 1);
+  const { results } = runScenario(answer.judged);
+  assert.equal(results[0].rejected, 0);
+  assert.deepEqual(answer.report, results.at(-1));
+});
+
+test('status project report materializes only once for generated history', async (t) => {
+  const { projectStatus } = require('./project-status');
+  const { input, preimage } = projectHistory(t);
+  const text = identity.canonicalText(preimage);
+  const canonical = require('./canonical');
+  const canonicalize = canonical.canonicalize;
+  const hashing = t.mock.method(canonical, 'canonicalize', (value) => canonicalize(value));
+  const answer = await projectStatus(input);
+  assert.equal(answer.report.rejected, 1);
+  // With no obligations the report keys only these records, twice per valid
+  // record and once for the invalid one. The ledger reader keys entire entries.
+  const hashes = hashing.mock.calls.filter(({ arguments: [value] }) => value === text);
+  assert.equal(hashes.length, 11);
+});
+
+test('status project report falls back to scenario replay', async (t) => {
+  const { projectStatus } = require('./project-status');
+  const { runScenario } = require('./scenario');
+  const { input } = projectHistory(t);
+  const final = t.mock.method(status, 'runFinalReport', () => { throw new Error('report fixture'); });
+  const answer = await projectStatus(input);
+  assert.equal(final.mock.callCount(), 1);
+  assert.deepEqual(answer.report, runScenario(answer.judged).results.at(-1));
+});
+
+test('status final report replays key and gate transitions', (t) => {
+  const { plain } = require('./plain');
+  const { runScenario } = require('./scenario');
+  const key = (target) => ({ obligation: 'sha256:a', kind: 'check', inputs: { targets: [target] }, provider: { name: 'p', version: '1', protocol: '0.2' } });
+  const k0 = key('sha256:1');
+  const k1 = key('sha256:2');
+  const append = (preimage, verdict) => ({ append: { kind: 'evidence', body: {
+    obligation: 'o', preimage, core_key: identity.identityOf(preimage), platform: 'p1', verdict, writer: 'k',
+  } } });
+  const scenario = {
+    kind: 'status',
+    self: { writer: 'k', platform: 'p1' },
+    policy: { required: ['i'], min_hard_gates: 1 },
+    obligations: { o: { preimage: k0 } },
+    intents: { i: { owner: 'owner', worker: 'worker', criteria: { c: { gate: 'hard', checked_by: ['o'] } } } },
+    steps: [
+      append(k0, 'passed'),
+      { change: { obligation: 'o', preimage: k1 } },
+      append(k1, 'failed'),
+      { set_gate: { intent: 'i', criterion: 'c', to: 'soft' } },
+      { append: { kind: 'evidence', body: 17 } },
+      { change: { obligation: 'missing', preimage: k0 } },
+      { set_gate: { intent: 'i', criterion: 'c', to: 'wrong' } },
+      {},
+    ].map((step) => ({ do: step })),
+  };
+  const parsed = plain(strictJson.read(JSON.stringify(scenario)).value);
+  const { results } = runScenario(parsed);
+  assert.equal(results.length, scenario.steps.length);
+  assert.deepEqual(results.slice(0, 4).map((result) => result.obligations.o.status), ['passed', 'unknown', 'failed', 'failed']);
+  assert.equal(results[2].project.status, 'failed');
+  const final = status.runFinalReport(parsed);
+  assert.equal(final.obligations.o.status, 'failed');
+  assert.equal(final.project.status, 'unknown');
+  assert.deepEqual(final.intents.i.gates, { hard: 0, soft: 1, deferred: 0, deferred_open: 0 });
+  assert.deepEqual(final, results.at(-1));
+
+  // The public scenario still drops a throwing step and reports that prefix.
+  const malformed = { ...parsed, steps: [...parsed.steps.slice(0, 3), { do: null }, ...parsed.steps.slice(3)] };
+  const stderr = t.mock.method(process.stderr, 'write', () => true);
+  const recovered = runScenario(malformed).results;
+  assert.equal(stderr.mock.callCount(), 2);
+  assert.equal(recovered.length, malformed.steps.length);
+  assert.deepEqual(recovered[3], results[2]);
+  assert.deepEqual(recovered.at(-1), final);
+});
