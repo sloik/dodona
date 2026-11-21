@@ -1232,7 +1232,37 @@ class KitAdequacyTests(unittest.TestCase):
         return self.at_session(self.case_report(0, []), *results)
 
     def at_status(self, *results):
-        return self.at_host_check(self.result(0), *results)
+        return self.at_host_check(self.host_check_report(0, []), *results)
+
+    def at_untyped(self, *results):
+        stand_in = ("stand-in", "stand_in.py", [])
+        with patch.object(kit_adequacy, "JUDGES", (*kit_adequacy.JUDGES, stand_in)):
+            return self.at_status(self.case_report(0, [], project=True), *results)
+
+    def host_check_report(self, code, rejected, *, unfinished=0, **fields):
+        report = {"cases": 132, "judged": 129, "skipped": 3, "matched": 129 - len(rejected) - unfinished,
+                  "unfinished": unfinished, "rejected": rejected, "all_matched": not rejected and not unfinished}
+        report.update(fields)
+        return self.result(code, "".join(f"MISMATCH {name}: detail\n" for name in rejected) + json.dumps(report) + "\n")
+
+    def test_host_check_replay_credits_the_exact_case_with_skips(self):
+        name = "well-behaved (exited) [a05c3820fa457e37]"
+        other = "well-behaved (timed-out) [d3f9eab0f80b830f]"
+        first, second = self.host_check_report(1, [name, other]), self.host_check_report(1, [name])
+        self.assertEqual(self.at_host_check(first, second), (False, [f"host-check-judge: {name}"]))
+
+    def test_host_check_replay_rejects_old_unfinished_or_inconsistent_reports(self):
+        name = "well-behaved (exited) [a05c3820fa457e37]"
+        first = self.host_check_report(1, [name])
+        for second in (self.host_check_report(1, [name + " "]), self.host_check_report(2, [], unfinished=1),
+                       self.result(1, f"MISMATCH {name}\n")):
+            with self.subTest(second=second.stdout):
+                self.assertEqual(self.at_host_check(first, second), (False, ["host-check-judge unsteady"]))
+        for bad in (self.host_check_report(1, [name, name]), self.host_check_report(1, [name], cases=131),
+                    self.host_check_report(1, [name], skipped=True), self.host_check_report(1, [name], skipped=None),
+                    self.result(1, f"MISMATCH {name}\n")):
+            with self.subTest(first=bad.stdout):
+                self.assertEqual(self.at_host_check(bad, bad), (False, ["host-check-judge unfinished"]))
 
     def case_report(self, code, rejected, *, project=False, unfinished=0, **fields):
         totals = {"cases": 252, "judged": 243, "skipped": 9} if project else {"cases": 22}
@@ -1278,13 +1308,13 @@ class KitAdequacyTests(unittest.TestCase):
                 self.assertEqual(self.at_status(answer, answer), (False, ["status-judge unfinished"]))
 
     def test_other_auxiliary_judges_keep_their_exit_status_treatment(self):
-        failed = self.result(1, "MISMATCH host check\n")
-        self.assertEqual(self.at_host_check(failed, self.result(0)), (False, ["host-check-judge unsteady"]))
+        failed = self.result(1, "MISMATCH stand-in\n")
+        self.assertEqual(self.at_untyped(failed, self.result(0)), (False, ["stand-in-judge unsteady"]))
 
     def test_repeated_untyped_auxiliary_rejection_is_provisional_not_caught(self):
         # Two identical exits 1 that name no case may be one environment failure twice (issue 41).
-        failed = self.result(1, "MISMATCH host check\n")
-        self.assertEqual(self.at_host_check(failed, failed), (False, ["host-check-judge provisional"]))
+        failed = self.result(1, "MISMATCH stand-in\n")
+        self.assertEqual(self.at_untyped(failed, failed), (False, ["stand-in-judge provisional"]))
 
     # The harness judge ends with the same footer, its count under `cases`: seven kernel cases and the known-answer
     # control; it runs after the attest judge (issue 41).
@@ -1334,7 +1364,7 @@ class KitAdequacyTests(unittest.TestCase):
             defects = [{"name": name, "file": "fixture.rs", "find": "old", "replace": "planted"}
                        for name in ("named", "untyped")]
             (kernel / "defects.json").write_text(json.dumps({"defects": defects}), encoding="utf-8")
-            results = [(True, []), (False, ["plan/named"]), (False, ["host-check-judge provisional"])]
+            results = [(True, []), (False, ["plan/named"]), (False, ["stand-in-judge provisional"])]
             with patch.object(kit_adequacy, "ROOT", root), patch.object(kit_adequacy, "passes_kit", side_effect=results), \
                     contextlib.redirect_stdout(io.StringIO()) as output:
                 status = kit_adequacy.main()

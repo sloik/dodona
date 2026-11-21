@@ -9,10 +9,10 @@ the kit, then plants each defect listed in kernel/defects.json, one at a time,
 rebuilds and runs the kit again: the scenarios, the ledger cases, the core-key vectors, the check values made at test time, the reference harness, the strict reading of input, the provider session and the host checks (decision 0033). A planted defect counts as caught when the
 changed kernel builds and the kit rejects it. The unchanged kernel is run on every judge; a planted
 defect is judged until the first judge rejects it, the scenarios first and, for a defect in the
-host's own files, the host judges next. A scenario, ledger, core-key, attest, harness, strict-input, session or status rejection
-needs a complete report and a replay on the same named case. The scenarios count `scenarios`, the ledger counts `checks`, the
-core-key judge counts `vectors` and status counts `judged` with skips tallied separately. The other reporting judges count
-`cases`. The caught line names the cases that repeated. Another auxiliary judge can reject
+host's own files, the host judges next. A rejection needs a complete report and a replay on the same named case. The
+scenarios count `scenarios`, the ledger counts `checks`, the core-key judge counts `vectors` and host-check and status count
+`judged` with skips tallied separately. The other judges count `cases`. The caught line names the cases that repeated.
+An auxiliary judge without a report can reject
 with exit 1 and no traceback or disk-full error; because it names no case, a repeat of it may be the same
 environment failure twice, so it is PROVISIONAL, never caught, and leaves the batch unfinished. A run that ends
 without this evidence is UNFINISHED (issue 41). A defect that names a case of a
@@ -42,7 +42,7 @@ JUDGES = (("ledger", "run_ledger_cases.py", []), ("core-key", "run_key_vectors.p
           ("host-check", "run_check_cases.py", ["check"]), ("status", "run_status_cases.py", ["status"]))
 # Judges that end with the scenarios' footer, and the key under which each counts its checks (issue 41).
 REPORTING = {"ledger": "checks", "core-key": "vectors", "attest": "cases", "harness": "cases", "input": "cases",
-             "session": "cases", "status": "judged"}
+             "session": "cases", "host-check": "judged", "status": "judged"}
 # The status judge recomputes each report with another kernel's scenario command, so that the kernel judged does
 # not certify its own report: here the second kernel's.
 OTHER_KERNEL = ["node", str(pathlib.Path(__file__).resolve().parent.parent / "kernel2" / "dodona-kernel2.js")]
