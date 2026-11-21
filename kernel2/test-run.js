@@ -14,7 +14,7 @@ const path = require('node:path');
 
 const {
   preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange, checkAll, batchWait,
-  executeBatch,
+  executeBatch, recordVerdicts,
 } = require('./project-run');
 const { runKey } = require('./check');
 const crypto = require('node:crypto');
@@ -1186,6 +1186,258 @@ test('planted: an answer taken before the command\'s output has closed', async (
   const kept = () => standInExecutor(answers(ANSWER_LINE, 0));
   assert.deepEqual(await executeBatch(['run-batch'], 'the-root', { runs: [] }, 40, kept()), { timedOut: true });
   assert.deepEqual(await damaged.executeBatch(['run-batch'], 'the-root', { runs: [] }, 40, kept()), { answer: { ended: true, reports: [] } });
+});
+
+// Step 13: recording, on small files in a folder of the test's own.
+
+const sha = (text) => `sha256:${crypto.createHash('sha256').update(text).digest('hex')}`;
+const PRE_A1 = { obligation: 'sha256:o1', kind: 'check', inputs: { n: 1 } };
+const PRE_A2 = { obligation: 'sha256:o2', kind: 'check', inputs: { n: 2 } };
+
+// A root with m/a.txt and m/b.txt, a kept session keyed on their bytes, and the run's input.
+function recordingProject(body) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kernel2-record-'));
+  try {
+    fs.mkdirSync(path.join(root, 'm'));
+    fs.mkdirSync(path.join(root, 'records'));
+    fs.writeFileSync(path.join(root, 'm', 'a.txt'), 'a\n');
+    fs.writeFileSync(path.join(root, 'm', 'b.txt'), 'b\n');
+    const session = keptSession('alpha', [], {
+      request: { binding: 'alpha', definitions: [], files: [{ path: 'm/a.txt', identity: sha('a\n') }, { path: 'm/b.txt', identity: sha('b\n') }] },
+    });
+    const asked = { root, ledger: 'l/run.ledger', owner_ledger: 'records/owner.ledger', site: { writer: 'w', platform: PLATFORM } };
+    const snapshot = { judged: { obligations: { a1: { preimage: PRE_A1 }, a2: { preimage: PRE_A2 } } } };
+    return body({ root, session, asked, snapshot, ledger: path.join(root, 'l', 'run.ledger') });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+const ENDS = [
+  { binding: 'alpha', name: 'a1', outcome: 'passed', strength: { class: 'c', rank: 'bounded' } },
+  { binding: 'alpha', name: 'a2', outcome: 'failed', strength: { class: 'c', rank: 'documented' } },
+  { binding: 'alpha', name: 'a3', outcome: 'error' },
+  { binding: 'zeta', name: 'z1', outcome: 'refused', reason: 'check-not-offered' },
+];
+
+const evidence = (name, preimage, verdict, strength, level) => ({
+  obligation: name, preimage, core_key: identityOf(preimage), platform: 'linux/x86_64', verdict, writer: 'w', strength, level,
+});
+
+test('recording: each passed or failed verdict an evidence entry, in order, in one append; nothing else written', () => {
+  recordingProject(({ session, asked, snapshot, ledger }) => {
+    assert.deepEqual(recordVerdicts(asked, [session], snapshot, ENDS), ['passed', 'failed', 'error', 'refused']);
+    const read = ledgerFile.read({ ledger });
+    assert.equal(read.torn, false);
+    assert.deepEqual(read.entries.map((entry) => [entry.kind, entry.body]), [
+      ['evidence', evidence('a1', PRE_A1, 'passed', { class: 'c', rank: 'bounded' }, 'bounded')],
+      ['evidence', evidence('a2', PRE_A2, 'failed', { class: 'c', rank: 'documented' }, 'asserted')],
+    ]);
+    assert.equal(fs.existsSync(`${ledger}.lock`), false, 'the lock released');
+  });
+  recordingProject(({ root, session, asked, snapshot }) => {
+    assert.deepEqual(recordVerdicts(asked, [session], snapshot, ENDS.slice(2)), ['error', 'refused']);
+    assert.equal(fs.existsSync(path.join(root, 'l')), false, 'nothing kept: no folder made, no file, no lock');
+  });
+});
+
+test('recording: an input changed or gone since it was keyed makes its verdict an error, not recorded', () => {
+  recordingProject(({ root, session, asked, snapshot, ledger }) => {
+    fs.writeFileSync(path.join(root, 'm', 'a.txt'), 'changed\n');
+    fs.rmSync(path.join(root, 'm', 'b.txt'));
+    assert.deepEqual(recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2)), ['error', 'error']);
+    assert.equal(fs.existsSync(ledger), false);
+  });
+  recordingProject(({ root, session, asked, snapshot, ledger }) => {
+    fs.writeFileSync(path.join(root, 'm', 'b.txt'), 'changed\n');
+    assert.deepEqual(recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2)), ['passed', 'error']);
+    assert.deepEqual(ledgerFile.read({ ledger }).entries.map((entry) => entry.body.obligation), ['a1'], 'only a1, whose own input is a.txt');
+  });
+});
+
+test('recording: an ending cut short is cut off; a corrupt or locked ledger is not written', () => {
+  const ledgerCode = require('./ledger');
+  recordingProject(({ session, asked, snapshot, ledger }) => {
+    fs.mkdirSync(path.dirname(ledger));
+    const first = ledgerFile.append({ ledger, kind: 'note', body: { n: 1 }, wait_ms: 1000 });
+    assert.ok(first.appended);
+    const torn = ledgerCode.encodeEntry({ previous: first.appended, kind: 'note', body: { n: 2 } }).line.subarray(0, 20);
+    fs.appendFileSync(ledger, torn);
+    assert.equal(ledgerFile.read({ ledger }).torn, true);
+    recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2));
+    const read = ledgerFile.read({ ledger });
+    assert.equal(read.torn, false);
+    assert.deepEqual(read.entries.map((entry) => entry.kind), ['note', 'evidence', 'evidence']);
+  });
+  recordingProject(({ session, asked, snapshot, ledger }) => {
+    fs.mkdirSync(path.dirname(ledger));
+    fs.writeFileSync(ledger, 'not a ledger\n');
+    assert.throws(() => recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2)), (error) => error instanceof Stop && error.reason === 'ledger-not-written');
+    assert.equal(fs.readFileSync(ledger, 'utf8'), 'not a ledger\n', 'left as it was');
+    assert.equal(fs.existsSync(`${ledger}.lock`), false);
+  });
+  recordingProject(({ session, asked, snapshot, ledger }) => {
+    fs.mkdirSync(path.dirname(ledger));
+    fs.writeFileSync(`${ledger}.lock`, '');
+    assert.throws(() => recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2), { waitMs: 30 }),
+      (error) => error instanceof Stop && error.reason === 'ledger-not-written');
+    assert.equal(fs.existsSync(ledger), false);
+    assert.equal(fs.existsSync(`${ledger}.lock`), true, 'a lock that is not ours is left alone');
+  });
+});
+
+test('recording: the run\'s ledger, become the owner\'s or reached through a link, is not written', { skip: noLinks }, () => {
+  recordingProject(({ root, session, asked, snapshot, ledger }) => {
+    fs.mkdirSync(path.dirname(ledger));
+    fs.writeFileSync(path.join(root, 'records', 'owner.ledger'), '');
+    fs.linkSync(path.join(root, 'records', 'owner.ledger'), ledger);
+    assert.throws(() => recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2)), (error) => error instanceof Stop && error.reason === 'ledger-not-written');
+    assert.equal(fs.readFileSync(path.join(root, 'records', 'owner.ledger'), 'utf8'), '');
+  });
+  recordingProject(({ root, session, asked, snapshot }) => {
+    fs.mkdirSync(path.join(root, 'elsewhere'));
+    fs.symlinkSync(path.join(root, 'elsewhere'), path.join(root, 'l'));
+    assert.throws(() => recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2)), (error) => error instanceof Stop && error.reason === 'ledger-not-written');
+    assert.deepEqual(fs.readdirSync(path.join(root, 'elsewhere')), []);
+  });
+});
+
+// The run's batch append, with file operations that write short, fail or cannot undo.
+const ioWith = (changes) => ({
+  openSync: fs.openSync, ftruncateSync: fs.ftruncateSync, writeSync: fs.writeSync, fsyncSync: fs.fsyncSync, closeSync: fs.closeSync, ...changes,
+});
+const TWO = [{ kind: 'evidence', body: { n: 1 } }, { kind: 'evidence', body: { n: 2 } }];
+
+// A ledger holding one whole entry, and a torn ending after it when `torn`.
+function heldLedger(body, torn = false) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kernel2-append-'));
+  try {
+    const ledger = path.join(root, 'run.ledger');
+    const first = ledgerFile.append({ ledger, kind: 'note', body: { n: 0 }, wait_ms: 1000 });
+    const whole = fs.readFileSync(ledger);
+    if (torn) fs.appendFileSync(ledger, 'dodona1 9');
+    return body({ ledger, whole, first: first.appended });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test('batch append: writes that come back short are carried on at the right place', () => {
+  heldLedger(({ ledger }) => {
+    let calls = 0;
+    const io = ioWith({
+      writeSync: (descriptor, bytes, offset, length, position) => {
+        calls += 1;
+        return fs.writeSync(descriptor, bytes, offset, Math.min(length, 7), position);
+      },
+    });
+    const got = ledgerFile.appendAll(ledger, TWO, 1000, { io });
+    assert.equal(got.appended.length, 2);
+    assert.ok(calls > 2, 'more than one write');
+    const read = ledgerFile.read({ ledger });
+    assert.deepEqual(read.entries.map((entry) => entry.body), [{ n: 0 }, { n: 1 }, { n: 2 }]);
+    assert.equal(read.torn, false);
+  });
+});
+
+test('batch append: a write or flush that fails leaves the ledger as it was, its entries whole', () => {
+  for (const [why, changes, torn] of [
+    ['a write that makes no progress', { writeSync: () => 0 }],
+    ['a write that fails after part was written', (() => {
+      let first = true;
+      return {
+        writeSync: (descriptor, bytes, offset, length, position) => {
+          if (!first) throw Object.assign(new Error('EIO'), { code: 'EIO' });
+          first = false;
+          return fs.writeSync(descriptor, bytes, offset, Math.min(length, 30), position);
+        },
+      };
+    })()],
+    ['a flush that fails after every byte was written', (() => {
+      let first = true;
+      return {
+        fsyncSync: (descriptor) => {
+          if (first) {
+            first = false;
+            throw new Error('EIO on fsync');
+          }
+          return fs.fsyncSync(descriptor);
+        },
+      };
+    })()],
+    ['a failure after a torn ending was cut', { writeSync: () => { throw new Error('ENOSPC'); } }, true],
+  ]) {
+    heldLedger(({ ledger, whole }) => {
+      const got = ledgerFile.appendAll(ledger, TWO, 1000, { io: ioWith(changes) });
+      assert.equal(got.refused, 'not-written', why);
+      assert.equal(got.rolled_back, true, why);
+      assert.deepEqual(fs.readFileSync(ledger), whole, `${why}: only the whole entry it held`);
+      assert.equal(fs.existsSync(`${ledger}.lock`), false, why);
+    }, torn);
+  }
+});
+
+test('batch append: an undo that cannot be done is said, and the run is refused', () => {
+  heldLedger(({ ledger }) => {
+    const io = ioWith({
+      writeSync: () => { throw new Error('EIO'); },
+      ftruncateSync: () => { throw new Error('EROFS'); },
+    });
+    const got = ledgerFile.appendAll(ledger, TWO, 1000, { io });
+    assert.deepEqual([got.refused, got.rolled_back], ['not-written', false]);
+    assert.match(got.detail, /EIO.*not cut back: EROFS/);
+  });
+  recordingProject(({ session, asked, snapshot }) => {
+    const io = ioWith({ fsyncSync: () => { throw new Error('EIO'); } });
+    assert.throws(() => recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2), { io }),
+      (error) => error instanceof Stop && error.reason === 'ledger-not-written' && /could not be cut back/.test(error.detail));
+  });
+});
+
+test('batch append: the target is judged again once the lock is held, before the ledger is read', () => {
+  heldLedger(({ ledger, whole }) => {
+    let lockHeld = null;
+    const got = ledgerFile.appendAll(ledger, TWO, 1000, {
+      check: () => {
+        lockHeld = fs.existsSync(`${ledger}.lock`);
+        return 'it has become the owner\'s ledger';
+      },
+      io: ioWith({ openSync: () => { throw new Error('opened after a refusal'); } }),
+    });
+    assert.deepEqual(got, { refused: 'unsafe', detail: 'it has become the owner\'s ledger' });
+    assert.equal(lockHeld, true);
+    assert.deepEqual(fs.readFileSync(ledger), whole);
+    assert.equal(fs.existsSync(`${ledger}.lock`), false);
+  });
+});
+
+test('planted: a short write taken as the whole of it', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'ledger-file.js'), 'utf8');
+  const needle = '    done += wrote;\n';
+  assert.equal(source.split(needle).length, 2);
+  const where = fs.mkdtempSync(path.join(os.tmpdir(), 'kernel2-planted-'));
+  try {
+    const damaged = source.replace(needle, '    done = bytes.length;\n')
+      .replace(/require\('\.\/([^']+)'\)/g, (whole, name) => `require(${JSON.stringify(path.join(__dirname, name))})`);
+    fs.writeFileSync(path.join(where, 'ledger-file.js'), damaged);
+    const plantedFile = require(path.join(where, 'ledger-file.js'));
+    heldLedger(({ ledger }) => {
+      const io = ioWith({ writeSync: (descriptor, bytes, offset, length, position) => fs.writeSync(descriptor, bytes, offset, Math.min(length, 7), position) });
+      assert.ok(plantedFile.appendAll(ledger, TWO, 1000, { io }).appended, 'the damaged copy says it appended');
+      assert.notEqual((ledgerFile.read({ ledger }).entries || []).length, 3, 'but the ledger does not hold the entries');
+    });
+  } finally {
+    fs.rmSync(where, { recursive: true, force: true });
+  }
+});
+
+test('planted: verdicts recorded without reading the inputs again', () => {
+  const damaged = planted('if (!stillTheSame(root, startBody(session, end.name).inputs)) {', 'if (false) {');
+  recordingProject(({ root, session, asked, snapshot, ledger }) => {
+    fs.writeFileSync(path.join(root, 'm', 'a.txt'), 'changed\n');
+    assert.deepEqual(damaged.recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 1)), ['passed']);
+    assert.equal(ledgerFile.read({ ledger }).entries.length, 1, 'the damaged copy recorded it');
+  });
 });
 
 test('planted: a run reported twice taken as reported once', async () => {

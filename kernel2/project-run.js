@@ -20,6 +20,8 @@ const {
   answerProblem, runKey, isRegularFile, fileIdentity, namedFiles, reportEnding, readReport,
 } = require('./check');
 const processes = require('./processes');
+const crypto = require('node:crypto');
+const ledgerFile = require('./ledger-file');
 
 // How long the executor is waited for (step 12): the longest `wall_ms` of the batch,
 // below 0 read as 0, and 60 seconds more; a day if a run states none; never more.
@@ -465,6 +467,86 @@ async function checkAll(sessions, plan, root, execute) {
   return open.map(({ planned, end }) => ({ binding: planned.binding, name: planned.name, ...end }));
 }
 
+// Step 13: recording.
+
+// The level an evidence entry states, from the final's rank as the host checks read it.
+const LEVEL_OF_RANK = { documented: 'asserted', sampled: 'sampled', bounded: 'bounded', exhaustive: 'proven' };
+const LEDGER_WAIT_MS = 60000;
+
+function stillTheSame(root, inputs) {
+  return inputs.every(({ path: rel, identity }) => {
+    try {
+      return `sha256:${crypto.createHash('sha256').update(fs.readFileSync(path.join(root, rel))).digest('hex')}` === identity;
+    } catch (error) {
+      return false;
+    }
+  });
+}
+
+// For each check, in the order the checks were started (`ends` is checkAll's answer),
+// whose verdict is passed or failed: each input file read again, and the verdict kept
+// only if every one still has the identity it was keyed with (otherwise `error`); then
+// one evidence entry for each kept verdict, all in one append to the run's ledger, once
+// it is shown again to be reached without a link and not the owner's ledger. Nothing is
+// written when nothing is kept. Returns each check's outcome, in the same order, for
+// countsOf. A ledger that cannot be appended to is `ledger-not-written`.
+function recordVerdicts(asked, sessions, snapshot, ends, { waitMs = LEDGER_WAIT_MS, io = fs } = {}) {
+  const { root, site } = asked;
+  const outcomes = [];
+  const entries = [];
+  for (const end of ends) {
+    if (end.outcome !== 'passed' && end.outcome !== 'failed') {
+      outcomes.push(end.outcome);
+      continue;
+    }
+    const session = sessions.find((each) => each.binding.name === end.binding);
+    if (!stillTheSame(root, startBody(session, end.name).inputs)) {
+      outcomes.push('error');
+      continue;
+    }
+    outcomes.push(end.outcome);
+    const { preimage } = own(snapshot.judged.obligations, end.name);
+    entries.push({
+      kind: 'evidence',
+      body: {
+        obligation: end.name,
+        preimage,
+        core_key: identityOf(preimage),
+        platform: `${site.platform.os}/${site.platform.arch}`,
+        verdict: end.outcome,
+        writer: site.writer,
+        strength: end.strength,
+        level: LEVEL_OF_RANK[end.strength.rank],
+      },
+    });
+  }
+  if (entries.length === 0) return outcomes;
+  // Asked before the folders are made, and again under the ledger's lock.
+  const problem = () => ledgerProblem(root, asked.ledger, asked.owner_ledger);
+  const early = problem();
+  if (early !== null) throw new Stop('ledger-not-written', early);
+  let written;
+  try {
+    written = ledgerFile.appendAll(path.join(root, asked.ledger), entries, waitMs, { check: problem, io });
+  } catch (error) {
+    throw new Stop('ledger-not-written', `${asked.ledger}: ${error.code || error.message}`);
+  }
+  if (written.refused !== undefined) {
+    const said = [written.refused, written.detail, written.rolled_back === false ? 'the ledger could not be cut back to what it held' : null];
+    throw new Stop('ledger-not-written', `${asked.ledger}: ${said.filter(Boolean).join('; ')}`);
+  }
+  return outcomes;
+}
+
+// Why the run's ledger may not be written now, or null: reached through a link, or the
+// same file as the owner's ledger.
+function ledgerProblem(root, ledgerRel, ownerRel) {
+  if (!reachedWithoutLink(root, ledgerRel)) return `${ledgerRel} is reached through a link`;
+  const ledgerId = fileId(path.join(root, ledgerRel));
+  if (ledgerId !== null && ledgerId === fileId(path.join(root, ownerRel))) return `${ledgerRel} is the owner's ledger`;
+  return null;
+}
+
 // The bytes of standard input to `{ready: digests}`, or the refusal the command would print.
 function preflightBytes(bytes) {
   try {
@@ -477,5 +559,5 @@ function preflightBytes(bytes) {
 
 module.exports = {
   preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange, SESSION_BROKE,
-  checkAll, batchWait, executeBatch,
+  checkAll, batchWait, executeBatch, recordVerdicts,
 };
