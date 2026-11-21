@@ -235,6 +235,30 @@ The kernel returns the executor's report under the original check ID. The builde
 {"type":"result","id":"2","capability":"artifact.build","body":{"final":{"verdict":"passed","outputs":[{"path":"out/demo.o","identity":"sha256:6cb54a97f497e7b39f196e09ff5a80126822b5a948c307aeb9c91401b4d86a52"}],"deterministic":true}}}
 ```
 
+## Conformance check example
+
+This draft exchange replays one `activate` transition from an initial value of `false`. The files and tool are synthetic. The provider declares `trace-replay` at the `sampled` rank in its manifest.
+
+### Mapping files
+
+The specification says `activate: enabled := true` and the implementation says `activate: power := true`. The mapping file says `enabled -> power`. Each file ends with a line feed. The kernel sends the specification and implementation in `inputs` and the mapping file in `mapping`. The checker includes all three in the run's inputs.
+
+```json
+{"type":"request","id":"1","deadline_ms":30000,"capability":"conformance.check","body":{"op":"start","obligation":{"binding":"replay","name":"power/activate","kind":"conformance","specified_by":["spec/power.spec"],"targets":["src/power.impl"],"expect":"holds","config":{"event":"activate","initial":false}},"inputs":[{"path":"spec/power.spec","identity":"sha256:f74cadc42cd18f983b9ddb34f7cc5ecada36c60b47cd9367da9b302c06099d64"},{"path":"src/power.impl","identity":"sha256:7aa21f553c6fd2b84b6fd4599f4ab11180340c53c4a68e29637c300592558450"}],"tools":[{"name":"replaycheck","version":"1.0.0","root":"tools/replaycheck","digest":"sha256:25ad79c15d863f065b8b1a5e6c6f99098500fb478fa9417cea976c1d4aee5a03"}],"platform":{"os":"linux","arch":"x86_64"},"mapping":[{"path":"map/power.map","identity":"sha256:8eb30fddebbc4fcd923028af8b181d71044e665af5b93d8fc3b8b70c7762ad89"}]}}
+{"type":"result","id":"1","capability":"conformance.check","body":{"next":{"program":{"tool":"replaycheck","path":"bin/replaycheck"},"args":["--event","activate","--initial","false","--spec","spec/power.spec","--impl","src/power.impl","--map","map/power.map","--report","out/replay.txt"],"inputs":[{"path":"map/power.map","identity":"sha256:8eb30fddebbc4fcd923028af8b181d71044e665af5b93d8fc3b8b70c7762ad89"},{"path":"spec/power.spec","identity":"sha256:f74cadc42cd18f983b9ddb34f7cc5ecada36c60b47cd9367da9b302c06099d64"},{"path":"src/power.impl","identity":"sha256:7aa21f553c6fd2b84b6fd4599f4ab11180340c53c4a68e29637c300592558450"}],"outputs":[{"path":"out/replay.txt"}],"limits":{"wall_ms":20000,"output_bytes":65536},"platform":{"os":"linux","arch":"x86_64"},"tools":[{"name":"replaycheck","digest":"sha256:25ad79c15d863f065b8b1a5e6c6f99098500fb478fa9417cea976c1d4aee5a03"}]}}}
+```
+
+### Evidence from the replay
+
+The tool tree contains one program, whose fixture bytes are `fixture replaycheck` followed by a line feed. The executor's report names the tool digest, an empty captured log and a replay file containing `activate: enabled false -> true | power false -> true` followed by a line feed.
+
+The kernel sends that report in `run.result`, where `check` names the original start request. The checker returns `passed` for the replayed transition, attaches the replay file and states what this result assumes about the replay adapter.
+
+```json
+{"type":"request","id":"2","deadline_ms":30000,"capability":"conformance.check","body":{"op":"run.result","check":"1","run":1,"report":{"handle":"replay-0001","end":"exited","exit_status":0,"platform":{"os":"linux","arch":"x86_64"},"tools_ran":[{"name":"replaycheck","digest":"sha256:25ad79c15d863f065b8b1a5e6c6f99098500fb478fa9417cea976c1d4aee5a03"}],"isolation":"best-effort","captured_output":{"path":"out/captured.log","identity":"sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"outputs":[{"path":"out/replay.txt","identity":"sha256:febb3aa928812dfbcdc1ff16e8c3efb37a0c98371419bda6eac39bdb58d16b26"}]}}}
+{"type":"result","id":"2","capability":"conformance.check","body":{"final":{"verdict":"passed","strength":{"class":"trace-replay","rank":"sampled"},"trusted_base":["the replay adapter reports the implementation's power state after activate"],"attachments":[{"path":"out/replay.txt","identity":"sha256:febb3aa928812dfbcdc1ff16e8c3efb37a0c98371419bda6eac39bdb58d16b26"}]}}}
+```
+
 ## Where to look for the exact shape
 
 | You need | Look at |
