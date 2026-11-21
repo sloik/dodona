@@ -1,10 +1,10 @@
 'use strict';
-// Tests of the run command's first slice, its additions to step 1 (project-run.js).
-// Run: node --test kernel2/test-run.js
+// Tests of the run command's first parts (project-run.js): its additions to step 1, and
+// the plan of step 10. Run alone: node --test kernel2/test-run.js
 //
 // Each refusal starts from an input that is accepted (the control) and breaks one rule,
 // so that rule alone stands between it and acceptance: a guard removed turns its test
-// red. Two guards are removed for real, in a disposable copy, at the end.
+// red. Guards are removed for real, in a disposable copy, at the end.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -12,8 +12,12 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { preflight, preflightBytes, diskName } = require('./project-run');
-const { Stop } = require('./project-status');
+const {
+  preflight, preflightBytes, diskName, planOf, countsOf, planRun,
+} = require('./project-run');
+const { Stop, projectStatus } = require('./project-status');
+const ledgerFile = require('./ledger-file');
+const { identityOf } = require('./identity');
 
 const noLinks = process.platform === 'win32';
 
@@ -233,14 +237,14 @@ function planted(needle, replacement) {
   const where = fs.mkdtempSync(path.join(os.tmpdir(), 'kernel2-planted-'));
   try {
     fs.writeFileSync(path.join(where, 'project-run.js'), damaged);
-    return require(path.join(where, 'project-run.js')).preflight;
+    return require(path.join(where, 'project-run.js'));
   } finally {
     fs.rmSync(where, { recursive: true, force: true });
   }
 }
 
 test('planted: comparing the owner\'s ledger by exact path lets another spelling through', () => {
-  const damaged = planted('diskName(ledger) === diskName(ownerRel)', 'ledger === ownerRel');
+  const damaged = planted('diskName(ledger) === diskName(ownerRel)', 'ledger === ownerRel').preflight;
   withProject((root) => {
     const asked = input(root, { ledger: 'Records/owner.ledger', ledgers: ['Records/owner.ledger'] });
     assert.equal(outcome(asked), 'bad-input');
@@ -249,10 +253,185 @@ test('planted: comparing the owner\'s ledger by exact path lets another spelling
 });
 
 test('planted: a transcript checked against ledgers but not their locks takes the owner\'s lock', () => {
-  const damaged = planted('[rel, `${rel}.lock`]', '[rel]');
+  const damaged = planted('[rel, `${rel}.lock`]', '[rel]').preflight;
   withProject((root) => {
     const asked = input(root, { transcript: 'records/owner.ledger.lock' });
     assert.equal(outcome(asked), 'bad-input');
     assert.equal(outcome(asked, damaged), 'ready');
   });
+});
+
+// Step 10, the plan. A snapshot as the status command's steps 2 to 10 leave it, given
+// as listed (not yet sorted), rejected and the status rules' report.
+function snapshotWith(listed, statuses, unchecked = []) {
+  const obligations = {};
+  for (const [name, status] of Object.entries(statuses)) obligations[name] = status === 'unknown' ? { status, reason: 'never-run' } : { status };
+  return { obligations: { listed, unchecked }, report: { obligations } };
+}
+
+const MIXED = snapshotWith(
+  [{ binding: 'zeta', name: 'a1' }, { binding: 'alpha', name: 'z1' }, { binding: 'alpha', name: 'c1' }, { binding: 'alpha', name: 'b1' }, { binding: 'zeta', name: 'z2' }],
+  { a1: 'passed', z1: 'unknown', c1: 'conflict', b1: 'failed', z2: 'unknown' },
+  ['ghost', 'z2'],
+);
+
+const MIXED_PLAN = {
+  obligations: 5,
+  check: [{ binding: 'alpha', name: 'z1' }, { binding: 'zeta', name: 'z2' }],
+  reused: [{ binding: 'alpha', name: 'b1', status: 'failed' }, { binding: 'alpha', name: 'c1', status: 'conflict' }, { binding: 'zeta', name: 'a1', status: 'passed' }],
+  not_checkable: ['ghost', 'z2'],
+};
+
+test('plan: unknown is checked, passed, failed and conflict reused, by binding and then name', () => {
+  assert.deepEqual(planOf(MIXED), MIXED_PLAN);
+  // A name both listed and rejected is checked as listed; one only rejected is only counted.
+  const counts = countsOf(planOf(MIXED), ['passed', 'refused']);
+  assert.deepEqual(Object.keys(counts), ['obligations', 'reused', 'checked', 'passed', 'failed', 'error', 'unavailable', 'unsupported', 'refused', 'not_checkable']);
+  assert.deepEqual(counts, { obligations: 5, reused: 3, checked: 2, passed: 1, failed: 0, error: 0, unavailable: 0, unsupported: 0, refused: 1, not_checkable: 2 });
+  assert.throws(() => countsOf(planOf(MIXED), []), /exactly one outcome/);
+  assert.throws(() => countsOf(planOf(MIXED), ['passed', 'maybe']), /exactly one outcome/);
+});
+
+test('counts: every planned check has an outcome given at its own place', () => {
+  const plan = planOf(MIXED); // two checks
+  // Holes: `every` and `filter` pass over them, so a list with none given looked complete.
+  for (const outcomes of [new Array(2), [, 'passed'], ['passed', ,], Object.assign(new Array(2), { 1: 'failed' })]) { // eslint-disable-line no-sparse-arrays
+    assert.equal(outcomes.length, 2);
+    assert.throws(() => countsOf(plan, outcomes), /exactly one outcome/, JSON.stringify(outcomes));
+  }
+  for (const outcomes of [{ length: 2, 0: 'passed', 1: 'passed' }, 'pp', undefined, ['passed', 'passed', 'passed'], ['passed', undefined]]) {
+    assert.throws(() => countsOf(plan, outcomes), /exactly one outcome/, String(outcomes));
+  }
+  // The same outcomes in either order give the same counts, in the contract's key order.
+  const counted = countsOf(plan, ['unsupported', 'unavailable']);
+  assert.deepEqual(counted, countsOf(plan, ['unavailable', 'unsupported']));
+  assert.deepEqual(Object.entries(counted), [['obligations', 5], ['reused', 3], ['checked', 2], ['passed', 0], ['failed', 0], ['error', 0],
+    ['unavailable', 1], ['unsupported', 1], ['refused', 0], ['not_checkable', 2]]);
+});
+
+test('plan: a listed obligation the report gives no status of its own is a fault, not a plan', () => {
+  const listed = [{ binding: 'b', name: 'o1' }, { binding: 'b', name: 'o2' }];
+  assert.throws(() => planOf(snapshotWith(listed, { o1: 'passed' })), /no status of its own/, 'missing');
+  assert.throws(() => planOf(snapshotWith(listed, { o1: 'passed', o2: 'maybe' })), /no status of its own/, 'not a status');
+  // A name an ordinary assignment cannot make an own key of: the report has no entry for it.
+  const report = { obligations: {} };
+  report.obligations.__proto__ = { status: 'passed' }; // eslint-disable-line no-proto
+  assert.equal(Object.hasOwn(report.obligations, '__proto__'), false);
+  assert.throws(() => planOf({ obligations: { listed: [{ binding: 'b', name: '__proto__' }], unchecked: [] }, report }), /no status of its own/);
+  // Given as its own key, the same name is planned as any other.
+  const own = { obligations: JSON.parse('{"__proto__": {"status": "unknown", "reason": "never-run"}}') };
+  assert.deepEqual(planOf({ obligations: { listed: [{ binding: 'b', name: '__proto__' }], unchecked: [] }, report: own }).check, [{ binding: 'b', name: '__proto__' }]);
+});
+
+test('plan: nothing listed, and everything current, check nothing', () => {
+  const none = planOf(snapshotWith([], {}));
+  assert.deepEqual(none, { obligations: 0, check: [], reused: [], not_checkable: [] });
+  assert.deepEqual(countsOf(none, []), { obligations: 0, reused: 0, checked: 0, passed: 0, failed: 0, error: 0, unavailable: 0, unsupported: 0, refused: 0, not_checkable: 0 });
+  const current = planOf(snapshotWith([{ binding: 'b', name: 'o1' }, { binding: 'b', name: 'o2' }], { o1: 'passed', o2: 'failed' }, ['gone']));
+  assert.deepEqual(current.check, []);
+  assert.deepEqual(countsOf(current, []), { obligations: 2, reused: 2, checked: 0, passed: 0, failed: 0, error: 0, unavailable: 0, unsupported: 0, refused: 0, not_checkable: 1 });
+});
+
+test('planted: an unknown status taken as current is never checked', () => {
+  const damaged = planted("const CURRENT = ['passed', 'failed', 'conflict'];", "const CURRENT = ['passed', 'failed', 'conflict', 'unknown'];");
+  assert.deepEqual(damaged.planOf(MIXED).check, []);
+  assert.notDeepEqual(damaged.planOf(MIXED), MIXED_PLAN);
+});
+
+test('planted: a conflict taken as no current result is checked again', () => {
+  const damaged = planted('if (CURRENT.includes(status)) reused.push',
+    "if (CURRENT.includes(status) && status !== 'conflict') reused.push");
+  const plan = damaged.planOf(MIXED);
+  assert(plan.check.some(({ name }) => name === 'c1'));
+  assert.notDeepEqual(plan, MIXED_PLAN);
+});
+
+test('planted: obligations taken by name alone come out of binding order', () => {
+  const damaged = planted('compareUnits(a.binding, b.binding) || compareUnits(a.name, b.name)', 'compareUnits(a.name, b.name)');
+  assert.notDeepEqual(damaged.planOf(MIXED), MIXED_PLAN);
+});
+
+// A provider that answers from a file: its manifest, and an enumeration per binding.
+const PROVIDER = `'use strict';
+const fs = require('node:fs');
+const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
+let buffer = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => {
+  buffer += chunk;
+  for (let at = buffer.indexOf('\\n'); at >= 0; at = buffer.indexOf('\\n')) {
+    const message = JSON.parse(buffer.slice(0, at));
+    buffer = buffer.slice(at + 1);
+    if (message.type === 'hello') send({ type: 'manifest', echo: message.echo, manifest: config.manifest });
+    else if (message.type === 'request') send({ type: 'result', id: message.id, capability: message.capability, body: config.answers[message.body.binding] });
+    else if (message.type === 'shutdown') process.exit(0);
+  }
+});
+process.stdin.on('end', () => process.exit(0));
+`;
+
+function obligation(name, file) {
+  return { name, kind: 'check', specified_by: [file], targets: [file], expect: 'holds', config: {}, inputs: [file] };
+}
+
+test('plan through the status command\'s own steps and status rules', async () => {
+  const root = project();
+  try {
+    fs.mkdirSync(path.join(root, 'm'));
+    fs.mkdirSync(path.join(root, 'n'));
+    fs.writeFileSync(path.join(root, 'm', 'a.txt'), 'a\n');
+    fs.writeFileSync(path.join(root, 'n', 'b.txt'), 'b\n');
+    fs.writeFileSync(path.join(root, 'dodona.toml'), '[project]\nname = "p"\n\n'
+      + '[[binding]]\nname = "zeta"\nprovider = "t.check"\ncapabilities = ["obligation.enumerate", "obligation.check"]\nmatch = ["m/*.txt"]\n\n'
+      + '[[binding]]\nname = "alpha"\nprovider = "t.check"\ncapabilities = ["obligation.enumerate", "obligation.check"]\nmatch = ["n/*.txt"]\n');
+    fs.writeFileSync(path.join(root, 'code', 'provider.js'), PROVIDER);
+    fs.writeFileSync(path.join(root, 'code', 'answers.json'), JSON.stringify({
+      manifest: { protocol: '0.2', name: 't.check', version: '1.0.0', capabilities: [{ capability: 'obligation.enumerate' }, { capability: 'obligation.check' }], tools: [] },
+      answers: {
+        zeta: { obligations: [obligation('a1', 'm/a.txt'), obligation('z2', 'm/a.txt')], rejected: [{ name: 'z2' }, { name: 'ghost' }] },
+        alpha: { obligations: [obligation('z1', 'n/b.txt'), obligation('c1', 'n/b.txt'), obligation('b1', 'n/b.txt')] },
+      },
+    }));
+    const site = input(root).site;
+    const asked = input(root, {
+      transcript: undefined,
+      site: { ...site, deadline_ms: 20000, providers: { 't.check': { command: [process.execPath, path.join(root, 'code', 'provider.js'), path.join(root, 'code', 'answers.json')], code: ['code/provider.js'] } } },
+    });
+    delete asked.transcript;
+
+    // Nothing recorded yet: everything listed is checked, by binding and then name.
+    const first = await planRun(asked);
+    assert.deepEqual(first.plan.check, [
+      { binding: 'alpha', name: 'b1' }, { binding: 'alpha', name: 'c1' }, { binding: 'alpha', name: 'z1' },
+      { binding: 'zeta', name: 'a1' }, { binding: 'zeta', name: 'z2' }]);
+    assert.deepEqual(first.plan.not_checkable, ['ghost', 'z2']);
+
+    // Verdicts under each obligation's own key, as a run records them.
+    const record = (name, verdict) => {
+      const preimage = first.snapshot.judged.obligations[name].preimage;
+      const body = { obligation: name, preimage, core_key: identityOf(preimage), platform: 'linux/x86_64', verdict, writer: 'w' };
+      assert.ok(ledgerFile.append({ ledger: path.join(root, 'l', 'run.ledger'), kind: 'evidence', body, wait_ms: 1000 }).appended);
+    };
+    record('a1', 'passed');
+    record('b1', 'failed');
+    record('c1', 'passed');
+    record('c1', 'failed');
+
+    const second = await planRun(asked);
+    assert.deepEqual(second.plan.check, [{ binding: 'alpha', name: 'z1' }, { binding: 'zeta', name: 'z2' }]);
+    assert.deepEqual(second.plan.reused, [
+      { binding: 'alpha', name: 'b1', status: 'failed' }, { binding: 'alpha', name: 'c1', status: 'conflict' }, { binding: 'zeta', name: 'a1', status: 'passed' }]);
+    assert.deepEqual(countsOf(second.plan, ['passed', 'error']),
+      { obligations: 5, reused: 3, checked: 2, passed: 1, failed: 0, error: 1, unavailable: 0, unsupported: 0, refused: 0, not_checkable: 2 });
+
+    // The status command, after its split, reports from the same steps what the plan read.
+    const status = await projectStatus(Buffer.from(JSON.stringify(asked)));
+    assert.equal(status.refused, undefined, status.detail);
+    assert.deepEqual(status.report.obligations, second.snapshot.report.obligations);
+    assert.deepEqual(status.not_checkable, ['ghost', 'z2']);
+    assert.deepEqual(status.ledger, { entries: 4, torn: false });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

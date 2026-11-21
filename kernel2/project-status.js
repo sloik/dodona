@@ -701,8 +701,9 @@ function objectOf(map) {
   return out;
 }
 
-async function judge(asked) {
-  const digests = checkInput(asked); // step 1
+// Steps 2 to 10, after step 1 has given the code digests: what was read, asked and
+// judged, from which the status command makes its output and the run command its plan.
+async function snapshotOf(asked, digests) {
   const root = asked.root;
   const site = asked.site;
   // Step 2.
@@ -767,6 +768,11 @@ async function judge(asked) {
     steps: [...read.entries.map((entry) => ({ do: { append: { kind: entry.kind, body: entry.body } } })), NOTHING],
   };
   const report = ownReport(judged);
+  return { judged, report, policy, obligations, intents, parent, unread, read, notServed };
+}
+
+// The output, from a snapshot: doubts, coverage (step 11) and the status as stated.
+function reportOf(asked, { judged, report, policy, obligations, intents, parent, unread, read, notServed }) {
   const doubts = [];
   if (asked.policy.not_applied.length > 0) doubts.push(DOUBTS.policy);
   if (policy.required.some((name) => intents.has(name) && intents.get(name).children.length > 0)) doubts.push(DOUBTS.children);
@@ -789,6 +795,11 @@ async function judge(asked) {
   };
 }
 
+async function judge(asked) {
+  const digests = checkInput(asked); // step 1
+  return reportOf(asked, await snapshotOf(asked, digests));
+}
+
 // The command: bytes of standard input to the one object it prints.
 async function projectStatus(bytes) {
   try {
@@ -803,4 +814,6 @@ module.exports = {
   projectStatus, readInput, isRelative, isPattern, segmentMatches, readProject, coverageOf, Stop,
   // Reused by the run command's checks of its own input (project-run.js).
   checkInput, isDirectory, fileId, stepsOf,
+  // Reused by its plan: the same steps 2 to 10 and the same output.
+  snapshotOf, reportOf,
 };

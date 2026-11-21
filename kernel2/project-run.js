@@ -1,8 +1,8 @@
 'use strict';
-// The first slice of the `run` command (conformance/README.md, "How a project's run is
-// judged"; decision 0034): its additions to step 1. The command is not served yet, and
-// dodona-kernel2.js offers no `run`; this module is reached only through `preflight`
-// and its tests (test-run.js).
+// The first parts of the `run` command (conformance/README.md, "How a project's run is
+// judged"; decision 0034): its additions to step 1, and the plan of step 10. The command
+// is not served yet, and dodona-kernel2.js offers no `run`; this module is reached only
+// through its tests (test-run.js).
 //
 // The run command takes the status command's input with `ledger`, `executor` and,
 // where wanted, `transcript`. These are checked first, before the status command's own
@@ -13,7 +13,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const unicode = require('./unicode');
 const { isObject } = require('./wire');
-const { readInput, isRelative, checkInput, isDirectory, fileId, stepsOf, Stop } = require('./project-status');
+const { compareUnits } = require('./canonical');
+const {
+  readInput, isRelative, checkInput, isDirectory, fileId, stepsOf, snapshotOf, Stop,
+} = require('./project-status');
+
+// The statuses that are a current result: reused, nothing sent for them.
+const CURRENT = ['passed', 'failed', 'conflict'];
+// What a checked obligation can end as, in the order `counts` gives them.
+const OUTCOMES = ['passed', 'failed', 'error', 'unavailable', 'unsupported', 'refused'];
 
 function isString(value) {
   return typeof value === 'string';
@@ -125,6 +133,54 @@ function preflight(asked) {
   return checkInput(asked);
 }
 
+// Step 10, the plan, from what the status command's steps 2 to 10 judged: the status
+// rules' own report says which obligation has a current result. Each obligation the
+// providers listed is either reused (passed, failed or conflict) or to be checked
+// (unknown), taken sorted by binding and then name. A name both listed and rejected is
+// checked as listed; a rejected name not listed is never checked, and only counted.
+function planOf(snapshot) {
+  const listed = [...snapshot.obligations.listed].sort((a, b) => compareUnits(a.binding, b.binding) || compareUnits(a.name, b.name));
+  const check = [];
+  const reused = [];
+  for (const { binding, name } of listed) {
+    const status = own(own(snapshot.report.obligations, name), 'status');
+    // The report names every obligation judged, as its own entry. One it lacks (such as a
+    // name the report's object could not hold as its own key) is a fault here, never a
+    // reason to check or to reuse.
+    if (!CURRENT.includes(status) && status !== 'unknown') {
+      throw new Error(`the status report gives no status of its own for the listed obligation ${JSON.stringify(name)}`);
+    }
+    if (CURRENT.includes(status)) reused.push({ binding, name, status });
+    else check.push({ binding, name });
+  }
+  return { obligations: listed.length, check, reused, not_checkable: snapshot.obligations.unchecked };
+}
+
+// `counts`, once each planned check has its outcome, in the order the checks were taken.
+// With nothing to check, `countsOf(plan, [])` is the whole of it.
+// Each outcome is read by its position, so a hole in the list (which `every` and `filter`
+// would pass over) is a missing outcome, never one counted as nothing.
+function countsOf(plan, outcomes) {
+  const checked = plan.check.length;
+  const given = Array.isArray(outcomes) && outcomes.length === checked
+    && plan.check.every((_, at) => Object.hasOwn(outcomes, at) && OUTCOMES.includes(outcomes[at]));
+  if (!given) throw new Error('every planned check needs exactly one outcome');
+  const counts = { obligations: plan.obligations, reused: plan.reused.length, checked };
+  for (const outcome of OUTCOMES) counts[outcome] = 0;
+  for (let at = 0; at < checked; at += 1) counts[outcomes[at]] += 1;
+  counts.not_checkable = plan.not_checkable.length;
+  return counts;
+}
+
+// Steps 1 to 10. The providers are asked as the status command asks them, each session
+// closed after its answer: holding a checking binding's session open for the checks
+// (step 5 of the run) is a later part, as are steps 11 to 14.
+async function planRun(asked) {
+  const digests = preflight(asked);
+  const snapshot = await snapshotOf(asked, digests);
+  return { digests, snapshot, plan: planOf(snapshot) };
+}
+
 // The bytes of standard input to `{ready: digests}`, or the refusal the command would print.
 function preflightBytes(bytes) {
   try {
@@ -135,4 +191,4 @@ function preflightBytes(bytes) {
   }
 }
 
-module.exports = { preflight, preflightBytes, diskName };
+module.exports = { preflight, preflightBytes, diskName, planOf, countsOf, planRun };

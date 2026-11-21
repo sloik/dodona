@@ -837,7 +837,3 @@ test('coverage: where each intent tree\'s hard gates sit', () => {
   assert.deepEqual(coverage.intents.a, { own_hard: 1, subtree_hard: 1, root: 'r', tree_hard: 2, floor: 2, floor_met_only_over_tree: true });
   assert.deepEqual(coverage.thinnest, { r: 'b' });
 });
-
-// The run command's first slice has its own file, so that it can be run alone; this
-// suite runs it too.
-require('./test-run');
