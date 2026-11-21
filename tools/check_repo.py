@@ -852,6 +852,17 @@ def gap_kit_judge_is_strict() -> None:
             problems.append(f"kit judge: wrong answer for kernel output {output!r}")
 
 
+def gap_status_report_names_policy_on_pass() -> None:
+    """The status schema described a policy identity for a pass without requiring one."""
+    schema = json.loads((ROOT / "protocol" / "status.schema.json").read_text(encoding="utf-8"))
+    condition = {
+        "if": {"properties": {"project": {"properties": {"status": {"const": "passed"}}}}},
+        "then": {"properties": {"policy": {"required": ["identity"]}}},
+    }
+    if condition not in schema.get("allOf", []):
+        problems.append("status.schema.json: a passed project must require policy.identity")
+
+
 def _fits(value, schema: dict, defs: dict, where: str) -> None:
     """A small structural check of data against the subset of JSON Schema the policy schema uses."""
     if "$ref" in schema:
@@ -937,7 +948,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
-              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown, gap_documents_follow_the_code]
+              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown,
+              gap_status_report_names_policy_on_pass, gap_documents_follow_the_code]
 
 
 class JudgeTests(unittest.TestCase):

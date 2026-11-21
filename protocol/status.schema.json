@@ -93,6 +93,30 @@
       "description": "Everything the kernel could not do or had to reject, so nothing is dropped silently."
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "project": {
+            "properties": {
+              "status": {
+                "const": "passed"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "policy": {
+            "required": [
+              "identity"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "patternProperties": {
     "^x-": {}
   },
