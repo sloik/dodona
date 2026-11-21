@@ -143,9 +143,9 @@ Bounds: one obligation, which can or cannot be checked, fixed from the start; at
 
 | # | Claim | Decision | Check | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | modelled, unchecked |
+| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 11 |
 
-Run 9 records the comparison for the kernel source files named in its index. The current sources require a fresh comparison. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
+Run 11 records the current comparison. Run 9 remains the record for the earlier kernel sources. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
 
 ## Shown by the conformance kit, not by a model
 
@@ -701,6 +701,10 @@ Two earlier attempts at this run stopped partway, at a limit on the space a job 
 | `mutant_no_resubmit_after_error` | temporal-violation | temporal violation | 966 / 430 |
 | `mutant_resubmits_unsupported` | temporal-violation | temporal violation | 1,071 / 430 |
 | `mutant_gives_up_on_error` | violation | violation of AnswerIsRight | 32 / 28 |
+
+### Run 11: both kernels on the retained model states
+
+On 2026-11-21, both kernels at `9967ca9` agreed with the model on all 71,744 evidence states and all 78,894 intent states. The four comparisons used the retained state lists from completed model runs. Their model sources, settings and comparison tool matched the artifact's original inputs. Run 11 records the original model outputs, both kernel source identities and the new comparison results. [Comparison job](https://github.com/sloik/dodona/actions/runs/44899354441/job/136831864935) · [Recorded outputs](runs/run-11/every-state/).
 
 ### Not a run: the first attempt at the rewritten models
 

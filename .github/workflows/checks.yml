@@ -143,6 +143,11 @@ jobs:
       - name: Judge the second kernel's status command with the project cases (decision 0034)
         if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
         run: ${{ matrix.python }} tools/run_status_cases.py --jobs 2 --kernel ${{ matrix.rust_kernel }} -- node kernel2/dodona-kernel2.js status
+      # The reference run and status commands, both driving the first kernel, judged with the run cases; each
+      # report is recomputed by the second kernel, so the kernel that ran the project does not grade it.
+      - name: Judge the reference run command with the run cases (decision 0034)
+        if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
+        run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js --status "${{ matrix.python }} tools/project_status.py --kernel ${{ matrix.rust_kernel }}" -- ${{ matrix.python }} tools/project_run.py --kernel ${{ matrix.rust_kernel }}
 
   # A kit that no defective kernel fails proves nothing. Every listed defect is
   # planted in each kernel in turn and the kit must reject it. Slow, so it has

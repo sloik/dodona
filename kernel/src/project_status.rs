@@ -1276,9 +1276,77 @@ fn same_file(a: &Path, b: &Path) -> bool {
         _ => false,
     }
 }
+/// Whether the handles identify the same file on Windows.
+#[cfg(windows)]
+fn same_file(a: &Path, b: &Path) -> bool {
+    file_id::same(a, b).unwrap_or_else(|| {
+        match (fs::canonicalize(a), fs::canonicalize(b)) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => false,
+        }
+    })
+}
+
+#[cfg(windows)]
+#[allow(unsafe_code)]
+mod file_id {
+    use std::fs::{File, OpenOptions};
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::os::windows::io::AsRawHandle;
+    use std::path::Path;
+
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    const FILE_ID_INFO: i32 = 18;
+
+    #[repr(C)]
+    #[derive(PartialEq, Eq)]
+    struct FileIdInfo {
+        volume: u64,
+        file: [u8; 16],
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetFileInformationByHandleEx(
+            file: *mut std::ffi::c_void,
+            class: i32,
+            info: *mut std::ffi::c_void,
+            size: u32,
+        ) -> i32;
+    }
+
+    fn id(file: &File) -> Option<FileIdInfo> {
+        let mut info = FileIdInfo { volume: 0, file: [0; 16] };
+        // SAFETY: file owns the live handle and info holds writable storage of
+        // the documented FILE_ID_INFO layout and size for the duration of the call.
+        let ok = unsafe {
+            GetFileInformationByHandleEx(
+                file.as_raw_handle(),
+                FILE_ID_INFO,
+                (&mut info as *mut FileIdInfo).cast(),
+                std::mem::size_of::<FileIdInfo>() as u32,
+            )
+        };
+        (ok != 0).then_some(info)
+    }
+
+    pub fn same(a: &Path, b: &Path) -> Option<bool> {
+        let open = |path: &Path| {
+            OpenOptions::new()
+                .access_mode(0)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+                .open(path)
+                .ok()
+        };
+        // Keep both handles open for the entire comparison.
+        let (a, b) = (open(a)?, open(b)?);
+        Some(id(&a)? == id(&b)?)
+    }
+}
+
 /// Without a file index in the standard library, the same file is the same
 /// path once every link is resolved. A hard link is not recognised.
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 fn same_file(a: &Path, b: &Path) -> bool {
     match (fs::canonicalize(a), fs::canonicalize(b)) {
         (Ok(a), Ok(b)) => a == b,
