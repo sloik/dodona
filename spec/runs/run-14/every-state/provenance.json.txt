@@ -1,0 +1,30 @@
+{
+  "compared_at": "f34dd36cea93e17069519561c1d79731f96ae2df",
+  "this_run": "44921672613",
+  "this_attempt": "1",
+  "what": "both kernels compared with retained model states; no model checker ran and no state was generated in this job; not a rerun on the shared queue",
+  "source": {
+    "repository": "sloik/dodona",
+    "workflow": ".github/workflows/models.yml",
+    "run": "44626497885",
+    "commit": "c8396c4ffb5a4d65be3fa9bb3ac552905d287fcc",
+    "artifact": {
+      "id": "14581497930",
+      "name": "model-run",
+      "zip_sha256": "91f80537732663bdde8ed47ab17e7f415eb6f5311450dad683c321468e3f6fb5"
+    },
+    "members": {
+      "out/runs/outputs/kernel/dump.states.dump": "23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4",
+      "out/runs/outputs/intent/dump.states.dump": "cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d"
+    },
+    "exit_files": {
+      "out/runs/outputs/kernel/dump.exit": "0",
+      "out/runs/outputs/intent/dump.exit": "0"
+    }
+  },
+  "unchanged_since_source": [
+    "spec/kernel",
+    "spec/intent",
+    "tools/check_states.py"
+  ]
+}
