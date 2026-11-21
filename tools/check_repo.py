@@ -1102,20 +1102,67 @@ class KitAdequacyTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(self.after_scenarios(answer), (False, ["ledger-judge unfinished"]))
 
-    # The session judge names no case the runner reads; it stands for the judges kept on their exit status. It runs
-    # after the typed ledger, core-key, attest, harness and strict-input judges.
     def at_session(self, *results):
         return self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.attest_report(0, []),
                                     self.harness_report(0, []), self.input_report(0, []), *results)
 
+    def at_host_check(self, *results):
+        return self.at_session(self.case_report(0, []), *results)
+
+    def at_status(self, *results):
+        return self.at_host_check(self.result(0), *results)
+
+    def case_report(self, code, rejected, *, project=False, unfinished=0, **fields):
+        totals = {"cases": 252, "judged": 243, "skipped": 9} if project else {"cases": 22}
+        total = totals.get("judged", totals["cases"])
+        report = dict(totals, matched=total - len(rejected) - unfinished, rejected=rejected,
+                      unfinished=unfinished, all_matched=not rejected and not unfinished)
+        report.update(fields)
+        return self.result(code, "".join(f"MISMATCH {name}: detail\n" for name in rejected) + json.dumps(report) + "\n")
+
+    def test_provider_replay_credits_the_repeated_named_case(self):
+        name = "wrong-id"
+        self.assertEqual(self.at_session(self.case_report(1, [name, "garbage"]), self.case_report(1, [name])),
+                         (False, [f"session-judge: {name}"]))
+
+    def test_status_replay_credits_the_repeated_named_case_with_skips(self):
+        name = "an empty ledger has a report"
+        first = self.case_report(1, [name, "two ledgers are read in order"], project=True)
+        second = self.case_report(1, [name], project=True)
+        self.assertEqual(self.at_status(first, second), (False, [f"status-judge: {name}"]))
+
+    def test_session_and_status_require_valid_exact_names_on_both_runs(self):
+        for run, label, name in ((self.at_session, "session", "wrong-id"),
+                                 (self.at_status, "status", "an empty ledger has a report")):
+            project = label == "status"
+            first = self.case_report(1, [name], project=project)
+            for second in (self.case_report(1, [name + " "], project=project),
+                           self.case_report(0, [], project=project),
+                           self.case_report(2, [], project=project, unfinished=1),
+                           self.result(1, f"MISMATCH {name}\n")):
+                with self.subTest(judge=label, second=second.stdout):
+                    self.assertEqual(run(first, second), (False, [f"{label}-judge unsteady"]))
+            old_report = self.result(1, json.dumps({"cases": 22, "matched": 21, "all_matched": False}) + "\n")
+            duplicate_field = self.result(1, first.stdout.replace('"unfinished": 0', '"unfinished": 1, "unfinished": 0'))
+            for bad in (old_report, duplicate_field, self.case_report(1, [name, name], project=project),
+                        self.case_report(1, [" "], project=project)):
+                with self.subTest(judge=label, first=bad.stdout):
+                    self.assertEqual(run(bad, bad), (False, [f"{label}-judge unfinished"]))
+
+    def test_status_cases_must_equal_judged_plus_skipped(self):
+        for bad in ({"cases": 251}, {"skipped": -1, "cases": 242}, {"judged": 243.0}, {"skipped": True}, {"skipped": None}):
+            with self.subTest(bad=bad):
+                answer = self.case_report(1, ["an empty ledger has a report"], project=True, **bad)
+                self.assertEqual(self.at_status(answer, answer), (False, ["status-judge unfinished"]))
+
     def test_other_auxiliary_judges_keep_their_exit_status_treatment(self):
-        failed = self.result(1, "MISMATCH session\n")
-        self.assertEqual(self.at_session(failed, self.result(0)), (False, ["session-judge unsteady"]))
+        failed = self.result(1, "MISMATCH host check\n")
+        self.assertEqual(self.at_host_check(failed, self.result(0)), (False, ["host-check-judge unsteady"]))
 
     def test_repeated_untyped_auxiliary_rejection_is_provisional_not_caught(self):
         # Two identical exits 1 that name no case may be one environment failure twice (issue 41).
-        failed = self.result(1, "MISMATCH session\n")
-        self.assertEqual(self.at_session(failed, failed), (False, ["session-judge provisional"]))
+        failed = self.result(1, "MISMATCH host check\n")
+        self.assertEqual(self.at_host_check(failed, failed), (False, ["host-check-judge provisional"]))
 
     # The harness judge ends with the same footer, its count under `cases`: seven kernel cases and the known-answer
     # control; it runs after the attest judge (issue 41).
@@ -1165,7 +1212,7 @@ class KitAdequacyTests(unittest.TestCase):
             defects = [{"name": name, "file": "fixture.rs", "find": "old", "replace": "planted"}
                        for name in ("named", "untyped")]
             (kernel / "defects.json").write_text(json.dumps({"defects": defects}), encoding="utf-8")
-            results = [(True, []), (False, ["plan/named"]), (False, ["session-judge provisional"])]
+            results = [(True, []), (False, ["plan/named"]), (False, ["host-check-judge provisional"])]
             with patch.object(kit_adequacy, "ROOT", root), patch.object(kit_adequacy, "passes_kit", side_effect=results), \
                     contextlib.redirect_stdout(io.StringIO()) as output:
                 status = kit_adequacy.main()

@@ -91,7 +91,7 @@ The same tests also cover a child that exits with an explicit disk-full diagnost
 
 The footer now counts `cases` with `unfinished` and `rejected`, like the other typed judges. The modes, each judged once, the ordinary exit-0 refusals and the completed-answer timing check are unchanged. The tests replace every host, process probe and signal with a stand-in.
 
-Both planted-defect runners still read this judge by its exit status alone, so a repeat of its exit 1 stays provisional. Their replay on a named case is not switched on, for three reasons:
+The planted-defect runners read this judge’s typed footer and require a named case to reject again on replay. The session judge’s evidence rules still determine which cases can complete:
 
 - Survival is known only from processes that poll. A fixture process blocked on a pipe a host left open cannot acknowledge, so its case is unfinished, never a mismatch.
 - On Windows, a surviving process is unfinished, never named; it is asked to stop through the stop file.
@@ -103,14 +103,14 @@ Other concerns are still open:
 - The checker judge's fixtures (`conformance/provider/fake_executor.py`, `misbehaving_checker.py`) and `tools/run_check_cases.py` were not changed here.
 - A zombie is told apart only through `ps`. Where `ps` is missing or its state codes differ, such a process stays unknown, and a healthy run can end unfinished.
 - A host that exits 0 without starting the provider is now unfinished (no process id recorded), not a mismatch.
-- How many planted defects move from provisional to unfinished in `kernel2/plant.js` has not been measured.
+- Full planted-defect qualification is needed to measure how many session defects give reproducible named rejections on each platform.
 - The Windows existence probe, the real fixture's polling, and the judge against a real host have not been run by these tests: every process, probe and acknowledgment in them is a stand-in.
 
 `StatusJudgeTests` in `tools/check_repo.py` covers the project status judge for issue 41. The judge ignored the independent `scenario` process's exit status and could credit its report even after a disk-full exit. A lost status or reference process also counted as a mismatch. The mocks require exit 2 and an unfinished case when a required process fails to complete or produces unusable output, or when the reference contradicts the fixture. A completed wrong status or refusal is named in `rejected` and exits 1 when the rest of the judge completes. A valid expected refusal can match. The footer counts the curated cases or generated variants, including skips and unfinished cases.
 
 The hosted matrix runs the mocked JavaScript runner tests in `kernel2/test-plant.js` before building either kernel. The Python repository check requires this unconditional hosted step and exercises missing and conditional registrations. The hosted step runs the behavior tests.
 
-The second kernel now credits a scenario, ledger, core-key, attest or strict-input catch only when a complete report names a case that rejects again on replay; the ledger, core-key, attest and strict-input reports count `checks`, `vectors`, `cases` and `cases`, respectively, where the scenarios count `scenarios`. A repeating exit 1 from another auxiliary judge, which names no case, is reported as provisional and leaves the batch unfinished. The Rust planted-defect runner (`tools/kit_adequacy.py`) once credited such a repeat as a catch; it now reports it as PROVISIONAL, counts it as unfinished and never as caught, and `KitAdequacyTests` shows that two identical exits 1 from the harness judge leave a batch unfinished even when another defect was caught. Launch failures, signals, timeouts, invalid reports and interrupted unit tests also leave the batch unfinished. A completed rejection from unit tests alone is a miss. The tests exercise restoring each mutation, removing partial copies, retrying a busy copy a bounded number of times, and preserving other runs' directories.
+Both planted-defect runners require a complete report and a replay on an exact named case for the scenario, ledger, core-key, attest, harness, strict-input, session and status judges. The session report counts `cases`, and the status report counts `judged` and requires `cases` to equal `judged` plus `skipped`. `KitAdequacyTests` and `kernel2/test-plant.js` show that older footers, malformed counts, duplicate names and a rejection on a different case leave these judges unfinished. The host-check judge in both runners and the canonical and path judges in the second runner still use exit status. A repeating exit 1 from one of them stays provisional and leaves the batch unfinished. Launch failures, signals, timeouts, invalid reports and interrupted unit tests also leave the batch unfinished. A completed rejection from unit tests alone is a miss. The tests exercise restoring each mutation, removing partial copies, retrying a busy copy a bounded number of times, and preserving other runs’ directories.
 
 ### A change must bring its documents
 

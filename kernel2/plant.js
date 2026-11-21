@@ -9,7 +9,7 @@
 // are tried; the unchanged copy is still put to every judge first.
 //
 // Per defect it prints
-//   caught      the scenario, ledger, core-key, attest, strict-input or harness judge rejected the defective copy with a complete report and,
+//   caught      a reporting judge rejected the defective copy with a complete report and,
 //               run a second time, rejected it again on a case it named both times; those cases are
 //               printed (judges are tried one at a time and the first rejection ends the defect's turn),
 //   caught provisionally
@@ -36,6 +36,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const strictJson = require('./strict-json');
 
 const root = path.resolve(__dirname, '..');
 
@@ -53,9 +54,8 @@ const OTHER_KERNEL = process.env.DODONA_OTHER_KERNEL
 const STATUS_JOBS = process.env.DODONA_STATUS_JOBS || '3';
 
 // Each judge: a name, the tool, the tool's own arguments before `--`, and the
-// arguments after `node <kernel>`. The scenario, ledger, core-key, attest, strict-input and harness judges end with the
-// same structured report; `count` is the key under which each counts what it ran. The harness judge's eight cases
-// are its seven kernel cases and its known-answer control.
+// arguments after `node <kernel>`. Reporting judges end with a structured footer. `count` names the total
+// used for that judge. The status judge counts its skips separately.
 const JUDGES = [
   { name: 'run_kit', tool: 'run_kit.py', args: ['scenario'], count: 'scenarios' },
   { name: 'run_ledger_cases', tool: 'run_ledger_cases.py', args: [], count: 'checks' },
@@ -65,9 +65,9 @@ const JUDGES = [
   { name: 'run_harness_check', tool: 'run_harness_check.py', args: ['scenario'], count: 'cases' },
   { name: 'run_vectors', tool: 'run_vectors.py', args: ['canonical'] },
   { name: 'run_path_vectors', tool: 'run_path_vectors.py', args: ['path', 'path-set'] },
-  { name: 'run_provider_cases', tool: 'run_provider_cases.py', args: ['session'] },
+  { name: 'run_provider_cases', tool: 'run_provider_cases.py', args: ['session'], count: 'cases' },
   { name: 'run_check_cases', tool: 'run_check_cases.py', args: ['check'] },
-  { name: 'run_status_cases', tool: 'run_status_cases.py', before: ['--jobs', STATUS_JOBS, '--kernel', OTHER_KERNEL], args: ['status'] },
+  { name: 'run_status_cases', tool: 'run_status_cases.py', before: ['--jobs', STATUS_JOBS, '--kernel', OTHER_KERNEL], args: ['status'], count: 'judged' },
 ];
 
 // Which judges a defect in a host module is put to first: the ones meant to catch it,
@@ -100,29 +100,33 @@ function loads(copy, spawn = spawnSync) {
   return run.status === 0 && (run.stdout || '').includes('"canonical":"{}"');
 }
 
-// The verdict of a judge that reports, from its last line, the summary tools/run_kit.py prints (and
-// tools/run_ledger_cases.py, tools/run_key_vectors.py, tools/run_attest_check.py and tools/run_input_cases.py, their
-// totals under `checks`, `vectors`, `cases` and `cases` where
-// `count` says): 'passed', 'rejected' with
-// the cases it names, or 'unfinished' when the report is missing, malformed or incomplete, says a
-// kernel process did not finish, disagrees with the exit status, or anything was written to stderr.
+// Read a reporting judge's final tally. A rejection carries its exact case names.
+// A missing, malformed or incomplete tally, a contradictory exit status, or stderr leaves the judge unfinished.
 function scenarioVerdict(run, count = 'scenarios') {
   const unfinished = { verdict: 'unfinished' };
   if (!ended(run) || (run.stderr || '') !== '') return unfinished;
   const lines = (run.stdout || '').trimEnd().split(/\r?\n/);
   let report;
   try {
-    report = JSON.parse(lines[lines.length - 1]);
+    report = strictJson.read(lines[lines.length - 1]).value;
   } catch {
     return unfinished;
   }
-  if (report === null || typeof report !== 'object' || Array.isArray(report) || report.unfinished !== 0) return unfinished;
-  const { [count]: total, matched, rejected } = report;
-  if (!Number.isInteger(total) || !Number.isInteger(matched) || total < 1 || matched < 0 || matched > total
-      || !Array.isArray(rejected) || rejected.length !== total - matched
-      || rejected.some((name) => typeof name !== 'string' || name === '')) return unfinished;
-  if (run.status === 0 && rejected.length === 0 && report.all_matched === true) return { verdict: 'passed' };
-  if (run.status === 1 && rejected.length > 0 && report.all_matched === false) return { verdict: 'rejected', cases: rejected };
+  if (!(report instanceof Map) || report.get('unfinished') !== 0n) return unfinished;
+  const total = report.get(count);
+  const matched = report.get('matched');
+  const rejected = report.get('rejected');
+  if (typeof total !== 'bigint' || typeof matched !== 'bigint' || total < 1n || matched < 0n || matched > total
+      || !Array.isArray(rejected) || BigInt(rejected.length) !== total - matched
+      || rejected.some((name) => typeof name !== 'string' || name.trim() === '')
+      || new Set(rejected).size !== rejected.length) return unfinished;
+  if (count === 'judged') {
+    const cases = report.get('cases');
+    const skipped = report.get('skipped');
+    if (typeof skipped !== 'bigint' || skipped < 0n || cases !== total + skipped) return unfinished;
+  }
+  if (run.status === 0 && rejected.length === 0 && report.get('all_matched') === true) return { verdict: 'passed' };
+  if (run.status === 1 && rejected.length > 0 && report.get('all_matched') === false) return { verdict: 'rejected', cases: rejected };
   return unfinished;
 }
 

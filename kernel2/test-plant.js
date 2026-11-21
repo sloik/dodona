@@ -57,6 +57,16 @@ const harness = (rejected, { status = rejected.length ? 1 : 0, unfinished = 0, k
     all_matched: rejected.length === 0 && unfinished === 0,
   }) + '\n');
 
+function caseReport(rejected, totals, { status = rejected.length ? 1 : 0, unfinished = 0, fields = {} } = {}) {
+  const footer = {
+    ...totals, matched: (totals.judged ?? totals.cases) - rejected.length - unfinished, rejected,
+    unfinished, all_matched: rejected.length === 0 && unfinished === 0, ...fields,
+  };
+  return done(status, rejected.map((name) => `MISMATCH ${name}: detail\n`).join('') + JSON.stringify(footer) + '\n');
+}
+const session = (rejected, options) => caseReport(rejected, { cases: 22 }, options);
+const projectStatus = (rejected, options) => caseReport(rejected, { cases: 252, judged: 243, skipped: 9 }, options);
+
 // A spawn that answers each process, named by its tool, from a queue; one with nothing queued accepts the copy.
 function fake(answers, onJudge = () => {}) {
   const calls = [];
@@ -77,6 +87,8 @@ function fake(answers, onJudge = () => {}) {
     if (name === 'run_key_vectors') return keys([]);
     if (name === 'run_attest_check') return attest([]);
     if (name === 'run_harness_check') return harness([]);
+    if (name === 'run_provider_cases') return session([]);
+    if (name === 'run_status_cases') return projectStatus([]);
     return name === 'run_ledger_cases' ? ledger([]) : done(0);
   };
   return { spawn, calls };
@@ -282,6 +294,38 @@ test('a harness report that is unfinished or of the old shape is not credited, e
   for (const [name, answer] of Object.entries(cases)) {
     assert.deepEqual(judge({ run_harness_check: [answer, answer] }), unfinished('run_harness_check'), name);
   }
+});
+
+const statusCase = 'an empty ledger has a report';
+for (const [tool, report, name, other] of [
+  ['run_provider_cases', session, 'wrong-id', 'garbage'],
+  ['run_status_cases', projectStatus, statusCase, 'two ledgers are read in order'],
+]) {
+  test(`${tool} credits the exact case repeated on replay`, () => {
+    assert.deepEqual(judge({ [tool]: [report([name, other]), report([name])] }),
+      { outcome: 'rejected', name: tool, mismatch: true, cases: [name] });
+  });
+
+  test(`${tool} leaves incomplete or malformed tallies unfinished`, () => {
+    const first = report([name]);
+    for (const second of [report([name + ' ']), report([]), report([], { status: 2, unfinished: 1 }), done(1, 'MISMATCH\n')]) {
+      assert.deepEqual(judge({ [tool]: [first, second] }), unfinished(tool, 'did not reject again on replay'));
+    }
+    const old = done(1, first.stdout.replace('"unfinished":0,', '').replace(`"rejected":[${JSON.stringify(name)}],`, ''));
+    const duplicateField = done(1, first.stdout.replace('"unfinished":0', '"unfinished":1,"unfinished":0'));
+    for (const bad of [old, duplicateField, report([name, name]), report([' ']), report([name], { status: 0 })]) {
+      assert.deepEqual(judge({ [tool]: [bad, bad] }), unfinished(tool));
+    }
+  });
+}
+
+test('the status tally accounts for all selected cases including skips', () => {
+  for (const fields of [{ cases: 251 }, { skipped: -1, cases: 242 }, { skipped: true }, { skipped: null }]) {
+    const answer = projectStatus([statusCase], { fields });
+    assert.deepEqual(judge({ run_status_cases: [answer, answer] }), unfinished('run_status_cases'));
+  }
+  const zero = caseReport([], { cases: 252, judged: 0, skipped: 252 });
+  assert.deepEqual(judge({ run_status_cases: [zero] }), unfinished('run_status_cases'));
 });
 
 // The other auxiliary judges name no case the runner reads; run_vectors (the canonical judge) stands for them.
