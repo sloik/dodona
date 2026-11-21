@@ -232,8 +232,9 @@ def not_json(text):
     raise ValueError("malformed")  # NaN and Infinity are not JSON, whatever Python's reader allows
 
 
-def strict_load(raw: bytes):
-    """Read one JSON text as the canonical encoding writes it, or raise Refused with the reason."""
+def strict_load(raw: bytes, limit: int | None = 64):
+    """Read one JSON text as the canonical encoding writes it, or raise Refused with the reason. Nesting deeper
+    than `limit` is `too-deep`; with no limit, only what the reader cannot hold is."""
     try:
         value = json.loads(raw.decode("utf-8"), object_pairs_hook=no_repeats, parse_float=no_fractions, parse_int=safe_integer,
                            parse_constant=not_json)
@@ -245,7 +246,7 @@ def strict_load(raw: bytes):
         raise Refused(str(err) if str(err) in ("duplicate-key", "not-an-integer") else "malformed") from None
     if half_pair(value):
         raise Refused("encoding")
-    if depth(value) > 64:
+    if limit is not None and depth(value) > limit:
         raise Refused("too-deep")
     return value
 

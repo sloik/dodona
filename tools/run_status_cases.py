@@ -241,7 +241,8 @@ def run(command: list[str], case: dict, site: dict, preimages: dict, timeout: in
             return None, requests(aux), f"exit {done.returncode}: " + done.stderr.decode("utf-8", "replace")[-300:]
         try:
             # Read strictly: a key given twice would let a reader that takes the first see something else.
-            return host.strict_load(done.stdout.rstrip(b"\n")), requests(aux), done.stderr.decode("utf-8", "replace")[-300:]
+            # a report holds ledger entries up to 64 levels deep, so it may nest deeper: no depth limit on the answer
+            return host.strict_load(done.stdout.rstrip(b"\n"), limit=None), requests(aux), done.stderr.decode("utf-8", "replace")[-300:]
         except Exception as err:  # noqa: BLE001
             return None, requests(aux), f"not one strict JSON object ({err}): " + done.stdout[:200].decode("utf-8", "replace")
 

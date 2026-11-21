@@ -224,6 +224,24 @@
         "entries": 4
       },
       "note": "A reader keeps entries of every kind."
+    },
+    {
+      "name": "an entry nested 64 levels deep",
+      "file": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 482 9bbf53a6c7eb58a46647414829f7bf0369fc3b3b19a05516799d194ad65fbab1 {\"body\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}},\"kind\":\"note\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n",
+      "expect": {
+        "torn": false,
+        "entries": 4
+      },
+      "note": "The entry itself is the first level. 64 levels is the limit, and is read."
+    },
+    {
+      "name": "an entry nested 65 levels deep",
+      "file": "dodona1 103 39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564 {\"body\":{\"note\":\"za\u017c\u00f3\u0142\u0107\",\"obligation\":\"ob-1\",\"verdict\":\"passed\"},\"kind\":\"evidence\",\"previous\":null}\ndodona1 149 b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7 {\"body\":{\"kind\":\"confirm-baseline\",\"ticket\":\"t-1\"},\"kind\":\"act\",\"previous\":\"sha256:39ee0f0c325b77cd3e1d4c7c5211b576be2e4f253552a161f44014b15ae68564\"}\ndodona1 158 411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18 {\"body\":{\"n\":3,\"obligation\":\"ob-2\",\"verdict\":\"failed\"},\"kind\":\"evidence\",\"previous\":\"sha256:b3869d49a78ab82c59539893b168767a31a953693d8271317b67d847fe5584e7\"}\ndodona1 488 4444b0fe23d4799cddbd713ffff9a1830a08a008c3529bc0b8ba8da1102bcf0b {\"body\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{\"x\":{}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}},\"kind\":\"note\",\"previous\":\"sha256:411e7133bcc879fd1db4fa436901eca8f74df37552c4e6106b43fc5f9ec66a18\"}\n",
+      "expect": {
+        "refused": "corrupt",
+        "at": 4
+      },
+      "note": "Every reader must be able to read every entry: nesting deeper than 64, the entry itself counted, makes the line corrupt."
     }
   ],
   "unlisted_kind": {
