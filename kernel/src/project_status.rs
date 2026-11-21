@@ -1760,3 +1760,369 @@ fn run(raw: &[u8]) -> Step<Value> {
         ("project_status", json::string(project_status)),
     ]))
 }
+
+/// The run command's input (conformance/README.md, "How a project's run is
+/// judged", step 1). The run command is not served yet: `main` does not call
+/// this, and nothing here plans, checks, records or reports.
+#[cfg_attr(not(test), allow(dead_code))]
+mod run_input {
+    use super::*;
+    use crate::unicode;
+    use crate::unicode_tables::FOLD;
+
+    /// The status command's input, with what the run command takes beyond it.
+    pub(super) struct RunInput {
+        pub(super) status: Input,
+        /// The ledger verdicts are appended to: one of `status.ledgers`.
+        pub(super) ledger: String,
+        pub(super) executor: Vec<String>,
+        pub(super) transcript: Option<String>,
+    }
+
+    /// Full case folding, one character at a time, with no normalization.
+    fn casefold(s: &str) -> String {
+        let mut out = String::new();
+        for c in s.chars() {
+            match FOLD.binary_search_by_key(&(c as u32), |x| x.0) {
+                Ok(i) => out.extend(FOLD[i].1.iter().filter_map(|&v| char::from_u32(v))),
+                Err(_) => out.push(c),
+            }
+        }
+        out
+    }
+
+    /// A path as a disk that ignores case and Unicode normalization compares
+    /// names: the NFC of the case-folded NFC.
+    fn disk_name(p: &str) -> String {
+        unicode::nfc(&casefold(&unicode::nfc(p)))
+    }
+
+    /// Step 1 of the run command. The run's own fields are checked first,
+    /// before the status command's checks of step 1, and so before any file
+    /// is read or any provider started; those of them that look at files only
+    /// when `root` is a directory. Every rule broken is `bad-input`.
+    pub(super) fn read(raw: &[u8]) -> Step<RunInput> {
+        let bad = |why: &str| stop("bad-input", why);
+        let v = match framed(raw) {
+            Some(v) => v,
+            None => return bad("the input is not one JSON object alone, read strictly"),
+        };
+        // A status field of the wrong type is the status checks' to refuse:
+        // here it only names nothing.
+        let ledgers = strings(v.opt("ledgers")).unwrap_or_default();
+        let owner = v.text("owner_ledger");
+        let ledger = match v.text("ledger") {
+            Some(l) if relative(l) => l.to_owned(),
+            _ => return bad("ledger must be a relative path"),
+        };
+        if !ledgers.contains(&ledger) {
+            return bad("ledger must be one of ledgers, so that what this run records the next run reads");
+        }
+        if owner.is_some_and(|o| disk_name(o) == disk_name(&ledger)) {
+            return bad("ledger is the owner's ledger, as a disk that ignores case and normalization compares names");
+        }
+        let executor = match strings(v.opt("executor")) {
+            Some(e) if !e.is_empty() && !e.iter().any(|a| a.contains('\0')) => e,
+            _ => return bad("executor must be a non-empty list of strings, none holding a NUL"),
+        };
+        let transcript = match v.opt("transcript") {
+            None => None,
+            Some(Value::String(t)) if relative(t) => Some(t.clone()),
+            Some(_) => return bad("transcript must be a relative path"),
+        };
+        if let Some(t) = &transcript {
+            let name = disk_name(t);
+            let taken = ledgers
+                .iter()
+                .map(String::as_str)
+                .chain(owner)
+                .flat_map(|l| [l.to_owned(), format!("{l}.lock")])
+                .chain(v.text("project").map(str::to_owned))
+                .any(|p| disk_name(&p) == name);
+            if taken {
+                return bad("transcript names a ledger, a ledger's lock or the project file");
+            }
+        }
+        let root = v
+            .text("root")
+            .map(PathBuf::from)
+            .filter(|r| fs::metadata(r).is_ok_and(|m| m.is_dir()));
+        if let Some(root) = root {
+            if link_on_the_way(&root, &ledger) {
+                return bad("ledger is reached through a link");
+            }
+            if owner.is_some_and(|o| relative(o) && same_file(&root.join(&ledger), &root.join(o))) {
+                return bad("ledger is the owner's ledger, as the operating system identifies files");
+            }
+            if let Some(t) = &transcript {
+                if link_on_the_way(&root, t) {
+                    return bad("transcript is reached through a link");
+                }
+                let path = root.join(t);
+                // No step below root is a link (above), so this follows none.
+                let folder = path.parent().unwrap_or(root.as_path());
+                if !fs::metadata(folder).is_ok_and(|m| m.is_dir()) {
+                    return bad("transcript's folder is not there");
+                }
+                match fs::symlink_metadata(&path) {
+                    Err(e) if e.kind() == ErrorKind::NotFound => {}
+                    _ => return bad("transcript is there already, or cannot be looked at"),
+                }
+            }
+        }
+        let status = read_input(raw)?;
+        Ok(RunInput {
+            status,
+            ledger,
+            executor,
+            transcript,
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        /// A folder of the test's own: tests run in parallel.
+        fn scratch(name: &str) -> PathBuf {
+            let dir = std::env::temp_dir()
+                .join(format!("dodona-run-input-{}-{name}", std::process::id()));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            dir
+        }
+
+        /// An input both step 1s accept, as fields to edit.
+        fn fields(root: &Path) -> Vec<(String, Value)> {
+            let site = json::object(vec![
+                (
+                    "platform",
+                    json::object(vec![
+                        ("os", json::string("linux")),
+                        ("arch", json::string("x86_64")),
+                    ]),
+                ),
+                ("writer", json::string("w")),
+                ("runner", json::string("r")),
+                ("tools", Value::Array(vec![])),
+                ("providers", Value::Object(vec![])),
+                ("deadline_ms", Value::Number(1000)),
+            ]);
+            let policy = json::object(vec![
+                ("required", Value::Array(vec![])),
+                ("min_hard_gates", Value::Number(1)),
+                ("floors", Value::Object(vec![])),
+                ("not_applied", Value::Array(vec![])),
+            ]);
+            let list = |items: &[&str]| Value::Array(items.iter().map(|s| json::string(s)).collect());
+            vec![
+                ("root", json::string(root.to_str().unwrap())),
+                ("project", json::string("dodona.toml")),
+                ("site", site),
+                ("policy", policy),
+                ("policy_source", json::string("test")),
+                ("ledgers", list(&["l/run.ledger"])),
+                ("owner_ledger", json::string("records/owner.ledger")),
+                ("ledger", json::string("l/run.ledger")),
+                ("executor", list(&["executor", "batch"])),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v))
+            .collect()
+        }
+
+        fn with(mut f: Vec<(String, Value)>, key: &str, value: Value) -> Vec<(String, Value)> {
+            f.retain(|(k, _)| k != key);
+            f.push((key.to_owned(), value));
+            f
+        }
+
+        /// The reason step 1 gives, or `ok`.
+        fn reason(f: Vec<(String, Value)>) -> (&'static str, String) {
+            match read(json::encode(&Value::Object(f)).as_bytes()) {
+                Ok(_) => ("ok", String::new()),
+                Err(s) => (s.reason, s.detail),
+            }
+        }
+
+        fn strs(items: &[&str]) -> Value {
+            Value::Array(items.iter().map(|s| json::string(s)).collect())
+        }
+
+        #[test]
+        fn a_well_formed_input_is_accepted() {
+            let root = scratch("accepted");
+            fs::create_dir_all(root.join("out")).unwrap();
+            let f = with(fields(&root), "transcript", json::string("out/t.json"));
+            let got = read(json::encode(&Value::Object(f)).as_bytes());
+            let got = match got {
+                Ok(r) => r,
+                Err(s) => panic!("refused: {} {}", s.reason, s.detail),
+            };
+            assert_eq!(got.ledger, "l/run.ledger");
+            assert_eq!(got.executor, vec!["executor", "batch"]);
+            assert_eq!(got.transcript.as_deref(), Some("out/t.json"));
+            assert_eq!(got.status.owner_ledger, "records/owner.ledger");
+            // No transcript is a run without one.
+            assert_eq!(reason(fields(&root)).0, "ok");
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn the_ledger_must_be_listed() {
+            // Case: "a ledger not listed among the ledgers".
+            let root = scratch("unlisted");
+            let f = with(fields(&root), "ledger", json::string("l/other.ledger"));
+            assert_eq!(reason(f).0, "bad-input");
+            // Case: "ledgers that are not a list": refused, never a crash.
+            let f = with(fields(&root), "ledgers", Value::Number(5));
+            assert_eq!(reason(f).0, "bad-input");
+            for bad in [Value::Null, Value::Number(1), json::string(""), json::string("/abs"), json::string("a/../b")] {
+                assert_eq!(reason(with(fields(&root), "ledger", bad)).0, "bad-input");
+            }
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn the_executor_is_a_command() {
+            let root = scratch("executor");
+            // Cases: "an executor that is no command", "an executor command holding a NUL".
+            for bad in [strs(&[]), strs(&["prog\0x"]), strs(&["prog", "a\0"]), json::string("prog"), Value::Null] {
+                assert_eq!(reason(with(fields(&root), "executor", bad)).0, "bad-input");
+            }
+            let f: Vec<_> = fields(&root).into_iter().filter(|(k, _)| k != "executor").collect();
+            assert_eq!(reason(f).0, "bad-input");
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn the_owners_ledger_is_never_the_runs() {
+            let root = scratch("owner");
+            let as_owner = |owner: &str, ledger: &str| {
+                let f = with(fields(&root), "owner_ledger", json::string(owner));
+                let f = with(f, "ledgers", strs(&[ledger]));
+                reason(with(f, "ledger", json::string(ledger))).0
+            };
+            // Cases: "the owner's ledger as the run's ledger" and "..., not yet
+            // written, ...": no file is there in this test.
+            assert_eq!(as_owner("records/owner.ledger", "records/owner.ledger"), "bad-input");
+            // Case: "the owner's ledger spelt with other case".
+            assert_eq!(as_owner("records/owner.ledger", "Records/owner.ledger"), "bad-input");
+            // Case: "the owner's ledger in the other Unicode form".
+            assert_eq!(as_owner("records/own\u{e9}r.ledger", "records/owne\u{301}r.ledger"), "bad-input");
+            assert_eq!(as_owner("records/owne\u{301}r.ledger", "records/own\u{e9}r.ledger"), "bad-input");
+            assert_eq!(as_owner("records/stra\u{df}e.ledger", "records/STRASSE.ledger"), "bad-input");
+            // Another name is another ledger.
+            assert_eq!(as_owner("records/owner.ledger", "records/other.ledger"), "ok");
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        /// The name rule is not plain equality or lower case: each of these
+        /// would let the cases above through.
+        #[test]
+        fn a_planted_name_comparison_would_miss_them() {
+            let pairs = [
+                ("records/owner.ledger", "Records/owner.ledger"),
+                ("records/own\u{e9}r.ledger", "records/owne\u{301}r.ledger"),
+                ("records/stra\u{df}e.ledger", "records/STRASSE.ledger"),
+            ];
+            for (a, b) in pairs {
+                assert_eq!(disk_name(a), disk_name(b), "{a} {b}");
+            }
+            assert!(pairs.iter().all(|(a, b)| a != b));
+            assert!(pairs[1..].iter().all(|(a, b)| a.to_lowercase() != b.to_lowercase()));
+            assert_ne!(unicode::nfc(pairs[0].0), unicode::nfc(pairs[0].1));
+            assert_ne!(unicode::nfc(pairs[2].0), unicode::nfc(pairs[2].1));
+            assert_ne!(disk_name("records/owner.ledger"), disk_name("records/owner.ledgers"));
+        }
+
+        #[test]
+        fn a_transcript_is_a_new_file_and_names_nothing_else() {
+            let root = scratch("transcript");
+            fs::write(root.join("notes.txt"), b"there").unwrap();
+            let t = |p: &str| reason(with(fields(&root), "transcript", json::string(p)));
+            // Each refusal by the rule it is for: the details tell them apart,
+            // so a rule taken away is not hidden by a later one.
+            let refused = |p: &str, rule: &str| {
+                let (why, detail) = t(p);
+                assert_eq!(why, "bad-input", "{p}");
+                assert!(detail.contains(rule), "{p}: {detail}");
+            };
+            // Case: "a transcript path holding a NUL".
+            refused("trans\0cript.json", "relative path");
+            refused("/abs.json", "relative path");
+            // Case: "a transcript written over a ledger".
+            refused("l/run.ledger", "names a ledger");
+            // Case: "a transcript named like a ledger in other case".
+            refused("L/Run.Ledger", "names a ledger");
+            // Cases: "a transcript at a ledger's lock", "... at the owner's ledger's lock".
+            refused("l/run.ledger.lock", "names a ledger");
+            refused("records/owner.ledger.lock", "names a ledger");
+            refused("records/owner.ledger", "names a ledger");
+            // The project file, compared the same way.
+            refused("Dodona.toml", "names a ledger");
+            // Case: "a transcript over a file that is there", on a file no other rule names.
+            refused("notes.txt", "there already");
+            // Case: "a transcript in a folder that is not there".
+            refused("nowhere/t.json", "folder");
+            assert_eq!(reason(with(fields(&root), "transcript", Value::Number(1))).0, "bad-input");
+            assert_eq!(t("t.json").0, "ok");
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn links_on_the_way_are_refused() {
+            let root = scratch("links");
+            fs::create_dir_all(root.join("real")).unwrap();
+            std::os::unix::fs::symlink(root.join("real"), root.join("lk")).unwrap();
+            // Case: "the run's ledger behind a link".
+            let f = with(fields(&root), "ledgers", strs(&["lk/run.ledger"]));
+            assert_eq!(reason(with(f, "ledger", json::string("lk/run.ledger"))).0, "bad-input");
+            // Case: "a transcript behind a link".
+            let f = with(fields(&root), "transcript", json::string("lk/t.json"));
+            assert_eq!(reason(f).0, "bad-input");
+            // The same paths through the folder itself are accepted.
+            let f = with(fields(&root), "ledgers", strs(&["real/run.ledger"]));
+            assert_eq!(reason(with(f, "ledger", json::string("real/run.ledger"))).0, "ok");
+            let f = with(fields(&root), "transcript", json::string("real/t.json"));
+            assert_eq!(reason(f).0, "ok");
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn a_hard_link_to_the_owners_ledger_is_the_owners() {
+            // Case: "the run's ledger a hard link to the owner's". The names
+            // differ, so only the same-file rule can refuse it.
+            let root = scratch("hardlink");
+            fs::create_dir_all(root.join("records")).unwrap();
+            fs::create_dir_all(root.join("l")).unwrap();
+            fs::write(root.join("records/owner.ledger"), b"").unwrap();
+            assert_ne!(disk_name("l/run.ledger"), disk_name("records/owner.ledger"));
+            assert_eq!(reason(fields(&root)).0, "ok");
+            fs::hard_link(root.join("records/owner.ledger"), root.join("l/run.ledger")).unwrap();
+            assert_eq!(reason(fields(&root)).0, "bad-input");
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn the_runs_fields_are_judged_first() {
+            // A root that names no folder is the status checks' bad-input; a
+            // bad executor is found before it, and no file check is made.
+            let root = scratch("first");
+            let missing = root.join("not-there");
+            let f = with(fields(&missing), "executor", strs(&[]));
+            let (why, detail) = reason(f);
+            assert_eq!(why, "bad-input");
+            assert!(detail.contains("executor"), "{detail}");
+            let (why, detail) = reason(fields(&missing));
+            assert_eq!(why, "bad-input");
+            assert!(detail.contains("root"), "{detail}");
+            // An empty root names no folder, whatever folder the test runs in.
+            let f = with(fields(&root), "root", json::string(""));
+            assert_eq!(reason(f).0, "bad-input");
+            let _ = fs::remove_dir_all(&root);
+        }
+    }
+}
