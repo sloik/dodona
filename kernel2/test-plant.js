@@ -39,6 +39,14 @@ const keys = (rejected, { status = rejected.length ? 1 : 0, unfinished = 0, key 
     [key]: 23, matched: 23 - rejected.length - unfinished, unfinished, rejected,
     all_matched: rejected.length === 0 && unfinished === 0,
   }) + '\n');
+// What tools/run_attest_check.py prints: a line per record graded, then the same footer with its count under `cases`.
+const CHANGED = 'changed after signing';
+const UNCOVERED = 'one fact left uncovered';
+const attest = (rejected, { status = rejected.length ? 1 : 0, unfinished = 0, key = 'cases' } = {}) =>
+  done(status, rejected.map((c) => `MISMATCH ${c}: kernel says None, None; the signer's own check says True\n`).join('') + JSON.stringify({
+    [key]: 7, matched: 7 - rejected.length - unfinished, unfinished, rejected,
+    all_matched: rejected.length === 0 && unfinished === 0,
+  }) + '\n');
 
 // A spawn that answers each process, named by its tool, from a queue; one with nothing queued accepts the copy.
 function fake(answers, onJudge = () => {}) {
@@ -58,6 +66,7 @@ function fake(answers, onJudge = () => {}) {
     if (name === 'run_kit') return kit([]);
     if (name === 'run_input_cases') return input([]);
     if (name === 'run_key_vectors') return keys([]);
+    if (name === 'run_attest_check') return attest([]);
     return name === 'run_ledger_cases' ? ledger([]) : done(0);
   };
   return { spawn, calls };
@@ -193,14 +202,49 @@ test('a core-key report that is unfinished or of the old shape is not credited, 
   }
 });
 
-// The other auxiliary judges name no case the runner reads; run_attest_check stands for them.
+test('an attest rejection that repeats on a named case is credited with the cases that repeated', () => {
+  assert.deepEqual(judge({ run_attest_check: [attest([CHANGED, UNCOVERED]), attest([UNCOVERED])] }),
+    { outcome: 'rejected', name: 'run_attest_check', mismatch: true, cases: [UNCOVERED] });
+});
+
+test('an attest replay that names another case, accepts or does not finish is not credited', () => {
+  for (const second of [attest([UNCOVERED]), attest([]), attest([], { status: 2, unfinished: 7 }),
+    done(1, `MISMATCH ${CHANGED}: kernel says None, None\n`), killed('SIGTERM')]) {
+    assert.deepEqual(judge({ run_attest_check: [attest([CHANGED]), second] }),
+      unfinished('run_attest_check', 'did not reject again on replay'));
+  }
+});
+
+test('an attest report that is unfinished or of the old shape is not credited, even when it repeats', () => {
+  // The old judge folded a kernel that could not start, timed out or was signalled into seven named kernel mismatches
+  // and exit 1; a runner that reads the footer must not take that for a catch.
+  const old = done(1, Array.from({ length: 7 }, (_, n) => `MISMATCH case ${n}: kernel says None, None\n`).join('')
+    + JSON.stringify({ cases: 7, matched: 0, all_matched: false }) + '\n');
+  const cases = {
+    old_footer: old,
+    usage: done(2),
+    stderr: done(1, attest([CHANGED]).stdout, 'Traceback (most recent call last):\n'),
+    kernel_did_not_finish: attest([], { status: 2, unfinished: 7 }),
+    unfinished_after_a_mismatch: attest([CHANGED], { status: 2, unfinished: 1 }),
+    exit_status_only: done(1, `MISMATCH ${CHANGED}\n`),
+    passed_without_footer: done(0),
+    vectors_key: attest([CHANGED], { key: 'vectors' }),
+    signal: killed('SIGTERM'),
+    launch_error: failed('ENOENT'),
+  };
+  for (const [name, answer] of Object.entries(cases)) {
+    assert.deepEqual(judge({ run_attest_check: [answer, answer] }), unfinished('run_attest_check'), name);
+  }
+});
+
+// The other auxiliary judges name no case the runner reads; run_harness_check stands for them.
 test('an auxiliary rejection must repeat, and one without a mismatch is named as such', () => {
-  assert.deepEqual(judge({ run_attest_check: [done(1, 'MISMATCH attest\n'), done(1, 'MISMATCH attest\n')] }),
-    { outcome: 'rejected', name: 'run_attest_check', mismatch: true, cases: [] });
-  assert.deepEqual(judge({ run_attest_check: [done(1, 'refused\n'), done(1, 'refused\n')] }),
-    { outcome: 'rejected', name: 'run_attest_check', mismatch: false, cases: [] });
-  assert.deepEqual(judge({ run_attest_check: [done(1, 'MISMATCH attest\n'), done(0)] }),
-    unfinished('run_attest_check', 'did not reject again on replay'));
+  assert.deepEqual(judge({ run_harness_check: [done(1, 'MISMATCH harness\n'), done(1, 'MISMATCH harness\n')] }),
+    { outcome: 'rejected', name: 'run_harness_check', mismatch: true, cases: [] });
+  assert.deepEqual(judge({ run_harness_check: [done(1, 'refused\n'), done(1, 'refused\n')] }),
+    { outcome: 'rejected', name: 'run_harness_check', mismatch: false, cases: [] });
+  assert.deepEqual(judge({ run_harness_check: [done(1, 'MISMATCH harness\n'), done(0)] }),
+    unfinished('run_harness_check', 'did not reject again on replay'));
 });
 
 test('an auxiliary judge that could not run, was signalled or broke is not credited', () => {
@@ -208,11 +252,11 @@ test('an auxiliary judge that could not run, was signalled or broke is not credi
     usage: done(2),
     signal: killed('SIGTERM'),
     launch_error: failed('ENOENT'),
-    traceback: done(1, 'MISMATCH attest\n', 'Traceback (most recent call last):\n'),
+    traceback: done(1, 'MISMATCH harness\n', 'Traceback (most recent call last):\n'),
     disk_full: done(1, 'OSError: [Errno 28] No space left on device\n'),
   };
   for (const [name, answer] of Object.entries(cases)) {
-    assert.deepEqual(judge({ run_attest_check: [answer] }), unfinished('run_attest_check'), name);
+    assert.deepEqual(judge({ run_harness_check: [answer] }), unfinished('run_harness_check'), name);
   }
 });
 
@@ -344,11 +388,20 @@ test('a unit-test run that did not finish is unfinished, not missed', (t) => {
 });
 
 test('a provisional auxiliary rejection cannot finish a batch successfully', (t) => {
-  const wrong = () => done(1, 'MISMATCH attest\n');
-  const run = batch(t, { run_kit: [kit([]), kit([]), kit(['plan/b']), kit(['plan/b'])], run_attest_check: [done(0), wrong(), wrong()] });
+  const wrong = () => done(1, 'MISMATCH harness\n');
+  const run = batch(t, { run_kit: [kit([]), kit([]), kit(['plan/b']), kit(['plan/b'])], run_harness_check: [done(0), wrong(), wrong()] });
   assert.equal(run.code, 2);
   assert.deepEqual([run.report.caught, run.report.caught_provisionally, run.report.all_caught], [1, 1, false]);
-  assert.match(run.verdicts[0], /^caught provisionally \(run_attest_check, no case named\)/);
+  assert.match(run.verdicts[0], /^caught provisionally \(run_harness_check, no case named\)/);
+  assert.match(run.verdicts[1], /^caught \(run_kit: plan\/b\)/);
+});
+
+test('an attest catch on a repeated named case is caught, not provisionally', (t) => {
+  const run = batch(t, { run_kit: [kit([]), kit([]), kit(['plan/b']), kit(['plan/b'])],
+    run_attest_check: [attest([]), attest([CHANGED]), attest([CHANGED])] });
+  assert.equal(run.code, 0);
+  assert.deepEqual([run.report.caught, run.report.caught_provisionally, run.report.all_caught], [2, 0, true]);
+  assert.match(run.verdicts[0], /^caught \(run_attest_check: changed after signing\)/);
   assert.match(run.verdicts[1], /^caught \(run_kit: plan\/b\)/);
 });
 

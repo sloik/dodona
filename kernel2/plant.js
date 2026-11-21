@@ -9,7 +9,7 @@
 // are tried; the unchanged copy is still put to every judge first.
 //
 // Per defect it prints
-//   caught      the scenario, ledger, core-key or strict-input judge rejected the defective copy with a complete report and,
+//   caught      the scenario, ledger, core-key, attest or strict-input judge rejected the defective copy with a complete report and,
 //               run a second time, rejected it again on a case it named both times; those cases are
 //               printed (judges are tried one at a time and the first rejection ends the defect's turn),
 //   caught provisionally
@@ -53,13 +53,13 @@ const OTHER_KERNEL = process.env.DODONA_OTHER_KERNEL
 const STATUS_JOBS = process.env.DODONA_STATUS_JOBS || '3';
 
 // Each judge: a name, the tool, the tool's own arguments before `--`, and the
-// arguments after `node <kernel>`. The scenario, ledger, core-key and strict-input judges end with the
+// arguments after `node <kernel>`. The scenario, ledger, core-key, attest and strict-input judges end with the
 // same structured report; `count` is the key under which each counts what it ran.
 const JUDGES = [
   { name: 'run_kit', tool: 'run_kit.py', args: ['scenario'], count: 'scenarios' },
   { name: 'run_ledger_cases', tool: 'run_ledger_cases.py', args: [], count: 'checks' },
   { name: 'run_key_vectors', tool: 'run_key_vectors.py', args: ['key'], count: 'vectors' },
-  { name: 'run_attest_check', tool: 'run_attest_check.py', args: ['scenario'] },
+  { name: 'run_attest_check', tool: 'run_attest_check.py', args: ['scenario'], count: 'cases' },
   { name: 'run_input_cases', tool: 'run_input_cases.py', args: [], count: 'cases' },
   { name: 'run_harness_check', tool: 'run_harness_check.py', args: ['scenario'] },
   { name: 'run_vectors', tool: 'run_vectors.py', args: ['canonical'] },
@@ -100,8 +100,8 @@ function loads(copy, spawn = spawnSync) {
 }
 
 // The verdict of a judge that reports, from its last line, the summary tools/run_kit.py prints (and
-// tools/run_ledger_cases.py, tools/run_key_vectors.py and tools/run_input_cases.py, their totals under `checks`,
-// `vectors` and `cases` where
+// tools/run_ledger_cases.py, tools/run_key_vectors.py, tools/run_attest_check.py and tools/run_input_cases.py, their
+// totals under `checks`, `vectors`, `cases` and `cases` where
 // `count` says): 'passed', 'rejected' with
 // the cases it names, or 'unfinished' when the report is missing, malformed or incomplete, says a
 // kernel process did not finish, disagrees with the exit status, or anything was written to stderr.
@@ -149,7 +149,7 @@ function runJudge(judge, copy, spawn) {
 // Puts the copy to the judges one at a time, then to its unit tests. Returns
 //   { outcome: 'clean' }                                    every judge and the unit tests accepted it,
 //   { outcome: 'rejected', name, mismatch, cases }          the first judge that rejected it (cases are the
-//                                                           scenarios, ledger checks or input cases that rejected it),
+//                                                           scenarios, ledger checks, vectors or cases that rejected it),
 //   { outcome: 'unfinished', name, why }                    a judge did not finish, or with `replay` its
 //                                                           rejection did not happen again on the same case.
 // With `replay`, a judge that rejects the copy is run once more, and only a rejection that repeats counts.

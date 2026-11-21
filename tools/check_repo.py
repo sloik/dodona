@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import check_models  # noqa: E402
 import kit_adequacy  # noqa: E402
 import pathcheck  # noqa: E402
+import run_attest_check  # noqa: E402
 import run_input_cases  # noqa: E402
 import run_key_vectors  # noqa: E402
 import run_kit  # noqa: E402
@@ -1049,7 +1050,7 @@ class KitAdequacyTests(unittest.TestCase):
     def test_auxiliary_judge_signal_and_usage_error_are_unfinished(self):
         for code in (-15, 2):
             with self.subTest(code=code), patch.object(kit_adequacy.subprocess, "run", return_value=self.result(code)):
-                self.assertEqual(kit_adequacy.run_judge("attest", "run_attest_check.py", ["scenario"], ROOT / "kernel"), "unfinished")
+                self.assertEqual(kit_adequacy.run_judge("harness", "run_harness_check.py", ["scenario"], ROOT / "kernel"), "unfinished")
 
     # The ledger judge ends with the scenarios' footer, its count under `checks` (issue 41).
     def ledger(self, code, rejected, unfinished=0, key="checks", all_matched=None, before=""):
@@ -1097,16 +1098,17 @@ class KitAdequacyTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(self.after_scenarios(answer), (False, ["ledger-judge unfinished"]))
 
+    # The harness judge names no case the runner reads; it stands for the judges kept on their exit status.
     def test_other_auxiliary_judges_keep_their_exit_status_treatment(self):
-        failed = self.result(1, "MISMATCH attest\n")
-        passed = self.key_report(0, [])
-        self.assertEqual(self.after_scenarios(self.ledger(0, []), passed, failed, self.result(0)), (False, ["attest-judge unsteady"]))
+        failed = self.result(1, "MISMATCH harness\n")
+        self.assertEqual(self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.attest_report(0, []),
+                                              failed, self.result(0)), (False, ["harness-judge unsteady"]))
 
     def test_repeated_untyped_auxiliary_rejection_is_provisional_not_caught(self):
         # Two identical exits 1 that name no case may be one environment failure twice (issue 41).
-        failed = self.result(1, "MISMATCH attest\n")
-        self.assertEqual(self.after_scenarios(self.ledger(0, []), self.key_report(0, []), failed, failed),
-                         (False, ["attest-judge provisional"]))
+        failed = self.result(1, "MISMATCH harness\n")
+        self.assertEqual(self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.attest_report(0, []),
+                                              failed, failed), (False, ["harness-judge provisional"]))
 
     def test_provisional_replay_leaves_the_batch_unfinished(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1117,7 +1119,7 @@ class KitAdequacyTests(unittest.TestCase):
             defects = [{"name": name, "file": "fixture.rs", "find": "old", "replace": "planted"}
                        for name in ("named", "untyped")]
             (kernel / "defects.json").write_text(json.dumps({"defects": defects}), encoding="utf-8")
-            results = [(True, []), (False, ["plan/named"]), (False, ["attest-judge provisional"])]
+            results = [(True, []), (False, ["plan/named"]), (False, ["harness-judge provisional"])]
             with patch.object(kit_adequacy, "ROOT", root), patch.object(kit_adequacy, "passes_kit", side_effect=results), \
                     contextlib.redirect_stdout(io.StringIO()) as output:
                 status = kit_adequacy.main()
@@ -1158,6 +1160,41 @@ class KitAdequacyTests(unittest.TestCase):
             with self.subTest(answer=answer.stdout):
                 self.assertEqual(self.at_key(answer, answer), (False, ["core-key-judge unfinished"]))
 
+    # The attest judge ends with the same footer, its count under `cases`; it runs after the core-key judge (issue 41).
+    def attest_report(self, code, rejected, unfinished=0, key="cases"):
+        summary = {key: 7, "matched": 7 - len(rejected) - unfinished, "unfinished": unfinished, "rejected": rejected,
+                   "all_matched": not rejected and not unfinished}
+        lines = "".join(f"MISMATCH {case}: kernel says None, None; the signer's own check says True\n" for case in rejected)
+        return self.result(code, lines + json.dumps(summary) + "\n")
+
+    def at_attest(self, *results):
+        return self.after_scenarios(self.ledger(0, []), self.key_report(0, []), *results)
+
+    def test_attest_rejection_is_credited_with_the_cases_that_repeat(self):
+        both = ["changed after signing", "one fact left uncovered"]
+        self.assertEqual(self.at_attest(self.attest_report(1, both), self.attest_report(1, ["one fact left uncovered"])),
+                         (False, ["attest-judge: one fact left uncovered"]))
+
+    def test_attest_replay_on_another_case_or_unfinished_is_unsteady(self):
+        first = self.attest_report(1, ["changed after signing"])
+        for second in (self.attest_report(1, ["one fact left uncovered"]), self.attest_report(0, []),
+                       self.attest_report(2, [], unfinished=7), self.result(1, "MISMATCH changed after signing: x\n")):
+            with self.subTest(second=second.stdout):
+                self.assertEqual(self.at_attest(first, second), (False, ["attest-judge unsteady"]))
+
+    def test_attest_report_that_is_unfinished_or_of_the_old_shape_is_unfinished_even_when_it_repeats(self):
+        # The old judge folded a kernel that could not start, timed out or was signalled into seven named kernel
+        # mismatches and exit 1; a runner that reads the footer must not take that for a catch.
+        old = self.result(1, "".join(f"MISMATCH case {n}: kernel says None, None\n" for n in range(7))
+                          + json.dumps({"cases": 7, "matched": 0, "all_matched": False}) + "\n")
+        rejected = self.attest_report(1, ["changed after signing"])
+        for answer in (old, self.attest_report(2, [], unfinished=7), self.attest_report(2, ["changed after signing"], unfinished=1),
+                       self.result(1, "MISMATCH changed after signing\n"), self.attest_report(1, ["changed after signing"], key="vectors"),
+                       self.result(-15, rejected.stdout), self.result(0), self.result(2),
+                       self.result(1, rejected.stdout, "Traceback (most recent call last):\n")):
+            with self.subTest(answer=answer.stdout):
+                self.assertEqual(self.at_attest(answer, answer), (False, ["attest-judge unfinished"]))
+
     # The strict-input judge ends with the same footer, its count under `cases`; it runs after the ledger, core-key,
     # attest and harness judges (issue 41).
     def input_report(self, code, rejected, unfinished=0, key="cases"):
@@ -1166,7 +1203,7 @@ class KitAdequacyTests(unittest.TestCase):
         return self.result(code, "".join(f"MISMATCH {case} (exit 0)\n" for case in rejected) + json.dumps(summary) + "\n")
 
     def at_input(self, *results):
-        return self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.result(0), self.result(0), *results)
+        return self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.attest_report(0, []), self.result(0), *results)
 
     def test_input_rejection_is_credited_with_the_cases_that_repeat(self):
         key = "a key repeated in one object is refused"
@@ -1479,6 +1516,114 @@ class KeyVectorJudgeTests(unittest.TestCase):
         self.assertEqual((code, summary["vectors"], summary["unfinished"], summary["all_matched"], calls), (2, 0, 1, False, []))
 
 
+class AttestJudgeTests(unittest.TestCase):
+    """The attest judge names a completed wrong grade, and never reports a kernel, signer or fixture that did not finish
+    as seven mismatches. A kernel grades the seven records in one `scenario` run that exits 0 (issue 41)."""
+
+    names = ["signed now by the reference signer", "changed after signing", "the result changed after signing",
+             "the target changed after signing", "signed without what was judged",
+             "signed with a key policy does not list", "one fact left uncovered"]
+    right = [{"level": "cross-make", "source": "attested"}] + [{"level": "helper", "source": "declared"}] * 6
+
+    @staticmethod
+    def answered(results, code=0):
+        stdout = results if isinstance(results, bytes) else json.dumps({"results": results}).encode("utf-8")
+        return subprocess.CompletedProcess(["kernel", "scenario"], code, stdout, b"")
+
+    def judge(self, answers):
+        argv = ["run_attest_check.py", "--", "kernel", "scenario"]
+        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_attest_check.sys, "argv", argv), \
+                patch.object(run_attest_check.subprocess, "run", side_effect=answers) as run:
+            code = run_attest_check.main()
+        lines = output.getvalue().splitlines()
+        return code, json.loads(lines[-1]), run.call_args_list, lines[:-1]
+
+    def test_every_right_grade_passes(self):
+        code, summary, calls, lines = self.judge([self.answered(self.right)])
+        self.assertEqual((code, summary), (0, {"cases": 7, "matched": 7, "all_matched": True, "unfinished": 0, "rejected": []}))
+        self.assertEqual([call.args[0] for call in calls], [["kernel", "scenario"]])
+        sent = json.loads(calls[0].kwargs["input"].decode("utf-8"))
+        self.assertEqual((sent["kind"], len(sent["steps"])), ("acts", 7))
+        self.assertEqual([line.split(":")[0] for line in lines], [f"match    {name}" for name in self.names])
+
+    def test_a_completed_wrong_grade_is_a_named_rejection(self):
+        wrong = [dict(r) for r in self.right]
+        wrong[1] = {"level": "cross-make", "source": "attested"}  # vouches for a record changed after signing
+        wrong[6] = {"level": "helper", "source": "attested"}
+        code, summary, _, lines = self.judge([self.answered(wrong)])
+        self.assertEqual((code, summary), (1, {"cases": 7, "matched": 5, "all_matched": False, "unfinished": 0,
+                                               "rejected": [self.names[1], self.names[6]]}))
+        self.assertTrue(lines[1].startswith(f"MISMATCH {self.names[1]}:"))
+
+    def test_a_malformed_per_case_answer_from_a_completed_kernel_is_a_named_rejection(self):
+        short = self.right[:5]
+        odd = list(self.right)
+        odd[0], odd[3] = "cross-make", None
+        for answer, rejected in ((self.answered(short), self.names[5:]), (self.answered(odd), [self.names[0], self.names[3]]),
+                                 (self.answered(b"not json"), self.names), (self.answered(b""), self.names),
+                                 (self.answered(b'{"results": 5}'), self.names), (self.answered(b"[]"), self.names)):
+            with self.subTest(stdout=answer.stdout):
+                code, summary, _, _ = self.judge([answer])
+                self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["all_matched"]), (1, 0, rejected, False))
+                self.assertEqual(summary["matched"], 7 - len(rejected))
+
+    def test_a_kernel_that_did_not_finish_is_unfinished_not_seven_mismatches(self):
+        right = self.answered(self.right).stdout
+        for failure in (FileNotFoundError(), OSError(errno.ENOSPC, "No space left on device"),
+                        subprocess.TimeoutExpired("kernel", 60), self.answered(right, -15), self.answered(right, -9),
+                        self.answered(right, 1), self.answered(b"", 101), self.answered(right, 0xC0000005)):
+            with self.subTest(failure=failure):
+                code, summary, _, lines = self.judge([failure])
+                self.assertEqual((code, summary.get("unfinished"), summary.get("rejected"), summary["all_matched"], summary["matched"]),
+                                 (2, 7, [], False, 0))
+                self.assertFalse(any(line.startswith("MISMATCH") for line in lines))
+                self.assertTrue(lines[0].startswith("UNFINISHED"))
+
+    def test_a_signer_or_fixture_that_could_not_finish_is_unfinished(self):
+        with patch.object(pathlib.Path, "read_text", side_effect=OSError(errno.ENOSPC, "No space left on device")):
+            code, summary, calls, _ = self.judge([])
+        self.assertEqual((code, summary, calls), (2, {"cases": 0, "matched": 0, "all_matched": False, "unfinished": 1, "rejected": []}, []))
+        with patch.object(run_attest_check.attest, "sign", side_effect=ValueError("no key")):
+            code, summary, calls, _ = self.judge([])
+        self.assertEqual((code, summary["unfinished"], summary["rejected"], calls), (2, 1, [], []))
+        # The kernel answered rightly, and the signer's own check of one record did not finish: that case is unfinished.
+        real = run_attest_check.attest.verify
+        with patch.object(run_attest_check.attest, "verify",
+                          side_effect=lambda record, key: (_ for _ in ()).throw(MemoryError()) if record.get("result") == "refused" else real(record, key)):
+            code, summary, _, _ = self.judge([self.answered(self.right)])
+        self.assertEqual((code, summary), (2, {"cases": 7, "matched": 6, "all_matched": False, "unfinished": 1, "rejected": []}))
+
+    def test_a_wrong_reference_verdict_is_unfinished_not_a_kernel_mismatch(self):
+        # The signer checking its own known fixture and returning the other boolean is a failure of the judge: the kernel
+        # graded rightly, so the case shows nothing about it. The same failure twice must not be a named catch.
+        real = run_attest_check.attest.verify
+        flip_refused = lambda record, key: (not real(record, key)) if record.get("result") == "refused" else real(record, key)
+        with patch.object(run_attest_check.attest, "verify", side_effect=flip_refused):
+            code, summary, _, lines = self.judge([self.answered(self.right)])
+        self.assertEqual((code, summary), (2, {"cases": 7, "matched": 6, "all_matched": False, "unfinished": 1, "rejected": []}))
+        self.assertTrue(lines[2].startswith(f"UNFINISHED {self.names[2]}:"))
+        self.assertFalse(any(line.startswith("MISMATCH") for line in lines))
+        with patch.object(run_attest_check.attest, "verify", side_effect=lambda record, key: not real(record, key)):
+            code, summary, _, _ = self.judge([self.answered(self.right)])
+        self.assertEqual((code, summary), (2, {"cases": 7, "matched": 0, "all_matched": False, "unfinished": 7, "rejected": []}))
+        # A wrong grade on the same case as a wrong reference verdict is still unfinished; a wrong grade elsewhere is named.
+        wrong = list(self.right)
+        wrong[2] = wrong[6] = {"level": "cross-make", "source": "attested"}
+        with patch.object(run_attest_check.attest, "verify", side_effect=flip_refused):
+            code, summary, _, _ = self.judge([self.answered(wrong)])
+        self.assertEqual((code, summary), (2, {"cases": 7, "matched": 5, "all_matched": False, "unfinished": 1,
+                                               "rejected": [self.names[6]]}))
+
+    def test_a_mismatch_with_an_unfinished_signer_check_leaves_the_run_unfinished(self):
+        wrong = list(self.right)
+        wrong[1] = {"level": "cross-make", "source": "attested"}
+        real = run_attest_check.attest.verify
+        with patch.object(run_attest_check.attest, "verify",
+                          side_effect=lambda record, key: (_ for _ in ()).throw(OSError()) if record.get("result") == "refused" else real(record, key)):
+            code, summary, _, _ = self.judge([self.answered(wrong)])
+        self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["all_matched"]), (2, 1, [self.names[1]], False))
+
+
 class PlantJsTests(unittest.TestCase):
     """Keep the standalone JavaScript runner tests registered in hosted CI."""
 
@@ -1573,6 +1718,7 @@ def main() -> int:
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(LedgerJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(InputJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KeyVectorJudgeTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(AttestJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantJsTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
