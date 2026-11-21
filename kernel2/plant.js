@@ -9,14 +9,14 @@
 // are tried; the unchanged copy is still put to every judge first.
 //
 // Per defect it prints
-//   caught      the scenario judge rejected the defective copy and, run a second time, rejected
-//               it again on a case it named both times (judges are tried one at a time and the
-//               first rejection ends the defect's turn),
+//   caught      the scenario or ledger judge rejected the defective copy with a complete report and,
+//               run a second time, rejected it again on a case it named both times; those cases are
+//               printed (judges are tried one at a time and the first rejection ends the defect's turn),
 //   caught provisionally
-//               an auxiliary judge exited 1 both times. These judges name no case the runner
+//               another auxiliary judge exited 1 both times. These judges name no case the runner
 //               can compare, so the catch is not shown to be on the same case and stays
-//               provisional for issue 41; it is counted in `caught` and again in
-//               `caught_provisionally`, and one with no mismatch reported also in
+//               provisional for issue 41. It is counted separately in `caught_provisionally`.
+//               A provisional rejection with no mismatch is also counted in
 //               `caught_without_mismatch`,
 //   UNFINISHED  a judge or the unit tests did not finish (could not start, were signalled or ran
 //               out of time, printed no complete report, broke, or exited other than 0 or 1), or
@@ -53,10 +53,11 @@ const OTHER_KERNEL = process.env.DODONA_OTHER_KERNEL
 const STATUS_JOBS = process.env.DODONA_STATUS_JOBS || '3';
 
 // Each judge: a name, the tool, the tool's own arguments before `--`, and the
-// arguments after `node <kernel>`. The scenario judge prints a structured report.
+// arguments after `node <kernel>`. The scenario and ledger judges end with the same
+// structured report; `count` is the key under which each counts what it ran.
 const JUDGES = [
-  { name: 'run_kit', tool: 'run_kit.py', args: ['scenario'], scenarios: true },
-  { name: 'run_ledger_cases', tool: 'run_ledger_cases.py', args: [] },
+  { name: 'run_kit', tool: 'run_kit.py', args: ['scenario'], count: 'scenarios' },
+  { name: 'run_ledger_cases', tool: 'run_ledger_cases.py', args: [], count: 'checks' },
   { name: 'run_key_vectors', tool: 'run_key_vectors.py', args: ['key'] },
   { name: 'run_attest_check', tool: 'run_attest_check.py', args: ['scenario'] },
   { name: 'run_input_cases', tool: 'run_input_cases.py', args: [] },
@@ -98,10 +99,11 @@ function loads(copy, spawn = spawnSync) {
   return run.status === 0 && (run.stdout || '').includes('"canonical":"{}"');
 }
 
-// The scenario judge's verdict from its last line, the summary tools/run_kit.py prints: 'passed',
-// 'rejected' with the cases it names, or 'unfinished' when the report is missing, malformed or
-// incomplete, says a kernel process did not finish, or disagrees with the exit status.
-function scenarioVerdict(run) {
+// The verdict of a judge that reports, from its last line, the summary tools/run_kit.py prints (and
+// tools/run_ledger_cases.py, its total under `checks` where `count` says): 'passed', 'rejected' with
+// the cases it names, or 'unfinished' when the report is missing, malformed or incomplete, says a
+// kernel process did not finish, disagrees with the exit status, or anything was written to stderr.
+function scenarioVerdict(run, count = 'scenarios') {
   const unfinished = { verdict: 'unfinished' };
   if (!ended(run) || (run.stderr || '') !== '') return unfinished;
   const lines = (run.stdout || '').trimEnd().split(/\r?\n/);
@@ -112,9 +114,9 @@ function scenarioVerdict(run) {
     return unfinished;
   }
   if (report === null || typeof report !== 'object' || Array.isArray(report) || report.unfinished !== 0) return unfinished;
-  const { scenarios, matched, rejected } = report;
-  if (!Number.isInteger(scenarios) || !Number.isInteger(matched) || scenarios < 1 || matched < 0 || matched > scenarios
-      || !Array.isArray(rejected) || rejected.length !== scenarios - matched
+  const { [count]: total, matched, rejected } = report;
+  if (!Number.isInteger(total) || !Number.isInteger(matched) || total < 1 || matched < 0 || matched > total
+      || !Array.isArray(rejected) || rejected.length !== total - matched
       || rejected.some((name) => typeof name !== 'string' || name === '')) return unfinished;
   if (run.status === 0 && rejected.length === 0 && report.all_matched === true) return { verdict: 'passed' };
   if (run.status === 1 && rejected.length > 0 && report.all_matched === false) return { verdict: 'rejected', cases: rejected };
@@ -139,13 +141,13 @@ function runJudge(judge, copy, spawn) {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
-  return judge.scenarios ? scenarioVerdict(run) : auxiliaryVerdict(run);
+  return judge.count ? scenarioVerdict(run, judge.count) : auxiliaryVerdict(run);
 }
 
 // Puts the copy to the judges one at a time, then to its unit tests. Returns
 //   { outcome: 'clean' }                                    every judge and the unit tests accepted it,
-//   { outcome: 'rejected', name, mismatch, cases }          the first judge that rejected it (cases are
-//                                                           the scenarios that rejected it, when it names any),
+//   { outcome: 'rejected', name, mismatch, cases }          the first judge that rejected it (cases are the
+//                                                           scenarios or ledger checks that rejected it),
 //   { outcome: 'unfinished', name, why }                    a judge did not finish, or with `replay` its
 //                                                           rejection did not happen again on the same case.
 // With `replay`, a judge that rejects the copy is run once more, and only a rejection that repeats counts.
@@ -156,7 +158,7 @@ function judgeCopy(copy, judges = JUDGES, { replay = false, spawn = spawnSync } 
     const first = runJudge(judge, copy, spawn);
     if (first.verdict === 'unfinished') return notFinished(judge.name);
     if (first.verdict === 'passed') continue;
-    if (judge.scenarios) {
+    if (judge.count) {
       let cases = first.cases;
       if (replay) {
         const again = runJudge(judge, copy, spawn);

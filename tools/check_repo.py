@@ -1047,7 +1047,58 @@ class KitAdequacyTests(unittest.TestCase):
     def test_auxiliary_judge_signal_and_usage_error_are_unfinished(self):
         for code in (-15, 2):
             with self.subTest(code=code), patch.object(kit_adequacy.subprocess, "run", return_value=self.result(code)):
-                self.assertEqual(kit_adequacy.run_judge("ledger", "run_ledger_cases.py", [], ROOT / "kernel"), "unfinished")
+                self.assertEqual(kit_adequacy.run_judge("core-key", "run_key_vectors.py", ["key"], ROOT / "kernel"), "unfinished")
+
+    # The ledger judge ends with the scenarios' footer, its count under `checks` (issue 41).
+    def ledger(self, code, rejected, unfinished=0, key="checks", all_matched=None, before=""):
+        summary = {key: 40, "matched": 40 - len(rejected), "unfinished": unfinished, "rejected": rejected,
+                   "all_matched": (not rejected and not unfinished) if all_matched is None else all_matched}
+        lines = "".join(f"MISMATCH {case}: detail\n" for case in rejected)
+        return self.result(code, before + lines + json.dumps(summary) + "\n")
+
+    def after_scenarios(self, *results):
+        passed = {"scenarios": 1, "matched": 1, "all_matched": True, "unfinished": 0, "rejected": []}
+        return self.planted(self.result(0, json.dumps(passed) + "\n"), *results)
+
+    def test_ledger_rejection_is_credited_with_the_checks_that_repeat(self):
+        writer = "writer 0 gave up at entry 3: the kernel answered {}\n"
+        both = ["torn", "two kernels appending at once lose nothing"]
+        self.assertEqual(self.after_scenarios(self.ledger(1, ["torn"]), self.ledger(1, ["torn"])),
+                         (False, ["ledger-judge: torn"]))
+        self.assertEqual(self.after_scenarios(self.ledger(1, both, before=writer), self.ledger(1, ["torn"])),
+                         (False, ["ledger-judge: torn"]))
+        self.assertEqual(self.after_scenarios(self.ledger(1, both), self.ledger(1, both, before=writer)),
+                         (False, [f"ledger-judge: {case}" for case in both]))
+
+    def test_ledger_replay_on_another_check_or_unfinished_is_unsteady(self):
+        first = self.ledger(1, ["torn"])
+        for second in (self.ledger(1, ["swapped"]), self.ledger(0, []), self.ledger(2, ["torn"], unfinished=1),
+                       self.result(1, "MISMATCH torn: detail\n")):
+            with self.subTest(second=second.stdout):
+                self.assertEqual(self.after_scenarios(first, second), (False, ["ledger-judge unsteady"]))
+
+    def test_ledger_report_that_is_partial_malformed_or_contradictory_is_unfinished(self):
+        torn = self.ledger(1, ["torn"])
+        cases = {
+            "unfinished_after_a_mismatch": self.ledger(2, ["torn"], unfinished=1),
+            "unfinished_with_exit_1": self.ledger(1, ["torn"], unfinished=1),
+            "no_footer": self.result(1, "MISMATCH torn: detail\n"),
+            "scenario_key": self.ledger(1, ["torn"], key="scenarios"),
+            "exit_1_all_matched": self.ledger(1, ["torn"], all_matched=True),
+            "exit_0_with_rejection": self.ledger(0, ["torn"]),
+            "exit_1_nothing_rejected": self.ledger(1, [], all_matched=False),
+            "empty_name": self.ledger(1, [""]),
+            "stderr": self.result(1, torn.stdout, "writer did not finish: OSError\n"),
+            "signal": self.result(-15, torn.stdout),
+        }
+        for name, answer in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(self.after_scenarios(answer), (False, ["ledger-judge unfinished"]))
+
+    def test_other_auxiliary_judges_keep_their_exit_status_treatment(self):
+        failed = self.result(1, "MISMATCH key vector\n")
+        self.assertEqual(self.after_scenarios(self.ledger(0, []), failed, failed), (False, ["core-key-judge"]))
+        self.assertEqual(self.after_scenarios(self.ledger(0, []), failed, self.result(0)), (False, ["core-key-judge unsteady"]))
 
     def test_a_batch_builds_into_its_own_copy(self):
         summary = {"scenarios": 1, "matched": 1, "all_matched": True, "unfinished": 0, "rejected": []}
