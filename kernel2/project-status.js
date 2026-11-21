@@ -799,4 +799,8 @@ async function projectStatus(bytes) {
   }
 }
 
-module.exports = { projectStatus, readInput, isRelative, isPattern, segmentMatches, readProject, coverageOf, Stop };
+module.exports = {
+  projectStatus, readInput, isRelative, isPattern, segmentMatches, readProject, coverageOf, Stop,
+  // Reused by the run command's checks of its own input (project-run.js).
+  checkInput, isDirectory, fileId, stepsOf,
+};
