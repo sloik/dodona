@@ -1,0 +1,12 @@
+# The files that decide how changes are judged, and the owner who answers for them. This asks for no
+# review that anything enforces: the owner opens the pull requests, so a code-owner review never applies.
+# What does apply is in tools/check_docs.py: a change to tools/check_docs.py, docs.yml, this file, the YAML reader's pin list
+# or wheel, or a [[rule]] of docs/doc-map.toml fails, and the owner merges over that failure.
+/tools/check_docs.py @sloik
+/docs/doc-map.toml @sloik
+/.github/workflows/docs.yml @sloik
+/.github/workflows/checks.yml @sloik
+/tools/check_repo.py @sloik
+/.github/CODEOWNERS @sloik
+/.github/yaml-reader.txt @sloik
+/.github/vendor/ @sloik

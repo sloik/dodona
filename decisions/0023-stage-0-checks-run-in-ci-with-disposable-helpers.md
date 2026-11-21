@@ -28,6 +28,8 @@ Model checks run only for the maintained main branch on the project's own runner
 
 The scripts are disposable. They are written in a scripting language because that is what runs unmodified on all three platforms today; this is not a choice of implementation language for dodona ([0011](0011-self-hosting-through-a-verified-seed.md)). They are deleted when a kernel can do the same job.
 
+*Amended by [decision 0033](0033-a-kernel-hosts-providers.md), proposed: the host helpers are to be replaced by a kernel that hosts providers itself, in two steps. The first step is merged, so both kernels can now host a provider session and one check; CI still runs `tools/host.py` and `tools/status.py` until the second. `tools/provider_host.py` and `tools/host.py check` stay as the references the kit is checked against.*
+
 ## Consequences
 
 - Every push shows publicly whether the repository's own claims still hold.

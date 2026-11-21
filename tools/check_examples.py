@@ -1,5 +1,7 @@
 """Validate the schemas, the provider guide's examples and dodona's own policy.
 
+    python tools/check_examples.py
+
 Stage-0 helper (decision 0023). Unlike the other helpers this one needs a
 third-party package, `jsonschema`, because a JSON Schema validator is not in
 the standard library. It runs in CI with a pinned version. Without the package
