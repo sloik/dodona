@@ -2382,6 +2382,217 @@ mod run_input {
         Ok(())
     }
 
+    // Steps 11 and 12 together: the checks of the plan, and the batches their runs form.
+
+    /// What an executor did with one batch, as far as the process goes. The
+    /// answer it printed is judged by `fates`.
+    pub(super) enum Batch {
+        /// It could not start, exited with a status other than 0, or printed
+        /// no first line that can be read strictly as one object.
+        Failed,
+        /// It was not done within the wait.
+        TimedOut,
+        /// The object it printed as its first line.
+        Answered(Value),
+    }
+
+    /// The site's executor, given one batch, `{"runs": [...]}`, and how long it
+    /// may take. The real one starts the executor command in `root`; tests give
+    /// a scripted one.
+    pub(super) trait Executor {
+        fn batch(&mut self, runs: &Value, wait: Duration) -> Batch;
+    }
+
+    /// What a batch gives one of its runs: a verdict that ends its check, or a
+    /// report to read as the host checks read one.
+    #[derive(Debug)]
+    pub(super) enum Fate {
+        Verdict(&'static str),
+        Report(Value),
+    }
+
+    /// Step 12, for each run of a batch, given by its key in the batch's order.
+    /// The batch as a whole first: not answered in time, `error` for every run;
+    /// failed, or an answer that is not an object with `ended` true and a list
+    /// `reports`, `unavailable` for every run; an item that is not an object
+    /// with a string `run_key` of the batch and a `report`, or a key given
+    /// twice, `error` for every run. Then each run: no report, or a report that
+    /// is not an object, `error` for its own check.
+    pub(super) fn fates(batch: &Batch, keys: &[String]) -> Vec<Fate> {
+        let all = |v: &'static str| -> Vec<Fate> { keys.iter().map(|_| Fate::Verdict(v)).collect() };
+        let answer = match batch {
+            Batch::TimedOut => return all("error"),
+            Batch::Failed => return all("unavailable"),
+            Batch::Answered(a) => a,
+        };
+        let reports = match (answer.opt("ended"), list(answer.opt("reports"))) {
+            (Some(Value::Bool(true)), Some(r)) if is_object(Some(answer)) => r,
+            _ => return all("unavailable"),
+        };
+        let mut seen: Vec<&str> = Vec::new();
+        for item in reports {
+            let key = item.text("run_key");
+            let fits = is_object(Some(item))
+                && item.opt("report").is_some()
+                && key.is_some_and(|k| keys.iter().any(|x| x == k) && !seen.contains(&k));
+            if !fits {
+                return all("error");
+            }
+            seen.extend(key);
+        }
+        keys.iter()
+            .map(|k| {
+                let report = reports
+                    .iter()
+                    .find(|r| r.text("run_key") == Some(k.as_str()))
+                    .map(|r| r.get("report"));
+                match report {
+                    Some(r @ Value::Object(_)) => Fate::Report(r.clone()),
+                    _ => Fate::Verdict("error"),
+                }
+            })
+            .collect()
+    }
+
+    /// One binding's session as the checks use it, with what its manifest declared.
+    pub(super) struct Lane<'a> {
+        pub(super) binding: String,
+        pub(super) channel: &'a mut dyn Channel,
+        pub(super) offers_check: bool,
+        pub(super) declared: Vec<String>,
+        pub(super) ceiling: host::Ceiling,
+    }
+
+    /// How a planned check ended.
+    #[derive(Debug)]
+    pub(super) enum Ended {
+        /// A verdict, from the provider's `final` or from the executor, with
+        /// the final's strength as the rules accepted it (null otherwise).
+        Verdict { verdict: String, strength: Value },
+        /// No verdict: counted as `refused`.
+        Refused(&'static str),
+    }
+
+    /// One planned check, ended: everything step 13 records it from.
+    pub(super) struct Finished {
+        pub(super) binding: String,
+        pub(super) name: String,
+        /// How many runs were handed to the executor.
+        pub(super) runs: usize,
+        pub(super) ended: Ended,
+    }
+
+    /// A check with a run waiting for the next batch.
+    struct Open {
+        plan: usize,
+        lane: usize,
+        check: Check,
+        number: usize,
+        run_key: String,
+        run: Value,
+    }
+
+    /// What one answer leaves: a check still open, or how it ended.
+    fn settle(answer: Answer, plan: usize, lane: usize, check: Check) -> Result<Open, (usize, Ended, usize)> {
+        match answer {
+            Answer::Run { number, run_key, run } => Ok(Open { plan, lane, check, number, run_key, run }),
+            Answer::Verdict { verdict, strength } => {
+                Err((plan, Ended::Verdict { verdict, strength }, check.runs))
+            }
+            Answer::Refused(reason) => Err((plan, Ended::Refused(reason), check.runs)),
+        }
+    }
+
+    /// Steps 11 and 12: take every planned check, in the plan's order, on its
+    /// binding's own session, each started and its first answer read before
+    /// the next is started; send the runs all open checks ask for as one batch,
+    /// in the order the checks were started; pass each report back in that
+    /// order, reading each provider's answer before the next report is sent;
+    /// and again, until no check is open. The host rules bound each check to
+    /// eight runs. An error is a session that broke: the whole run is refused
+    /// with it, nothing more is sent, and nothing is recorded.
+    pub(super) fn schedule(
+        lanes: &mut [Lane],
+        to_check: &[(String, String)],
+        checks: &[Checkable],
+        executor: &mut dyn Executor,
+        root: &Path,
+    ) -> Result<Vec<Finished>, &'static str> {
+        let mut ended: Vec<Option<(Ended, usize)>> = to_check.iter().map(|_| None).collect();
+        let mut open: Vec<Open> = Vec::new();
+        for (i, (binding, name)) in to_check.iter().enumerate() {
+            let lane = lanes.iter().position(|l| &l.binding == binding);
+            let checkable = checks.iter().find(|c| &c.binding == binding && &c.name == name);
+            let (l, c) = match (lane, checkable) {
+                (Some(l), Some(c)) if can_check(Some(lanes[l].offers_check)) => (l, c),
+                _ => {
+                    ended[i] = Some((Ended::Refused("not-offered"), 0));
+                    continue;
+                }
+            };
+            let lane = &mut lanes[l];
+            let mut check = start(&mut *lane.channel, c, &lane.declared, &lane.ceiling)?;
+            let a = answer(&mut *lane.channel, &mut check, root)?;
+            match settle(a, i, l, check) {
+                Ok(o) => open.push(o),
+                Err((p, e, runs)) => ended[p] = Some((e, runs)),
+            }
+        }
+        while !open.is_empty() {
+            let runs = Value::Array(
+                open.iter()
+                    .map(|o| {
+                        json::object(vec![
+                            ("number", Value::Number(o.number as i64)),
+                            ("run_key", json::string(&o.run_key)),
+                            ("run", o.run.clone()),
+                        ])
+                    })
+                    .collect(),
+            );
+            let wait = open
+                .iter()
+                .map(|o| host::executor_wait(&o.run))
+                .max()
+                .unwrap_or_default();
+            let keys: Vec<String> = open.iter().map(|o| o.run_key.clone()).collect();
+            let batch = executor.batch(&json::object(vec![("runs", runs)]), wait);
+            let mut next = Vec::new();
+            for (mut o, fate) in std::mem::take(&mut open).into_iter().zip(fates(&batch, &keys)) {
+                let report = match fate {
+                    Fate::Verdict(v) => {
+                        let e = Ended::Verdict { verdict: v.to_owned(), strength: Value::Null };
+                        ended[o.plan] = Some((e, o.check.runs));
+                        continue;
+                    }
+                    Fate::Report(r) => r,
+                };
+                // Read as the host checks read a report, before the provider sees it.
+                if let Some(v) = host::report_fault(&o.run, Some(&report)) {
+                    let e = Ended::Verdict { verdict: v.to_owned(), strength: Value::Null };
+                    ended[o.plan] = Some((e, o.check.runs));
+                    continue;
+                }
+                let channel = &mut *lanes[o.lane].channel;
+                pass_back(channel, &mut o.check, o.number, report)?;
+                let a = answer(channel, &mut o.check, root)?;
+                match settle(a, o.plan, o.lane, o.check) {
+                    Ok(still) => next.push(still),
+                    Err((p, e, runs)) => ended[p] = Some((e, runs)),
+                }
+            }
+            open = next;
+        }
+        Ok(to_check
+            .iter()
+            .zip(ended)
+            .map(|((binding, name), e)| {
+                let (ended, runs) = e.unwrap_or((Ended::Refused("not-offered"), 0));
+                Finished { binding: binding.clone(), name: name.clone(), runs, ended }
+            })
+            .collect())
+    }
+
     #[cfg(test)]
     mod check_tests {
         use super::*;
@@ -2613,6 +2824,225 @@ mod run_input {
             assert!(can_check(Some(true)));
             assert!(!can_check(Some(false)));
             assert!(!can_check(None));
+        }
+
+        // The scheduler, with a scripted executor: no process is started.
+
+        struct FakeExecutor {
+            /// Every batch it was given, in order.
+            sent: Vec<Value>,
+            /// What it does with each batch in turn; once these run out, it
+            /// answers every run with a report of a run that exited as described.
+            scripted: Vec<Batch>,
+        }
+        impl FakeExecutor {
+            fn new(scripted: Vec<Batch>) -> FakeExecutor {
+                FakeExecutor { sent: vec![], scripted }
+            }
+        }
+        fn report_for(run: &Value) -> Value {
+            json::object(vec![
+                ("end", json::string("exited")),
+                ("platform", run.get("platform").clone()),
+                ("tools_ran", run.get("tools").clone()),
+            ])
+        }
+        /// An ended batch with a good report for each run whose position `keep` allows.
+        fn answered(runs: &Value, keep: impl Fn(usize) -> bool) -> Batch {
+            let reports = runs
+                .get("runs")
+                .array()
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| keep(*i))
+                .map(|(_, r)| {
+                    json::object(vec![
+                        ("run_key", r.get("run_key").clone()),
+                        ("report", report_for(r.get("run"))),
+                    ])
+                })
+                .collect();
+            Batch::Answered(json::object(vec![
+                ("ended", Value::Bool(true)),
+                ("reports", Value::Array(reports)),
+            ]))
+        }
+        impl Executor for FakeExecutor {
+            fn batch(&mut self, runs: &Value, _wait: Duration) -> Batch {
+                self.sent.push(runs.clone());
+                if self.scripted.is_empty() {
+                    answered(runs, |_| true)
+                } else {
+                    self.scripted.remove(0)
+                }
+            }
+        }
+        fn lane<'a>(binding: &str, ch: &'a mut Scripted) -> Lane<'a> {
+            Lane {
+                binding: binding.to_owned(),
+                channel: ch,
+                offers_check: true,
+                declared: declared(),
+                ceiling: ceiling(),
+            }
+        }
+        fn pair(b: &str, n: &str) -> (String, String) {
+            (b.to_owned(), n.to_owned())
+        }
+        fn next() -> String {
+            format!(r#"{{"next":{}}}"#, good_run())
+        }
+        const PASS: &str = r#"{"final":{"verdict":"passed","strength":{"class":"model","rank":"bounded"}}}"#;
+        const FAIL: &str = r#"{"final":{"verdict":"failed","strength":{"class":"model","rank":"sampled"}}}"#;
+        fn verdict(f: &Finished) -> (&str, Option<&str>) {
+            match &f.ended {
+                Ended::Verdict { verdict, strength } => (verdict.as_str(), strength.text("rank")),
+                Ended::Refused(r) => (*r, None),
+            }
+        }
+        fn runs_of(batch: &Value) -> Vec<(i64, String)> {
+            batch
+                .get("runs")
+                .array()
+                .iter()
+                .map(|r| (r.get("number").number(), r.get("run_key").str().to_owned()))
+                .collect()
+        }
+
+        #[test]
+        fn two_bindings_share_batches_in_the_order_checks_were_started() {
+            let mut a = Scripted::after_enumerate(vec![reply("2", &next()), reply("3", &next()), reply("4", FAIL)]);
+            let mut b = Scripted::after_enumerate(vec![reply("2", &next()), reply("3", PASS)]);
+            let mut ex = FakeExecutor::new(vec![]);
+            let plan = [pair("a", "o1"), pair("b", "o2")];
+            let checks = [checkable("a", "o1"), checkable("b", "o2")];
+            let done = {
+                let mut lanes = vec![lane("a", &mut a), lane("b", &mut b)];
+                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new(".")).unwrap()
+            };
+            // Batch 1 holds both first runs, a's before b's; batch 2 only a's second.
+            assert_eq!(ex.sent.len(), 2);
+            let first = runs_of(&ex.sent[0]);
+            assert_eq!(first.iter().map(|r| r.0).collect::<Vec<_>>(), vec![1, 1]);
+            let started = a.sent[0].get("body");
+            let run = ex.sent[0].get("runs").array()[0].get("run");
+            assert_eq!(first[0].1, host::run_key(started.get("obligation"), started.get("inputs"), 1, run));
+            assert_ne!(first[0].1, first[1].1);
+            assert_eq!(runs_of(&ex.sent[1]).iter().map(|r| r.0).collect::<Vec<_>>(), vec![2]);
+            // Each provider got its own reports, naming its own start, under its own ids.
+            let ids = |s: &Scripted| s.sent.iter().map(|m| m.text("id").unwrap().to_owned()).collect::<Vec<_>>();
+            assert_eq!(ids(&a), vec!["2", "3", "4"]);
+            assert_eq!(ids(&b), vec!["2", "3"]);
+            assert!(a.sent[1..].iter().all(|m| m.get("body").text("check") == Some("2")));
+            assert_eq!(a.sent[2].get("body").get("run").number(), 2);
+            // The results, in plan order, with the strength the rules accepted.
+            assert_eq!((done[0].name.as_str(), verdict(&done[0]), done[0].runs), ("o1", ("failed", Some("sampled")), 2));
+            assert_eq!((done[1].name.as_str(), verdict(&done[1]), done[1].runs), ("o2", ("passed", Some("bounded")), 1));
+        }
+
+        #[test]
+        fn a_batch_is_judged_whole_and_then_run_by_run() {
+            let keys = ["k1".to_owned(), "k2".to_owned()];
+            let named = |b: Batch| -> Vec<String> {
+                fates(&b, &keys)
+                    .into_iter()
+                    .map(|f| match f {
+                        Fate::Verdict(v) => v.to_owned(),
+                        Fate::Report(_) => "report".to_owned(),
+                    })
+                    .collect()
+            };
+            let answer = |s: &str| Batch::Answered(v(s));
+            assert_eq!(named(Batch::TimedOut), ["error", "error"]);
+            assert_eq!(named(Batch::Failed), ["unavailable", "unavailable"]);
+            assert_eq!(named(answer(r#"{"ended":false,"reports":[]}"#)), ["unavailable", "unavailable"]);
+            assert_eq!(named(answer(r#"{"ended":true}"#)), ["unavailable", "unavailable"]);
+            assert_eq!(named(answer(r#"{"ended":"true","reports":[]}"#)), ["unavailable", "unavailable"]);
+            // A malformed item, a key not of the batch, or one given twice: the whole batch.
+            assert_eq!(named(answer(r#"{"ended":true,"reports":[1]}"#)), ["error", "error"]);
+            assert_eq!(named(answer(r#"{"ended":true,"reports":[{"run_key":"k9","report":{}}]}"#)), ["error", "error"]);
+            assert_eq!(named(answer(r#"{"ended":true,"reports":[{"run_key":"k1"}]}"#)), ["error", "error"]);
+            let twice = r#"{"ended":true,"reports":[{"run_key":"k1","report":{}},{"run_key":"k1","report":{}}]}"#;
+            assert_eq!(named(answer(twice)), ["error", "error"]);
+            // A run with no report, or a report that is not an object: that run's check alone.
+            assert_eq!(named(answer(r#"{"ended":true,"reports":[{"run_key":"k1","report":{}}]}"#)), ["report", "error"]);
+            let not_object = r#"{"ended":true,"reports":[{"run_key":"k2","report":"x"},{"run_key":"k1","report":{}}]}"#;
+            assert_eq!(named(answer(not_object)), ["report", "error"]);
+        }
+
+        #[test]
+        fn a_missing_report_is_an_error_for_its_own_check_only() {
+            let mut a = Scripted::after_enumerate(vec![reply("2", &next()), reply("3", PASS)]);
+            let mut b = Scripted::after_enumerate(vec![reply("2", &next())]);
+            /// An executor whose ended batch reports the first run only.
+            struct FirstOnly;
+            impl Executor for FirstOnly {
+                fn batch(&mut self, runs: &Value, _wait: Duration) -> Batch {
+                    answered(runs, |i| i == 0)
+                }
+            }
+            let mut ex = FirstOnly;
+            let plan = [pair("a", "o1"), pair("b", "o2")];
+            let checks = [checkable("a", "o1"), checkable("b", "o2")];
+            let done = {
+                let mut lanes = vec![lane("a", &mut a), lane("b", &mut b)];
+                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new(".")).unwrap()
+            };
+            assert_eq!(verdict(&done[0]), ("passed", Some("bounded")));
+            assert_eq!((verdict(&done[1]), done[1].runs), (("error", None), 1));
+            // b's provider is never handed a report that did not come.
+            assert_eq!(b.sent.len(), 1);
+        }
+
+        #[test]
+        fn checks_refused_on_their_own_leave_the_run_going() {
+            let mut not_offered = Scripted::after_enumerate(vec![]);
+            let mut a = Scripted::after_enumerate(vec![reply("2", "{}"), reply("3", &next()), reply("4", PASS)]);
+            let mut ex = FakeExecutor::new(vec![]);
+            let plan = [pair("list", "o0"), pair("noffer", "o1"), pair("a", "o2"), pair("a", "o3")];
+            let checks = [checkable("list", "o0"), checkable("noffer", "o1"), checkable("a", "o2"), checkable("a", "o3")];
+            let done = {
+                // "list" lists only enumeration, so it has no lane at all.
+                let mut off = lane("noffer", &mut not_offered);
+                off.offers_check = false;
+                let mut lanes = vec![off, lane("a", &mut a)];
+                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new(".")).unwrap()
+            };
+            assert_eq!(verdict(&done[0]), ("not-offered", None));
+            assert_eq!(verdict(&done[1]), ("not-offered", None));
+            assert!(not_offered.sent.is_empty());
+            assert_eq!(verdict(&done[2]), ("neither-or-both", None));
+            assert_eq!(verdict(&done[3]), ("passed", Some("bounded")));
+            assert_eq!(ex.sent.len(), 1);
+        }
+
+        #[test]
+        fn a_session_that_breaks_refuses_the_whole_run_at_once() {
+            let mut a = Scripted::after_enumerate(vec![reply("2", &next()), reply("9", PASS)]);
+            let mut b = Scripted::after_enumerate(vec![reply("2", &next()), reply("3", PASS)]);
+            let mut ex = FakeExecutor::new(vec![]);
+            let plan = [pair("a", "o1"), pair("b", "o2")];
+            let checks = [checkable("a", "o1"), checkable("b", "o2")];
+            let got = {
+                let mut lanes = vec![lane("a", &mut a), lane("b", &mut b)];
+                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new(".")).map(|_| ())
+            };
+            assert_eq!(got, Err("wrong-id"));
+            // Nothing more is sent once a session has broken: b never gets its report.
+            assert_eq!(b.sent.len(), 1);
+        }
+
+        #[test]
+        fn a_check_gets_at_most_eight_runs() {
+            let replies = (2..=10).map(|id| reply(&id.to_string(), &next())).collect();
+            let mut a = Scripted::after_enumerate(replies);
+            let mut ex = FakeExecutor::new(vec![]);
+            let done = {
+                let mut lanes = vec![lane("a", &mut a)];
+                schedule(&mut lanes, &[pair("a", "o1")], &[checkable("a", "o1")], &mut ex, Path::new(".")).unwrap()
+            };
+            assert_eq!(ex.sent.len(), 8);
+            assert_eq!((verdict(&done[0]), done[0].runs), (("too-many-runs", None), 8));
         }
     }
 
