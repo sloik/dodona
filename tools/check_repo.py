@@ -1619,9 +1619,10 @@ class LedgerJudgeTests(unittest.TestCase):
         """A kernel that gives every request the same answer, without starting anything."""
         return lambda command, **kwargs: subprocess.CompletedProcess(command, code, stdout, b"")
 
-    def judge(self, run, writers=()):
+    def judge(self, run, writers=(), *, output=None):
         argv = ["run_ledger_cases.py", "--", "kernel"]
-        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_ledger_cases.sys, "argv", argv), \
+        output = io.StringIO() if output is None else output
+        with contextlib.redirect_stdout(output), patch.object(run_ledger_cases.sys, "argv", argv), \
                 patch.object(run_ledger_cases.subprocess, "run", side_effect=run), \
                 patch.object(run_ledger_cases.subprocess, "Popen", side_effect=list(writers)):
             code = run_ledger_cases.main()
@@ -1663,6 +1664,79 @@ class LedgerJudgeTests(unittest.TestCase):
         code, summary = self.judge(self.kernel(json.dumps(wrong).encode()), [FakeWriter(0), FakeWriter(0)])
         self.assertEqual((code, summary["unfinished"]), (1, 0))
         self.assertIn("two kernels appending at once lose nothing", summary["rejected"])
+
+    def judge_held_lock(self, answer):
+        reference = json.loads((ROOT / "conformance" / "ledger" / "cases.json").read_text(encoding="utf-8"))["file"].encode("utf-8")
+        output = io.StringIO()
+
+        def run(command, **kwargs):
+            request = json.loads(kwargs["input"])
+            held = pathlib.Path(request["ledger"])
+            if command[-1] != "ledger-append" or held.name != "held.ledger":
+                return subprocess.CompletedProcess(command, 0, b"{}", b"")
+            lock = held.with_suffix(".ledger.lock")
+            self.assertEqual(request, {"ledger": str(held), "kind": "evidence", "body": {}, "wait_ms": 300})
+            self.assertEqual(held.read_bytes(), reference)
+            self.assertEqual(lock.read_text(encoding="ascii"), "held by the judge\n")
+            reply = answer(held, lock)
+            return subprocess.CompletedProcess(command, 0, json.dumps(reply).encode(), b"")
+
+        code, receipt = self.judge(run, [FakeWriter(0), FakeWriter(0)], output=output)
+        return code, receipt, output.getvalue()
+
+    def test_wrong_held_append_remains_a_named_rejection_when_it_removes_the_marker(self):
+        def wrong(held, lock):
+            held.write_bytes(held.read_bytes() + b"mock append\n")
+            lock.unlink()
+            return {"appended": "mock"}
+
+        code, receipt, log = self.judge_held_lock(wrong)
+        name = "a held lock refuses an append"
+        self.assertIn(f"MISMATCH {name}:", log)
+        self.assertIn(name, receipt["rejected"])
+        self.assertEqual((code, receipt["unfinished"], receipt["all_matched"]), (1, 0, False),
+                         "\n".join(log.splitlines()[-3:-1]))
+        self.assertIn("two kernels appending at once lose nothing", log)
+
+    def test_held_lock_requires_both_the_ledger_and_marker_to_be_intact(self):
+        def unchanged(held, lock):
+            return {"refused": "locked"}
+
+        def removed_marker(held, lock):
+            lock.unlink()
+            return unchanged(held, lock)
+
+        def changed_marker(held, lock):
+            lock.write_bytes(b"changed")
+            return unchanged(held, lock)
+
+        def changed_ledger(held, lock):
+            held.write_bytes(b"changed")
+            return unchanged(held, lock)
+
+        for answer in (unchanged, removed_marker, changed_marker, changed_ledger):
+            with self.subTest(answer=answer.__name__):
+                code, receipt, log = self.judge_held_lock(answer)
+                self.assertEqual((code, receipt["unfinished"]), (1, 0), "\n".join(log.splitlines()[-3:-1]))
+                self.assertEqual("a held lock refuses an append" in receipt["rejected"], answer is not unchanged)
+                self.assertEqual("match    a held lock refuses an append" in log, answer is unchanged)
+
+    def test_unrelated_held_lock_read_or_cleanup_errors_keep_the_judge_unfinished(self):
+        denied = PermissionError(errno.EACCES, "mock marker access denied")
+        disappeared = FileNotFoundError(errno.ENOENT, "mock marker disappeared after observation")
+
+        for method, error in (("read_bytes", denied), ("unlink", denied), ("unlink", disappeared)):
+            original = getattr(pathlib.Path, method)
+
+            def fail_for_marker(path, *args, **kwargs):
+                if path.name == "held.ledger.lock":
+                    raise error
+                return original(path, *args, **kwargs)
+
+            with self.subTest(method=method, error=type(error).__name__), patch.object(pathlib.Path, method, fail_for_marker):
+                code, receipt, log = self.judge_held_lock(lambda held, lock: {"refused": "locked"})
+                self.assertUnfinished(code, receipt)
+                self.assertIn(type(error).__name__, log)
 
     def test_a_writer_that_cannot_start_or_finish_is_reaped_and_unfinished(self):
         for writers in ([FakeWriter(None), OSError(errno.EAGAIN, "Resource temporarily unavailable")],
