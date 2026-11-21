@@ -15,6 +15,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    # The manual fallback has its own baseline in every shard.
+    if: github.repository != 'sloik/dodona' || github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-41-rust-fallback-qualified'
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -182,3 +184,44 @@ jobs:
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every second kernel defect in order and judge its evidence
         run: node kernel2/plant.js
+
+  rust-shard-fallback:
+    name: Issue 41 Rust fallback shard ${{ matrix.shard }}/5
+    if: github.repository == 'sloik/dodona' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dodona-eight-41-rust-fallback-qualified'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    env:
+      SHARD_INDEX: ${{ matrix.shard }}
+    steps:
+      - name: Checkout the proof workflow and collector binding
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Checkout the fixed Rust proof source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 2047e108f6adcec36b554822a1b9f4b598a1fcf1
+          path: shard-source
+          persist-credentials: false
+      - name: Judge the unchanged kernel and one fixed Rust shard
+        run: python3 .github/site/rust_shard_proof.py capture shard-source "$RUNNER_TEMP/issue41-rust-shard" "$SHARD_INDEX"
+      - name: Upload the bound shard receipt
+        id: shard-receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: issue41-rust-${{ github.run_id }}-${{ github.run_attempt }}-shard-${{ matrix.shard }}-of-5
+          path: |
+            ${{ runner.temp }}/issue41-rust-shard/receipt.json
+            ${{ runner.temp }}/issue41-rust-shard/binding.json
+          if-no-files-found: error
+      - name: Bind the uploaded artifact to this job
+        env:
+          PROOF_ARTIFACT_ID: ${{ steps.shard-receipt.outputs.artifact-id }}
+          PROOF_ARTIFACT_DIGEST: ${{ steps.shard-receipt.outputs.artifact-digest }}
+        run: python3 .github/site/rust_shard_proof.py bind "$RUNNER_TEMP/issue41-rust-shard" "$SHARD_INDEX"
