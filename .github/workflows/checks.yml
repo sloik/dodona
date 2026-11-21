@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-41-held-ledger-proof'
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -153,6 +154,7 @@ jobs:
   # planted in each kernel in turn and the kit must reject it. Slow, so it has
   # its own job.
   planted-defects:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-41-held-ledger-proof'
     strategy:
       fail-fast: false
       matrix:
@@ -177,3 +179,43 @@ jobs:
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every listed defect and check some judge rejects each
         run: ${{ matrix.run }}
+
+  held-ledger-proof:
+    name: Held-ledger qualification (${{ matrix.system }})
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
+      && github.ref == 'refs/heads/dodona-eight-41-held-ledger-proof'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            system: macos
+            python: python3
+          - os: ubuntu-26.04
+            system: linux
+            python: python3
+          - os: windows-2025
+            system: windows
+            python: python
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout the dispatched proof commit and its source parent
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Run the ledger judge mocks and both ordinary ledger commands
+        run: ${{ matrix.python }} .github/site/held_ledger_proof.py ${{ matrix.system }} "${{ runner.temp }}/held-ledger-proof.json"
+      - name: Keep each completed ledger qualification receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: held-ledger-proof-${{ matrix.system }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/held-ledger-proof.json
+          if-no-files-found: error
+          retention-days: 90
