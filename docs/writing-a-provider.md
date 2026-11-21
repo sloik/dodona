@@ -164,6 +164,22 @@ A decision provider maps its own status words onto `proposed`, `accepted`, `supe
 
 `intent.index` follows the same pattern. Its result is described in [messages.schema.json](../protocol/messages.schema.json) under `res_intent_index`.
 
+## Example: store.blob
+
+This exchange illustrates the draft message schema. The file `out/message.txt` contains the five bytes `hello`. A `put` request stores the file and returns its content identity.
+
+```json
+{"type":"request","id":"1","deadline_ms":30000,"capability":"store.blob","body":{"op":"put","file":"out/message.txt"}}
+{"type":"result","id":"1","capability":"store.blob","body":{"identity":"sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"}}
+```
+
+A `get` request uses that identity and gives the destination path in `into`. The result names the retrieved file.
+
+```json
+{"type":"request","id":"2","deadline_ms":30000,"capability":"store.blob","body":{"op":"get","identity":"sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824","into":"work/message.txt"}}
+{"type":"result","id":"2","capability":"store.blob","body":{"file":"work/message.txt"}}
+```
+
 ## Where to look for the exact shape
 
 | You need | Look at |
