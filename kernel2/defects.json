@@ -1965,8 +1965,8 @@
       "name": "status step 6: the key's tools carry their version",
       "model_case": "(project status)",
       "file": "project-status.js",
-      "find": "tools: site.tools.map((tool) => ({ name: tool.name, digest: tool.digest })),",
-      "replace": "tools: site.tools.map((tool) => ({ name: tool.name, version: tool.version, digest: tool.digest })),"
+      "find": ".map((tool) => ({ name: tool.name, digest: tool.digest })),",
+      "replace": ".map((tool) => ({ name: tool.name, version: tool.version, digest: tool.digest })),"
     },
     {
       "name": "status step 6: the key's config is the config itself, not its identity",
@@ -2198,6 +2198,13 @@
       "file": "project-status.js",
       "find": " && command.every((word) => !word.includes('\\u0000')) && isStrings(own(provider, 'code'));",
       "replace": " && isStrings(own(provider, 'code'));"
+    },
+    {
+      "name": "status step 6: the key holds every site tool, not only those the manifest names",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "tools: site.tools.filter((tool) => uses.has(tool.name)).map(",
+      "replace": "tools: site.tools.map("
     }
   ]
 }

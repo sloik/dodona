@@ -448,6 +448,7 @@ async function obligationsOf(root, site, digests, bindings, claims) {
       if (![...item.specified_by, ...item.targets].every((rel) => item.inputs.includes(rel))) throw new Stop('unknown-file', item.name);
     }
     const version = `${manifest.version}+${digests.get(binding.provider)}+${site.runner}`;
+    const uses = new Set(manifest.tools.map((tool) => tool.name));
     for (const item of items) {
       if (found.has(item.name)) throw new Stop('duplicate-obligation', item.name);
       const given = item.inputs.map((rel) => ({ path: rel, identity: identities.get(rel) }));
@@ -459,7 +460,8 @@ async function obligationsOf(root, site, digests, bindings, claims) {
             specified_by: sortedSet(given.filter((file) => item.specified_by.includes(file.path)).map((file) => file.identity)),
             targets: sortedSet(given.filter((file) => item.targets.includes(file.path)).map((file) => file.identity)),
             closure: sortedSet(given.map((file) => identityOf({ path: file.path, identity: file.identity }))),
-            tools: site.tools.map((tool) => ({ name: tool.name, digest: tool.digest })),
+            // Only the site's tools the provider's manifest names, in the site's order.
+            tools: site.tools.filter((tool) => uses.has(tool.name)).map((tool) => ({ name: tool.name, digest: tool.digest })),
             config: identityOf(item.config),
             expect: item.expect,
           },
