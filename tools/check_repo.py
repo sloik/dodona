@@ -35,6 +35,7 @@ import run_input_cases  # noqa: E402
 import run_key_vectors  # noqa: E402
 import run_kit  # noqa: E402
 import run_ledger_cases  # noqa: E402
+import run_provider_cases  # noqa: E402
 
 problems: list[str] = []
 
@@ -1756,6 +1757,437 @@ class HarnessJudgeTests(unittest.TestCase):
         self.assertEqual((code, json.loads(output.getvalue().splitlines()[-1])["unfinished"]), (2, 1))
 
 
+class ProviderJudgeTests(unittest.TestCase):
+    """The session judge counts only an answer the host completed with exit 0 (issue 41). A host that could not start,
+    ran out of time or exited other than 0, a fixture whose transcript or process ids could not be read, a process
+    whose state could not be told, and a cleanup that did not take leave the case unfinished. A completed wrong answer,
+    a wrong transcript, a completed answer over the deadline plus grace, and a fixture process confirmed still running
+    are named mismatches. Every host, process probe and signal is a stand-in: no real process is started or probed."""
+
+    spec = json.loads((ROOT / "conformance" / "provider" / "cases.json").read_text(encoding="utf-8"))
+    PID = 4242
+
+    def transcript(self, mode):
+        limits = self.spec["limits"]
+        echo = "h" + chr(0xE9) + "llo " + chr(0x2603) + " " + chr(1) + chr(0x1F) + " end"
+        hello = {"type": "hello", "protocol": ["0.2"], "echo": echo,
+                 "limits": {"max_line_bytes": limits["max_line_bytes"], "deadline_ms": limits["deadline_ms"]}}
+        request = {"type": "request", "id": "1", "deadline_ms": limits["deadline_ms"], "capability": "decision.index",
+                   "body": {"files": []}}
+        return "".join(json.dumps(m) + "\n" for m in (hello, request, {"type": "shutdown"}))
+
+    def host(self, override, clock):
+        """A stand-in for the host: it records what the fixture would record and answers each case rightly with exit 0,
+        unless `override` gives a mode another exit, answer, transcript, pid file, duration or exception."""
+        cases = {case["mode"]: case for case in self.spec["cases"]}
+
+        def run(command, **kwargs):
+            mode = command[-1]
+            case, change = cases[mode], (override or {}).get(mode, {})
+            env = kwargs["env"]
+            seen, pids = pathlib.Path(env["DODONA_TEST_SEEN"]), pathlib.Path(env["DODONA_TEST_PIDFILE"])
+            pid_text = change.get("pids", f"{self.PID}\n")
+            if pid_text == "directory":
+                pids.mkdir()
+            elif pid_text is not None:
+                pids.write_text(pid_text, encoding="ascii")
+            seen_text = change.get("transcript", self.transcript(mode))
+            if seen_text is not None:
+                seen.write_text(seen_text, encoding="utf-8")
+            clock[0] += change.get("took", 0.1)
+            if "raise" in change:
+                raise change["raise"]
+            answer = {"outcome": case["outcome"], "log_bytes": 0, "log_truncated": case.get("log_truncated", False)}
+            if "reason" in case:
+                answer["reason"] = case["reason"]
+            answer = change.get("answer", answer)
+            stdout = answer if isinstance(answer, bytes) else json.dumps(answer).encode("utf-8")
+            return subprocess.CompletedProcess(command, change.get("code", 0), stdout, b"")
+        return run
+
+    # How the stand-in fixture process behaves after the host returned:
+    #   gone         it has exited; no process has its id
+    #   cooperative  it is still waiting: it acknowledges the probe, then the stop file, and exits
+    #   late         still waiting, but it answers only the stop file
+    #   silent       its id is present and nothing ever acknowledges (another process may hold the id)
+    #   stubborn     it acknowledges the probe and never stops
+    #   unknown      whether the id exists cannot be told, and nothing acknowledges
+    def judge(self, override=None, fixture="gone", nonce=None):
+        """Run the judge on stand-ins. Returns the exit status, the footer, the other lines, the host calls, and every
+        destructive act attempted: a signal other than 0 through os.kill, or any command other than the host."""
+        clock = [1000.0]
+        envs: list[dict] = []
+        destructive: list = []
+        host = self.host(override, clock)
+        state = {"gone": "gone", "unknown": "unknown"}.get(fixture, "present")
+
+        def run(command, **kwargs):
+            if command[:1] != ["host"]:
+                destructive.append(command)
+                raise OSError("no command but the host is started in these tests")
+            envs.append(kwargs["env"])
+            return host(command, **kwargs)
+
+        def kill(pid, sig):
+            if sig != 0:
+                destructive.append(("kill", pid, sig))
+            raise AssertionError("no process is probed in these tests")
+
+        def note(env, kind):
+            path = pathlib.Path(env["DODONA_TEST_ACK"]) / f"{kind}-{self.PID}"
+            if path.parent.is_dir() and not path.exists():
+                path.write_text(nonce or env["DODONA_TEST_NONCE"], encoding="ascii")
+
+        def tick(seconds):  # the fixture's own polling, run whenever the judge waits
+            clock[0] += seconds
+            if not envs:
+                return
+            env = envs[-1]
+            probed, stopped = (pathlib.Path(env[k]).exists() for k in ("DODONA_TEST_PROBE", "DODONA_TEST_STOP"))
+            if probed and fixture in ("cooperative", "stubborn"):
+                note(env, "alive")
+            if probed and fixture == "dir-ack":  # something not a regular file where an acknowledgment belongs
+                pathlib.Path(env["DODONA_TEST_ACK"], f"alive-{self.PID}").mkdir(exist_ok=True)
+            if stopped and fixture == "after-stop":  # answers the probe only once the stop file exists
+                note(env, "alive")
+            if stopped and fixture in ("cooperative", "late", "after-stop"):
+                note(env, "stopped")
+
+        def look(pid, deadline):
+            env = envs[-1]
+            if fixture in ("cooperative", "late", "after-stop") and \
+                    pathlib.Path(env["DODONA_TEST_ACK"], f"stopped-{pid}").exists():
+                return "gone"
+            return state
+
+        argv = ["run_provider_cases.py", "--", "host"]
+        made = tempfile.mkdtemp
+        # `create=True`: the judge before issue 41 had no `observe`, so the first test fails there on its verdict alone.
+        with tempfile.TemporaryDirectory() as base, contextlib.redirect_stdout(io.StringIO()) as output, \
+                patch.object(run_provider_cases.sys, "argv", argv), \
+                patch.object(run_provider_cases.subprocess, "run", side_effect=run) as ran, \
+                patch.object(run_provider_cases.os, "kill", side_effect=kill), \
+                patch.object(run_provider_cases.tempfile, "mkdtemp",
+                             side_effect=lambda suffix=None, prefix=None, dir=None: made(suffix, prefix, base)), \
+                patch.object(run_provider_cases.time, "sleep", side_effect=tick), \
+                patch.object(run_provider_cases.time, "monotonic", side_effect=lambda: clock[0]), \
+                patch.object(run_provider_cases, "alive", create=True, side_effect=lambda pid: False), \
+                patch.object(run_provider_cases, "observe", create=True, side_effect=look) as looked:
+            code = run_provider_cases.main()
+        lines = output.getvalue().splitlines()
+        self.looked = looked.call_args_list
+        self.nonces = [env["DODONA_TEST_NONCE"] for env in envs]
+        return code, json.loads(lines[-1]), lines[:-1], ran.call_args_list, destructive
+
+    def total(self):
+        return len(self.spec["cases"])
+
+    def test_a_host_that_exits_nonzero_with_an_ok_answer_has_not_answered(self):
+        # The red of issue 41: exit 1 with {"outcome": "ok"}, a healthy transcript and no process ids was a match.
+        # The footer is read with .get, so the old judge fails here on its verdict, not on a missing key.
+        code, summary, lines, _, _ = self.judge({"well-behaved": {"code": 1, "answer": {"outcome": "ok"}, "pids": None}})
+        self.assertEqual((code, summary.get("unfinished"), summary.get("rejected"), summary.get("all_matched")), (2, 1, [], False))
+        self.assertNotIn("match    well-behaved", lines)
+        self.assertTrue(any(line.startswith("UNFINISHED well-behaved:") for line in lines))
+
+    def test_the_exit_status_alone_leaves_the_case_unfinished(self):
+        # The same, with the fixture's process id recorded and seen gone: only the exit status is wrong.
+        for exit_code in (1, 2, -15, -9, 0xC0000005):
+            with self.subTest(exit_code=exit_code):
+                code, summary, lines, _, _ = self.judge({"well-behaved": {"code": exit_code, "answer": {"outcome": "ok"}}})
+                self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["matched"]), (2, 1, [], self.total() - 1))
+                self.assertNotIn("match    well-behaved", lines)
+
+    def test_every_right_answer_with_exit_0_passes_each_mode_once(self):
+        code, summary, lines, calls, destructive = self.judge()
+        total = self.total()
+        self.assertEqual((code, summary), (0, {"cases": total, "matched": total, "all_matched": True, "unfinished": 0, "rejected": []}))
+        modes = [call.args[0][-1] for call in calls]
+        self.assertEqual(modes, [case["mode"] for case in self.spec["cases"]])
+        self.assertEqual(len(set(modes)), len(modes))
+        self.assertEqual(destructive, [])
+        # Intentional refusals a host answers with exit 0 are ordinary matches.
+        for mode in ("exits-before-answering", "never-answers", "garbage", "nan-in-an-answer"):
+            self.assertIn(f"match    {mode}", lines)
+
+    def test_a_completed_wrong_named_answer_is_a_named_mismatch(self):
+        for answer in ({"outcome": "error", "reason": "closed"}, {"outcome": "refused"}, {"outcome": "error", "reason": "deadline"}):
+            with self.subTest(answer=answer):
+                code, summary, lines, _, _ = self.judge({"well-behaved": {"answer": answer}})
+                self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["all_matched"]), (1, 0, ["well-behaved"], False))
+                self.assertTrue(any(line.startswith("MISMATCH well-behaved:") for line in lines))
+        code, summary, _, _, _ = self.judge({"garbage": {"answer": {"outcome": "error", "reason": "deadline"}}})
+        self.assertEqual((code, summary["rejected"]), (1, ["garbage"]))
+
+    def test_exit_0_without_a_readable_json_object_naming_an_outcome_is_unfinished(self):
+        for answer in (b"not json", b"", b"[]", b"\xff\xfe", b'{"outcome": NaN}', b'{"reason": "closed"}',
+                       b'{"outcome": 1}', b'"ok"', b"{} {}"):
+            with self.subTest(answer=answer):
+                code, summary, lines, _, _ = self.judge({"well-behaved": {"answer": answer}})
+                self.assertEqual((code, summary["unfinished"], summary["rejected"]), (2, 1, []))
+                self.assertTrue(any(line.startswith("UNFINISHED well-behaved:") for line in lines))
+
+    def test_each_curated_mode_is_its_own_control(self):
+        # The curated modes are unchanged, each judged once; a wrong outcome for one mode alone is named as that mode only.
+        modes = [case["mode"] for case in self.spec["cases"]]
+        self.assertEqual((len(modes), len(set(modes))), (22, 22))
+        for case in self.spec["cases"]:
+            with self.subTest(mode=case["mode"]):
+                flipped = {"outcome": "error", "reason": "closed"} if case["outcome"] == "ok" else {"outcome": "ok"}
+                code, summary, _, _, destructive = self.judge({case["mode"]: {"answer": flipped}})
+                self.assertEqual((code, summary["rejected"], summary["unfinished"], destructive), (1, [case["mode"]], 0, []))
+                self.assertEqual(summary["matched"], len(modes) - 1)
+
+    def test_a_wrong_transcript_from_a_fixture_that_started_is_a_named_mismatch(self):
+        code, summary, _, _, _ = self.judge({"well-behaved": {"transcript": ""}})
+        self.assertEqual((code, summary["unfinished"], summary["rejected"]), (1, 0, ["well-behaved"]))
+
+    def test_a_completed_answer_over_the_deadline_plus_grace_is_a_named_mismatch(self):
+        limits = self.spec["limits"]
+        slow = (limits["deadline_ms"] + limits["grace_ms"]) / 1000 + 1
+        code, summary, lines, _, _ = self.judge({"never-answers": {"took": slow}})
+        self.assertEqual((code, summary["unfinished"], summary["rejected"]), (1, 0, ["never-answers"]))
+        self.assertTrue(any(line.startswith("MISMATCH never-answers:") and "over the deadline plus grace" in line for line in lines))
+        # Slow and exit 1 is no answer at all.
+        code, summary, _, _, _ = self.judge({"never-answers": {"took": slow, "code": 1}})
+        self.assertEqual((code, summary["unfinished"], summary["rejected"]), (2, 1, []))
+
+    def test_a_host_that_could_not_start_or_ran_out_of_time_is_unfinished(self):
+        for failure in (FileNotFoundError(), OSError(errno.ENOSPC, "No space left on device"),
+                        subprocess.TimeoutExpired("host", 28)):
+            with self.subTest(failure=failure):
+                code, summary, lines, _, _ = self.judge({"late": {"raise": failure}})
+                self.assertEqual((code, summary["unfinished"], summary["rejected"]), (2, 1, []))
+                self.assertTrue(any(line.startswith("UNFINISHED late:") for line in lines))
+
+    def test_a_fixture_that_could_not_be_observed_is_unfinished(self):
+        broken = {"unparseable transcript": {"transcript": "{not json\n"},
+                  "pid file not a number": {"pids": "abc\n"},
+                  "pid that would signal a group": {"pids": "0\n"},
+                  "negative pid": {"pids": "-1\n"},
+                  "init": {"pids": "1\n"},
+                  "no pid file": {"pids": None},
+                  "empty pid file": {"pids": ""},
+                  "unreadable pid file": {"pids": "directory"}}
+        for name, change in broken.items():
+            with self.subTest(name=name):
+                code, summary, lines, _, destructive = self.judge({"wrong-id": change})
+                self.assertEqual((code, summary["unfinished"], summary["rejected"]), (2, 1, []))
+                self.assertEqual(destructive, [])
+                # Evidence is kept, and the stop file was still created in `finally`.
+                self.assertTrue(any(line.startswith("UNFINISHED wrong-id:") and "kept as evidence" in line for line in lines))
+        # An invalid id leads to no process action at all, not even a look, and refuses the whole file.
+        too_big = run_provider_cases.PID_MAX + 1
+        for pids in ("0\n", "-1\n", "-4242\n", "1\n", "abc\n", f"{too_big}\n", "9" * 30 + "\n", "+4242\n", "4_242\n", "0x10\n", f"{self.PID}\n-5\n", f"{self.PID}\n{too_big}\n"):
+            with self.subTest(pids=pids):
+                code, summary, _, _, destructive = self.judge({"well-behaved": {"pids": pids}}, fixture="cooperative")
+                self.assertEqual((destructive, summary["unfinished"] >= 1), ([], True))
+                self.assertNotIn("well-behaved", summary["rejected"])
+                self.assertTrue(all(call.args[0] == self.PID for call in self.looked))  # only the other cases' valid id
+                self.assertTrue(self.looked)
+
+    def test_pid_validation_is_strict_and_in_the_platforms_range(self):
+        valid = run_provider_cases.valid_pid
+        self.assertEqual(valid("4242"), 4242)
+        self.assertEqual(valid(str(run_provider_cases.PID_MAX)), run_provider_cases.PID_MAX)
+        for text in ("0", "1", "-1", "-4242", "+4242", " 4242", "4242 ", "4_242", "0x10", "٤٢", "",
+                     str(run_provider_cases.PID_MAX + 1), "9" * 11, "9" * 400, str(os.getpid())):
+            with self.subTest(text=text):
+                self.assertIsNone(valid(text))
+        self.assertEqual(run_provider_cases.PID_MAX, 0xFFFFFFFF if sys.platform == "win32" else 0x7FFFFFFF)
+        # The observer refuses an unvalidated id itself, before any system call.
+        with patch.object(run_provider_cases, "exists_posix") as posix, patch.object(run_provider_cases, "exists_windows") as win:
+            for pid in (-5, 0, 1, run_provider_cases.PID_MAX + 1, 1 << 80):
+                self.assertEqual(run_provider_cases.observe(pid, 0.0), "unknown")
+            self.assertEqual((posix.call_args_list, win.call_args_list), ([], []))
+
+    def test_an_id_written_twice_is_one_process(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "pids"
+            path.write_text(f"{self.PID}\n{self.PID}\n4343\n", encoding="ascii")
+            self.assertEqual(run_provider_cases.read_pids(path), [self.PID, 4343])
+        code, summary, _, _, _ = self.judge({"well-behaved": {"pids": f"{self.PID}\n{self.PID}\n"}})
+        self.assertEqual((code, summary["unfinished"]), (0, 0))
+
+    def test_special_files_are_quarantined_not_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = pathlib.Path(tmp)
+            real = folder / "real"
+            real.write_bytes(b"4242\n")
+            big = folder / "big"
+            big.write_bytes(b"1" * (run_provider_cases.LIMITS["pids"] + 1))
+            (folder / "dir").mkdir()
+            kinds = ["dir", "big"]
+            try:
+                os.symlink(real, folder / "link")
+                kinds.append("link")
+            except (OSError, NotImplementedError):
+                pass  # no symbolic links here
+            if hasattr(os, "mkfifo"):
+                os.mkfifo(folder / "fifo")  # never opened: a pipe would block a reader
+                kinds.append("fifo")
+            for kind in kinds:
+                with self.subTest(kind=kind), self.assertRaises(run_provider_cases.Unobserved):
+                    run_provider_cases.read_private(folder / kind, run_provider_cases.LIMITS["pids"])
+            self.assertIsNone(run_provider_cases.read_private(folder / "absent", 10))
+            self.assertEqual(run_provider_cases.read_private(real, 10), b"4242\n")
+        # An acknowledgment that is not a regular file is not one.
+        code, summary, lines, _, destructive = self.judge(fixture="dir-ack")
+        self.assertEqual((code, summary["rejected"], destructive), (2, [], []))
+        self.assertTrue(all("not a regular file" in line for line in lines))
+
+    def test_each_case_has_its_own_nonce(self):
+        self.judge()
+        self.assertEqual(len(set(self.nonces)), self.total())
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{32}", nonce) for nonce in self.nonces))
+
+    def test_an_acknowledgment_made_after_the_stop_is_not_survival_seen_before_it(self):
+        code, summary, lines, _, destructive = self.judge(fixture="after-stop")
+        self.assertEqual((code, summary["rejected"], summary["unfinished"], destructive), (2, [], self.total(), []))
+        self.assertTrue(all("not before cleanup" in line for line in lines))
+
+    def test_a_missing_transcript_is_unfinished_not_a_mismatch(self):
+        # Every mode records hello first, and no case declares an absent transcript, so absence is no observation.
+        for mode in ("well-behaved", "exits-before-answering", "never-answers"):
+            with self.subTest(mode=mode):
+                code, summary, lines, _, _ = self.judge({mode: {"transcript": None}})
+                self.assertEqual((code, summary["unfinished"], summary["rejected"]), (2, 1, []))
+                self.assertTrue(any(line.startswith(f"UNFINISHED {mode}:") and "missing" in line for line in lines))
+        self.assertFalse(any(case.get("transcript") == "absent" for case in self.spec["cases"]))
+
+    def test_a_survivor_that_acknowledges_before_cleanup_is_named_and_stopped_without_a_signal(self):
+        code, summary, lines, _, destructive = self.judge(fixture="cooperative")
+        self.assertEqual((code, summary["unfinished"], summary["matched"]), (1, 0, 0))
+        self.assertEqual(summary["rejected"], [case["mode"] for case in self.spec["cases"]])
+        self.assertTrue(lines[0].startswith("MISMATCH well-behaved:") and "still running" in lines[0])
+        self.assertEqual(destructive, [])
+
+    def test_a_survivor_shown_only_by_the_later_stop_acknowledgment_is_unfinished(self):
+        code, summary, lines, _, destructive = self.judge(fixture="late")
+        self.assertEqual((code, summary["unfinished"], summary["rejected"], destructive), (2, self.total(), [], []))
+        self.assertTrue(all("not before cleanup" in line for line in lines))
+
+    def test_an_acknowledgment_of_another_run_is_not_this_ones(self):
+        code, summary, lines, _, destructive = self.judge(fixture="cooperative", nonce="0" * 32)
+        self.assertEqual((code, summary["unfinished"], summary["rejected"], destructive), (2, self.total(), [], []))
+        self.assertTrue(all("not this case's" in line for line in lines))
+
+    def test_uncertainty_is_never_a_pass_and_never_a_signal(self):
+        # An id that is present and never acknowledges (perhaps another program's now), one whose existence cannot be
+        # told, and a survivor that ignores the stop file: each case is unfinished, kept, and nothing is signalled.
+        for fixture, said in (("silent", "never acknowledged"), ("unknown", "never acknowledged"),
+                              ("stubborn", "nothing was signalled")):
+            with self.subTest(fixture=fixture):
+                code, summary, lines, calls, destructive = self.judge(fixture=fixture)
+                self.assertEqual((code, summary["unfinished"], summary["rejected"]), (2, self.total(), []))
+                self.assertEqual((destructive, len(calls)), ([], self.total()))
+                self.assertTrue(all(said in line and "kept as evidence" in line for line in lines))
+
+    def test_every_wait_ends_by_one_deadline(self):
+        # The stand-in clock moves only when the judge sleeps: a wait that ignored the deadline would never end.
+        for fixture in ("silent", "stubborn", "unknown"):
+            with self.subTest(fixture=fixture):
+                self.judge(fixture=fixture)
+                self.assertLessEqual(len(self.looked), self.total() * 2 * int(run_provider_cases.OBSERVE_SECONDS / run_provider_cases.POLL + 2))
+
+    def test_the_stop_file_is_created_even_when_observation_fails(self):
+        made = []
+        real = run_provider_cases.create
+
+        def create(path, text):
+            made.append(path.name)
+            return real(path, text)
+        with patch.object(run_provider_cases, "read_transcript", side_effect=RuntimeError("observation broke")), \
+                patch.object(run_provider_cases, "create", side_effect=create):
+            with self.assertRaises(RuntimeError):
+                self.judge()
+        self.assertEqual(made, ["stop"])
+
+    def test_marker_files_are_created_only_if_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "stop"
+            self.assertIsNone(run_provider_cases.create(path, "n"))
+            self.assertIsNotNone(run_provider_cases.create(path, "other"))
+            self.assertEqual(path.read_text(encoding="ascii"), "n")
+
+    def test_a_folder_that_cannot_be_removed_is_unfinished(self):
+        real = run_provider_cases.shutil.rmtree
+
+        def stuck(path, *args, **kwargs):  # removes the folder, so the test leaves nothing behind, and reports a failure
+            real(path, *args, **kwargs)
+            if "dodona-provider-case-" in str(path):  # the test's own folder is removed without complaint
+                raise OSError(errno.EBUSY, "Device or resource busy")
+        with patch.object(run_provider_cases.shutil, "rmtree", side_effect=stuck):
+            code, summary, _, _, _ = self.judge()
+        self.assertIs(run_provider_cases.shutil.rmtree, real)
+        self.assertEqual((code, summary["unfinished"], summary["rejected"]), (2, self.total(), []))
+
+    def test_a_mismatch_then_an_unfinished_case_leaves_the_run_unfinished(self):
+        code, summary, _, _, _ = self.judge({"well-behaved": {"answer": {"outcome": "error", "reason": "closed"}},
+                                             "garbage": {"code": 1}})
+        self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["all_matched"]), (2, 1, ["well-behaved"], False))
+        self.assertEqual(summary["matched"], self.total() - 2)
+
+    def test_cases_that_cannot_be_read_leave_the_run_unfinished(self):
+        with patch.object(pathlib.Path, "read_text", side_effect=OSError(errno.ENOSPC, "No space left on device")):
+            code, summary, _, calls, _ = self.judge()
+        self.assertEqual((code, summary, calls), (2, {"cases": 0, "matched": 0, "all_matched": False, "unfinished": 1, "rejected": []}, []))
+
+    @staticmethod
+    def ps(code, stdout=""):
+        return unittest.mock.Mock(return_value=subprocess.CompletedProcess(["ps"], code, stdout, ""))
+
+    def test_the_posix_existence_probe_only_asks(self):
+        # Signal 0, then `ps -o stat=` for the one valid id; only a clearly reported Z is an exit.
+        deadline = 2000.0
+        cases = {
+            "no such process": (ProcessLookupError(), None, "gone"),
+            "the probe failed": (OSError(errno.EINVAL, "Invalid argument"), None, "unknown"),
+            "running": (None, self.ps(0, "S\n"), "present"),
+            "running, another user's": (PermissionError(), self.ps(0, "Ss+\n"), "present"),
+            "zombie": (None, self.ps(0, "Z\n"), "gone"),
+            "zombie with flags": (None, self.ps(0, "Z+\n"), "gone"),
+            "ps found nothing": (None, self.ps(1, ""), "unknown"),
+            "ps said nothing": (None, self.ps(0, "\n"), "unknown"),
+            "ps said two things": (None, self.ps(0, "S Z\n"), "unknown"),
+            "ps said something unexpected": (None, self.ps(0, "?\n"), "unknown"),
+            "ps said a header": (None, self.ps(0, "STAT\nZ\n"), "unknown"),
+            "ps is missing": (None, unittest.mock.Mock(side_effect=FileNotFoundError()), "unknown"),
+            "ps timed out": (None, unittest.mock.Mock(side_effect=subprocess.TimeoutExpired("ps", 1)), "unknown"),
+        }
+        for name, (effect, ps, want) in cases.items():
+            with self.subTest(name=name), patch.object(run_provider_cases.time, "monotonic", return_value=1999.5):
+                kill = unittest.mock.Mock(side_effect=[effect])
+                ps = ps or unittest.mock.Mock(side_effect=AssertionError("ps must not run"))
+                self.assertEqual(run_provider_cases.exists_posix(self.PID, deadline, kill=kill, run=ps), want)
+                self.assertEqual(kill.call_args_list, [unittest.mock.call(self.PID, 0)])  # signal 0 only, ever
+                for call in ps.call_args_list:
+                    self.assertEqual(call.args[0], ["ps", "-o", "stat=", "-p", str(self.PID)])
+                    self.assertLessEqual(call.kwargs["timeout"], 0.5)  # what is left of the case's deadline
+        # Past the deadline, `ps` is not started at all and the state is unknown.
+        late = unittest.mock.Mock(side_effect=AssertionError("ps must not run"))
+        with patch.object(run_provider_cases.time, "monotonic", return_value=2000.0):
+            self.assertEqual(run_provider_cases.exists_posix(self.PID, deadline, kill=unittest.mock.Mock(), run=late), "unknown")
+        self.assertEqual(late.call_args_list, [])
+
+    def test_the_judge_has_no_way_to_signal_a_recorded_process(self):
+        # Cleanup is the fixture's own: the stop file. No signalling helper and no command-line heuristic; `ps` asks
+        # only for the state of one validated id.
+        for name in ("end", "end_posix", "SIGKILL", "observe_posix", "FIXTURE_COMMANDS"):
+            self.assertFalse(hasattr(run_provider_cases, name), name)
+        source = (ROOT / "tools" / "run_provider_cases.py").read_text(encoding="utf-8")
+        for word in ("SIGKILL", "SIGTERM", "taskkill", "TerminateProcess", "killpg", ".kill(", ".terminate(",
+                     "command=", "-ww", "args="):
+            self.assertNotIn(word, source)
+        self.assertEqual(source.count('"ps"'), 1)
+        self.assertIn('["ps", "-o", "stat=", "-p", str(pid)]', source)
+        self.assertEqual(source.count("subprocess.run("), 1)  # the host; `ps` runs through the injected `run`
+        fixture = (ROOT / "conformance" / "provider" / "misbehaving_provider.py").read_text(encoding="utf-8")
+        self.assertNotIn("time.sleep(600)", fixture)
+        for name in ("DODONA_TEST_STOP", "DODONA_TEST_PROBE", "DODONA_TEST_ACK", "DODONA_TEST_NONCE", '"x"'):
+            self.assertIn(name, fixture)
+
+
 class PlantJsTests(unittest.TestCase):
     """Keep the standalone JavaScript runner tests registered in hosted CI."""
 
@@ -1852,6 +2284,7 @@ def main() -> int:
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KeyVectorJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(AttestJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(HarnessJudgeTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ProviderJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantJsTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
