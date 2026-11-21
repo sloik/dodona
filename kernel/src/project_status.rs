@@ -173,7 +173,7 @@ struct Input {
     ledgers: Vec<String>,
     owner_ledger: String,
     platform: String,
-    /// The site's platform as given, `{"os", "arch"}`: a check is started on it.
+    /// The site's platform object exactly as given: a check is started on it.
     /// Read by the run command only, which is not served yet.
     #[allow(dead_code)]
     platform_given: Value,
@@ -303,7 +303,9 @@ fn read_input(input: &[u8]) -> Step<Input> {
             .collect(),
     );
     let tools = Value::Array(tools.iter().map(|t| field(t, &["name", "digest"])).collect());
-    let platform_given = json::object(vec![("os", json::string(os)), ("arch", json::string(arch))]);
+    // The whole object, as the site gives it: a platform may say more than its
+    // os and arch (protocol/common.schema.json: `libc`, `emulated_on`).
+    let platform_given = platform.cloned().unwrap_or(Value::Null);
     let mut providers = Vec::new();
     match site.opt("providers") {
         Some(Value::Object(ps)) => {
@@ -969,7 +971,7 @@ struct Checkable {
     inputs: Vec<(String, String)>,
     /// The site's tools the manifest names, `{"name", "version", "digest"}`, in the site's order.
     tools: Value,
-    /// The site's platform as given, `{"os", "arch"}`.
+    /// The site's platform object exactly as given.
     platform: Value,
     /// The preimage of step 6, which a recorded verdict carries.
     preimage: Value,
@@ -2201,6 +2203,419 @@ mod run_input {
         Ok((input, snapshot, plan))
     }
 
+    // Step 11. Checks, up to where a run is handed to the executor.
+
+    /// One connection to a provider as checks use it: each request carries the
+    /// connection's own next id, and each message read has its own deadline.
+    /// A kept `Session` is one; tests give a scripted one.
+    pub(super) trait Channel {
+        /// Send an `obligation.check` request with this body; the id it carried.
+        fn send_check(&mut self, body: Value) -> Result<String, &'static str>;
+        /// The next message, read strictly.
+        fn read(&mut self) -> Result<Value, &'static str>;
+    }
+
+    impl Channel for Session {
+        fn send_check(&mut self, body: Value) -> Result<String, &'static str> {
+            let (id, request) = self.request("obligation.check", body);
+            self.peer.send(&request, Instant::now() + self.wait)?;
+            Ok(id)
+        }
+        fn read(&mut self) -> Result<Value, &'static str> {
+            self.peer.read(Instant::now() + self.wait)
+        }
+    }
+
+    /// The reasons that say a session itself broke: every check on it is in
+    /// doubt, so the whole run is refused with the reason and nothing is recorded.
+    pub(super) const SESSION_BROKE: [&str; 13] = [
+        "deadline",
+        "closed",
+        "framing",
+        "too-long",
+        "encoding",
+        "malformed",
+        "not-an-integer",
+        "duplicate-key",
+        "too-deep",
+        "wrong-id",
+        "wrong-capability",
+        "unexpected",
+        "provider-error",
+    ];
+
+    /// Whether a check can be asked of its binding's session at all: there is
+    /// one (the binding lists `obligation.check`) and its manifest offers the
+    /// check. Otherwise the obligation is counted as `refused`, and nothing is sent.
+    pub(super) fn can_check(offers_check: Option<bool>) -> bool {
+        offers_check == Some(true)
+    }
+
+    /// One check under way: what the host rules judge it against, and its runs.
+    pub(super) struct Check {
+        pub(super) binding: String,
+        pub(super) name: String,
+        given: host::Given,
+        /// The obligation and inputs as the check was started: a run key is made from them.
+        obligation: Value,
+        inputs: Value,
+        /// The id of the `start` request: each `run.result` names it.
+        pub(super) start_id: String,
+        /// The id of the request whose answer is awaited.
+        awaited: String,
+        /// How many runs have been handed on.
+        pub(super) runs: usize,
+    }
+
+    /// What one answer to a check gives.
+    #[derive(Debug)]
+    pub(super) enum Answer {
+        /// A run for the executor, numbered from 1, with its key.
+        Run {
+            number: usize,
+            run_key: String,
+            run: Value,
+        },
+        /// A verdict from a `final` that every rule accepts, with the final's
+        /// `strength` as the provider gave it (null when it gave none). For
+        /// `passed` and `failed`, `host::final_verdict` has bounded it by the
+        /// manifest's class and rank; step 13 records it with the verdict.
+        Verdict { verdict: String, strength: Value },
+        /// The check ends with no verdict, and is counted as `refused`.
+        Refused(&'static str),
+    }
+    /// Runs are the same when their canonical encodings are.
+    impl PartialEq for Answer {
+        fn eq(&self, other: &Answer) -> bool {
+            match (self, other) {
+                (
+                    Answer::Run { number: a, run_key: k, run: r },
+                    Answer::Run { number: b, run_key: l, run: s },
+                ) => a == b && k == l && json::encode(r) == json::encode(s),
+                (
+                    Answer::Verdict { verdict: a, strength: s },
+                    Answer::Verdict { verdict: b, strength: t },
+                ) => a == b && json::encode(s) == json::encode(t),
+                (Answer::Refused(a), Answer::Refused(b)) => a == b,
+                _ => false,
+            }
+        }
+    }
+
+    /// Start the check of `c` on `ch`, as the host checks start one. An error
+    /// is a session that broke, which refuses the whole run.
+    pub(super) fn start(
+        ch: &mut dyn Channel,
+        c: &Checkable,
+        declared: &[String],
+        ceiling: &host::Ceiling,
+    ) -> Result<Check, &'static str> {
+        let body = c.start();
+        let id = ch.send_check(body.clone())?;
+        Ok(Check {
+            binding: c.binding.clone(),
+            name: c.name.clone(),
+            given: c.given(declared, ceiling),
+            obligation: body.get("obligation").clone(),
+            inputs: body.get("inputs").clone(),
+            start_id: id.clone(),
+            awaited: id,
+            runs: 0,
+        })
+    }
+
+    /// Read and judge the answer to the request the check awaits: the host
+    /// checks' rules, in their order. `root` is where attachments are found.
+    pub(super) fn answer(
+        ch: &mut dyn Channel,
+        check: &mut Check,
+        root: &Path,
+    ) -> Result<Answer, &'static str> {
+        let a = ch.read()?;
+        if let Some(fault) = crate::session::answer_fault(&a, &check.awaited, "obligation.check") {
+            return Err(fault);
+        }
+        let body = a.opt("body");
+        if !is_object(body) {
+            return Err("unexpected");
+        }
+        let (next, fin) = (body.and_then(|b| b.opt("next")), body.and_then(|b| b.opt("final")));
+        let run = match (next, fin) {
+            (Some(run), None) => run,
+            (None, Some(f)) => {
+                return Ok(match host::final_verdict(&check.given, check.runs, f, root) {
+                    Ok(verdict) => Answer::Verdict {
+                        verdict,
+                        strength: f.opt("strength").cloned().unwrap_or(Value::Null),
+                    },
+                    Err(reason) => Answer::Refused(reason),
+                })
+            }
+            _ => return Ok(Answer::Refused("neither-or-both")),
+        };
+        if let Some(fault) = host::run_fault(&check.given, check.runs, run) {
+            return Ok(Answer::Refused(fault));
+        }
+        check.runs += 1;
+        Ok(Answer::Run {
+            number: check.runs,
+            run_key: host::run_key(&check.obligation, &check.inputs, check.runs, run),
+            run: run.clone(),
+        })
+    }
+
+    /// Pass an executor's report for run `number` back to the check's provider,
+    /// on the same session, under the session's next id.
+    pub(super) fn pass_back(
+        ch: &mut dyn Channel,
+        check: &mut Check,
+        number: usize,
+        report: Value,
+    ) -> Result<(), &'static str> {
+        let body = json::object(vec![
+            ("op", json::string("run.result")),
+            ("check", json::string(&check.start_id)),
+            ("run", Value::Number(number as i64)),
+            ("report", report),
+        ]);
+        check.awaited = ch.send_check(body)?;
+        Ok(())
+    }
+
+    #[cfg(test)]
+    mod check_tests {
+        use super::*;
+
+        /// A provider's side of a session, scripted: what it was sent, and what it answers.
+        struct Scripted {
+            ids: RequestIds,
+            sent: Vec<Value>,
+            replies: Vec<Result<Value, &'static str>>,
+        }
+        impl Scripted {
+            /// A session on which `obligation.enumerate` has already used id "1".
+            fn after_enumerate(replies: Vec<Result<Value, &'static str>>) -> Scripted {
+                let mut ids = RequestIds::new();
+                ids.take();
+                Scripted { ids, sent: vec![], replies: replies.into_iter().rev().collect() }
+            }
+        }
+        impl Channel for Scripted {
+            fn send_check(&mut self, body: Value) -> Result<String, &'static str> {
+                let id = self.ids.take();
+                self.sent.push(json::object(vec![("id", json::string(&id)), ("body", body)]));
+                Ok(id)
+            }
+            fn read(&mut self) -> Result<Value, &'static str> {
+                self.replies.pop().unwrap_or(Err("closed"))
+            }
+        }
+
+        const A: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const C: &str = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+
+        fn v(s: &str) -> Value {
+            json::parse(s.as_bytes()).unwrap()
+        }
+        /// The site's platform as given: more than os and arch, in no canonical order.
+        fn platform() -> Value {
+            v(r#"{"os":"linux","emulated_on":"aarch64","arch":"x86_64","libc":"musl"}"#)
+        }
+        fn checkable(binding: &str, name: &str) -> Checkable {
+            Checkable {
+                binding: binding.to_owned(),
+                name: name.to_owned(),
+                obligation: v(&format!(
+                    r#"{{"binding":"{binding}","name":"{name}","kind":"k","specified_by":["a.txt"],"targets":[],"expect":"holds","config":{{}}}}"#
+                )),
+                inputs: vec![("a.txt".to_owned(), A.to_owned())],
+                tools: v(&format!(r#"[{{"name":"checker","version":"2.1","digest":"{C}"}}]"#)),
+                platform: platform(),
+                preimage: Value::Object(vec![]),
+            }
+        }
+        fn declared() -> Vec<String> {
+            vec!["checker".to_owned()]
+        }
+        fn ceiling() -> host::Ceiling {
+            Some(("model".to_owned(), "bounded".to_owned()))
+        }
+        fn reply(id: &str, body: &str) -> Result<Value, &'static str> {
+            Ok(v(&format!(
+                r#"{{"type":"result","id":"{id}","capability":"obligation.check","body":{body}}}"#
+            )))
+        }
+        /// A run every host rule accepts, on the platform written in another order.
+        fn good_run() -> String {
+            format!(
+                r#"{{"program":{{"tool":"checker","path":"bin/checker"}},"args":["a.txt"],
+                   "inputs":[{{"path":"a.txt","identity":"{A}"}}],"outputs":[],
+                   "platform":{{"libc":"musl","arch":"x86_64","emulated_on":"aarch64","os":"linux"}},
+                   "tools":[{{"name":"checker","digest":"{C}"}}]}}"#
+            )
+        }
+
+        #[test]
+        fn a_start_carries_the_platform_and_tools_as_given() {
+            let mut ch = Scripted::after_enumerate(vec![]);
+            let check = start(&mut ch, &checkable("t.check", "o1"), &declared(), &ceiling()).unwrap();
+            // The first check on the session that enumerated is its request "2".
+            assert_eq!(check.start_id, "2");
+            let body = ch.sent[0].get("body");
+            assert_eq!(body.text("op"), Some("start"));
+            // The whole platform, libc and emulated_on included, with the same identity.
+            let sent = body.get("platform");
+            assert_eq!(sent.text("libc"), Some("musl"));
+            assert_eq!(sent.text("emulated_on"), Some("aarch64"));
+            assert_eq!(canonical::identity(sent), canonical::identity(&platform()));
+            // The tool with its version; the obligation with its binding and no inputs.
+            assert_eq!(body.get("tools").array()[0].text("version"), Some("2.1"));
+            assert_eq!(body.get("obligation").text("binding"), Some("t.check"));
+            assert!(body.get("obligation").opt("inputs").is_none());
+        }
+
+        #[test]
+        fn two_bindings_number_their_requests_apart() {
+            let mut a = Scripted::after_enumerate(vec![]);
+            let mut b = Scripted::after_enumerate(vec![]);
+            let first = start(&mut a, &checkable("a.check", "o1"), &declared(), &ceiling()).unwrap();
+            let second = start(&mut a, &checkable("a.check", "o2"), &declared(), &ceiling()).unwrap();
+            let other = start(&mut b, &checkable("b.check", "o3"), &declared(), &ceiling()).unwrap();
+            assert_eq!((first.start_id.as_str(), second.start_id.as_str()), ("2", "3"));
+            assert_eq!(other.start_id, "2");
+            assert_eq!((a.sent.len(), b.sent.len()), (2, 1));
+            assert_eq!(other.binding, "b.check");
+        }
+
+        #[test]
+        fn a_run_is_numbered_keyed_and_judged_by_the_host_rules() {
+            let mut ch = Scripted::after_enumerate(vec![reply("2", &format!(r#"{{"next":{}}}"#, good_run()))]);
+            let mut check = start(&mut ch, &checkable("t.check", "o1"), &declared(), &ceiling()).unwrap();
+            match answer(&mut ch, &mut check, Path::new(".")).unwrap() {
+                Answer::Run { number, run_key, run } => {
+                    assert_eq!(number, 1);
+                    let started = ch.sent[0].get("body");
+                    let key = host::run_key(started.get("obligation"), started.get("inputs"), 1, &run);
+                    assert_eq!(run_key, key);
+                }
+                other => panic!("{other:?}"),
+            }
+            // The report goes back under the session's next id, naming the start.
+            pass_back(&mut ch, &mut check, 1, Value::Object(vec![])).unwrap();
+            let sent = &ch.sent[1];
+            assert_eq!(sent.text("id"), Some("3"));
+            assert_eq!(sent.get("body").text("check"), Some("2"));
+            assert_eq!(check.awaited, "3");
+        }
+
+        #[test]
+        fn a_final_after_a_run_gives_its_verdict() {
+            let fin = r#"{"final":{"verdict":"passed","strength":{"class":"model","rank":"bounded"}}}"#;
+            let mut ch = Scripted::after_enumerate(vec![
+                reply("2", &format!(r#"{{"next":{}}}"#, good_run())),
+                reply("3", fin),
+            ]);
+            let mut check = start(&mut ch, &checkable("t.check", "o1"), &declared(), &ceiling()).unwrap();
+            assert!(matches!(answer(&mut ch, &mut check, Path::new(".")), Ok(Answer::Run { .. })));
+            pass_back(&mut ch, &mut check, 1, Value::Object(vec![])).unwrap();
+            // The verdict keeps the strength the rules bounded, for step 13 to record.
+            let strength = v(r#"{"class":"model","rank":"bounded"}"#);
+            assert_eq!(
+                answer(&mut ch, &mut check, Path::new(".")),
+                Ok(Answer::Verdict { verdict: "passed".into(), strength })
+            );
+        }
+
+        #[test]
+        fn the_strength_kept_is_the_one_the_rules_accepted() {
+            let after_one_run = |fin: &str| {
+                let mut ch = Scripted::after_enumerate(vec![
+                    reply("2", &format!(r#"{{"next":{}}}"#, good_run())),
+                    reply("3", fin),
+                ]);
+                let mut check = start(&mut ch, &checkable("t", "o1"), &declared(), &ceiling()).unwrap();
+                answer(&mut ch, &mut check, Path::new(".")).unwrap();
+                pass_back(&mut ch, &mut check, 1, Value::Object(vec![])).unwrap();
+                answer(&mut ch, &mut check, Path::new("."))
+            };
+            // A rank below the ceiling is kept exactly, fields the rules do not read included.
+            let lower = r#"{"final":{"verdict":"failed","strength":{"class":"model","rank":"sampled","note":"n"}}}"#;
+            match after_one_run(lower) {
+                Ok(Answer::Verdict { verdict, strength }) => {
+                    assert_eq!(verdict, "failed");
+                    assert_eq!(strength.text("rank"), Some("sampled"));
+                    assert_eq!(strength.text("class"), Some("model"));
+                    assert_eq!(strength.text("note"), Some("n"));
+                }
+                other => panic!("{other:?}"),
+            }
+            // A strength the rules refuse gives no verdict, so none is kept.
+            let above = r#"{"final":{"verdict":"passed","strength":{"class":"model","rank":"exhaustive"}}}"#;
+            assert_eq!(after_one_run(above), Ok(Answer::Refused("strength-above-ceiling")));
+            let other_class = r#"{"final":{"verdict":"passed","strength":{"class":"test","rank":"bounded"}}}"#;
+            assert_eq!(after_one_run(other_class), Ok(Answer::Refused("strength-class-mismatch")));
+            // A verdict that is never recorded may come with no strength.
+            let error = r#"{"final":{"verdict":"error"}}"#;
+            assert_eq!(
+                after_one_run(error),
+                Ok(Answer::Verdict { verdict: "error".into(), strength: Value::Null })
+            );
+        }
+
+        #[test]
+        fn a_rule_broken_by_a_check_refuses_that_check_only() {
+            let refused = |body: &str| {
+                let mut ch = Scripted::after_enumerate(vec![reply("2", body)]);
+                let mut check = start(&mut ch, &checkable("t", "o1"), &declared(), &ceiling()).unwrap();
+                answer(&mut ch, &mut check, Path::new("."))
+            };
+            assert_eq!(refused("{}"), Ok(Answer::Refused("neither-or-both")));
+            let both = format!(r#"{{"next":{},"final":{{"verdict":"passed"}}}}"#, good_run());
+            assert_eq!(refused(&both), Ok(Answer::Refused("neither-or-both")));
+            let fin = r#"{"final":{"verdict":"passed","strength":{"class":"model","rank":"bounded"}}}"#;
+            assert_eq!(refused(fin), Ok(Answer::Refused("verdict-without-run")));
+            let other_platform = good_run().replace(r#""libc":"musl","#, "");
+            assert_eq!(
+                refused(&format!(r#"{{"next":{other_platform}}}"#)),
+                Ok(Answer::Refused("platform-mismatch"))
+            );
+            for reason in ["neither-or-both", "verdict-without-run", "platform-mismatch"] {
+                assert!(!SESSION_BROKE.contains(&reason));
+            }
+        }
+
+        #[test]
+        fn a_broken_session_refuses_the_whole_run() {
+            let broke = |r: Result<Value, &'static str>| {
+                let mut ch = Scripted::after_enumerate(vec![r]);
+                let mut check = start(&mut ch, &checkable("t", "o1"), &declared(), &ceiling()).unwrap();
+                answer(&mut ch, &mut check, Path::new("."))
+            };
+            // The connection ends, or a line is no message.
+            assert_eq!(broke(Err("closed")), Err("closed"));
+            assert_eq!(broke(Err("malformed")), Err("malformed"));
+            // An answer to another request, an error, or no object body.
+            assert_eq!(broke(reply("1", r#"{"final":{}}"#)), Err("wrong-id"));
+            let error = v(r#"{"type":"error","id":"2","error":{"code":"x","message":"m"}}"#);
+            assert_eq!(broke(Ok(error)), Err("provider-error"));
+            assert_eq!(broke(reply("2", "[]")), Err("unexpected"));
+            let other = v(r#"{"type":"result","id":"2","capability":"obligation.enumerate","body":{}}"#);
+            assert_eq!(broke(Ok(other)), Err("wrong-capability"));
+            for reason in ["closed", "malformed", "wrong-id", "provider-error", "unexpected", "wrong-capability"] {
+                assert!(SESSION_BROKE.contains(&reason), "{reason}");
+            }
+        }
+
+        #[test]
+        fn only_an_offered_check_is_asked() {
+            // A binding that lists only enumeration has no kept session; a
+            // manifest that does not offer the check gets none sent.
+            assert!(can_check(Some(true)));
+            assert!(!can_check(Some(false)));
+            assert!(!can_check(None));
+        }
+    }
+
     #[cfg(test)]
     mod plan_tests {
         use super::*;
@@ -2508,10 +2923,10 @@ mod run_input {
             };
             let start = c.start();
             assert_eq!(start.text("op"), Some("start"));
-            assert_eq!(
-                json::encode(start.get("inputs")),
-                r#"[{"path":"spec/a.tla","identity":"sha256:aa"}]"#
-            );
+            let inputs = start.get("inputs").array();
+            assert_eq!(inputs.len(), 1);
+            assert_eq!(inputs[0].text("path"), Some("spec/a.tla"));
+            assert_eq!(inputs[0].text("identity"), Some("sha256:aa"));
             // The full triple, version included, and the platform as given.
             assert_eq!(start.get("tools").array()[0].text("version"), Some("2.1"));
             assert_eq!(start.get("platform").text("os"), Some("linux"));
@@ -2674,6 +3089,29 @@ mod run_input {
             let missing = root.join("not-there");
             let f = with(fields(&missing), "owner_ledger", json::string("records/owner.ledger."));
             refused(f);
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn the_platform_is_kept_whole_and_the_status_platform_is_unchanged() {
+            let root = scratch("platform");
+            let mut f = fields(&root);
+            let site = f.iter_mut().find(|(k, _)| k == "site").map(|(_, s)| s).unwrap();
+            if let Some(p) = site.opt_mut("platform") {
+                *p = json::parse(br#"{"libc":"gnu","arch":"x86_64","os":"linux"}"#).unwrap();
+            }
+            let got = match read(json::encode(&Value::Object(f)).as_bytes()) {
+                Ok(r) => r,
+                Err(s) => panic!("refused: {} {}", s.reason, s.detail),
+            };
+            // What status judges and records is OS + "/" + ARCH, as before.
+            assert_eq!(got.status.platform, "linux/x86_64");
+            // What a check is started on is the object as the site gave it.
+            assert_eq!(got.status.platform_given.text("libc"), Some("gnu"));
+            assert_eq!(
+                json::encode(&got.status.platform_given),
+                r#"{"arch":"x86_64","libc":"gnu","os":"linux"}"#
+            );
             let _ = fs::remove_dir_all(&root);
         }
 
