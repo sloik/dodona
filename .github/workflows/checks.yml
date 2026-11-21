@@ -188,5 +188,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Judge complete and incomplete group snapshots with mocks
+        run: cargo test --locked --manifest-path kernel/Cargo.toml 'proc::batch::tests'
       - name: Observe one harmless retained direct child
         run: cargo test --locked --manifest-path kernel/Cargo.toml proc::batch::platform::darwin_diagnostic::report_owned_batch_stages -- --ignored --exact --nocapture
