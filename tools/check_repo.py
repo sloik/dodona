@@ -807,6 +807,23 @@ def gap_status_keeps_literal_obligation_names() -> None:
         problems.append("conformance/project/cases.json: no status case for a passed obligation named __proto__")
 
 
+def gap_js_planted_defect_anchors_exist() -> None:
+    """A missing source anchor means the configured JavaScript defect is never planted."""
+    kernel = ROOT / "kernel2"
+    defects = json.loads((kernel / "defects.json").read_text(encoding="utf-8"))["defects"]
+    sources: dict[str, str | None] = {}
+    for defect in defects:
+        file = defect["file"]
+        if file not in sources:
+            try:
+                sources[file] = (kernel / file).read_bytes().decode("utf-8")
+            except (OSError, UnicodeError):
+                sources[file] = None
+        source = sources[file]
+        if source is None or defect["find"] not in source:
+            problems.append(f"kernel2/defects.json: {defect['name']!r}: anchor absent from kernel2/{file}")
+
+
 def gap_every_check_is_listed() -> None:
     """A gap check that nobody can find the reason for will be deleted by mistake."""
     listed = (ROOT / "docs" / "gap-checks.md").read_text(encoding="utf-8")
@@ -1063,7 +1080,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_no_generated_files_are_tracked,
-              gap_provider_cases_match_the_provider, gap_every_check_is_listed,
+              gap_provider_cases_match_the_provider, gap_js_planted_defect_anchors_exist, gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,

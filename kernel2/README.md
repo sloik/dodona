@@ -42,6 +42,8 @@ From the repository root:
 
 `plant.js` copies the kernel, plants defects from `defects.json` one at a time, and judges each copy. Changes to a host or project status module go to the judge for that module first. A rejection counts when the judge reports a complete tally and the same named case rejects on replay. The scenario judge counts `scenarios`, the ledger judge counts `checks`, and the core-key, canonical and path judges count `vectors`. Host-check and status count `judged` with skips tallied separately. The remaining judges count `cases`. If only the unit tests reject a copy, the kit reports a miss. A copy that cannot load is broken. The runner restores each mutation and removes its own temporary copy. Hosted CI exercises this behavior with mocked subprocesses in `test-plant.js`.
 
+The repository checker detects missing source anchors from `defects.json`. For example, the cross-platform assurance defect changes the evidence supplied to the level calculation while keeping the literal obligation name as an own property.
+
 The status judge uses the first kernel's `scenario` command to recompute the report. Build the first kernel in release mode from the repository's `kernel/` directory, or name its executable with `DODONA_OTHER_KERNEL`. `DODONA_STATUS_JOBS` controls case concurrency and defaults to three. `node kernel2/plant.js FILE...` tries the defects in the named files. The runner starts its judges through `DODONA_PYTHON` when set, or through `python3` on Unix and `python` on Windows.
 
 ## Unicode
