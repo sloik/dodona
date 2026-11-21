@@ -2074,6 +2074,26 @@ mod run_input {
             Some(Value::String(t)) if relative(t) => Some(t.clone()),
             Some(_) => return bad("transcript must be a relative path"),
         };
+        // A disk that drops the dots and spaces a name ends in would take such a
+        // path for another: the ledger and the owner's ledger always, and, when
+        // a transcript is written, every path it must not land on. Judged on the
+        // spelling alone, before any file is looked at.
+        let aliased = |p: &str| {
+            relative(p) && p.split('/').any(|s| s.ends_with('.') || s.ends_with(' '))
+        };
+        let mut spelt: Vec<&str> = vec![ledger.as_str()];
+        spelt.extend(owner);
+        if let Some(t) = &transcript {
+            spelt.push(t.as_str());
+            spelt.extend(ledgers.iter().map(String::as_str));
+            spelt.extend(v.text("project"));
+        }
+        if let Some(p) = spelt.into_iter().find(|p| aliased(*p)) {
+            return stop(
+                "bad-input",
+                format!("{p:?}: a segment ends in a dot or a space, which a disk may take for another name"),
+            );
+        }
         if let Some(t) = &transcript {
             let name = disk_name(t);
             let taken = ledgers
@@ -2165,28 +2185,20 @@ mod run_input {
 
     /// Steps 1 to 10 of the run command: the run's input, the project as the
     /// status command reads it with the sessions of step 5 kept for checks,
-    /// and the plan. A kept session none of whose obligations is to be checked
-    /// is closed here, so a run with nothing to check holds no session for
-    /// checks. Not served: nothing after step 10 is done.
+    /// and the plan. Every kept session, that of a binding with nothing to
+    /// check included, stays open in the snapshot for the whole run (step 11):
+    /// when each is shut down is part of what a transcript records. They are
+    /// closed when the snapshot is dropped, at the end of the run or on a
+    /// refusal. Not served: nothing after step 10 is done.
     pub(super) fn prepare(raw: &[u8]) -> Step<(RunInput, Snapshot, Plan)> {
         let input = read(raw)?;
-        let mut snapshot = snapshot(&input.status, true)?;
+        let snapshot = snapshot(&input.status, true)?;
         let plan = plan(
             &snapshot.obligations.listed,
             &snapshot.obligations.not_checkable,
             &snapshot.report,
         );
-        // Dropping a session closes it.
-        snapshot
-            .obligations
-            .kept
-            .retain(|k| needed(&k.binding, &plan.to_check));
         Ok((input, snapshot, plan))
-    }
-
-    /// Whether a binding has an obligation to check, so its session is wanted.
-    fn needed(binding: &str, to_check: &[(String, String)]) -> bool {
-        to_check.iter().any(|(b, _)| b == binding)
     }
 
     #[cfg(test)]
@@ -2529,14 +2541,6 @@ mod run_input {
             assert!(!offers_check(&manifest(&["obligation.enumerate"])));
             assert!(!offers_check(&json::object(vec![])));
         }
-
-        #[test]
-        fn only_bindings_with_something_to_check_keep_a_session() {
-            let to_check = vec![("t.check".to_owned(), "o1".to_owned())];
-            assert!(needed("t.check", &to_check));
-            assert!(!needed("other", &to_check));
-            assert!(!needed("t.check", &[]));
-        }
     }
 
     #[cfg(test)]
@@ -2625,6 +2629,51 @@ mod run_input {
             assert_eq!(got.status.owner_ledger, "records/owner.ledger");
             // No transcript is a run without one.
             assert_eq!(reason(fields(&root)).0, "ok");
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn a_name_a_disk_may_shorten_is_refused_by_its_spelling() {
+            let root = scratch("aliases");
+            let shortened = "ends in a dot or a space";
+            let refused = |f: Vec<(String, Value)>| {
+                let (why, detail) = reason(f);
+                assert_eq!(why, "bad-input");
+                assert!(detail.contains(shortened), "{detail}");
+            };
+            let run_ledger = |l: &str| {
+                let f = with(fields(&root), "ledgers", strs(&[l]));
+                with(f, "ledger", json::string(l))
+            };
+            // The run's ledger and the owner's, always.
+            refused(run_ledger("l/run.ledger."));
+            refused(run_ledger("l/run.ledger "));
+            refused(run_ledger("l./run.ledger"));
+            refused(run_ledger("l /run.ledger"));
+            refused(with(fields(&root), "owner_ledger", json::string("records/owner.ledger.")));
+            refused(with(fields(&root), "owner_ledger", json::string("records /owner.ledger")));
+            // Dots and spaces inside a name, or a name starting with a dot, are not shortened.
+            assert_eq!(reason(run_ledger("l/run.v1.ledger")).0, "ok");
+            assert_eq!(reason(run_ledger("l/.run ledger")).0, "ok");
+            // Without a transcript, other listed ledgers and the project file are
+            // the status command's to read as they are spelt.
+            let others = |f: Vec<(String, Value)>| {
+                let f = with(f, "ledgers", strs(&["l/run.ledger", "x/other.ledger."]));
+                with(f, "project", json::string("dodona.toml "))
+            };
+            assert_eq!(reason(others(fields(&root))).0, "ok");
+            // With one, every path the transcript must not land on is judged too.
+            let t = |f: Vec<(String, Value)>, p: &str| with(f, "transcript", json::string(p));
+            refused(t(others(fields(&root)), "t.json"));
+            refused(t(with(fields(&root), "ledgers", strs(&["l/run.ledger", "x/other.ledger."])), "t.json"));
+            refused(t(with(fields(&root), "project", json::string("dodona.toml.")), "t.json"));
+            refused(t(fields(&root), "t.json."));
+            refused(t(fields(&root), "out /t.json"));
+            assert_eq!(reason(t(fields(&root), "t.json")).0, "ok");
+            // Judged before any file is looked at: a root that is not there is not reached.
+            let missing = root.join("not-there");
+            let f = with(fields(&missing), "owner_ledger", json::string("records/owner.ledger."));
+            refused(f);
             let _ = fs::remove_dir_all(&root);
         }
 
