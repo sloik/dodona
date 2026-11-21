@@ -2951,7 +2951,7 @@ mod run_input {
             (finished, checks)
         }
         /// The files as they are now.
-        fn files(now: &[(&str, Option<&str>)]) -> impl FnMut(&str) -> Option<String> + '_ {
+        fn files<'a>(now: &'a [(&'a str, Option<&'a str>)]) -> impl FnMut(&str) -> Option<String> + 'a {
             move |path: &str| {
                 now.iter()
                     .find(|(p, _)| *p == path)
