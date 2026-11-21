@@ -1916,8 +1916,15 @@
       "name": "ledger: a line nested deeper than 64 is read",
       "model_case": null,
       "file": "src/ledger.rs",
-      "find": "    if depth > crate::wire::MAX_DEPTH {\n",
-      "replace": "    if depth > usize::MAX - 1 {\n"
+      "find": "    if depth > crate::wire::MAX_DEPTH {\n        return None;\n",
+      "replace": "    if depth > usize::MAX - 1 {\n        return None;\n"
+    },
+    {
+      "name": "ledger: an append nested deeper than 64 is written",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "    if depth > crate::wire::MAX_DEPTH {\n        return Ok(refused(\"bad-request\"));\n",
+      "replace": "    if depth > usize::MAX - 1 {\n        return Ok(refused(\"bad-request\"));\n"
     }
   ]
 }

@@ -149,6 +149,13 @@ pub fn append(v: &Value) -> Result<Value, String> {
     let (Some(kind), Some(body)) = (kind, v.opt("body")) else {
         return Ok(refused("bad-request"));
     };
+    // An entry nested deeper than 64 levels, the entry itself the first, could
+    // never be read back: it is refused before anything is touched.
+    let shell = json::object(vec![("body", body.clone())]);
+    let depth = crate::jsonread::parse(&json::encode(&shell), true).map_or(usize::MAX, |(_, d)| d);
+    if depth > crate::wire::MAX_DEPTH {
+        return Ok(refused("bad-request"));
+    }
     let Some(_lock) = lock(path, wait)? else {
         return Ok(refused("locked"));
     };
