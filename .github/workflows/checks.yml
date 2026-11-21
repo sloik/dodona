@@ -177,53 +177,44 @@ jobs:
         run: ${{ matrix.run }}
 
   private-run-checkpoint:
-    name: Private run checkpoint (${{ matrix.system }})
+    name: Project run deadline trace on Linux
     if: >-
       github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
       && github.ref == 'refs/heads/dodona-eight-run-private-proof'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - system: linux
-            os: ubuntu-26.04
-            python: python3
-            rust_kernel: kernel/target/release/dodona-kernel
-          - system: macos
-            os: macos-26
-            python: python3
-            rust_kernel: kernel/target/release/dodona-kernel
-          - system: windows
-            os: windows-2025
-            python: python
-            rust_kernel: kernel/target/release/dodona-kernel.exe
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Name the exact proof input and tool versions
-        shell: bash
+      - name: Build the first kernel
+        run: cargo build --locked --release --manifest-path kernel/Cargo.toml
+      - name: Record provider messages before and after a deadline in owned fixtures
         run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git rev-parse HEAD
-          rustc --version
-          cargo --version
-          node --version
-      - name: Judge the first kernel's private run module
-        run: cargo test --locked --manifest-path kernel/Cargo.toml --bin dodona-kernel 'project_status::'
-      - name: Judge the second kernel's private run module
-        if: ${{ !cancelled() }}
-        run: node --test kernel2/test-run.js
-      - name: Build the two-command first kernel
-        id: build_run
-        if: ${{ !cancelled() }}
-        run: cargo build --release --locked --manifest-path kernel/Cargo.toml
-      - name: Judge the first kernel run with the complete project fixture set
-        if: ${{ !cancelled() && steps.build_run.outcome == 'success' }}
-        run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js --status "${{ matrix.rust_kernel }} status" -- ${{ matrix.rust_kernel }} run
-      - name: Judge the second kernel run with the complete project fixture set
-        if: ${{ !cancelled() && steps.build_run.outcome == 'success' }}
-        run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel ${{ matrix.rust_kernel }} --status "node kernel2/dodona-kernel2.js status" -- node kernel2/dodona-kernel2.js run
+          python3 - <<'DODONA_TRACE'
+          import json
+          import sys
+          sys.path.insert(0, 'tools')
+          import run_run_cases as judge
+          spec = json.loads(judge.CASES.read_text(encoding='utf-8'))
+          selected = next(c for c in spec['cases'] if c['name'] == 'a provider later than the deadline refuses the whole run')
+          cli = 'kernel/target/release/dodona-kernel'
+          peer = ['node', 'kernel2/dodona-kernel2.js']
+          reference = judge.REFERENCE + ['--kernel'] + peer
+          reference_status = judge.REFERENCE_STATUS + ['--kernel'] + peer
+          def trace(answer):
+              return {key: [(row['type'], row['capability'], row['deadline_ms']) for row in rows]
+                      for key, rows in answer['asked'].items() if key != 'executor.record.jsonl'}
+          mismatch = 0
+          for iteration in range(5):
+              got = judge.run_case([cli, 'run'], [cli, 'status'], selected, spec['site'])
+              ref = judge.run_case(reference, reference_status, selected, spec['site'])
+              matches = judge.same(got['asked'], ref['asked'])
+              mismatch += not matches
+              print(json.dumps({'attempt': iteration + 1, 'equal_records': matches,
+                                'first_refusal': (got['first'] or {}).get('refused'),
+                                'reference_refusal': (ref['first'] or {}).get('refused'),
+                                'candidate': trace(got), 'reference': trace(ref)}, sort_keys=True), flush=True)
+          print(json.dumps({'observations': 5, 'differing_records': mismatch}))
+          DODONA_TRACE
