@@ -173,9 +173,18 @@ struct Input {
     ledgers: Vec<String>,
     owner_ledger: String,
     platform: String,
+    /// The site's platform as given, `{"os", "arch"}`: a check is started on it.
+    /// Read by the run command only, which is not served yet.
+    #[allow(dead_code)]
+    platform_given: Value,
     writer: String,
     runner: String,
+    /// The site's tools as `{"name", "digest"}`, the form a key holds.
     tools: Value,
+    /// The site's tools as `{"name", "version", "digest"}`, the form a check is
+    /// started with. Read by the run command only.
+    #[allow(dead_code)]
+    tools_given: Value,
     providers: Vec<(String, Provider)>,
     deadline_ms: u64,
     required: Vec<String>,
@@ -284,17 +293,17 @@ fn read_input(input: &[u8]) -> Step<Input> {
             )
         }
     };
-    let tools = Value::Array(
+    let field = |t: &Value, fields: &[&str]| {
+        json::object(fields.iter().map(|k| (*k, t.get(k).clone())).collect())
+    };
+    let tools_given = Value::Array(
         tools
             .iter()
-            .map(|t| {
-                json::object(vec![
-                    ("name", t.get("name").clone()),
-                    ("digest", t.get("digest").clone()),
-                ])
-            })
+            .map(|t| field(t, &["name", "version", "digest"]))
             .collect(),
     );
+    let tools = Value::Array(tools.iter().map(|t| field(t, &["name", "digest"])).collect());
+    let platform_given = json::object(vec![("os", json::string(os)), ("arch", json::string(arch))]);
     let mut providers = Vec::new();
     match site.opt("providers") {
         Some(Value::Object(ps)) => {
@@ -359,9 +368,11 @@ fn read_input(input: &[u8]) -> Step<Input> {
         ledgers,
         owner_ledger,
         platform: format!("{os}/{arch}"),
+        platform_given,
         writer,
         runner,
         tools,
+        tools_given,
         providers: read,
         deadline_ms,
         required: strings(policy.opt("required")).unwrap_or_default(),
@@ -721,12 +732,36 @@ fn file_refs(files: &[(String, String)]) -> Value {
 
 // Steps 5 and 7. A session with a provider, as in a check.
 
+/// A session owns its connection: the ids of its requests count from 1 on it
+/// alone, and however it is left, by `close` or by being dropped on a refusal,
+/// `shutdown` is sent once and every process the provider started is ended.
 struct Session {
     peer: Peer,
     log: Log,
     manifest: Value,
     wait: Duration,
     deadline_ms: u64,
+    ids: RequestIds,
+    closed: bool,
+}
+/// The ids of one session's requests: "1", "2" and on, never shared with another session.
+struct RequestIds {
+    next: u64,
+}
+impl RequestIds {
+    fn new() -> RequestIds {
+        RequestIds { next: 1 }
+    }
+    fn take(&mut self) -> String {
+        let id = self.next.to_string();
+        self.next += 1;
+        id
+    }
+}
+impl Drop for Session {
+    fn drop(&mut self) {
+        self.close();
+    }
 }
 impl Session {
     /// Start the binding's provider in `root`, say hello, and read its manifest.
@@ -769,6 +804,8 @@ impl Session {
             manifest: Value::Null,
             wait: Duration::from_millis(input.deadline_ms),
             deadline_ms: input.deadline_ms,
+            ids: RequestIds::new(),
+            closed: false,
         };
         match s.greet(binding) {
             Ok(()) => Ok(s),
@@ -800,18 +837,24 @@ impl Session {
         self.manifest = manifest.clone();
         Ok(())
     }
-    /// One request, and the body of its result.
-    fn ask(&mut self, capability: &str, body: Value) -> Result<Value, &'static str> {
+    /// The request this session sends next, with its own id: "1" for the first.
+    fn request(&mut self, capability: &str, body: Value) -> (String, Value) {
+        let id = self.ids.take();
         let request = json::object(vec![
             ("type", json::string("request")),
-            ("id", json::string("1")),
+            ("id", json::string(&id)),
             ("deadline_ms", Value::Number(self.deadline_ms as i64)),
             ("capability", json::string(capability)),
             ("body", body),
         ]);
+        (id, request)
+    }
+    /// One request, and the body of its result.
+    fn ask(&mut self, capability: &str, body: Value) -> Result<Value, &'static str> {
+        let (id, request) = self.request(capability, body);
         self.peer.send(&request, Instant::now() + self.wait)?;
         let a = self.peer.read(Instant::now() + self.wait)?;
-        if a.text("id") != Some("1") {
+        if a.text("id") != Some(id.as_str()) {
             return Err("wrong-id");
         }
         if a.text("type") == Some("error") {
@@ -827,7 +870,12 @@ impl Session {
     }
     /// `shutdown`, a second to exit, and every process the provider started
     /// ended. What it writes after its answer is not read.
+    /// Once only: a second call, or the drop after a `close`, does nothing.
     fn close(&mut self) {
+        if self.closed {
+            return;
+        }
+        self.closed = true;
         let _ = self.peer.shutdown(Instant::now() + wire::SHUTDOWN_GRACE);
         self.peer.end();
         self.log.settle();
@@ -845,8 +893,28 @@ fn consult(
     let answer = s.ask(capability, body);
     s.close();
     match answer {
-        Ok(body) => Ok((body, s.manifest)),
+        Ok(body) => Ok((body, std::mem::replace(&mut s.manifest, Value::Null))),
         Err(reason) => stop(reason, format!("{}: {capability}", binding.provider)),
+    }
+}
+
+/// Ask one binding's provider one thing, and keep the session open if the
+/// answer came: for the run command, whose checks go to the provider that
+/// enumerated. On a broken session it is closed before the refusal, as
+/// `consult` closes it; dropped later, on any refusal, it is closed then.
+fn consult_and_keep(
+    input: &Input,
+    binding: &Binding,
+    capability: &str,
+    body: Value,
+) -> Step<(Value, Session)> {
+    let mut s = Session::open(input, binding)?;
+    match s.ask(capability, body) {
+        Ok(body) => Ok((body, s)),
+        Err(reason) => {
+            s.close();
+            stop(reason, format!("{}: {capability}", binding.provider))
+        }
     }
 }
 
@@ -860,11 +928,102 @@ fn listing<'a>(bindings: &'a [Binding], capability: &str) -> Vec<&'a Binding> {
 // Steps 5 and 6. Obligations and their keys.
 
 struct Obligations {
-    /// name -> {"preimage": P}, in the order found.
+    /// name -> {"preimage": P}, in the order found. Moved into J by `snapshot`.
     found: Vec<(String, Value)>,
     /// Every obligation as {"binding", "name"}, sorted by binding and then name.
     listed: Vec<(String, String)>,
     not_checkable: Vec<String>,
+    /// For the run command only (empty for `status`): the session of each
+    /// binding that lists `obligation.check`, kept open, sorted by binding.
+    kept: Vec<Kept>,
+    /// For the run command only: what each listed obligation's check is
+    /// started with, in the order found.
+    checks: Vec<Checkable>,
+}
+
+/// A session kept open after `obligation.enumerate` for the checks of its
+/// binding (run step 5), with what its manifest declared then. Dropping it
+/// closes the session.
+#[allow(dead_code)]
+struct Kept {
+    binding: String,
+    session: Session,
+    /// The manifest lists `obligation.check`; a check on a session whose
+    /// manifest does not is counted as refused (run step 11).
+    offers_check: bool,
+    /// The tools the manifest declares, as the host checks read them.
+    declared: Vec<String>,
+    /// The class and rank the manifest declares for `obligation.check`.
+    ceiling: host::Ceiling,
+}
+
+/// What a check of one obligation is started with (run step 11), as it was
+/// measured in steps 4 to 6, so that what is checked is what was keyed.
+#[allow(dead_code)]
+struct Checkable {
+    binding: String,
+    name: String,
+    /// The obligation as enumerated, with its `binding` and without `inputs`.
+    obligation: Value,
+    /// F: each file the provider listed in `inputs`, with the identity it was keyed with.
+    inputs: Vec<(String, String)>,
+    /// The site's tools the manifest names, `{"name", "version", "digest"}`, in the site's order.
+    tools: Value,
+    /// The site's platform as given, `{"os", "arch"}`.
+    platform: Value,
+    /// The preimage of step 6, which a recorded verdict carries.
+    preimage: Value,
+}
+
+#[allow(dead_code)]
+impl Checkable {
+    /// The body of the request that starts the check, as the host checks give it.
+    fn start(&self) -> Value {
+        json::object(vec![
+            ("op", json::string("start")),
+            ("obligation", self.obligation.clone()),
+            ("inputs", file_refs(&self.inputs)),
+            ("tools", self.tools.clone()),
+            ("platform", self.platform.clone()),
+        ])
+    }
+    /// What the host check rules judge each run and the final against.
+    fn given(&self, declared: &[String], ceiling: &host::Ceiling) -> host::Given {
+        host::Given {
+            obligation: self.obligation.clone(),
+            inputs: self.inputs.clone(),
+            tools: self
+                .tools
+                .array()
+                .iter()
+                .map(|t| (t.get("name").str().to_owned(), t.get("digest").str().to_owned()))
+                .collect(),
+            platform: self.platform.clone(),
+            declared: declared.to_vec(),
+            ceiling: ceiling.clone(),
+        }
+    }
+}
+
+/// The obligation as a check is started with it: as enumerated, without
+/// `inputs`, with `binding`.
+fn as_checked(o: &Value, binding: &str) -> Value {
+    let mut members: Vec<(String, Value)> = o
+        .object()
+        .iter()
+        .filter(|(k, _)| k != "inputs" && k != "binding")
+        .cloned()
+        .collect();
+    members.push(("binding".to_owned(), json::string(binding)));
+    sorted_object(members)
+}
+
+/// Whether a manifest (the `manifest` object) lists `obligation.check`.
+fn offers_check(manifest: &Value) -> bool {
+    list(manifest.opt("capabilities"))
+        .unwrap_or_default()
+        .iter()
+        .any(|c| c.text("capability") == Some("obligation.check"))
 }
 
 fn obligation_shaped(o: &Value) -> bool {
@@ -880,15 +1039,22 @@ fn obligation_shaped(o: &Value) -> bool {
         && o.opt("inputs").is_some()
 }
 
+/// Steps 5 and 6. With `keep` (the run command), the session of a binding
+/// that lists `obligation.check` stays open, and what each check is started
+/// with is kept; without it (the status command), every session is ended as
+/// soon as its answer is read, before the answer is judged.
 fn obligations(
     input: &Input,
     bindings: &[Binding],
     claims: &[(String, Vec<(String, String)>)],
+    keep: bool,
 ) -> Step<Obligations> {
     let mut out = Obligations {
         found: Vec::new(),
         listed: Vec::new(),
         not_checkable: Vec::new(),
+        kept: Vec::new(),
+        checks: Vec::new(),
     };
     for binding in listing(bindings, "obligation.enumerate") {
         let files: &[(String, String)] = claims
@@ -900,7 +1066,14 @@ fn obligations(
             ("definitions", Value::Array(vec![])),
             ("files", file_refs(files)),
         ]);
-        let (answer, manifest) = consult(input, binding, "obligation.enumerate", body)?;
+        // A session kept here is closed when it is dropped, on every refusal below.
+        let (answer, manifest, session) = if keep && binding.serves("obligation.check") {
+            let (answer, s) = consult_and_keep(input, binding, "obligation.enumerate", body)?;
+            (answer, s.manifest.clone(), Some(s))
+        } else {
+            let (answer, manifest) = consult(input, binding, "obligation.enumerate", body)?;
+            (answer, manifest, None)
+        };
         let bad = |why: &str| stop("bad-answer", format!("binding {}: {why}", binding.name));
         // Each rule over every obligation of the answer before the next rule.
         let items = match list(answer.opt("obligations")) {
@@ -953,6 +1126,16 @@ fn obligations(
                 .array()
                 .iter()
                 .filter(|t| t.text("name").is_some_and(|n| named_tools.contains(&n)))
+                .cloned()
+                .collect(),
+        );
+        // The same tools, as a check is started with them: with their versions.
+        let tools_given = Value::Array(
+            input
+                .tools_given
+                .array()
+                .iter()
+                .filter(|tool| tool.text("name").is_some_and(|name| named_tools.contains(&name)))
                 .cloned()
                 .collect(),
         );
@@ -1028,12 +1211,38 @@ fn obligations(
                     ]),
                 ),
             ]);
+            if keep {
+                out.checks.push(Checkable {
+                    binding: binding.name.clone(),
+                    name: name.to_owned(),
+                    obligation: as_checked(o, &binding.name),
+                    inputs: inputs.clone(),
+                    tools: tools_given.clone(),
+                    platform: input.platform_given.clone(),
+                    preimage: preimage.clone(),
+                });
+            }
             out.found
                 .push((name.to_owned(), json::object(vec![("preimage", preimage)])));
             out.listed.push((binding.name.clone(), name.to_owned()));
         }
         out.not_checkable
             .extend(rejected.iter().map(|r| r.get("name").str().to_owned()));
+        if let Some(session) = session {
+            // `greet` has read the manifest with `host::manifest`, so it has this shape.
+            let (declared, ceiling) = host::manifest(&json::object(vec![(
+                "manifest",
+                session.manifest.clone(),
+            )]))
+            .unwrap_or_default();
+            out.kept.push(Kept {
+                binding: binding.name.clone(),
+                offers_check: offers_check(&session.manifest),
+                declared,
+                ceiling,
+                session,
+            });
+        }
     }
     out.listed
         .sort_by(|a, b| order(&a.0, &b.0).then_with(|| order(&a.1, &b.1)));
@@ -1575,8 +1784,9 @@ struct Snapshot {
     report: Value,
 }
 
-/// Steps 2 to 10, on an input step 1 has read.
-fn snapshot(input: &Input) -> Step<Snapshot> {
+/// Steps 2 to 10, on an input step 1 has read. `keep` is for the run command
+/// (see `obligations`); the status command passes false.
+fn snapshot(input: &Input, keep: bool) -> Step<Snapshot> {
     let root = &input.root;
     // Step 2.
     if !plain_file(root, &input.project) {
@@ -1638,7 +1848,7 @@ fn snapshot(input: &Input) -> Step<Snapshot> {
         }
     }
     // Steps 5 and 6.
-    let obligations = obligations(&input, &bindings, &claims)?;
+    let mut obligations = obligations(input, &bindings, &claims, keep)?;
     // Step 7.
     let intents = intents(&input, &bindings, &claims, &obligations.listed)?;
     // Step 8.
@@ -1691,7 +1901,8 @@ fn snapshot(input: &Input) -> Step<Snapshot> {
             ]),
         ),
         ("policy", policy),
-        ("obligations", sorted_object(obligations.found.clone())),
+        // Moved, not copied: nothing reads `found` after J is made.
+        ("obligations", sorted_object(std::mem::take(&mut obligations.found))),
         ("intents", sorted_object(intents.judged.clone())),
         ("steps", Value::Array(steps)),
     ]);
@@ -1717,7 +1928,7 @@ fn run(raw: &[u8]) -> Step<Value> {
         read,
         judged,
         report,
-    } = snapshot(&input)?;
+    } = snapshot(&input, false)?;
     // Step 11.
     let coverage = coverage(&intents.judged, input.min_hard_gates);
     // What could hide a failure the report does not show, in the contract's order and words.
@@ -1953,17 +2164,29 @@ mod run_input {
     }
 
     /// Steps 1 to 10 of the run command: the run's input, the project as the
-    /// status command reads it, and the plan. Not served: the sessions of step
-    /// 5 are not kept open for checks yet, and nothing after step 10 is done.
+    /// status command reads it with the sessions of step 5 kept for checks,
+    /// and the plan. A kept session none of whose obligations is to be checked
+    /// is closed here, so a run with nothing to check holds no session for
+    /// checks. Not served: nothing after step 10 is done.
     pub(super) fn prepare(raw: &[u8]) -> Step<(RunInput, Snapshot, Plan)> {
         let input = read(raw)?;
-        let snapshot = snapshot(&input.status)?;
+        let mut snapshot = snapshot(&input.status, true)?;
         let plan = plan(
             &snapshot.obligations.listed,
             &snapshot.obligations.not_checkable,
             &snapshot.report,
         );
+        // Dropping a session closes it.
+        snapshot
+            .obligations
+            .kept
+            .retain(|k| needed(&k.binding, &plan.to_check));
         Ok((input, snapshot, plan))
+    }
+
+    /// Whether a binding has an obligation to check, so its session is wanted.
+    fn needed(binding: &str, to_check: &[(String, String)]) -> bool {
+        to_check.iter().any(|(b, _)| b == binding)
     }
 
     #[cfg(test)]
@@ -2092,6 +2315,227 @@ mod run_input {
             let p = plan(&[pair("t", "o2"), pair("t", "o1")], &[], &report);
             assert_eq!(p.to_check, vec![pair("t", "o1"), pair("t", "o2")]);
             assert!(p.reused.is_empty());
+        }
+    }
+
+    #[cfg(test)]
+    mod verdict_tests {
+        use super::*;
+
+        fn pair(b: &str, n: &str) -> (String, String) {
+            (b.to_owned(), n.to_owned())
+        }
+
+        /// A status scenario as the status command's step 10 makes one.
+        fn scenario(obligations: Vec<(&str, Value)>, appends: Vec<Value>) -> Value {
+            let mut steps: Vec<Value> = appends
+                .into_iter()
+                .map(|body| {
+                    json::object(vec![(
+                        "do",
+                        json::object(vec![(
+                            "append",
+                            json::object(vec![("kind", json::string("evidence")), ("body", body)]),
+                        )]),
+                    )])
+                })
+                .collect();
+            let neutral_step = json::object(vec![(
+                "do",
+                json::object(vec![(
+                    "set_gate",
+                    json::object(vec![
+                        ("intent", json::string("")),
+                        ("criterion", json::string("")),
+                        ("to", json::string("hard")),
+                    ]),
+                )]),
+            )]);
+            steps.push(neutral_step);
+            json::object(vec![
+                ("kind", json::string("status")),
+                ("name", json::string("this-project")),
+                (
+                    "self",
+                    json::object(vec![
+                        ("writer", json::string("w")),
+                        ("platform", json::string("linux/x86_64")),
+                    ]),
+                ),
+                (
+                    "policy",
+                    json::object(vec![
+                        ("min_hard_gates", Value::Number(1)),
+                        ("required", Value::Array(vec![])),
+                        ("trusted_writers", Value::Array(vec![])),
+                        ("floors", Value::Object(vec![])),
+                        ("attestors", Value::Object(vec![])),
+                        ("makes", Value::Array(vec![])),
+                    ]),
+                ),
+                (
+                    "obligations",
+                    json::object(
+                        obligations
+                            .into_iter()
+                            .map(|(n, p)| (n, json::object(vec![("preimage", p)])))
+                            .collect(),
+                    ),
+                ),
+                ("intents", Value::Object(vec![])),
+                ("steps", Value::Array(steps)),
+            ])
+        }
+
+        #[test]
+        fn listed_and_rejected_keeps_its_verdict_and_rejected_only_is_not_planned() {
+            let preimage = json::object(vec![
+                ("obligation", json::string("o2-key")),
+                ("kind", json::string("check")),
+            ]);
+            let record = json::object(vec![
+                ("obligation", json::string("o2")),
+                ("preimage", preimage.clone()),
+                ("core_key", json::string(&canonical::identity(&preimage))),
+                ("platform", json::string("linux/x86_64")),
+                ("verdict", json::string("passed")),
+                ("writer", json::string("w")),
+            ]);
+            let judged = scenario(
+                vec![("o1", Value::Object(vec![])), ("o2", preimage)],
+                vec![record],
+            );
+            // The verdict comes from the status rules, not from this test.
+            let report = status::run(&judged).pop().unwrap();
+            let status_of = |n: &str| report.get("obligations").get(n).text("status").map(str::to_owned);
+            assert_eq!(status_of("o2").as_deref(), Some("passed"));
+            assert_eq!(status_of("o1").as_deref(), Some("unknown"));
+            // o2 is listed and rejected; o7 is rejected only.
+            let not_checkable = ["o2".to_owned(), "o7".to_owned()];
+            let p = plan(&[pair("t", "o2"), pair("t", "o1")], &not_checkable, &report);
+            assert_eq!(p.reused, vec![pair("t", "o2")]);
+            assert_eq!(p.to_check, vec![pair("t", "o1")]);
+            assert!(!p.to_check.iter().chain(&p.reused).any(|(_, n)| n == "o7"));
+            assert_eq!((p.obligations, p.not_checkable), (2, 2));
+            // With no record, the listed-and-rejected name is checked as listed.
+            let empty = status::run(&scenario(vec![("o2", Value::Object(vec![]))], vec![]))
+                .pop()
+                .unwrap();
+            let p = plan(&[pair("t", "o2")], &not_checkable, &empty);
+            assert_eq!(p.to_check, vec![pair("t", "o2")]);
+        }
+    }
+
+    #[cfg(test)]
+    mod kept_tests {
+        use super::*;
+
+        #[test]
+        fn each_session_numbers_its_own_requests() {
+            let (mut a, mut b) = (RequestIds::new(), RequestIds::new());
+            // The enumeration is "1"; the first check on the same session is "2".
+            assert_eq!(a.take(), "1");
+            assert_eq!(a.take(), "2");
+            // Another session starts again from "1".
+            assert_eq!(b.take(), "1");
+            assert_eq!(a.take(), "3");
+        }
+
+        fn obligation() -> Value {
+            json::object(vec![
+                ("name", json::string("o1")),
+                ("kind", json::string("model")),
+                ("specified_by", Value::Array(vec![json::string("spec/a.tla")])),
+                ("targets", Value::Array(vec![])),
+                ("expect", json::string("holds")),
+                ("config", json::object(vec![("depth", Value::Number(3))])),
+                ("defect_of", json::string("o0")),
+                ("inputs", Value::Array(vec![json::string("spec/a.tla")])),
+            ])
+        }
+
+        #[test]
+        fn a_check_is_started_with_the_obligation_as_enumerated() {
+            let o = as_checked(&obligation(), "t.check");
+            assert!(o.opt("inputs").is_none());
+            assert_eq!(o.text("binding"), Some("t.check"));
+            // Every other field as the provider gave it, `defect_of` and `config` included.
+            for k in ["name", "kind", "specified_by", "targets", "expect", "config", "defect_of"] {
+                assert_eq!(
+                    o.opt(k).map(json::encode),
+                    obligation().opt(k).map(json::encode),
+                    "{k}"
+                );
+            }
+            // A provider's own `binding` does not stand in for the binding.
+            let mut forged = obligation();
+            if let Value::Object(m) = &mut forged {
+                m.push(("binding".to_owned(), json::string("other")));
+            }
+            assert_eq!(as_checked(&forged, "t.check").text("binding"), Some("t.check"));
+        }
+
+        #[test]
+        fn what_was_measured_is_what_a_check_starts_with() {
+            let tool = json::object(vec![
+                ("name", json::string("checker")),
+                ("version", json::string("2.1")),
+                ("digest", json::string("sha256:cc")),
+            ]);
+            let c = Checkable {
+                binding: "t.check".to_owned(),
+                name: "o1".to_owned(),
+                obligation: as_checked(&obligation(), "t.check"),
+                inputs: vec![("spec/a.tla".to_owned(), "sha256:aa".to_owned())],
+                tools: Value::Array(vec![tool]),
+                platform: json::object(vec![
+                    ("os", json::string("linux")),
+                    ("arch", json::string("x86_64")),
+                ]),
+                preimage: Value::Object(vec![]),
+            };
+            let start = c.start();
+            assert_eq!(start.text("op"), Some("start"));
+            assert_eq!(
+                json::encode(start.get("inputs")),
+                r#"[{"path":"spec/a.tla","identity":"sha256:aa"}]"#
+            );
+            // The full triple, version included, and the platform as given.
+            assert_eq!(start.get("tools").array()[0].text("version"), Some("2.1"));
+            assert_eq!(start.get("platform").text("os"), Some("linux"));
+            assert_eq!(start.get("platform").text("arch"), Some("x86_64"));
+            // The host rules see the same files and tools, keyed by digest.
+            let ceiling = Some(("model".to_owned(), "bounded".to_owned()));
+            let g = c.given(&["checker".to_owned()], &ceiling);
+            assert_eq!(g.inputs, c.inputs);
+            assert_eq!(g.tools, vec![("checker".to_owned(), "sha256:cc".to_owned())]);
+            assert_eq!(g.named(), vec!["spec/a.tla".to_owned()]);
+            assert_eq!(g.ceiling, ceiling);
+        }
+
+        #[test]
+        fn only_a_manifest_listing_the_check_offers_it() {
+            let manifest = |caps: &[&str]| {
+                json::object(vec![(
+                    "capabilities",
+                    Value::Array(
+                        caps.iter()
+                            .map(|c| json::object(vec![("capability", json::string(c))]))
+                            .collect(),
+                    ),
+                )])
+            };
+            assert!(offers_check(&manifest(&["obligation.enumerate", "obligation.check"])));
+            assert!(!offers_check(&manifest(&["obligation.enumerate"])));
+            assert!(!offers_check(&json::object(vec![])));
+        }
+
+        #[test]
+        fn only_bindings_with_something_to_check_keep_a_session() {
+            let to_check = vec![("t.check".to_owned(), "o1".to_owned())];
+            assert!(needed("t.check", &to_check));
+            assert!(!needed("other", &to_check));
+            assert!(!needed("t.check", &[]));
         }
     }
 
