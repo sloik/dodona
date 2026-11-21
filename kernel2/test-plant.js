@@ -10,6 +10,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 const plant = require('./plant.js');
 
 const done = (status, stdout = '', stderr = '') => ({ status, signal: null, stdout, stderr });
@@ -421,8 +422,10 @@ function batch(t, answers, options = {}) {
   };
   const code = plant.main({ spawn, source, tmp, only: [], otherKernel: source, log: (line) => lines.push(line), remove,
     pause: (ms) => pauses.push(ms), ...options.main });
+  const footer = lines.at(-1);
+  const report = footer?.startsWith('{') ? JSON.parse(footer) : undefined;
   return { code, seen, removed, removedPaths, pauses, calls, tmp, left: fs.readdirSync(tmp).sort(),
-    report: JSON.parse(lines[lines.length - 1]), verdicts: lines.slice(0, -1) };
+    report, verdicts: report === undefined ? lines : lines.slice(0, -1) };
 }
 
 const bothCaught = () => ({ run_kit: [kit([]), kit(['plan/a']), kit(['plan/a']), kit(['plan/b']), kit(['plan/b'])] });
@@ -578,4 +581,87 @@ test('an unchanged copy that cannot be judged is unfinished, and one that is rej
   const rejected = batch(t, { run_kit: [kit(['plan/a'])] });
   assert.deepEqual([rejected.code, rejected.report.caught, rejected.report.finished], [1, 0, true]);
   assert.deepEqual(rejected.left, ['kernel2-plant-other']);
+});
+
+const fixedEntries = () => Array.from({ length: 319 }, (_, at) => ({
+  name: `fixture ${at + 1}`, file: 'rule.js', find: 'a = 1', replace: 'a = 0',
+}));
+const sliceAnswers = (count) => [kit([]), ...Array.from({ length: count * 2 }, () => kit(['plan/a']))];
+
+function shardBatch(t, index, answers, options = {}) {
+  const manifest = JSON.stringify({ defects: options.entries || fixedEntries() });
+  const sha256 = createHash('sha256').update(manifest).digest('hex');
+  const result = batch(t, { run_kit: answers }, {
+    manifest,
+    removeFails: options.removeFails,
+    main: { only: ['--shard', `${index}/5`], shardManifestSha256: options.sha256 || sha256 },
+  });
+  return { ...result, sha256 };
+}
+
+test('fixed shards reconstruct the exact manifest as five separate receipts', (t) => {
+  const entries = fixedEntries().map(({ name }, offset) => ({ index: offset + 1, name }));
+  const covered = [];
+  for (const index of [1, 2, 3, 4, 5]) {
+    const expected = entries.filter((entry) => (entry.index - index) % 5 === 0);
+    const run = shardBatch(t, index, sliceAnswers(expected.length));
+    assert.equal(run.code, 0);
+    assert.deepEqual(run.report, {
+      defects: expected.length, caught: expected.length, missed: 0, stale: 0, broken: 0, unfinished: 0,
+      caught_provisionally: 0, caught_without_mismatch: 0, all_caught: false, finished: true, cleaned_up: true,
+      shard: { index, count: 5 }, inventory: { sha256: run.sha256, count: 319 },
+      covered: expected, baseline_passed: true, shard_passed: true,
+    });
+    assert.equal(run.calls.filter((call) => call === 'run_kit').length, 1 + expected.length * 2);
+    assert.deepEqual(run.left, ['kernel2-plant-other']);
+    covered.push(...run.report.covered);
+  }
+  assert.deepEqual(covered.sort((a, b) => a.index - b.index), entries);
+});
+
+test('fixed shards refuse malformed and mixed selectors before judging', (t) => {
+  for (const only of [
+    ['--shard'], ['--shard=1/5'], ['--shard', '0/5'], ['--shard', '6/5'], ['--shard', '01/5'],
+    ['--shard', '1/1'], ['--shard', '1/5', 'rule.js'], ['rule.js', '--shard', '1/5'],
+    ['--shard', '1/5', '--shard', '2/5'],
+  ]) {
+    const run = batch(t, {}, { main: { only } });
+    assert.equal(run.code, 2, only.join(' '));
+    assert.equal(run.report, undefined);
+    assert.deepEqual([run.calls, run.removedPaths], [[], []]);
+  }
+});
+
+test('fixed shards refuse raw hash, inventory count, and duplicate-name errors before judging', (t) => {
+  const duplicate = fixedEntries();
+  duplicate[1].name = duplicate[0].name;
+  for (const options of [{ sha256: '0'.repeat(64) }, { entries: fixedEntries().slice(0, -1) }, { entries: duplicate }]) {
+    const run = shardBatch(t, 2, [], options);
+    assert.equal(run.code, 2);
+    assert.deepEqual(run.report.shard, { index: 2, count: 5 });
+    assert.deepEqual([run.report.shard_passed, run.report.baseline_passed, run.report.finished], [false, false, false]);
+    assert.deepEqual([run.calls, run.removedPaths, run.report.covered], [[], [], []]);
+  }
+});
+
+test('fixed shards with a lost named replay leave that position uncovered', (t) => {
+  const answers = sliceAnswers(64);
+  answers[2] = kit(['plan/another']);
+  const run = shardBatch(t, 2, answers);
+  assert.equal(run.code, 2);
+  assert.deepEqual([run.report.caught, run.report.unfinished, run.report.baseline_passed, run.report.shard_passed], [63, 1, true, false]);
+  assert.deepEqual(run.report.covered[0], { index: 7, name: 'fixture 7' });
+  assert.equal(run.report.covered.length, 63);
+  assert.match(run.verdicts[0], /^UNFINISHED .*fixture 2$/);
+});
+
+test('fixed shards require both the unchanged baseline and clean teardown', (t) => {
+  const baseline = shardBatch(t, 5, [kit(['plan/a'])]);
+  assert.equal(baseline.code, 1);
+  assert.deepEqual([baseline.report.baseline_passed, baseline.report.shard_passed, baseline.report.covered],
+    [false, false, []]);
+  const cleanup = shardBatch(t, 5, sliceAnswers(63), { removeFails: true });
+  assert.equal(cleanup.code, 2);
+  assert.deepEqual([cleanup.report.baseline_passed, cleanup.report.finished, cleanup.report.cleaned_up, cleanup.report.shard_passed],
+    [true, true, false, false]);
 });

@@ -4,9 +4,12 @@
 // the judges against it.
 //
 //     node kernel2/plant.js [FILE...]
+//     node kernel2/plant.js --shard INDEX/5
 //
 // With FILE names (such as project-status.js), only the defects planted in those files
 // are tried; the unchanged copy is still put to every judge first.
+// A fixed shard takes every fifth defect from INDEX in the pinned manifest. It reports
+// shard_passed for that subset and always leaves the whole-suite all_caught flag false.
 //
 // Per defect it prints
 //   caught      a reporting judge rejected the defective copy with a complete report and,
@@ -32,6 +35,7 @@
 // (SIGKILL, or a signal Node does not catch) can leave its copy behind; the summary then is never
 // printed, so nothing claims it was removed.
 
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -229,38 +233,75 @@ function judgeDefect(copy, defect, counts, spawn) {
   return `caught provisionally (${result.name} exited 1 without a mismatch)`;
 }
 
+const SHARD_COUNT = 5;
+const SHARD_INVENTORY_COUNT = 319;
+const SHARD_MANIFEST_SHA256 = 'f06ffd803d8000ed3821f0b8533f9966ed92fa7af255a5020557637277d71e00';
+
+function shardSelector(args) {
+  if (!args.some((arg) => arg === '--shard' || (typeof arg === 'string' && arg.startsWith('--shard=')))) return null;
+  const match = args.length === 2 && args[0] === '--shard' && /^([1-5])\/5$/.exec(args[1]);
+  return match ? { index: Number(match[1]), count: SHARD_COUNT } : false;
+}
+
+function readShardInventory(file, expectedSha256) {
+  const raw = fs.readFileSync(file);
+  const sha256 = createHash('sha256').update(raw).digest('hex');
+  if (sha256 !== expectedSha256) throw new Error('raw manifest SHA-256 differs from the fixed shard inventory');
+  const defects = readDefects(file, raw.toString('utf8'));
+  const count = defects.length;
+  if (count !== SHARD_INVENTORY_COUNT || new Set(defects.map(({ name }) => name)).size !== count) {
+    throw new Error('the fixed shard inventory must contain 319 distinct defect names');
+  }
+  return { defects, identity: { sha256, count } };
+}
+
 // Runs the batch and returns the exit status. Every argument is for tests; the defaults are the real run.
 function main({
   spawn = spawnSync,
   source = __dirname,
   tmp = os.tmpdir(),
   only = process.argv.slice(2),
+  shardManifestSha256 = SHARD_MANIFEST_SHA256,
   otherKernel = OTHER_KERNEL,
   log = console.log,
   copyTree = (from, to) => fs.cpSync(from, to, { recursive: true }),
   remove = (dir) => fs.rmSync(dir, { recursive: true, force: true }),
   pause = sleep,
 } = {}) {
+  const shard = shardSelector(only);
+  if (shard === false) {
+    log('UNFINISHED: use --shard INDEX/5 alone, with INDEX from 1 to 5');
+    return 2;
+  }
   if (!fs.existsSync(otherKernel)) {
     log(`no kernel to recompute status reports with at ${otherKernel}: build the first kernel, or name one in DODONA_OTHER_KERNEL; nothing was planted`);
     return 2;
   }
   const counts = { caught: 0, missed: 0, stale: 0, broken: 0, unfinished: 0, caught_provisionally: 0, caught_without_mismatch: 0 };
   let defects = [];
+  let inventory = null;
+  const covered = [];
   let finished = false;
+  let baselinePassed = false;
   let baselineRejected = false;
   let cleanedUp = true;
   let copy = null;
   try {
     // A list that is missing or cannot be read leaves the run unfinished; nothing is copied or planted.
-    let listed;
     try {
-      listed = readDefects(path.join(source, 'defects.json'));
+      const file = path.join(source, 'defects.json');
+      if (shard) {
+        const pinned = readShardInventory(file, shardManifestSha256);
+        inventory = pinned.identity;
+        defects = pinned.defects.filter((_, offset) => offset % shard.count === shard.index - 1);
+      } else {
+        const listed = readDefects(file);
+        defects = only.length === 0 ? listed : listed.filter((defect) => only.includes(defect.file));
+      }
     } catch (err) {
       log(`UNFINISHED: the defect list could not be read: ${err && err.message ? err.message : err}; nothing was planted`);
       return summarise();
     }
-    defects = only.length === 0 ? listed : listed.filter((defect) => only.includes(defect.file));
     // Made inside the cleanup's reach, so a copy that fails part of the way is removed too.
     copy = fs.mkdtempSync(path.join(tmp, 'kernel2-plant-'));
     copyTree(source, copy);
@@ -272,7 +313,9 @@ function main({
       baselineRejected = true;
       finished = true;
     } else {
-      for (const defect of defects) {
+      baselinePassed = true;
+      for (const [offset, defect] of defects.entries()) {
+        const caught = counts.caught;
         const file = path.join(copy, defect.file);
         const original = fs.readFileSync(file, 'utf8');
         const parts = original.split(defect.find);
@@ -289,6 +332,9 @@ function main({
             fs.writeFileSync(file, original);
           }
         }
+        if (shard && counts.caught > caught) {
+          covered.push({ index: shard.index + offset * shard.count, name: defect.name });
+        }
         log(`${verdict.padEnd(26)} ${defect.name}`);
       }
       finished = true;
@@ -302,8 +348,13 @@ function main({
 
   function summarise() {
     const all = finished && cleanedUp && !baselineRejected && counts.caught === defects.length && defects.length > 0;
-    log(JSON.stringify({ defects: defects.length, ...counts, all_caught: all, finished, cleaned_up: cleanedUp }));
-    if (all) return 0;
+    const receipt = { defects: defects.length, ...counts, all_caught: !shard && all, finished, cleaned_up: cleanedUp };
+    const shardPassed = all && baselinePassed && covered.length === defects.length;
+    if (shard) {
+      Object.assign(receipt, { shard, inventory, covered, baseline_passed: baselinePassed, shard_passed: shardPassed });
+    }
+    log(JSON.stringify(receipt));
+    if (shard ? shardPassed : all) return 0;
     if (!finished || !cleanedUp || counts.unfinished > 0 || counts.caught_provisionally > 0) return 2;
     return 1;
   }
@@ -311,8 +362,8 @@ function main({
 
 // The defect list: an object whose `defects` is a list of entries, each with a non-empty name, a relative file
 // inside the copy, and the text to find and to put in its place. Anything else throws.
-function readDefects(file) {
-  const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+function readDefects(file, text = fs.readFileSync(file, 'utf8')) {
+  const manifest = JSON.parse(text);
   const defects = manifest !== null && typeof manifest === 'object' ? manifest.defects : undefined;
   if (!Array.isArray(defects)) throw new Error(`${path.basename(file)} has no list of defects`);
   defects.forEach((defect, number) => {

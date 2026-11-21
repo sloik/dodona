@@ -38,9 +38,12 @@ From the repository root:
     python3 tools/run_check_cases.py -- node kernel2/dodona-kernel2.js check
     python3 tools/run_status_cases.py --jobs 3 --kernel <the first kernel> -- node kernel2/dodona-kernel2.js status
     node kernel2/plant.js
+    node kernel2/plant.js --shard 1/5
     node --test kernel2/test-plant.js
 
 `plant.js` copies the kernel, plants defects from `defects.json` one at a time, and judges each copy. Changes to a host or project status module go to the judge for that module first. A rejection counts when the judge reports a complete tally and the same named case rejects on replay. The scenario judge counts `scenarios`, the ledger judge counts `checks`, and the core-key, canonical and path judges count `vectors`. Host-check and status count `judged` with skips tallied separately. The remaining judges count `cases`. If only the unit tests reject a copy, the kit reports a miss. A copy that cannot load is broken. The runner restores each mutation and removes its own temporary copy. Hosted CI exercises this behavior with mocked subprocesses in `test-plant.js`.
+
+The fixed shard selector is `--shard INDEX/5`, with INDEX from 1 to 5. It takes every fifth defect in the pinned 319-entry manifest, starting at that one-based index. Each shard judges the unchanged baseline and replays its named rejections. The final receipt gives the selector, raw manifest digest, and original positions and names of its catches. An exit-0 shard has `baseline_passed`, `shard_passed`, `finished`, and `cleaned_up` true, with `all_caught` false. A full result requires all five disjoint receipts and their exact source provenance.
 
 The status judge uses the first kernel's `scenario` command to recompute the report. Build the first kernel in release mode from the repository's `kernel/` directory, or name its executable with `DODONA_OTHER_KERNEL`. `DODONA_STATUS_JOBS` controls case concurrency and defaults to three. `node kernel2/plant.js FILE...` tries the defects in the named files. The runner starts its judges through `DODONA_PYTHON` when set, or through `python3` on Unix and `python` on Windows.
 
