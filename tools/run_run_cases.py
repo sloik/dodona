@@ -1,6 +1,6 @@
 """Judge a command that runs a project's checks and reports its status (decision 0034).
 
-    python tools/run_run_cases.py --kernel KERNEL... --status "STATUS COMMAND" -- RUN COMMAND...
+    python tools/run_run_cases.py --kernel KERNEL... --status "STATUS COMMAND" [--jobs N] -- RUN COMMAND...
 
 Each case in conformance/project/run-cases.json is a small project, set up afresh, with a provider that enumerates
 and takes checks as the case scripts them (conformance/project/fixture_provider.py) and an executor that answers

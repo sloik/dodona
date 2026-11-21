@@ -115,7 +115,7 @@ def self_test() -> list[str]:
 
 
 def main() -> int:
-    if sys.argv[1:] == ["--self-test"]:
+    if len(sys.argv) == 2 and "--self-test" in sys.argv:
         try:
             problems = self_test()
         except NotValid as err:

@@ -45,7 +45,7 @@ amends:
 - The site's driver keeps deciding whether a batch ended, and says so in the reports it hands back. The kernel decides nothing about the site.
 - The kit's expectations are written from this text and the reference, before either kernel implements them, and a separate reviewer attacks the contract, the reference and the cases before any kernel's author sees them.
 
-- **A key holds only the tools its provider uses.** The tools in an obligation's key, and those handed to its provider when a check starts, are the site's tools that the provider's manifest names. A tool pinned for another provider (the test runner's Node, decision 0035) therefore changes no key of the model checker's, and an upgrade of one provider's tool reruns only that provider's checks.
+- **A key holds only the tools its provider uses.** The tools in an obligation's key, and those handed to its provider when a check starts, are the site's tools that the provider's manifest names. A tool pinned for another provider (for example, the runtime of a test runner) changes no key of the model checker's, and an upgrade of one provider's tool reruns only that provider's checks.
 
 ## What would show this wrong
 

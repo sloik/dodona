@@ -25,6 +25,7 @@ It covers what the formal models cover and no more: obligation status, intent st
 | `provider/misbehaving_provider.py` | A provider that does one thing wrong in each of its modes: garbage, a byte-order mark, a carriage return, bad encoding, an over-long line, half a line, no answer, a late answer, a wrong or repeated answer, a flood on standard error, a process left behind |
 | `provider/cases.json` | What a host must do with it in each mode |
 | `project/cases.json`, `project/fixture_provider.py` | Small projects, each with providers that answer from a file, and what a command reporting the project's status must refuse or report |
+| `project/run-cases.json`, `project/fake_batch_executor.py` | Small projects with scripted batch reports for judging what the run command executes and records |
 | `provider/misbehaving_checker.py` | A checking provider that sends only well-formed messages and breaks one rule a schema cannot express in each of its modes |
 | `provider/check-cases.json` | What a host must do with that checker in each mode |
 | `provider/fake_executor.py` | The executor command the check cases give a host: it records what it was started with and prints the report, or a broken one, that each case asks for |

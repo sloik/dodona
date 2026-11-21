@@ -16,4 +16,4 @@ from intents_md import *  # noqa: E402,F401,F403 - every name of the reader, for
 from intents_md import main  # noqa: E402
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main("--write" in sys.argv))

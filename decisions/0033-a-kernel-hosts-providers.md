@@ -16,6 +16,8 @@ amends:
 
 # 0033. A kernel hosts providers itself, and one status command reports on a project
 
+[Decision 0034](0034-a-kernel-runs-a-project-and-reports-its-status.md) amends this decision with the project-level commands.
+
 ## Context
 
 Decision 0026 made the first host a stage-0 helper, `tools/host.py`, and the first status report another, `tools/status.py`. They join a provider, an executor and a kernel, and they keep the rules a schema cannot express: what a run may start, which files it may name, that a verdict rests on a run and claims no more strength than declared. Those rules are where most of the protection against a provider that misbehaves lies, and they live in a helper written by the same author as the tests that judge them. A kernel is the part of dodona meant to be trusted; the rules belong in it, held to the same kit by two independent kernels.

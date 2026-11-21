@@ -13,6 +13,8 @@ supersedes: []
 
 # 0026. The first host and status command are stage-0 helpers, and a result is keyed by what was measured to have run
 
+[Decision 0034](0034-a-kernel-runs-a-project-and-reports-its-status.md) amends this decision for the kernel's `status` and `run` commands.
+
 ## Context
 
 A kernel could work out status from a scenario, and a model checker ran in CI, but the two had never met: no provider spoke the protocol for real, nothing was written to a ledger, and no status was derived for dodona itself. Joining them needs a program that starts a provider, has runs executed, and passes results to a kernel. The seed kernels do none of that ([0025](0025-the-first-seed-kernel.md)).

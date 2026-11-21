@@ -1,10 +1,10 @@
 """Read dodona's intent files, and write the criteria table each one shows (decision 0028).
 
-The intents provider (provider.py) answers intent.index with what this reads. The commands below
-are run through tools/intents.py:
+The intents provider (provider.py) answers intent.index with what this reads. The same commands
+are available through tools/intents.py:
 
-    python tools/intents.py --write   # rewrite each intent's table from its front matter
-    python tools/intents.py --check   # fail unless every intent file can be read one way only
+    python providers/intents/intents_md.py --write   # rewrite each intent's criteria table
+    python providers/intents/intents_md.py           # fail unless every intent has one reading
 
 An intent's criteria are data, kept in its front matter as one JSON line:
 
@@ -199,9 +199,9 @@ def write(path: pathlib.Path) -> bool:
     return False
 
 
-def main() -> int:
+def main(rewrite: bool = False) -> int:
     paths = sorted((ROOT / "intents").glob("[0-9]*.md"))
-    problems = check_all(paths, "--write" in sys.argv)
+    problems = check_all(paths, rewrite)
     for problem in problems:
         print(problem)
     print(json.dumps({"intents": len(paths), "readable": len(paths) - len(problems)}))
@@ -227,4 +227,4 @@ def check_all(paths: list[pathlib.Path], rewrite: bool = False) -> list[str]:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main("--write" in sys.argv))
