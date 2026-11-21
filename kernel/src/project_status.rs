@@ -2593,6 +2593,548 @@ mod run_input {
             .collect())
     }
 
+    // Step 12. The site's executor, run as a process.
+
+    use std::io::{Read as IoRead, Write as IoWrite};
+    use std::sync::mpsc;
+
+    /// A started executor as a batch waits for it: whether it has exited, and
+    /// if so whether with status 0; and ending it with all it started.
+    pub(super) trait Started {
+        fn exit_status(&mut self) -> Option<bool>;
+        fn end_tree(&mut self);
+    }
+    impl Started for Tree {
+        fn exit_status(&mut self) -> Option<bool> {
+            match self.child.try_wait() {
+                Ok(Some(status)) => Some(status.success()),
+                Ok(None) => None,
+                Err(_) => Some(false),
+            }
+        }
+        fn end_tree(&mut self) {
+            self.end();
+        }
+    }
+
+    /// The first line of what a reader gives, without its line feed, read to
+    /// the end: what follows the first line is read and dropped, never parsed
+    /// or kept, so an executor that writes more is not stopped from exiting.
+    /// The first line is kept whole, however long. None when there is no line
+    /// feed at all or reading fails.
+    pub(super) fn first_line_of(mut out: impl IoRead) -> Option<Vec<u8>> {
+        let mut line = Vec::new();
+        let mut found = false;
+        let mut buf = [0u8; 8192];
+        loop {
+            match out.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) if !found => match buf[..n].iter().position(|b| *b == b'\n') {
+                    Some(p) => {
+                        line.extend_from_slice(&buf[..p]);
+                        found = true;
+                    }
+                    None => line.extend_from_slice(&buf[..n]),
+                },
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(_) => return None,
+            }
+        }
+        found.then_some(line)
+    }
+
+    /// What an executor that exited and closed its output answered: one JSON
+    /// object, read strictly, as its first line, ended by a line feed alone,
+    /// with no byte-order mark. Anything else, or a status other than 0, is
+    /// `Failed`, which the batch reads as `unavailable`.
+    pub(super) fn judge_output(success: bool, line: Option<&[u8]>) -> Batch {
+        let line = match (success, line) {
+            (true, Some(l)) => l,
+            _ => return Batch::Failed,
+        };
+        if line.is_empty() || line.ends_with(b"\r") || line.starts_with(b"\xEF\xBB\xBF") {
+            return Batch::Failed;
+        }
+        match std::str::from_utf8(line).ok().map(wire::strict) {
+            Some(Ok(v @ Value::Object(_))) => Batch::Answered(v),
+            _ => Batch::Failed,
+        }
+    }
+
+    /// Give a started executor its input and wait, under one deadline for all
+    /// of it, for both its own exit and the end of its output. Writing the
+    /// input and reading the output run beside the wait, so neither can hold
+    /// it past `until`: an executor that does not read, or a process it
+    /// started that keeps its output open, ends the batch as `TimedOut`. On
+    /// every way out the executor is ended with everything it started, and
+    /// nothing else.
+    pub(super) fn await_batch(
+        started: &mut dyn Started,
+        stdin: Option<Box<dyn IoWrite + Send>>,
+        stdout: Box<dyn IoRead + Send>,
+        input: Vec<u8>,
+        until: Instant,
+    ) -> Batch {
+        await_batch_reaped(started, stdin, stdout, input, until, REAP_LIMIT).0
+    }
+
+    /// How long, once the executor's own group or job has been ended, the
+    /// threads that wrote its input and read its output are waited for. Ending
+    /// the group or job closes every end of the two pipes its processes held,
+    /// so each thread then finishes at once: its write fails or its read ends.
+    /// One still blocked after this means a process that left the group or job
+    /// holds a pipe, which the contract puts beyond what a host can promise to
+    /// end; waiting for it could last for ever, so the thread is left to finish
+    /// on its own. It owns only its pipe end and a sender nobody reads.
+    const REAP_LIMIT: Duration = Duration::from_secs(2);
+
+    /// Wait up to `limit` for every worker, and join each that has finished.
+    /// Whether all of them were joined.
+    fn reap(workers: Vec<std::thread::JoinHandle<()>>, limit: Duration) -> bool {
+        let until = Instant::now() + limit;
+        while workers.iter().any(|w| !w.is_finished()) && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let mut all = true;
+        for w in workers {
+            if w.is_finished() {
+                let _ = w.join();
+            } else {
+                all = false;
+            }
+        }
+        all
+    }
+
+    /// `await_batch`, and whether every worker thread was joined.
+    ///
+    /// A batch is answered only when, all observed no later than `until`:
+    /// the whole input was written and the executor's input closed; the
+    /// executor exited; and its output ended. A write that fails is `Failed`
+    /// (the executor did not get its batch, whatever it printed); anything not
+    /// all observed by `until` is `TimedOut`, even if it happened while the
+    /// wait was between two looks.
+    fn await_batch_reaped(
+        started: &mut dyn Started,
+        stdin: Option<Box<dyn IoWrite + Send>>,
+        stdout: Box<dyn IoRead + Send>,
+        input: Vec<u8>,
+        until: Instant,
+        limit: Duration,
+    ) -> (Batch, bool) {
+        let mut workers = Vec::new();
+        let (wtx, wrx) = mpsc::channel();
+        match stdin {
+            Some(mut w) => workers.push(std::thread::spawn(move || {
+                let written = w.write_all(&input).and_then(|_| w.flush()).is_ok();
+                // Dropped before the receipt, so the executor has seen its input end.
+                drop(w);
+                let _ = wtx.send(written);
+            })),
+            // No way to give the input: the receipt can never come.
+            None => drop(wtx),
+        }
+        let (otx, orx) = mpsc::channel();
+        workers.push(std::thread::spawn(move || {
+            let _ = otx.send(first_line_of(stdout));
+        }));
+        let mut written: Option<bool> = None;
+        let mut status: Option<bool> = None;
+        let mut line: Option<Option<Vec<u8>>> = None;
+        let outcome = loop {
+            if written.is_none() {
+                match wrx.try_recv() {
+                    Ok(ok) => written = Some(ok),
+                    // No input to give, or a writer that ended without a receipt.
+                    Err(mpsc::TryRecvError::Disconnected) => written = Some(false),
+                    Err(mpsc::TryRecvError::Empty) => {}
+                }
+            }
+            if status.is_none() {
+                status = started.exit_status();
+            }
+            if line.is_none() {
+                match orx.try_recv() {
+                    Ok(l) => line = Some(l),
+                    Err(mpsc::TryRecvError::Disconnected) => line = Some(None),
+                    Err(mpsc::TryRecvError::Empty) => {}
+                }
+            }
+            // What was seen counts only if it was seen by the deadline.
+            let seen_at = Instant::now();
+            if seen_at > until {
+                break Batch::TimedOut;
+            }
+            if written == Some(false) {
+                break Batch::Failed;
+            }
+            if let (Some(true), Some(success), Some(l)) = (written, status, &line) {
+                break judge_output(success, l.as_deref());
+            }
+            std::thread::sleep(Duration::from_millis(5).min(until - seen_at));
+        };
+        started.end_tree();
+        (outcome, reap(workers, limit))
+    }
+
+    /// The executor command, started once per batch in `root`, in a process
+    /// group (Unix) or job (Windows) of its own.
+    pub(super) struct Native<'a> {
+        pub(super) command: &'a [String],
+        pub(super) root: &'a Path,
+    }
+    impl Executor for Native<'_> {
+        fn batch(&mut self, runs: &Value, wait: Duration) -> Batch {
+            let until = Instant::now() + wait;
+            let (program, args) = match self.command.split_first() {
+                Some(p) => p,
+                None => return Batch::Failed,
+            };
+            let spawned = Tree::spawn(
+                Command::new(program)
+                    .args(args)
+                    .current_dir(self.root)
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::null()),
+            );
+            // One that cannot start, or could not be confined and has been
+            // ended, answers nothing: `unavailable`.
+            let mut tree = match spawned {
+                Ok(t) => t,
+                Err(_) => return Batch::Failed,
+            };
+            let stdin = tree
+                .child
+                .stdin
+                .take()
+                .map(|w| Box::new(w) as Box<dyn IoWrite + Send>);
+            let stdout = match tree.child.stdout.take() {
+                Some(r) => r,
+                None => return Batch::Failed, // `tree` is ended as it is dropped
+            };
+            let input = json::encode(runs).into_bytes();
+            await_batch(&mut tree, stdin, Box::new(stdout), input, until)
+        }
+    }
+
+    #[cfg(test)]
+    mod executor_tests {
+        use super::*;
+        use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+        use std::sync::{Arc, Mutex};
+
+        /// Opened when the fake tree is ended, as ending a real tree closes
+        /// the pipe ends its processes held: what waits on it is let go.
+        #[derive(Clone)]
+        struct Gate(Arc<(Mutex<bool>, std::sync::Condvar)>);
+        impl Gate {
+            fn new() -> Gate {
+                Gate(Arc::new((Mutex::new(false), std::sync::Condvar::new())))
+            }
+            fn open(&self) {
+                *self.0 .0.lock().unwrap() = true;
+                self.0 .1.notify_all();
+            }
+            fn wait(&self) {
+                let mut open = self.0 .0.lock().unwrap();
+                while !*open {
+                    open = self.0 .1.wait(open).unwrap();
+                }
+            }
+        }
+        /// A started executor, scripted: it exits at a set time, or never.
+        struct Fake {
+            exits: Option<(Instant, bool)>,
+            ended: Arc<AtomicBool>,
+            gate: Gate,
+        }
+        impl Started for Fake {
+            fn exit_status(&mut self) -> Option<bool> {
+                self.exits.filter(|(at, _)| Instant::now() >= *at).map(|(_, ok)| ok)
+            }
+            fn end_tree(&mut self) {
+                self.ended.store(true, AtomicOrdering::SeqCst);
+                self.gate.open();
+            }
+        }
+        fn fake(exits: Option<(Duration, bool)>) -> (Fake, Arc<AtomicBool>, Gate) {
+            let ended = Arc::new(AtomicBool::new(false));
+            let gate = Gate::new();
+            let f = Fake {
+                exits: exits.map(|(after, ok)| (Instant::now() + after, ok)),
+                ended: ended.clone(),
+                gate: gate.clone(),
+            };
+            (f, ended, gate)
+        }
+        /// Output that gives some bytes and then does not end until the tree
+        /// is ended: a process the executor started still holds it open.
+        struct HeldOpen {
+            first: Vec<u8>,
+            gate: Gate,
+        }
+        impl IoRead for HeldOpen {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                if !self.first.is_empty() {
+                    let n = self.first.len().min(buf.len());
+                    buf[..n].copy_from_slice(&self.first[..n]);
+                    self.first.drain(..n);
+                    return Ok(n);
+                }
+                self.gate.wait();
+                Ok(0)
+            }
+        }
+        fn held_open(first: &[u8], gate: &Gate) -> Box<dyn IoRead + Send> {
+            Box::new(HeldOpen { first: first.to_vec(), gate: gate.clone() })
+        }
+        /// Input nobody reads: a write blocks until the tree is ended, and then
+        /// fails, as a write to a pipe whose reader is gone does.
+        struct NeverRead(Gate);
+        impl IoWrite for NeverRead {
+            fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+                self.0.wait();
+                Err(std::io::ErrorKind::BrokenPipe.into())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        /// Input whose reader is already gone: every write fails at once.
+        struct Broken;
+        impl IoWrite for Broken {
+            fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::ErrorKind::BrokenPipe.into())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        fn writer(w: impl IoWrite + Send + 'static) -> Option<Box<dyn IoWrite + Send>> {
+            Some(Box::new(w))
+        }
+        fn kept() -> (Option<Box<dyn IoWrite + Send>>, Arc<Mutex<Vec<u8>>>) {
+            let bytes = Arc::new(Mutex::new(Vec::new()));
+            (writer(Kept(bytes.clone())), bytes)
+        }
+        const ANSWER: &[u8] = b"{\"ended\":true,\"reports\":[]}\n";
+        /// The batch, with whether every worker was joined in the reap limit.
+        fn awaited(
+            f: &mut Fake,
+            stdin: Option<Box<dyn IoWrite + Send>>,
+            stdout: Box<dyn IoRead + Send>,
+            input: &[u8],
+            until: Instant,
+        ) -> (String, bool) {
+            let (b, joined) = await_batch_reaped(f, stdin, stdout, input.to_vec(), until, REAP_LIMIT);
+            (kind(&b), joined)
+        }
+        /// Input that keeps what it is given.
+        struct Kept(Arc<Mutex<Vec<u8>>>);
+        impl IoWrite for Kept {
+            fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(b);
+                Ok(b.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        /// A reader that gives one byte at a time, so a line feed can fall anywhere.
+        struct Trickle(std::io::Cursor<Vec<u8>>);
+        impl IoRead for Trickle {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                let n = 1.min(buf.len());
+                self.0.read(&mut buf[..n])
+            }
+        }
+        fn out(bytes: &[u8]) -> Box<dyn IoRead + Send> {
+            Box::new(std::io::Cursor::new(bytes.to_vec()))
+        }
+        fn soon() -> Instant {
+            Instant::now() + Duration::from_millis(300)
+        }
+        fn kind(b: &Batch) -> String {
+            match b {
+                Batch::Failed => "failed".into(),
+                Batch::TimedOut => "timed-out".into(),
+                Batch::Answered(v) => json::encode(v),
+            }
+        }
+
+        #[test]
+        fn the_first_line_is_kept_and_the_rest_is_drained_unread() {
+            let text = b"{\"ended\":true,\"reports\":[]}\nnot json {{{ \xff\nmore";
+            assert_eq!(first_line_of(&text[..]).as_deref(), Some(&b"{\"ended\":true,\"reports\":[]}"[..]));
+            let trickled = first_line_of(Trickle(std::io::Cursor::new(text.to_vec())));
+            assert_eq!(trickled.as_deref(), Some(&b"{\"ended\":true,\"reports\":[]}"[..]));
+            // No line feed at all: no answer.
+            assert_eq!(first_line_of(&b"{\"ended\":true}"[..]), None);
+            // A first line of any length is kept whole.
+            let long = format!("{{\"ended\":true,\"pad\":\"{}\"}}\n", "x".repeat(200_000));
+            assert_eq!(first_line_of(long.as_bytes()).map(|l| l.len()), Some(long.len() - 1));
+        }
+
+        #[test]
+        fn only_a_strict_object_line_after_a_clean_exit_is_an_answer() {
+            fn judged(success: bool, line: &[u8]) -> String {
+                kind(&judge_output(success, Some(line)))
+            }
+            let ok = br#"{"ended":true,"reports":[]}"#;
+            assert_eq!(judged(true, ok), r#"{"ended":true,"reports":[]}"#);
+            // An exit status other than 0, whatever was printed.
+            assert_eq!(judged(false, ok), "failed");
+            // No line, an empty line, a carriage return, a byte-order mark.
+            assert_eq!(kind(&judge_output(true, None)), "failed");
+            assert_eq!(judged(true, b""), "failed");
+            assert_eq!(judged(true, b"{\"ended\":true,\"reports\":[]}\r"), "failed");
+            assert_eq!(judged(true, b"\xEF\xBB\xBF{\"ended\":true,\"reports\":[]}"), "failed");
+            // Read strictly: a key twice, a fraction, not an object, not UTF-8.
+            assert_eq!(judged(true, br#"{"ended":true,"ended":true,"reports":[]}"#), "failed");
+            assert_eq!(judged(true, br#"{"ended":true,"reports":[],"n":1.0}"#), "failed");
+            assert_eq!(judged(true, b"[]"), "failed");
+            assert_eq!(judged(true, b"{\"a\":\"\xff\"}"), "failed");
+        }
+
+        #[test]
+        fn a_batch_ends_when_its_input_is_written_the_executor_exits_and_its_output_ends() {
+            // Trailing output after the answer is drained, not read.
+            let (mut f, ended, _) = fake(Some((Duration::ZERO, true)));
+            let (stdin, given) = kept();
+            let (b, joined) = awaited(
+                &mut f,
+                stdin,
+                out(b"{\"ended\":true,\"reports\":[]}\ntrailing, not json\n"),
+                b"{\"runs\":[]}",
+                soon(),
+            );
+            assert_eq!(b, r#"{"ended":true,"reports":[]}"#);
+            // The receipt came before the answer counted, so the input is all there.
+            assert_eq!(given.lock().unwrap().as_slice(), b"{\"runs\":[]}");
+            assert!(ended.load(AtomicOrdering::SeqCst));
+            assert!(joined);
+        }
+
+        #[test]
+        fn an_answer_does_not_count_while_the_input_is_still_being_written() {
+            // The executor exits 0 and its output ends with a good answer, but
+            // the write of its input has not completed: no answer, and when the
+            // deadline passes the batch is an error; ending the tree lets the
+            // blocked writer go, and it is joined.
+            let (mut f, ended, gate) = fake(Some((Duration::ZERO, true)));
+            let (b, joined) = awaited(&mut f, writer(NeverRead(gate)), out(ANSWER), &[b'x'; 64], soon());
+            assert_eq!(b, "timed-out");
+            assert!(ended.load(AtomicOrdering::SeqCst));
+            assert!(joined);
+        }
+
+        #[test]
+        fn a_failed_write_is_not_an_answer() {
+            let (mut f, ended, _) = fake(Some((Duration::ZERO, true)));
+            let (b, joined) = awaited(&mut f, writer(Broken), out(ANSWER), b"{\"runs\":[]}", soon());
+            assert_eq!(b, "failed");
+            assert!(ended.load(AtomicOrdering::SeqCst) && joined);
+            // No way to give the input at all is the same.
+            let (mut f, _, _) = fake(Some((Duration::ZERO, true)));
+            assert_eq!(awaited(&mut f, None, out(ANSWER), b"{}", soon()).0, "failed");
+            assert!(matches!(fates(&Batch::Failed, &["k".to_owned()])[0], Fate::Verdict("unavailable")));
+        }
+
+        #[test]
+        fn a_completion_first_seen_after_the_deadline_does_not_count() {
+            // Everything is ready, but the deadline has already passed when it
+            // is first looked at.
+            let (mut f, ended, _) = fake(Some((Duration::ZERO, true)));
+            let (stdin, _) = kept();
+            let past = Instant::now();
+            std::thread::sleep(Duration::from_millis(20));
+            let (b, joined) = awaited(&mut f, stdin, out(ANSWER), b"{}", past);
+            assert_eq!(b, "timed-out");
+            assert!(ended.load(AtomicOrdering::SeqCst) && joined);
+        }
+
+        #[test]
+        fn an_exit_status_other_than_0_is_unavailable() {
+            let (mut f, ended, _) = fake(Some((Duration::ZERO, false)));
+            let (stdin, _) = kept();
+            let (b, joined) = awaited(&mut f, stdin, out(ANSWER), b"{}", soon());
+            assert_eq!(b, "failed");
+            assert!(ended.load(AtomicOrdering::SeqCst) && joined);
+        }
+
+        #[test]
+        fn an_executor_that_does_not_exit_in_time_is_an_error_for_the_batch() {
+            let (mut f, ended, _) = fake(None);
+            let (stdin, _) = kept();
+            let (b, joined) = awaited(&mut f, stdin, out(ANSWER), b"{}", soon());
+            assert_eq!(b, "timed-out");
+            assert!(ended.load(AtomicOrdering::SeqCst) && joined);
+            assert!(matches!(fates(&Batch::TimedOut, &["k".to_owned()])[0], Fate::Verdict("error")));
+        }
+
+        #[test]
+        fn a_process_left_holding_the_output_keeps_the_batch_waiting_until_the_deadline() {
+            // The executor has exited with 0, its input was written and it
+            // printed a good answer, but a process it started holds its output
+            // open: no end of output by the deadline, so the batch is an error.
+            // Ending the tree closes the output, and the reader is joined.
+            let (mut f, ended, gate) = fake(Some((Duration::ZERO, true)));
+            let (stdin, _) = kept();
+            let begun = Instant::now();
+            let (b, joined) = awaited(&mut f, stdin, held_open(ANSWER, &gate), b"{}", soon());
+            assert_eq!(b, "timed-out");
+            assert!(begun.elapsed() >= Duration::from_millis(250));
+            assert!(ended.load(AtomicOrdering::SeqCst) && joined);
+        }
+
+        #[test]
+        fn an_executor_that_never_reads_its_input_cannot_hold_the_batch() {
+            let (mut f, ended, gate) = fake(None);
+            let (b, joined) = awaited(
+                &mut f,
+                writer(NeverRead(gate.clone())),
+                held_open(b"", &gate),
+                &vec![b'x'; 1 << 20],
+                soon(),
+            );
+            assert_eq!(b, "timed-out");
+            assert!(ended.load(AtomicOrdering::SeqCst) && joined);
+        }
+
+        #[test]
+        fn a_worker_kept_blocked_by_an_escaped_process_is_not_waited_for_without_end() {
+            // A gate nobody opens: a process outside the tree holds the pipe.
+            // The batch still ends at its deadline, and the reap gives up after
+            // its limit rather than waiting for ever.
+            let (mut f, _, _) = fake(None);
+            let escaped = Gate::new();
+            let begun = Instant::now();
+            let (b, joined) = await_batch_reaped(
+                &mut f,
+                writer(Kept(Arc::new(Mutex::new(Vec::new())))),
+                held_open(b"", &escaped),
+                b"{}".to_vec(),
+                Instant::now() + Duration::from_millis(50),
+                Duration::from_millis(100),
+            );
+            assert_eq!(kind(&b), "timed-out");
+            assert!(!joined);
+            assert!(begun.elapsed() < Duration::from_secs(2));
+            // Let the one worker this test leaves go, so it does not outlive the test.
+            escaped.open();
+        }
+
+        #[test]
+        fn an_executor_that_cannot_start_is_unavailable() {
+            let empty: [String; 0] = [];
+            let mut none = Native { command: &empty, root: Path::new(".") };
+            let b = none.batch(&json::object(vec![("runs", Value::Array(vec![]))]), Duration::from_millis(100));
+            assert_eq!(kind(&b), "failed");
+        }
+    }
+
     #[cfg(test)]
     mod check_tests {
         use super::*;
