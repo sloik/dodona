@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-40-repaired-c37-proof'
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -149,6 +150,7 @@ jobs:
   # planted in each kernel in turn and the kit must reject it. Slow, so it has
   # its own job.
   planted-defects:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-40-repaired-c37-proof'
     strategy:
       fail-fast: false
       matrix:
@@ -173,3 +175,131 @@ jobs:
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every listed defect and check some judge rejects each
         run: ${{ matrix.run }}
+
+  # One-off, proposed (claim C37): both kernels compared with the model's own answer on every state of the two
+  # dump models, read from the lists of states that one finished run of models.yml on main kept as an artifact.
+  # No model checker runs here and no state is generated: the states are the retained ones, fetched by a fixed
+  # artifact id and checked against fixed digests, never "the latest". It is not a rerun on the shared queue and
+  # not a cache hit. The comparison runs by manual dispatch on its disposable proof branch.
+  c37-retained-states:
+    name: C37 both kernels on retained model states (one-off)
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
+      && github.ref == 'refs/heads/dodona-eight-40-repaired-c37-proof'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read   # to read the retained artifact of models.yml
+    env:
+      SOURCE_RUN: "44626497885"
+      SOURCE_SHA: c8396c4ffb5a4d65be3fa9bb3ac552905d287fcc
+      ARTIFACT_ID: "14581497930"
+      ARTIFACT_NAME: model-run
+      ZIP_SHA256: 91f80537732663bdde8ed47ab17e7f415eb6f5311450dad683c321468e3f6fb5
+      KERNEL_DUMP_SHA256: 23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4
+      INTENT_DUMP_SHA256: cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d
+      KERNEL_STATES: "71744"
+      INTENT_STATES: "78894"
+      PR_HEAD: ${{ github.sha }}
+    steps:
+      # The dispatched commit, with the history needed to compare it with the
+      # commit the retained run checked out.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The dump models, their settings and the comparison tool are as the retained run had them
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$PR_HEAD"
+          git cat-file -e "$SOURCE_SHA^{commit}" || git fetch --no-tags --quiet origin "$SOURCE_SHA"
+          git diff --exit-code --stat "$SOURCE_SHA" HEAD -- spec/kernel spec/intent tools/check_states.py
+      - name: Fetch the retained artifact by id, check where it came from and its digests, take out only the four files
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          E="$RUNNER_TEMP/c37-evidence"; D="$RUNNER_TEMP/c37-retained"
+          mkdir -p "$E" "$D"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" > "$D/artifact.json"
+          jq -e --arg name "$ARTIFACT_NAME" --arg run "$SOURCE_RUN" --arg sha "$SOURCE_SHA" \
+            '.name == $name and .expired == false and (.workflow_run.id | tostring) == $run
+             and .workflow_run.head_sha == $sha and .workflow_run.head_branch == "main"
+             and .workflow_run.repository_id == .workflow_run.head_repository_id' "$D/artifact.json" > /dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$D/run.json"
+          jq -e --arg sha "$SOURCE_SHA" --arg repo "$GITHUB_REPOSITORY" \
+            '.status == "completed" and .conclusion == "success" and (.event == "push" or .event == "workflow_dispatch") and .head_branch == "main"
+             and .head_sha == $sha and .head_repository.full_name == $repo and .repository.full_name == $repo
+             and .path == ".github/workflows/models.yml"' "$D/run.json" > /dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$D/model-run.zip"
+          echo "$ZIP_SHA256  $D/model-run.zip" | sha256sum --check --strict
+          unzip -Z1 "$D/model-run.zip" > "$D/members.txt"
+          for model in kernel intent; do
+            mkdir -p "$D/$model"
+            for file in dump.states.dump dump.exit; do
+              member="out/runs/outputs/$model/$file"
+              test "$(grep -cxF "$member" "$D/members.txt")" = 1
+              unzip -p "$D/model-run.zip" "$member" > "$D/$model/$file"
+            done
+            test "$(tr -d '[:space:]' < "$D/$model/dump.exit")" = 0
+          done
+          echo "$KERNEL_DUMP_SHA256  $D/kernel/dump.states.dump" | sha256sum --check --strict
+          echo "$INTENT_DUMP_SHA256  $D/intent/dump.states.dump" | sha256sum --check --strict
+          jq -n --arg pr_head "$PR_HEAD" --arg repo "$GITHUB_REPOSITORY" --arg run "$SOURCE_RUN" --arg sha "$SOURCE_SHA" \
+            --arg artifact "$ARTIFACT_ID" --arg name "$ARTIFACT_NAME" --arg zip "$ZIP_SHA256" \
+            --arg kernel "$KERNEL_DUMP_SHA256" --arg intent "$INTENT_DUMP_SHA256" \
+            --arg this_run "$GITHUB_RUN_ID" --arg this_attempt "$GITHUB_RUN_ATTEMPT" \
+            '{compared_at: $pr_head, this_run: $this_run, this_attempt: $this_attempt,
+              what: "both kernels compared with retained model states; no model checker ran and no state was generated in this job; not a rerun on the shared queue",
+              source: {repository: $repo, workflow: ".github/workflows/models.yml", run: $run, commit: $sha,
+                       artifact: {id: $artifact, name: $name, zip_sha256: $zip},
+                       members: {"out/runs/outputs/kernel/dump.states.dump": $kernel,
+                                 "out/runs/outputs/intent/dump.states.dump": $intent},
+                       exit_files: {"out/runs/outputs/kernel/dump.exit": "0", "out/runs/outputs/intent/dump.exit": "0"}},
+              unchanged_since_source: ["spec/kernel", "spec/intent", "tools/check_states.py"]}' > "$E/provenance.json"
+      - name: Build the seed kernel
+        run: cargo build --release --locked --manifest-path kernel/Cargo.toml
+      - name: First kernel, evidence reuse, every retained state
+        shell: bash
+        run: |
+          out="$RUNNER_TEMP/c37-evidence/first-kernel-evidence.txt"
+          python3 tools/check_states.py --model kernel --dump "$RUNNER_TEMP/c37-retained/kernel/dump.states.dump" --settings spec/kernel/dump-settings.json -- kernel/target/release/dodona-kernel | tee "$out"
+          tail -n 1 "$out" | jq -e --argjson n "$KERNEL_STATES" '.model == "kernel" and .states == $n and .differences == 0 and .all_agree == true' > /dev/null
+      - name: First kernel, intent delivery, every retained state
+        shell: bash
+        run: |
+          out="$RUNNER_TEMP/c37-evidence/first-kernel-intent.txt"
+          python3 tools/check_states.py --model intent --dump "$RUNNER_TEMP/c37-retained/intent/dump.states.dump" --settings spec/intent/dump-settings.json -- kernel/target/release/dodona-kernel | tee "$out"
+          tail -n 1 "$out" | jq -e --argjson n "$INTENT_STATES" '.model == "intent" and .states == $n and .differences == 0 and .all_agree == true' > /dev/null
+      - name: Second kernel, evidence reuse, every retained state
+        shell: bash
+        run: |
+          out="$RUNNER_TEMP/c37-evidence/second-kernel-evidence.txt"
+          python3 tools/check_states.py --model kernel --dump "$RUNNER_TEMP/c37-retained/kernel/dump.states.dump" --settings spec/kernel/dump-settings.json -- node kernel2/dodona-kernel2.js | tee "$out"
+          tail -n 1 "$out" | jq -e --argjson n "$KERNEL_STATES" '.model == "kernel" and .states == $n and .differences == 0 and .all_agree == true' > /dev/null
+      - name: Second kernel, intent delivery, every retained state
+        shell: bash
+        run: |
+          out="$RUNNER_TEMP/c37-evidence/second-kernel-intent.txt"
+          python3 tools/check_states.py --model intent --dump "$RUNNER_TEMP/c37-retained/intent/dump.states.dump" --settings spec/intent/dump-settings.json -- node kernel2/dodona-kernel2.js | tee "$out"
+          tail -n 1 "$out" | jq -e --argjson n "$INTENT_STATES" '.model == "intent" and .states == $n and .differences == 0 and .all_agree == true' > /dev/null
+      # Reached only when all four comparisons above exited 0 with every state in agreement.
+      - name: Record the commit, the digest of every input file of both kernels, the built kernel and the tool versions
+        shell: bash
+        run: |
+          E="$RUNNER_TEMP/c37-evidence"
+          git rev-parse HEAD > "$E/head.txt"
+          git ls-files -z -- kernel kernel2 spec/kernel spec/intent tools/check_states.py | xargs -0 sha256sum > "$E/input-files.sha256"
+          sha256sum kernel/target/release/dodona-kernel > "$E/built-kernel.sha256"
+          { rustc --version; cargo --version; node --version; python3 --version; } > "$E/tool-versions.txt"
+          echo "all four comparisons agreed on every retained state" > "$E/complete.txt"
+      # The results and digests only: the lists of states stay out, and nothing here holds a token.
+      - name: Keep the comparison results
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: c37-retained-states-comparison
+          path: ${{ runner.temp }}/c37-evidence
+          if-no-files-found: error
+          retention-days: 90
