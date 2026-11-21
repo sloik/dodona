@@ -239,10 +239,19 @@ def main() -> int:
         # A held lock.
         held = fresh("held.ledger", good)
         lock = pathlib.Path(str(held) + ".lock")
-        lock.write_text("held by the judge\n", encoding="ascii")
+        marker = b"held by the judge\n"
+        lock.write_bytes(marker)
         refused = ask(command, "ledger-append", {"ledger": str(held), "kind": "evidence", "body": {}, "wait_ms": 300})
-        check("a held lock refuses an append", refused == {"refused": "locked"} and held.read_bytes() == good, str(refused))
-        lock.unlink()
+        unchanged = held.read_bytes() == good
+        try:
+            observed_marker = lock.read_bytes()
+        except FileNotFoundError:
+            observed_marker = None
+        intact = observed_marker == marker
+        check("a held lock refuses an append", refused == {"refused": "locked"} and unchanged and intact,
+              f"answered {refused}; ledger unchanged: {unchanged}; marker intact: {intact}")
+        # A wrong answer may already have removed the fixture's marker.
+        lock.unlink(missing_ok=observed_marker is None)
 
         # Two writers at once.
         shared = folder / "shared.ledger"
