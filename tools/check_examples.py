@@ -1,4 +1,4 @@
-"""Validate the schemas, the provider guide's examples and dodona's own policy.
+"""Validate the schemas, provider guide examples, policy and project intent criteria.
 
     python tools/check_examples.py
 
@@ -7,8 +7,8 @@ third-party package, `jsonschema`, because a JSON Schema validator is not in
 the standard library. It runs in CI with a pinned version. Without the package
 it says so and fails: a check that silently does nothing is not a check.
 
-Exit status is 0 only if every schema is valid, every JSON line in
-docs/writing-a-provider.md is a valid message, and policy.toml is a valid policy.
+Exit status is 0 only if the schemas, messages, policy, and criteria validate
+and the project criteria schema accepts the positive and refuses the negative control.
 """
 from __future__ import annotations
 
@@ -18,6 +18,34 @@ import sys
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+INTENT_CRITERIA_SCHEMA = "project-intent-criteria.schema.json"
+
+
+def check_intent_criteria(validator) -> tuple[int, list[str]]:
+    """Check the decoded criteria value separately from the Markdown reader's criteria rules."""
+    import intents
+
+    problems = []
+    paths = sorted((ROOT / "intents").glob("[0-9]*.md"))
+    if not paths:
+        problems.append("no project intent files found")
+    for path in paths:
+        name = path.relative_to(ROOT)
+        try:
+            front, _ = intents.front(path.read_text(encoding="utf-8"))
+            criteria = json.loads(front["criteria"])
+        except (intents.Unreadable, KeyError, json.JSONDecodeError, OSError) as err:
+            problems.append(f"{name}: could not decode criteria: {err}")
+            continue
+        for err in validator.iter_errors(criteria):
+            problems.append(f"{name}: criteria{err.json_path[1:]}: {err.message}")
+
+    deferred = {"id": "1", "words": "Replay the sample", "gate": "deferred", "condition": "the sample is replayed"}
+    if not validator.is_valid([dict(deferred, limit_days=90)]):
+        problems.append("project intent criteria schema refuses a deferred criterion with a valid observation and limit")
+    if validator.is_valid([deferred]):
+        problems.append("project intent criteria schema accepts a deferred criterion without limit_days")
+    return len(paths), problems
 
 
 def main() -> int:
@@ -57,9 +85,16 @@ def main() -> int:
     policy = tomllib.loads((ROOT / "policy.toml").read_text(encoding="utf-8"))
     for err in jsonschema.Draft202012Validator(schemas["policy.schema.json"], registry=registry).iter_errors(policy):
         problems.append(f"policy.toml: {err.message[:160]}")
+    intent_files = 0
+    if INTENT_CRITERIA_SCHEMA not in schemas:
+        problems.append(f"{INTENT_CRITERIA_SCHEMA}: missing schema")
+    else:
+        criteria = jsonschema.Draft202012Validator(schemas[INTENT_CRITERIA_SCHEMA], registry=registry)
+        intent_files, intent_problems = check_intent_criteria(criteria)
+        problems.extend(intent_problems)
     for line in problems:
         print("PROBLEM", line)
-    print(json.dumps({"schemas": len(schemas), "examples": examples, "problems": len(problems)}))
+    print(json.dumps({"schemas": len(schemas), "examples": examples, "intent_files": intent_files, "problems": len(problems)}))
     return 1 if problems else 0
 
 

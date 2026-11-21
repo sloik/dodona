@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sloik/dodona/protocol/project-intent-criteria.schema.json",
+  "title": "Project intent criteria",
+  "description": "The decoded criteria value in a dodona project intent file. The Markdown reader checks the source spelling, unique criterion IDs and the rendered criteria table.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "required": ["id", "words", "gate"],
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "words": {
+        "type": "string",
+        "minLength": 1
+      },
+      "gate": {
+        "enum": ["hard", "soft", "deferred"]
+      },
+      "checks": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "checked_by": {
+        "type": "string",
+        "description": "A note shown alongside the check patterns."
+      },
+      "condition": {
+        "type": "string",
+        "minLength": 1
+      },
+      "limit_days": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "if": {
+      "properties": {
+        "gate": {
+          "const": "deferred"
+        }
+      }
+    },
+    "then": {
+      "required": ["condition", "limit_days"]
+    },
+    "else": {
+      "not": {
+        "anyOf": [
+          {"required": ["condition"]},
+          {"required": ["limit_days"]}
+        ]
+      }
+    }
+  }
+}

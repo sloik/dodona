@@ -58,6 +58,7 @@ A **run description** (see [messages.schema.json](messages.schema.json)) names: 
 | [evidence-record.schema.json](evidence-record.schema.json) | One ledger entry |
 | [act-record.schema.json](act-record.schema.json) | One act of judgement, with what is needed to grade how separate the actor was from the work |
 | [messages.schema.json](messages.schema.json) | Every line on the wire: hello, the manifest answer, request, result, error and shutdown envelopes; the request and result body of every capability; the run description and the executor's report; what the indexers and enumeration return |
+| [project-intent-criteria.schema.json](project-intent-criteria.schema.json) | The decoded `criteria` value in a project intent file |
 | [lock.schema.json](lock.schema.json) | The lock: providers and tools pinned to exact versions, one digest and entry point per platform, upstream source, requirement closure |
 | [policy.schema.json](policy.schema.json) | What must pass: required obligations and intents, minimum evidence, the gate floor, acceptable providers, executors and record origins, the separation floor per kind of act |
 | [status.schema.json](status.schema.json) | The result of the agent-facing `status` command, with its error object and error codes |

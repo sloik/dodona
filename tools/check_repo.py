@@ -438,6 +438,7 @@ def gap_an_intent_reads_one_way_only() -> None:
                              ("a deferred criterion without its limit", lambda c: c[deferred].pop("limit_days")),
                              ("a limit of 0 days", lambda c: c[deferred].update(limit_days=0)),
                              ("a limit written as text", lambda c: c[deferred].update(limit_days="30")),
+                             ("a limit written with a fractional part", lambda c: c[deferred].update(limit_days=30.0)),
                              ("a limit that is true", lambda c: c[deferred].update(limit_days=True)),
                              ("a condition with markup", lambda c: c[deferred].update(condition="<b>seen</b>")),
                              ("a condition of spaces", lambda c: c[deferred].update(condition=" ")),
@@ -917,6 +918,12 @@ def gap_provider_cases_match_the_provider() -> None:
         problems.append("conformance/provider/cases.json: a mode is listed twice")
 
 
+def gap_project_intent_criteria_have_a_schema() -> None:
+    """The shape of the criteria in a project file differs from the provider's wire format."""
+    if not (ROOT / "protocol/project-intent-criteria.schema.json").is_file():
+        problems.append("project intent criteria have no schema")
+
+
 def gap_documents_follow_the_code() -> None:
     """Code changed and the documents describing it did not. The checks live in tools/check_docs.py."""
     import check_docs
@@ -937,7 +944,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
-              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown, gap_documents_follow_the_code]
+              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown,
+              gap_project_intent_criteria_have_a_schema, gap_documents_follow_the_code]
 
 
 class JudgeTests(unittest.TestCase):
