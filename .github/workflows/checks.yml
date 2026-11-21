@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
-    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-40-deadline-fix-proof'
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-40-owned-batch-proof'
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -150,7 +150,7 @@ jobs:
   # planted in each kernel in turn and the kit must reject it. Slow, so it has
   # its own job.
   planted-defects:
-    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-40-deadline-fix-proof'
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-40-owned-batch-proof'
     strategy:
       fail-fast: false
       matrix:
@@ -177,10 +177,10 @@ jobs:
         run: ${{ matrix.run }}
 
   private-run-checkpoint:
-    name: Project run deadline correction (${{ matrix.system }})
+    name: Owned batch and project run (${{ matrix.system }})
     if: >-
       github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
-      && github.ref == 'refs/heads/dodona-eight-40-deadline-fix-proof'
+      && github.ref == 'refs/heads/dodona-eight-40-owned-batch-proof'
     strategy:
       fail-fast: false
       matrix:
@@ -212,6 +212,8 @@ jobs:
           rustc --version
           cargo --version
           node --version
+      - name: Judge batch ownership and loss with mock controls
+        run: cargo test --locked --manifest-path kernel/Cargo.toml --bin dodona-kernel 'proc::batch::'
       - name: Judge the first kernel's private run module
         run: cargo test --locked --manifest-path kernel/Cargo.toml --bin dodona-kernel 'project_status::'
       - name: Keep the full bounded project shutdown grace
