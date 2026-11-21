@@ -38,6 +38,7 @@ import run_ledger_cases  # noqa: E402
 import run_provider_cases  # noqa: E402
 import run_run_cases  # noqa: E402
 import run_status_cases  # noqa: E402
+import run_vectors  # noqa: E402
 
 problems: list[str] = []
 
@@ -1610,6 +1611,116 @@ class KeyVectorJudgeTests(unittest.TestCase):
         self.assertEqual((code, summary["vectors"], summary["unfinished"], summary["all_matched"], calls), (2, 0, 1, False, []))
 
 
+class CanonicalVectorJudgeTests(unittest.TestCase):
+    """A named mismatch needs a completed, usable canonical answer."""
+
+    @staticmethod
+    def vectors():
+        vectors = json.loads((ROOT / "conformance" / "vectors" / "canonical.json").read_text(encoding="utf-8"))
+        accept = [(v["name"], json.dumps(v["value"], indent=1, ensure_ascii=True).encode("utf-8"),
+                   {"canonical": v["canonical"], "sha256": v["sha256"]}) for v in vectors["accept"]]
+        reject = [(v["name"], v["text"].encode("utf-8"), {"refused": v["reason"]}) for v in vectors["reject"]]
+        return accept + reject
+
+    @staticmethod
+    def answered(payload, code=0, stderr=b""):
+        stdout = payload if isinstance(payload, bytes) else json.dumps(payload).encode("utf-8")
+        return subprocess.CompletedProcess(["kernel", "canonical"], code, stdout, stderr)
+
+    def right(self):
+        return [self.answered(want) for _, _, want in self.vectors()]
+
+    def judge(self, answers):
+        argv = ["run_vectors.py", "--", "kernel", "canonical"]
+        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_vectors.sys, "argv", argv), \
+                patch.object(run_vectors.subprocess, "run", side_effect=answers) as run:
+            code = run_vectors.main()
+        lines = output.getvalue().splitlines()
+        return code, json.loads(lines[-1]), lines[:-1], run.call_args_list
+
+    def test_disk_full_stdout_cannot_pass_as_an_expected_refusal(self):
+        answers = self.right()
+        answers[-1] = self.answered(self.vectors()[-1][2], stderr=b"No space left on device")
+        code, summary, lines, _ = self.judge(answers)
+        self.assertEqual(code, 2)
+        self.assertEqual((summary["unfinished"], summary["rejected"]), (1, []))
+        self.assertTrue(any(line.startswith("UNFINISHED " + self.vectors()[-1][0]) for line in lines))
+
+
+    def test_all_existing_vectors_keep_input_bytes_and_exact_answers(self):
+        code, summary, _, calls = self.judge(self.right())
+        cases = self.vectors()
+        self.assertEqual((code, summary), (0, {"vectors": len(cases), "matched": len(cases), "all_matched": True,
+                                               "unfinished": 0, "rejected": []}))
+        self.assertEqual([call.args[0] for call in calls], [["kernel", "canonical"]] * len(cases))
+        self.assertEqual([call.kwargs["input"] for call in calls], [data for _, data, _ in cases])
+
+    def test_valid_wrong_bytes_hash_or_refusal_are_named(self):
+        cases = self.vectors()
+        at = next(i for i, (name, _, _) in enumerate(cases) if name == "keys are sorted")
+        want = cases[at][2]
+        value = json.loads(want["canonical"])
+        unsorted = json.dumps(dict(reversed(list(value.items()))), ensure_ascii=False, separators=(",", ":"))
+        self.assertNotEqual(unsorted, want["canonical"])
+        replies = [
+            (at, {"canonical": unsorted, "sha256": hashlib.sha256(unsorted.encode("utf-8")).hexdigest()}),
+            (at, dict(want, sha256="0" * 64)),
+            (-1, {"refused": "wrong reason"}),
+        ]
+        for index, wrong in replies:
+            with self.subTest(index=index, wrong=wrong):
+                answers = self.right()
+                answers[index] = self.answered(wrong)
+                code, summary, lines, _ = self.judge(answers)
+                self.assertEqual((code, summary["matched"], summary["unfinished"], summary["rejected"]),
+                                 (1, len(cases) - 1, 0, [cases[index][0]]))
+                self.assertTrue(any(line.startswith("MISMATCH " + cases[index][0]) for line in lines))
+
+    def test_process_failures_and_unusable_output_are_unfinished(self):
+        cases = self.vectors()
+        for at in (0, -1):
+            want = cases[at][2]
+            failures = [
+                FileNotFoundError("missing command"), OSError(errno.ENOSPC, "disk full"),
+                subprocess.TimeoutExpired("kernel", 30), self.answered(want, -15), self.answered(want, 0xC0000005),
+                self.answered(want, 1, b"failed"), self.answered(want, stderr=b"ENOSPC"),
+                self.answered(b"not JSON"), self.answered(b""), self.answered(b"\xff"),
+                self.answered(["not an answer"]), self.answered({}), self.answered({"canonical": "missing hash"}),
+                self.answered(b'{"refused":"x","refused":"y"}'),
+            ]
+            for failed in failures:
+                with self.subTest(at=at, failed=failed):
+                    answers = self.right()
+                    answers[at] = failed
+                    code, summary, lines, _ = self.judge(answers)
+                    self.assertEqual((code, summary["matched"], summary["unfinished"], summary["rejected"]),
+                                     (2, len(cases) - 1, 1, []))
+                    self.assertTrue(any(line.startswith("UNFINISHED " + cases[at][0]) for line in lines))
+
+    def test_an_unfinished_case_takes_precedence_over_a_named_mismatch(self):
+        answers = self.right()
+        answers[0] = self.answered({"refused": "wrong"})
+        answers[-1] = subprocess.TimeoutExpired("kernel", 30)
+        code, summary, _, _ = self.judge(answers)
+        self.assertEqual((code, summary["unfinished"], summary["rejected"]),
+                         (2, 1, [self.vectors()[0][0]]))
+
+    def test_empty_duplicate_and_unreadable_fixtures_launch_nothing(self):
+        duplicate = {"name": "same name", "text": "wrong", "reason": "invalid-json"}
+        replies = [
+            json.dumps({"accept": [], "reject": []}),
+            json.dumps({"accept": [], "reject": [duplicate, duplicate]}),
+            "{",
+            OSError(errno.ENOSPC, "No space left on device"),
+        ]
+        for reply in replies:
+            with self.subTest(reply=reply), patch.object(pathlib.Path, "read_text", side_effect=[reply]):
+                code, summary, _, calls = self.judge([])
+                self.assertEqual((code, summary["vectors"], summary["matched"], summary["rejected"], calls),
+                                 (2, 0, 0, [], []))
+                self.assertFalse(summary["all_matched"])
+
+
 class AttestJudgeTests(unittest.TestCase):
     """The attest judge names a completed wrong grade, and never reports a kernel, signer or fixture that did not finish
     as seven mismatches. A kernel grades the seven records in one `scenario` run that exits 0 (issue 41)."""
@@ -2581,6 +2692,7 @@ def main() -> int:
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(LedgerJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(InputJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KeyVectorJudgeTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(CanonicalVectorJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(AttestJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(HarnessJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ProviderJudgeTests))
