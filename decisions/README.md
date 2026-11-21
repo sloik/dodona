@@ -61,3 +61,4 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0031](0031-an-agreement-after-a-real-change-keeps-its-grade-up-to-a-limit.md) | An agreement after a change keeps its grade, up to a limit on refusals along the line | proposed, owner direction |
 | [0032](0032-a-stand-in-is-verified-for-its-own-key-and-any-disagreement-withdraws-it.md) | A stand-in is verified for its own key, and any disagreement about that key withdraws it | proposed |
 | [0033](0033-a-kernel-hosts-providers.md) | A kernel hosts providers itself, and one status command reports on a project | proposed |
+| [0036](0036-pull-requests-open-ready-and-merge-after-checks-pass.md) | Reviewable pull requests open ready and merge automatically once their checks pass | proposed, owner direction |
