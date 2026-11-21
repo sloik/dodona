@@ -38,6 +38,12 @@ fn entry(line: &[u8], earlier: &[String]) -> Option<Value> {
     {
         return None;
     }
+    // A payload nested deeper than 64 levels, the entry itself the first, is
+    // corrupt. Measured without recursion, before the payload is read as a value.
+    let (_, depth) = crate::jsonread::parse(payload, true).ok()?;
+    if depth > crate::wire::MAX_DEPTH {
+        return None;
+    }
     let entry = json::parse(payload.as_bytes()).ok()?;
     let shaped = matches!(&entry, Value::Object(fields) if fields.len() == 3)
         && entry.text("kind").is_some_and(|k| !k.is_empty())
