@@ -25,7 +25,6 @@ import json
 import os
 import pathlib
 import shlex
-import subprocess
 import sys
 import tempfile
 
@@ -33,13 +32,14 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import canonical  # noqa: E402
 import ledger  # noqa: E402
 import run_status_cases as rsc  # noqa: E402
-from run_status_cases import Skip, same  # noqa: E402
+from run_status_cases import Skip, Unfinished, same  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CASES = ROOT / "conformance" / "project" / "run-cases.json"
 EXECUTOR = ROOT / "conformance" / "project" / "fake_batch_executor.py"
 REFERENCE = [sys.executable, str(ROOT / "tools" / "project_run.py")]
 REFERENCE_STATUS = [sys.executable, str(ROOT / "tools" / "project_status.py")]
+TIMEOUT = 300
 COMPARED = ("judged", "coverage", "ledger", "not_served", "not_checkable", "policy_not_applied", "project_doubts", "counts")
 COUNT_KEYS = ("obligations", "reused", "checked", "passed", "failed", "error", "unavailable", "unsupported", "refused", "not_checkable")
 
@@ -66,19 +66,6 @@ def set_up(case: dict, site: dict, where: pathlib.Path) -> tuple[bytes, bytes, p
     return json.dumps(asked, ensure_ascii=False).encode("utf-8"), status_input, root, aux
 
 
-def call(command: list[str], stdin: bytes) -> tuple[dict | None, str]:
-    try:
-        done = subprocess.run(command, input=stdin, capture_output=True, timeout=300)
-    except subprocess.TimeoutExpired:
-        return None, "timed out"
-    if done.returncode != 0:
-        return None, f"exit {done.returncode}: " + done.stderr.decode("utf-8", "replace")[-300:]
-    try:
-        return rsc.host.strict_load(done.stdout.rstrip(b"\n"), limit=None), ""  # answers hold ledger entries up to 64 deep
-    except Exception as err:  # noqa: BLE001
-        return None, f"not one strict JSON object ({err})"
-
-
 def batches(aux: pathlib.Path) -> list[dict]:
     path = aux / "executor.record.jsonl"
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()] if path.exists() else []
@@ -88,7 +75,7 @@ def recorded(root: pathlib.Path, rel: str) -> dict:
     """The verdicts in the run's ledger, by obligation, as the reference reader reads them."""
     try:
         read = ledger.read(root / rel)
-    except Exception:  # noqa: BLE001
+    except ledger.Corrupt:
         return {"unreadable": True}
     return {e["body"]["obligation"]: e["body"]["verdict"] for e in read["entries"]
             if e["kind"] == "evidence" and isinstance(e["body"], dict) and "obligation" in e["body"]}
@@ -128,12 +115,12 @@ def provider_records(aux: pathlib.Path) -> list[dict]:
     return found
 
 
-def run_case(command: list[str], status: list[str], case: dict, site: dict) -> dict:
+def run_case(command: list[str], status: list[str], case: dict, site: dict, role: str) -> dict:
     with tempfile.TemporaryDirectory() as tmp:
         stdin, status_input, root, aux = set_up(case, site, pathlib.Path(tmp))
         try:
             before = tree_digest(root)
-            first, err = call(command, stdin)
+            first = rsc.answer(command, stdin, role, timeout=TIMEOUT)
             after_first = tree_digest(root)
             changed_files = after_first != before
             locks_left = sorted(p.relative_to(root).as_posix() for p in root.rglob("*.lock"))
@@ -146,15 +133,18 @@ def run_case(command: list[str], status: list[str], case: dict, site: dict) -> d
             if transcript_rel:
                 try:
                     transcript = json.loads((root / transcript_rel).read_text(encoding="utf-8"))
-                except (OSError, ValueError):
+                except (FileNotFoundError, IsADirectoryError, ValueError):
                     transcript = "unreadable"
-            after, err_status = (call(status, status_input) if first and "refused" not in first else (None, ""))
-            second = json.loads(stdin)
-            second.pop("transcript", None)  # a transcript is written once, to a new file
-            again, err_again = (call(command, json.dumps(second, ensure_ascii=False).encode("utf-8")) if first and "refused" not in first else (None, ""))
+            after = again = None
+            if "refused" not in first and "refused" not in case["expect"]:
+                after = rsc.answer(status, status_input, f"{role}'s status command", timeout=TIMEOUT)
+                second = json.loads(stdin)
+                second.pop("transcript", None)  # a transcript is written once, to a new file
+                again = rsc.answer(command, json.dumps(second, ensure_ascii=False).encode("utf-8"),
+                                   f"{role}'s second run", timeout=TIMEOUT)
             sent_again = batches(aux)[len(sent):]
             ledger_rel = json.loads(stdin)["ledger"]
-            return {"first": first, "err": err, "sent": sent, "after": after, "err_status": err_status, "again": again,
+            return {"first": first, "sent": sent, "after": after, "again": again,
                     "sent_again": sent_again, "recorded": recorded(root, ledger_rel), "asked": rsc.requests(aux),
                     "transcript": transcript, "provider_records": records_first, "changed_files": changed_files,
                     "after_first": after_first, "locks_left": locks_left,
@@ -203,36 +193,11 @@ def run_key_problems(got: dict) -> list[str]:
     return []
 
 
-def judge(case: dict, site: dict, command: list[str], status: list[str], kernel: list[str]) -> list[str]:
-    got = run_case(command, status, case, site)
-    ref = run_case(REFERENCE + ["--kernel"] + kernel, REFERENCE_STATUS + ["--kernel"] + kernel, case, site)
-    expect, problems = case["expect"], []
-    first = got["first"]
-    if not isinstance(first, dict):
-        return [f"no JSON object answered ({got['err']})"]
-    if "refused" in expect:
-        if (ref["first"] or {}).get("refused") != expect["refused"]:
-            problems.append(f"the kit is wrong: the reference gives {ref['first']} ({ref['err']})")
-        if first.get("refused") != expect["refused"] or set(first) != {"refused", "detail"}:
-            problems.append(f"expected exactly refused {expect['refused']}, got {json.dumps(first)[:200]}")
-        if not same(got["sent"], ref["sent"]):
-            problems.append("the batches sent before the refusal differ from the reference's")
-        # A refusal changes nothing, but for what the text keeps from before it (verdicts recorded before a transcript
-        # that cannot be written, or before the ledgers are read again): exactly what the reference leaves.
-        if got["after_first"] != ref["after_first"]:
-            problems.append("a refused run left the project's files other than the reference leaves them")
-        if got["locks_left"]:
-            problems.append(f"a lock was left behind: {got['locks_left']}")
-        if not same(got["asked"], ref["asked"]):
-            problems.append("the providers started or asked differ from the reference's")
-        return problems
-    if "refused" in first:
-        return [f"refused {first['refused']} ({first.get('detail')}), expected a report"]
-    if not isinstance(ref["first"], dict) or "refused" in ref["first"]:
-        return [f"the kit is wrong: the reference gives {ref['first']} ({ref['err']})"]
-    # Judged without the reference.
+def observations(case: dict, got: dict) -> list[str]:
+    """Check what both the candidate and the reference must actually do."""
+    expect, first, problems = case["expect"], got["first"], []
     counts = first.get("counts", {})
-    if set(counts) != set(COUNT_KEYS) or not all(type(counts[k]) is int for k in COUNT_KEYS):
+    if not isinstance(counts, dict) or set(counts) != set(COUNT_KEYS) or not all(type(counts[k]) is int for k in COUNT_KEYS):
         return [f"counts must hold exactly {list(COUNT_KEYS)}, as whole numbers"]
     if counts["reused"] + counts["checked"] != counts["obligations"] or \
             sum(counts[v] for v in ("passed", "failed", "error", "unavailable", "unsupported", "refused")) != counts["checked"]:
@@ -249,7 +214,7 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
         problems.append(f"recorded: expected {expect['recorded']}, got {got['recorded']}")
     after = got["after"]
     if not isinstance(after, dict) or "refused" in after:
-        problems.append(f"the status command straight after did not report ({got['err_status'] or after})")
+        problems.append(f"the status command straight after did not report ({after})")
     else:
         mine = {k: v for k, v in first.items() if k != "counts"}
         if case.get("files_change_during_run"):
@@ -262,22 +227,77 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
     again = got["again"]
     # Run again, it checks exactly what the first run did not record (verdicts other than passed and failed).
     left = counts["checked"] - counts["passed"] - counts["failed"]
-    if not isinstance(again, dict) or again.get("counts", {}).get("checked") != left or (left == 0 and got["sent_again"]):
-        problems.append(f"run a second time, it checked {(again or {}).get('counts', {}).get('checked')} obligations, not the {left} left without a recorded verdict")
+    again_counts = again.get("counts") if isinstance(again, dict) else None
+    checked = again_counts.get("checked") if isinstance(again_counts, dict) else None
+    if type(checked) is not int or checked != left or (left == 0 and got["sent_again"]):
+        problems.append(f"run a second time, it checked {checked} obligations, not the {left} left without a recorded verdict")
     if got["locks_left"]:
         problems.append(f"a lock was left behind: {got['locks_left']}")
     if "transcript" in json.dumps(case.get("run_input_edit", [])):
         # The transcript of the first run holds what the providers were sent then (the second run appended none to it).
         kept = got["transcript"]
-        if not isinstance(kept, list) or not all(isinstance(m, dict) and m.get("to") in ("provider", "kernel") for m in kept):
+        if not isinstance(kept, list) or not all(isinstance(m, dict) and m.get("to") in ("provider", "kernel")
+                                                and isinstance(m.get("message"), dict) for m in kept):
             problems.append("no transcript as the text gives it was written")
         else:
             sent_to = sorted(json.dumps(m["message"], sort_keys=True) for m in kept if m["to"] == "provider")
             received = sorted(json.dumps(m, sort_keys=True) for m in got["provider_records"])
             if not sent_to or sent_to != received:
                 problems.append("the transcript's messages to providers are not exactly what the providers received")
-            elif normal_transcript(kept) != normal_transcript(ref["transcript"]):
-                problems.append("the transcript is not the reference's, in order and in both directions (ids aside)")
+    return problems
+
+
+def reference_report(case: dict, ref: dict, kernel: list[str]) -> dict:
+    """Check the reference before its observations can be used to name a mismatch."""
+    answer = ref["first"]
+    if set(answer) != rsc.OUT_KEYS | {"counts"} or any(
+            not isinstance(answer[field], kind) for field, kind in rsc.REFERENCE_FIELDS.items()):
+        raise Unfinished("the reference gave no complete run premise")
+    view = answer["judged"]
+    if not (view.get("kind") == "status" and view.get("name") == "this-project"
+            and all(isinstance(view.get(key), dict) for key in ("self", "policy", "obligations", "intents"))
+            and isinstance(view.get("steps"), list) and view["steps"] and all(isinstance(step, dict) for step in view["steps"])):
+        raise Unfinished("the reference gave no scenario to judge")
+    # Judge the same project even if the command under judgement gave the wrong scenario.
+    report = rsc.scenario_report(kernel, view, timeout=TIMEOUT)
+    status = report["project"]["status"]
+    headline = "unknown" if answer["project_doubts"] and status in ("passed", "nothing-required") else status
+    if not same(answer["report"], report) or answer["project_status"] != headline:
+        raise Unfinished("the reference report differs from the independent scenario")
+    problems = observations(case, ref) + rsc.expected_differences(answer, report, headline, case["expect"])
+    if problems:
+        raise Unfinished("the reference and independent scenario disagree with the fixture: " + "; ".join(problems))
+    return report
+
+
+def judge(case: dict, site: dict, command: list[str], status: list[str], kernel: list[str]) -> list[str]:
+    got = run_case(command, status, case, site, "run command")
+    ref = run_case(REFERENCE + ["--kernel"] + kernel, REFERENCE_STATUS + ["--kernel"] + kernel, case, site, "reference run")
+    expect, problems = case["expect"], []
+    first = got["first"]
+    if "refused" in expect:
+        if not rsc.refusal(ref["first"]) or ref["first"]["refused"] != expect["refused"] or ref["locks_left"]:
+            raise Unfinished(f"the reference did not give the fixture's refusal {expect['refused']} and release its locks")
+        if not rsc.refusal(first) or first["refused"] != expect["refused"]:
+            problems.append(f"expected exactly refused {expect['refused']}, got {json.dumps(first)[:200]}")
+        if not same(got["sent"], ref["sent"]):
+            problems.append("the batches sent before the refusal differ from the reference's")
+        # A refusal changes nothing, but for what the text keeps from before it (verdicts recorded before a transcript
+        # that cannot be written, or before the ledgers are read again): exactly what the reference leaves.
+        if got["after_first"] != ref["after_first"]:
+            problems.append("a refused run left the project's files other than the reference leaves them")
+        if got["locks_left"]:
+            problems.append(f"a lock was left behind: {got['locks_left']}")
+        if not same(got["asked"], ref["asked"]):
+            problems.append("the providers started or asked differ from the reference's")
+        return problems
+    report = reference_report(case, ref, kernel)
+    if "refused" in first:
+        return [f"refused {first['refused']} ({first.get('detail')}), expected a report"]
+    problems = observations(case, got)
+    if "transcript" in json.dumps(case.get("run_input_edit", [])) and \
+            normal_transcript(got["transcript"]) != normal_transcript(ref["transcript"]):
+        problems.append("the transcript is not the reference's, in order and in both directions (ids aside)")
     # Judged against the reference.
     for field in COMPARED:
         if not same(first.get(field), ref["first"].get(field)):
@@ -286,15 +306,8 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
         problems.append("the ledger it wrote differs, byte for byte, from the reference's")
     if not same(got["asked"], ref["asked"]):
         problems.append("the requests sent to the providers differ from the reference's")
-    own, _ = call(kernel + ["scenario"], json.dumps(first.get("judged")).encode("utf-8")) if first.get("judged") else (None, "")
-    own_report = (own or {}).get("results", [None])[-1] if isinstance(own, dict) else None
-    if own_report is None or not same(first.get("report"), own_report):
-        problems.append("the report is not what the scenario command gives for what was judged")
-    status = expect.get("status", {})
-    report = first.get("report") or {}
-    for name, want in status.get("obligations", {}).items():
-        if report.get("obligations", {}).get(name, {}).get("status") != want:
-            problems.append(f"obligation {name}: expected {want}")
+    if not same(first.get("report"), report):
+        problems.append("the report is not what the independent scenario command gives")
     if "project_status" in expect and first.get("project_status") != expect["project_status"]:
         problems.append(f"project_status: expected {expect['project_status']}, got {first.get('project_status')}")
     return problems
@@ -311,31 +324,46 @@ def main() -> int:
     ap.add_argument("command", nargs=argparse.REMAINDER)
     args = ap.parse_args()
     kernel, command = args.kernel, args.command[1:] if args.command[:1] == ["--"] else args.command
-    status = shlex.split(args.status)
     if "--" in kernel:
         kernel, command = kernel[:kernel.index("--")], kernel[kernel.index("--") + 1:]
-    spec = json.loads(CASES.read_text(encoding="utf-8"))
 
-    def one(case):
+    def one(case: dict) -> list[str] | Exception:
         try:
-            return case, judge(case, spec["site"], command, status, kernel), None
-        except Skip as why:
-            return case, None, why
-        except Exception as err:  # noqa: BLE001 - a case the judge cannot run is a mismatch, never a pass
-            return case, [f"the judge could not run this case: {type(err).__name__}: {err}"], None
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        results = list(pool.map(one, spec["cases"]))
-    matched = skipped = 0
-    for case, problems, why in results:
-        if why is not None:
+            return judge(case, spec["site"], command, status, kernel)
+        except Exception as err:  # fixture and process failures need a result too
+            return err
+
+    try:
+        status = shlex.split(args.status)
+        if not kernel or not command or not status:
+            raise ValueError("the run, status and independent kernel commands must be given")
+        spec = json.loads(CASES.read_text(encoding="utf-8"))
+        cases = spec["cases"]
+        names = [case["name"] for case in cases]
+        if any(not isinstance(name, str) or not name for name in names) or len(set(names)) != len(names):
+            raise ValueError("cases must have distinct nonempty names")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
+            results = list(pool.map(one, cases))
+    except Exception as err:
+        print(f"UNFINISHED the judge could not prepare its cases: {type(err).__name__}: {err}")
+        return rsc.finish(0, 0, 0, [], 1)
+
+    matched = skipped = unfinished = 0
+    rejected = []
+    for name, result in zip(names, results, strict=True):
+        if isinstance(result, Skip):
             skipped += 1
-            print(f"skipped  {case['name']}: {why}")
-            continue
-        matched += not problems
-        print(("match    " if not problems else "MISMATCH ") + case["name"] + ("" if not problems else ": " + "; ".join(problems)))
-    judged = len(spec["cases"]) - skipped
-    print(json.dumps({"cases": len(spec["cases"]), "judged": judged, "skipped": skipped, "matched": matched, "all_matched": matched == judged}))
-    return 0 if judged and matched == judged else 1
+            print(f"skipped  {name}: {result}")
+        elif isinstance(result, Exception):
+            unfinished += 1
+            print(f"UNFINISHED {name}: {type(result).__name__}: {result}")
+        elif result:
+            rejected.append(name)
+            print(f"MISMATCH {name}: " + "; ".join(result))
+        else:
+            matched += 1
+            print(f"match    {name}")
+    return rsc.finish(len(cases), skipped, matched, rejected, unfinished)
 
 
 if __name__ == "__main__":

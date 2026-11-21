@@ -12,6 +12,10 @@ import json
 import os
 import sys
 
+# The kit's one cooperative waiter (importing the provider only defines it): every intentional wait here, and the
+# process left behind, answers the judge's probe and stop files, which exist only after the host returned.
+from misbehaving_provider import POLL, wait
+
 MODE = os.environ.get("DODONA_CHECKER_MODE") or (sys.argv[1] if len(sys.argv) > 1 else "well-behaved")
 SEEN = os.environ.get("DODONA_TEST_SEEN")
 
@@ -174,7 +178,8 @@ def main() -> None:
             out.write(f"{os.getpid()}\n")
     if MODE == "leaves-a-child":
         import subprocess
-        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+        # Waits up to 120 s as before, with inherited streams as before, but cooperatively.
+        child = subprocess.Popen([sys.executable, "-c", POLL + "wait(1200)\n"])
         if pidfile:
             with open(pidfile, "a", encoding="utf-8") as out:
                 out.write(f"{child.pid}\n")
@@ -201,8 +206,7 @@ def main() -> None:
         del manifest["tools"]
     send({"type": "manifest", "echo": hello["echo"] + (" changed" if MODE == "wrong-echo" else ""), "manifest": manifest})
     if MODE == "stops-reading":
-        import time
-        time.sleep(60)
+        wait(600)  # up to 60 s, as before
         return
     while True:
         request = read()
@@ -211,8 +215,7 @@ def main() -> None:
         body = request["body"]
         passed = {"final": {"verdict": "passed", "strength": {"class": "test", "rank": RANK}}}
         if MODE == "too-slow":
-            import time
-            time.sleep(30)
+            wait(300)  # up to 30 s, as before
         if body["op"] == "start":
             answer = {"next": run(body)}
             if MODE == "final-unsupported":
