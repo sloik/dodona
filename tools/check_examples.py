@@ -7,8 +7,9 @@ third-party package, `jsonschema`, because a JSON Schema validator is not in
 the standard library. It runs in CI with a pinned version. Without the package
 it says so and fails: a check that silently does nothing is not a check.
 
-Exit status is 0 only if the schemas, messages, policy, and criteria validate
-and the project criteria schema accepts the positive control and refuses the negative controls.
+Exit status is 0 only if the schemas, guide messages, policy and project
+criteria validate. The evidence-strength and project criteria controls
+must also give their expected results.
 """
 from __future__ import annotations
 
@@ -51,6 +52,32 @@ def check_intent_criteria(validator) -> tuple[int, list[str]]:
     return len(paths), problems
 
 
+def evidence_strength_problems(validator) -> list[str]:
+    """Validate paired synthetic records that differ only by the presence of strength."""
+    digest = "sha256:" + "0" * 64
+    record = {
+        "record": digest, "obligation": digest, "core_key": digest,
+        "platform": {"os": "linux", "arch": "x86_64"}, "verdict": "passed",
+        "inputs": {"specified_by": [digest], "targets": [digest], "closure": [],
+                   "tools": [], "config": digest, "expect": "holds"},
+        "provider": {"name": "fixture", "version": "1", "protocol": "0.2"},
+        "executor": {"name": "fixture", "version": "1"}, "isolation": "none",
+        "origin": {"writer": "fixture"}, "runs": [{"exit_status": 0, "output": digest, "tools_ran": []}],
+    }
+    problems = []
+    for kind, needs_strength in (("check", True), ("conformance", True), ("build", False)):
+        without_strength = dict(record, kind=kind)
+        with_strength = dict(without_strength, strength={"class": "test", "rank": "sampled"})
+        invalid, valid = ((without_strength, with_strength) if needs_strength else (with_strength, without_strength))
+        errors = list(validator.iter_errors(valid))
+        if errors:
+            problems.append(f"evidence {kind} control: {errors[0].message}")
+        if validator.is_valid(invalid):
+            wrong = "without strength" if needs_strength else "with strength"
+            problems.append(f"evidence {kind}: accepts a record {wrong}")
+    return problems
+
+
 def main() -> int:
     try:
         import jsonschema
@@ -88,6 +115,8 @@ def main() -> int:
     policy = tomllib.loads((ROOT / "policy.toml").read_text(encoding="utf-8"))
     for err in jsonschema.Draft202012Validator(schemas["policy.schema.json"], registry=registry).iter_errors(policy):
         problems.append(f"policy.toml: {err.message[:160]}")
+    evidence = jsonschema.Draft202012Validator(schemas["evidence-record.schema.json"], registry=registry)
+    problems.extend(evidence_strength_problems(evidence))
     intent_files = 0
     if INTENT_CRITERIA_SCHEMA not in schemas:
         problems.append(f"{INTENT_CRITERIA_SCHEMA}: missing schema")

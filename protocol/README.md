@@ -55,7 +55,7 @@ A **run description** (see [messages.schema.json](messages.schema.json)) names: 
 |---|---|
 | [common.schema.json](common.schema.json) | Identities, names, platforms, verdicts, status, strength, isolation, capability names |
 | [provider-manifest.schema.json](provider-manifest.schema.json) | What a provider announces |
-| [evidence-record.schema.json](evidence-record.schema.json) | One ledger entry |
+| [evidence-record.schema.json](evidence-record.schema.json) | One evidence entry. Check and conformance records require `strength`. Build records omit it |
 | [act-record.schema.json](act-record.schema.json) | One act of judgement, with what is needed to grade how separate the actor was from the work |
 | [messages.schema.json](messages.schema.json) | Every line on the wire: hello, the manifest answer, request, result, error and shutdown envelopes; the request and result body of every capability; the run description and the executor's report; what the indexers and enumeration return |
 | [project-intent-criteria.schema.json](project-intent-criteria.schema.json) | The decoded `criteria` value in a project intent file, including the ASCII digits in criterion IDs and the required fields for deferred gates |
