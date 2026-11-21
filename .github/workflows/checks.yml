@@ -177,11 +177,21 @@ jobs:
         run: ${{ matrix.run }}
 
   private-run-checkpoint:
-    name: Private run checkpoint on Linux
+    name: Private run checkpoint (${{ matrix.system }})
     if: >-
       github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
       && github.ref == 'refs/heads/dodona-eight-run-private-proof'
-    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: linux
+            os: ubuntu-26.04
+          - system: macos
+            os: macos-26
+          - system: windows
+            os: windows-2025
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -189,6 +199,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Name the exact proof input and tool versions
+        shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git rev-parse HEAD
