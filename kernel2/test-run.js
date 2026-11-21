@@ -287,10 +287,15 @@ test('planted: with a transcript, a project file ending in a dot is let through 
 
 // A copy of project-run.js with one guard removed, loaded beside the real modules. The
 // needle must be found exactly once, so a plant that changes nothing cannot pass.
+// Several plants at once are given as a list of [needle, replacement] pairs.
 function planted(needle, replacement) {
-  const source = fs.readFileSync(path.join(__dirname, 'project-run.js'), 'utf8');
-  assert.equal(source.split(needle).length, 2, `the needle ${needle} is in project-run.js once`);
-  const damaged = source.replace(needle, replacement)
+  const pairs = Array.isArray(needle) ? needle : [[needle, replacement]];
+  let source = fs.readFileSync(path.join(__dirname, 'project-run.js'), 'utf8');
+  for (const [find, put] of pairs) {
+    assert.equal(source.split(find).length, 2, `the needle ${find} is in project-run.js once`);
+    source = source.replace(find, () => put);
+  }
+  const damaged = source
     .replace(/require\('\.\/([^']+)'\)/g, (whole, name) => `require(${JSON.stringify(path.join(__dirname, name))})`);
   const where = fs.mkdtempSync(path.join(os.tmpdir(), 'kernel2-planted-'));
   try {
@@ -1293,7 +1298,8 @@ test('recording: an ending cut short is cut off; a corrupt or locked ledger is n
   });
 });
 
-test('recording: the run\'s ledger, become the owner\'s or reached through a link, is not written', { skip: noLinks }, () => {
+// A hard link needs no symbolic-link privilege, so this one runs on every platform.
+test('recording: the run\'s ledger, become a hard link to the owner\'s, is not written', () => {
   recordingProject(({ root, session, asked, snapshot, ledger }) => {
     fs.mkdirSync(path.dirname(ledger));
     fs.writeFileSync(path.join(root, 'records', 'owner.ledger'), '');
@@ -1301,6 +1307,17 @@ test('recording: the run\'s ledger, become the owner\'s or reached through a lin
     assert.throws(() => recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2)), (error) => error instanceof Stop && error.reason === 'ledger-not-written');
     assert.equal(fs.readFileSync(path.join(root, 'records', 'owner.ledger'), 'utf8'), '');
   });
+  // The control: a separate file with the same bytes is another ledger, and is written.
+  recordingProject(({ root, session, asked, snapshot, ledger }) => {
+    fs.mkdirSync(path.dirname(ledger));
+    fs.writeFileSync(path.join(root, 'records', 'owner.ledger'), '');
+    fs.writeFileSync(ledger, '');
+    assert.deepEqual(recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2)), ['passed', 'failed']);
+    assert.equal(fs.readFileSync(path.join(root, 'records', 'owner.ledger'), 'utf8'), '');
+  });
+});
+
+test('recording: the run\'s ledger reached through a link is not written', { skip: noLinks }, () => {
   recordingProject(({ root, session, asked, snapshot }) => {
     fs.mkdirSync(path.join(root, 'elsewhere'));
     fs.symlinkSync(path.join(root, 'elsewhere'), path.join(root, 'l'));
@@ -1606,6 +1623,57 @@ test('transcript: a run refused before it reports writes none', async () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('planted: a report made by asking the providers again starts sessions step 14 must not', async () => {
+  const damaged = planted('  const output = { ...reportOf(asked, rereadOf(asked, snapshot)), counts };',
+    '  const output = { ...reportOf(asked, await snapshotOf(asked, checkInput(asked))), counts };');
+  const sessionsStarted = async (module) => {
+    const root = project();
+    try {
+      const { asked, log } = runFixture(root);
+      const out = await module.runProject(asked, { execute: scripted((runs) => reportsFor(runs)).execute });
+      assert.deepEqual([out.counts.passed, out.counts.failed], [1, 1]);
+      return messagesByProcess(log).size;
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  };
+  assert.equal(await sessionsStarted({ runProject }), 1, 'the one kept session, nothing asked again');
+  assert.equal(await sessionsStarted(damaged), 2, 'the damaged copy enumerated again');
+});
+
+test('planted: a transcript written over a file that appeared during the run', async () => {
+  const placeCheck = "  if (problem !== null) throw new Stop('transcript-not-written', `${rel} ${problem}`);\n";
+  const createNew = 'fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL';
+  const lateFile = async (module) => {
+    const root = project();
+    try {
+      const { asked } = runFixture(root);
+      asked.transcript = 'transcript.json';
+      const { execute } = scripted((runs) => {
+        fs.writeFileSync(path.join(root, 'transcript.json'), 'someone else\'s');
+        return reportsFor(runs);
+      });
+      let refused = null;
+      try {
+        await module.runProject(asked, { execute });
+      } catch (error) {
+        if (!(error instanceof Stop)) throw error;
+        refused = error.reason;
+      }
+      return [refused, fs.readFileSync(path.join(root, 'transcript.json'), 'utf8')];
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  };
+  // The place judged again, and the file created only if none is there: each alone refuses.
+  assert.deepEqual(await lateFile({ runProject }), ['transcript-not-written', 'someone else\'s']);
+  assert.deepEqual(await lateFile(planted(placeCheck, '')), ['transcript-not-written', 'someone else\'s'], 'create-new alone still refuses');
+  // Without both, the file is written over.
+  const [refused, after] = await lateFile(planted([[placeCheck, ''], [createNew, 'fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC']]));
+  assert.equal(refused, null);
+  assert.notEqual(after, 'someone else\'s');
 });
 
 test('recording: the target judged again: a ledger not a regular file, a step not a folder, a step not to be looked at', () => {
