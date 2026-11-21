@@ -1,6 +1,7 @@
 """Judge a kernel's ledger against conformance/ledger/cases.json and more-damage.json. Stage-0 helper (decision 0023).
 
     python tools/run_ledger_cases.py -- <kernel command>
+    python tools/run_ledger_cases.py --write LEDGER WRITER COUNT -- <kernel command>   # started by itself, as one of two writers
 
 The kernel is given the subcommands `ledger-append` and `ledger-read`, as
 conformance/README.md describes. The expected file is built here from the

@@ -3,7 +3,7 @@
     python tools/keep.py dumps          --plan PLAN --fresh DIR --kept DIR --into DIR
     python tools/keep.py finish         --plan PLAN --ledger FILE --into DIR
     python tools/keep.py summary        --plan PLAN --conclude FILE --status FILE --kept-from FILE
-    python tools/keep.py require-passed --status FILE
+    python tools/keep.py require-passed --status FILE [--plan PLAN]
 
 It judges nothing. Which checks are reused is decided by a kernel in
 `tools/host.py plan`; this only moves files and prints what the plan said.

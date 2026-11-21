@@ -1,7 +1,7 @@
 """Read dodona's intent files, and write the criteria table each one shows. Stage-0 helper (decision 0028).
 
     python tools/intents.py --write   # rewrite each intent's table from its front matter
-    python tools/intents.py --check   # fail unless every intent file can be read one way only
+    python tools/intents.py           # fail unless every intent file can be read one way only
 
 The reading is the intents provider's (providers/intents/intents_md.py), so what this checks is what
 the provider answers.

@@ -2,6 +2,7 @@
 id: "0031"
 title: An agreement after a change keeps its grade, up to a limit on refusals along the line
 status: proposed
+direction: owner
 date: 2026-11-18
 governs:
   - spec/attempts/Attempts.tla

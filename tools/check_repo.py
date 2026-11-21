@@ -1,5 +1,7 @@
 """Checks of this repository that need no model checker and run on any platform.
 
+    python tools/check_repo.py
+
 Stage-0 helper (decision 0023): disposable, to be replaced by dodona itself.
 Exit status is 0 only if every check passed.
 """
@@ -700,6 +702,65 @@ def gap_workflows_are_safe() -> None:
                 problems.append(f"{path.name}: self-hosted job is not restricted to this repository's main branch")
         if "permissions:" not in text:
             problems.append(f"{path.name}: no explicit permissions")
+        problems.extend(f"{path.name}: {p}" for p in pull_request_target_problems(text))
+    # The guard must be seen to fail: each unsafe edit of the workflow that uses pull_request_target is planted.
+    docs = ROOT / ".github" / "workflows" / "docs.yml"
+    text = docs.read_text(encoding="utf-8") if docs.exists() else ""
+    for old, new in (("python3 -I tools/check_docs.py diff", "python3 tools/check_docs.py diff"),
+                     ("fetch-depth: 0", "fetch-depth: 0\n          ref: ${{ github.event.pull_request.head.sha }}"),
+                     ("contents: read", "contents: write"),
+                     ("persist-credentials: false", "persist-credentials: true"),
+                     ("refs/pull/$PR_NUMBER/head:", "refs/pull/$PR_NUMBER/merge:"),
+                     ("PR_HEAD: ${{ github.event.pull_request.head.sha }}", "PR_HEAD: ${{ github.event.pull_request.merge_commit_sha }}"),
+                     ('git checkout --quiet --detach "$BASE"', 'git checkout --quiet --detach "$HEAD"'),
+                     ('git checkout --quiet --detach "$BASE"', 'git worktree add "$RUNNER_TEMP/pr" "$HEAD"'),
+                     ('git checkout --quiet --detach "$BASE"', 'git switch --detach "$HEAD"'),
+                     ("run: |\n", 'run: |\n          echo "${{ github.event.pull_request.title }}"\n'),
+                     ("run: |\n", 'run: |\n          echo "${{ github.head_ref }}"\n')):
+        if "pull_request_target" in text and (old not in text or not pull_request_target_problems(text.replace(old, new, 1))):
+            problems.append(f".github/workflows/docs.yml: the pull_request_target guard does not notice {new.strip()!r}")
+
+
+def pull_request_target_problems(text: str) -> list[str]:
+    """pull_request_target runs with the base's workflow and a token; it is safe only while nothing
+    from the pull request is checked out or run, and the token can do no more than read."""
+    if "pull_request_target" not in text:
+        return []
+    found = []
+    if re.search(r"ref:\s*\$\{\{[^}]*(pull_request\.head|head_ref)", text):
+        found.append("checks out the pull request's head under pull_request_target")
+    if re.search(r"^\s+\w[\w-]*:\s*write\b", text, flags=re.M) or "secrets." in text:
+        found.append("gives the token write access, or uses a secret, under pull_request_target")
+    if "persist-credentials: false" not in text:
+        found.append("keeps credentials in the checkout under pull_request_target")
+    if any(re.search(r"\bpython3?(?! -I)\s", line) for line in text.split("\n") if not line.lstrip().startswith("#")):
+        found.append("runs Python without -I under pull_request_target, so a file in the working directory could be imported")
+    if re.search(r"refs/pull/[^\s'\"]*/merge|merge_commit_sha", text):
+        found.append("uses the pull request's merge commit under pull_request_target, which holds its code")
+    runs = run_blocks(text)
+    for cmd in re.findall(r"\bgit\s+(?:checkout|switch|worktree\s+add)\b[^\n;&|]*", runs):
+        if cmd.split()[-1] != '"$BASE"':
+            found.append(f"checks out something other than the base under pull_request_target: {cmd.strip()!r}")
+    if re.search(r"github\.event\.pull_request\.(title|body|head\.ref|head\.label)|github\.head_ref", runs):
+        found.append("puts text the pull request's author chose into a run: block under pull_request_target; pass it through env:")
+    return found
+
+
+def run_blocks(text: str) -> str:
+    """The text of every run: block of a workflow, comments left out."""
+    out, indent = [], None
+    for line in text.split("\n"):
+        stripped = line.lstrip()
+        here = len(line) - len(stripped)
+        if indent is not None and stripped and here <= indent:
+            indent = None
+        m = re.match(r"(-\s+)?run:\s*(.*)$", stripped)
+        if m:
+            indent = here
+            out.append(m.group(2))
+        elif indent is not None and not stripped.startswith("#"):
+            out.append(stripped)
+    return "\n".join(out)
 
 
 def gap_every_check_is_listed() -> None:
@@ -856,6 +917,14 @@ def gap_provider_cases_match_the_provider() -> None:
         problems.append("conformance/provider/cases.json: a mode is listed twice")
 
 
+def gap_documents_follow_the_code() -> None:
+    """Code changed and the documents describing it did not. The checks live in tools/check_docs.py."""
+    import check_docs
+    repo = check_docs.Repo(ROOT)
+    problems.extend("documents: " + p for p in check_docs.repo_problems(repo))
+    problems.extend("documents: " + p for p in check_docs.self_test(repo, with_git=False))  # CI runs it whole
+
+
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
@@ -868,7 +937,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
-              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown]
+              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown, gap_documents_follow_the_code]
 
 
 class ToolPinTests(unittest.TestCase):
