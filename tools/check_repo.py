@@ -1060,6 +1060,34 @@ class KitAdequacyTests(unittest.TestCase):
             self.assertEqual(build[build.index("--target-dir") + 1], str(copy / "target"))
 
 
+class PlantJsTests(unittest.TestCase):
+    """Keep the standalone JavaScript runner tests registered in hosted CI."""
+
+    command = "run: node --test kernel2/test-plant.js"
+
+    def registered(self, workflow: str) -> bool:
+        job = re.search(r"(?ms)^  checks:[ \t]*\n(.*?)(?=^  [\w-]+:[ \t]*$|\Z)", workflow)
+        if job is None:
+            return False
+        steps = re.split(r"(?m)^      - ", job[1])[1:]
+        for step in steps:
+            if re.search(r"(?m)^\s*run: cargo build\b", step):
+                break
+            if self.command in [line.strip() for line in step.splitlines()]:
+                return not re.search(r"(?m)^\s*(if|continue-on-error):", step)
+        return False
+
+    def test_plant_js_cases_run_on_the_hosted_matrix(self):
+        self.assertTrue((ROOT / "kernel2" / "test-plant.js").is_file())
+        workflow = (ROOT / ".github" / "workflows" / "checks.yml").read_text(encoding="utf-8")
+        self.assertTrue(self.registered(workflow))
+        for replacement in ("run: node --test kernel2/test.js",
+                            "if: matrix.os == 'ubuntu-26.04'\n        " + self.command,
+                            "continue-on-error: true\n        " + self.command):
+            with self.subTest(replacement=replacement):
+                self.assertFalse(self.registered(workflow.replace(self.command, replacement)))
+
+
 class JudgeTests(unittest.TestCase):
     """The judge must never turn an unfinished or wrong run into a match."""
 
@@ -1123,6 +1151,7 @@ def main() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(JudgeTests)
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ToolPinTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitAdequacyTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantJsTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
         print("PROBLEM", line)
