@@ -2,7 +2,7 @@
 
 A small first kernel, written from [the conformance kit](../conformance/README.md) and [the ledger format](../protocol/ledger.md). It is not a usable dodona: it hosts one provider session or one check at a time ([decision 0033](../decisions/0033-a-kernel-hosts-providers.md)), but plans no work and has no agent interface. Passing the kit is sampled evidence, not a proof.
 
-It uses the standard library only. The one module with unsafe code is `proc.rs`: the calls to the operating system that end a whole process tree (a process group on Unix, a job object on Windows), which the standard library does not offer.
+It uses the standard library only. Unsafe operating-system calls in `proc.rs` end a process group on Unix or a job object on Windows. On Windows, `project_status.rs` queries the volume and file number of an open file.
 
 ## Commands
 
@@ -46,7 +46,7 @@ The host's own input, the manifest, the numbered rules for a run and the rules f
 
 `status` follows conformance/README.md, "How a project's status is judged", step by step, in `project_status.rs` ([decision 0034](../decisions/0034-a-kernel-runs-a-project-and-reports-its-status.md)). It answers every input with one JSON object and exit status 0, a refusal included. The first rule broken gives the reason and nothing after it is done: every provider's code and every claimed file is read before any provider is started, and a session that said `hello` always ends with `shutdown` and every process of the provider ended.
 
-It holds no status rules of its own. The scenario it judged is run through `status::run`, the code of the `scenario` command, and the report is its last result. Sessions use the check's reading (`wire.rs`, `host::manifest`); ledgers are read by `ledger-read`'s code, so a ledger is exactly as strict here as there. Where the contract leaves a choice: a provider that cannot be confined to a process tree of its own is `provider-not-started`; a claimed file whose name is not UTF-8 is `unreadable-file`, since no path the protocol carries can name it; two ledgers are the same file when the device and file number agree on Unix, and when their resolved paths agree elsewhere, where the standard library has no file index (a hard link is not recognised there).
+It holds no status rules of its own. The scenario it judged is run through `status::run`, the code of the `scenario` command, and the report is its last result. Sessions use the check's reading (`wire.rs`, `host::manifest`); ledgers are read by `ledger-read`'s code, so a ledger is exactly as strict here as there. A provider that cannot be confined to a process tree of its own is `provider-not-started`. A claimed file whose name is outside UTF-8 is `unreadable-file`. The kernel compares ledger identity by device and file number on Unix, by volume and file number on Windows, and by resolved path on other systems. On Windows the kernel compares full 128-bit file numbers with both handles open. If either handle cannot supply an identity, it compares resolved paths.
 
 ## The ledger
 
