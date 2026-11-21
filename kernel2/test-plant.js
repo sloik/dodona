@@ -26,6 +26,13 @@ const ledger = (rejected, { status = rejected.length ? 1 : 0, unfinished = 0, ke
     [key]: 40, matched: 40 - rejected.length, unfinished, rejected,
     all_matched: allMatched === undefined ? rejected.length === 0 && unfinished === 0 : allMatched,
   }) + '\n');
+// What tools/run_input_cases.py prints: a line per case, then the same footer with its count under `cases` (issue 41).
+const DUPLICATE_KEY = 'a key repeated in one object is refused';
+const input = (rejected, { status = rejected.length ? 1 : 0, unfinished = 0, key = 'cases' } = {}) =>
+  done(status, rejected.map((c) => `MISMATCH ${c} (exit 0)\n`).join('') + JSON.stringify({
+    [key]: 6, matched: 6 - rejected.length - unfinished, unfinished, rejected,
+    all_matched: rejected.length === 0 && unfinished === 0,
+  }) + '\n');
 
 // A spawn that answers each process, named by its tool, from a queue; one with nothing queued accepts the copy.
 function fake(answers, onJudge = () => {}) {
@@ -43,6 +50,7 @@ function fake(answers, onJudge = () => {}) {
     }
     if (name === 'loads') return done(0, '{"canonical":"{}","sha256":"0"}');
     if (name === 'run_kit') return kit([]);
+    if (name === 'run_input_cases') return input([]);
     return name === 'run_ledger_cases' ? ledger([]) : done(0);
   };
   return { spawn, calls };
@@ -115,6 +123,35 @@ test('a ledger report that is partial, malformed or contradictory is not credite
   };
   for (const [name, answer] of Object.entries(cases)) {
     assert.deepEqual(judge({ run_ledger_cases: [answer] }), unfinished('run_ledger_cases'), name);
+  }
+});
+
+test('a strict-input rejection that repeats on a named case is credited with that case', () => {
+  assert.deepEqual(judge({ run_input_cases: [input([DUPLICATE_KEY]), input([DUPLICATE_KEY])] }),
+    { outcome: 'rejected', name: 'run_input_cases', mismatch: true, cases: [DUPLICATE_KEY] });
+});
+
+test('a strict-input replay that names another case, accepts or does not finish is not credited', () => {
+  for (const second of [input(['a byte that is not UTF-8 is refused']), input([]), input([], { status: 2, unfinished: 1 }),
+    killed('SIGTERM')]) {
+    assert.deepEqual(judge({ run_input_cases: [input([DUPLICATE_KEY]), second] }), unfinished('run_input_cases', 'did not reject again on replay'));
+  }
+});
+
+test('a strict-input report that is unfinished, partial or of the old shape is not credited', () => {
+  const cases = {
+    // A kernel ended by a signal on the duplicate-key case: the judge exits 2 and names no rejection.
+    signalled_kernel: input([], { status: 2, unfinished: 1 }),
+    unfinished_after_a_mismatch: input([DUPLICATE_KEY], { status: 2, unfinished: 1 }),
+    old_footer: done(1, `MISMATCH ${DUPLICATE_KEY} (exit 0)\n` + JSON.stringify({ cases: 6, matched: 5, all_matched: false }) + '\n'),
+    exit_status_only: done(1),
+    passed_without_footer: done(0),
+    checks_key: input([DUPLICATE_KEY], { key: 'checks' }),
+    signal: killed('SIGTERM'),
+    launch_error: failed('ENOENT'),
+  };
+  for (const [name, answer] of Object.entries(cases)) {
+    assert.deepEqual(judge({ run_input_cases: [answer] }), unfinished('run_input_cases'), name);
   }
 });
 
@@ -283,6 +320,15 @@ test('a ledger catch on a repeated named check is caught, not provisionally', (t
   assert.equal(run.code, 0);
   assert.deepEqual([run.report.caught, run.report.caught_provisionally, run.report.all_caught], [2, 0, true]);
   assert.match(run.verdicts[0], /^caught \(run_ledger_cases: torn\)/);
+  assert.match(run.verdicts[1], /^caught \(run_kit: plan\/b\)/);
+});
+
+test('a strict-input catch on a repeated named case is caught, not provisionally', (t) => {
+  const run = batch(t, { run_kit: [kit([]), kit([]), kit(['plan/b']), kit(['plan/b'])],
+    run_input_cases: [input([]), input([DUPLICATE_KEY]), input([DUPLICATE_KEY])] });
+  assert.equal(run.code, 0);
+  assert.deepEqual([run.report.caught, run.report.caught_provisionally, run.report.all_caught], [2, 0, true]);
+  assert.match(run.verdicts[0], /^caught \(run_input_cases: a key repeated in one object is refused\)/);
   assert.match(run.verdicts[1], /^caught \(run_kit: plan\/b\)/);
 });
 

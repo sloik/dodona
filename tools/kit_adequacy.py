@@ -9,9 +9,10 @@ the kit, then plants each defect listed in kernel/defects.json, one at a time,
 rebuilds and runs the kit again: the scenarios, the ledger cases, the core-key vectors, the check values made at test time, the reference harness, the strict reading of input, the provider session and the host checks (decision 0033). A planted defect counts as caught when the
 changed kernel builds and the kit rejects it. The unchanged kernel is run on every judge; a planted
 defect is judged until the first judge rejects it, the scenarios first and, for a defect in the
-host's own files, the host judges next. A scenario or ledger rejection needs a complete report from
-the judge (the ledger's counts `checks` where the scenarios' counts `scenarios`), and the same named
-case must reject on replay; the caught line names those cases. Another auxiliary judge can reject
+host's own files, the host judges next. A scenario, ledger or strict-input rejection needs a complete
+report from the judge (the ledger's counts `checks` and the strict-input judge's `cases` where the
+scenarios' counts `scenarios`), and the same named case must reject on replay; the caught line names
+those cases. Another auxiliary judge can reject
 with exit 1 and no traceback or disk-full error, and that rejection must repeat. A run that ends without this evidence
 is UNFINISHED (issue 41). A defect that names a case of a
 formal model must be rejected by a scenario that says it covers that case;
@@ -39,7 +40,7 @@ JUDGES = (("ledger", "run_ledger_cases.py", []), ("core-key", "run_key_vectors.p
           ("input", "run_input_cases.py", []), ("session", "run_provider_cases.py", ["session"]),
           ("host-check", "run_check_cases.py", ["check"]), ("status", "run_status_cases.py", ["status"]))
 # Judges that end with the scenarios' footer, and the key under which each counts its checks (issue 41).
-REPORTING = {"ledger": "checks"}
+REPORTING = {"ledger": "checks", "input": "cases"}
 # The status judge recomputes each report with another kernel's scenario command, so that the kernel judged does
 # not certify its own report: here the second kernel's.
 OTHER_KERNEL = ["node", str(pathlib.Path(__file__).resolve().parent.parent / "kernel2" / "dodona-kernel2.js")]

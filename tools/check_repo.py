@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import check_models  # noqa: E402
 import kit_adequacy  # noqa: E402
 import pathcheck  # noqa: E402
+import run_input_cases  # noqa: E402
 import run_kit  # noqa: E402
 import run_ledger_cases  # noqa: E402
 
@@ -1100,6 +1101,36 @@ class KitAdequacyTests(unittest.TestCase):
         self.assertEqual(self.after_scenarios(self.ledger(0, []), failed, failed), (False, ["core-key-judge"]))
         self.assertEqual(self.after_scenarios(self.ledger(0, []), failed, self.result(0)), (False, ["core-key-judge unsteady"]))
 
+    # The strict-input judge ends with the same footer, its count under `cases`; it runs after the ledger, core-key,
+    # attest and harness judges (issue 41).
+    def input_report(self, code, rejected, unfinished=0, key="cases"):
+        summary = {key: 6, "matched": 6 - len(rejected) - unfinished, "unfinished": unfinished, "rejected": rejected,
+                   "all_matched": not rejected and not unfinished}
+        return self.result(code, "".join(f"MISMATCH {case} (exit 0)\n" for case in rejected) + json.dumps(summary) + "\n")
+
+    def at_input(self, *results):
+        return self.after_scenarios(self.ledger(0, []), self.result(0), self.result(0), self.result(0), *results)
+
+    def test_input_rejection_is_credited_with_the_cases_that_repeat(self):
+        key = "a key repeated in one object is refused"
+        self.assertEqual(self.at_input(self.input_report(1, [key]), self.input_report(1, [key])), (False, [f"input-judge: {key}"]))
+
+    def test_input_replay_on_another_case_or_unfinished_is_unsteady(self):
+        first = self.input_report(1, ["a key repeated in one object is refused"])
+        for second in (self.input_report(1, ["a byte that is not UTF-8 is refused"]), self.input_report(0, []),
+                       self.input_report(2, [], unfinished=1)):
+            with self.subTest(second=second.stdout):
+                self.assertEqual(self.at_input(first, second), (False, ["input-judge unsteady"]))
+
+    def test_input_report_that_is_partial_or_unfinished_is_unfinished(self):
+        key = "a key repeated in one object is refused"
+        old = self.result(1, f"MISMATCH {key} (exit 0)\n" + json.dumps({"cases": 6, "matched": 5, "all_matched": False}) + "\n")
+        for answer in (self.input_report(2, [key], unfinished=1), self.input_report(2, [], unfinished=1), old,
+                       self.result(1, f"MISMATCH {key} (exit 0)\n"), self.input_report(1, [key], key="checks"),
+                       self.result(-15, self.input_report(1, [key]).stdout)):
+            with self.subTest(answer=answer.stdout):
+                self.assertEqual(self.at_input(answer), (False, ["input-judge unfinished"]))
+
     def test_a_batch_builds_into_its_own_copy(self):
         summary = {"scenarios": 1, "matched": 1, "all_matched": True, "unfinished": 0, "rejected": []}
         with tempfile.TemporaryDirectory() as tmp:
@@ -1221,6 +1252,81 @@ class LedgerJudgeTests(unittest.TestCase):
             self.assertEqual(write([failure]), 2, failure)
 
 
+class InputJudgeTests(unittest.TestCase):
+    """The strict-input judge counts a nonzero exit as a refusal only when the kernel returned on its own: a kernel
+    that could not start, ran out of time or was ended by the operating system leaves the run unfinished (issue 41)."""
+
+    control = "the input without a fault is answered"
+    repeated_key = "a key repeated in one object is refused"
+
+    @staticmethod
+    def exited(code):
+        return subprocess.CompletedProcess(["kernel", "scenario"], code, b"", b"")
+
+    def judge(self, answers):
+        answers = [self.exited(a) if isinstance(a, int) else a for a in answers]
+        argv = ["run_input_cases.py", "--", "kernel"]
+        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_input_cases.sys, "argv", argv), \
+                patch.object(run_input_cases.subprocess, "run", side_effect=answers) as run:
+            code = run_input_cases.main()
+        return code, json.loads(output.getvalue().splitlines()[-1]), run.call_args_list
+
+    def test_ordinary_nonzero_refusals_complete_and_pass(self):
+        for codes in ([0, 1, 2, 1, 2, 2], [0, 101, 1, 3, 255, 2], [0, 0xFFFFFFFF, 1, 1, 1, 1]):
+            with self.subTest(codes=codes):
+                code, summary, _ = self.judge(codes)
+                self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["all_matched"]), (0, 0, [], True))
+                self.assertEqual((summary["cases"], summary["matched"]), (6, 6))
+
+    def test_an_accepted_fault_is_a_named_mismatch(self):
+        code, summary, _ = self.judge([0, 0, 2, 2, 2, 2])
+        self.assertEqual((code, summary["unfinished"], summary["all_matched"]), (1, 0, False))
+        self.assertEqual(summary["rejected"], [self.repeated_key])
+        self.assertEqual((summary["cases"], summary["matched"]), (6, 5))
+        code, summary, _ = self.judge([1, 2, 2, 2, 2, 2])
+        self.assertEqual((code, summary["unfinished"], summary["rejected"]), (1, 0, [self.control]))
+
+    def test_a_kernel_ended_by_the_operating_system_is_unfinished_not_a_refusal(self):
+        # -15: a POSIX signal. 0xC0000005, 0xC00000FD, 0xC0000409: an access violation, a stack overflow and a fail-fast
+        # abort as Windows reports them, in the NTSTATUS error range.
+        for ended in (-15, -9, 0xC0000005, 0xC00000FD, 0xC0000409):
+            with self.subTest(ended=ended):
+                code, summary, _ = self.judge([0, ended, 2, 2, 2, 2])
+                self.assertEqual((code, summary["unfinished"], summary["all_matched"]), (2, 1, False))
+                self.assertNotIn(self.repeated_key, summary["rejected"])
+                self.assertEqual(summary["rejected"], [])
+
+    def test_a_kernel_that_could_not_start_or_ran_out_of_time_is_unfinished(self):
+        for failure in (OSError(errno.ENOSPC, "No space left on device"), FileNotFoundError(),
+                        subprocess.TimeoutExpired("kernel", 60)):
+            for at in (0, 1):
+                answers = [0, 2, 2, 2, 2, 2]
+                answers[at] = failure
+                with self.subTest(failure=failure, at=at):
+                    code, summary, _ = self.judge(answers)
+                    self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["all_matched"]), (2, 1, [], False))
+
+    def test_a_mismatch_then_an_unfinished_case_leaves_the_run_unfinished(self):
+        code, summary, _ = self.judge([0, 0, -15, 2, 2, 2])
+        self.assertEqual((code, summary["unfinished"], summary["all_matched"]), (2, 1, False))
+        self.assertEqual(summary["rejected"], [self.repeated_key])
+
+    def test_a_failure_of_the_judge_itself_is_unfinished(self):
+        with patch.object(pathlib.Path, "read_text", side_effect=OSError(errno.ENOSPC, "No space left on device")):
+            code, summary, calls = self.judge([])
+        self.assertEqual((code, summary["unfinished"], summary["all_matched"], calls), (2, 1, False, []))
+
+    def test_the_same_inputs_are_sent(self):
+        _, _, calls = self.judge([0, 1, 2, 1, 2, 2])
+        self.assertEqual([call.args[0] for call in calls], [["kernel", "scenario"]] * 6)
+        sent = [call.kwargs["input"] for call in calls]
+        json.loads(sent[0].decode("utf-8"))
+        self.assertTrue(sent[1].startswith(b'{"kind": "nothing", '))
+        self.assertTrue(sent[5].endswith(b', "x": "\xff"}'))
+        with self.assertRaises(UnicodeDecodeError):
+            sent[5].decode("utf-8")
+
+
 class PlantJsTests(unittest.TestCase):
     """Keep the standalone JavaScript runner tests registered in hosted CI."""
 
@@ -1313,6 +1419,7 @@ def main() -> int:
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ToolPinTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitAdequacyTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(LedgerJudgeTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(InputJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantJsTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
