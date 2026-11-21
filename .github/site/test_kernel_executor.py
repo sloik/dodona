@@ -51,12 +51,13 @@ class KernelExecutor(unittest.TestCase):
         self.where = pathlib.Path(self.tmp.name)
         self.project = self.where / "project"
         (self.project / "spec" / "m").mkdir(parents=True)
-        (self.project / "spec" / "m" / "a.tla").write_text("---- a\n", encoding="utf-8")
+        model_bytes = b"---- a\n"
+        (self.project / "spec" / "m" / "a.tla").write_bytes(model_bytes)
         _, pinned = host.lock_tools()
         (self.where / "queue.py").write_text(FAKE_QUEUE.replace("PINNED_JAR", repr(pinned["tla2tools"]["sha256"])), encoding="utf-8")
         tools, _ = host.lock_tools()
         self.asked = [{"name": t["name"], "digest": t["digest"]} for t in tools]
-        identity = "sha256:" + hashlib.sha256(b"---- a\n").hexdigest()
+        identity = "sha256:" + hashlib.sha256(model_bytes).hexdigest()
         run = {"program": {"tool": "java", "path": "bin/java"}, "args": ["-cp", "${tool:tla2tools}/tla2tools.jar", "tlc2.TLC", "a.tla"],
                "inputs": [{"path": "spec/m/a.tla", "identity": identity}], "outputs": [], "limits": {"wall_ms": 1000},
                "platform": host.PLATFORM, "cwd": "spec/m", "tools": self.asked}
