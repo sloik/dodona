@@ -73,9 +73,23 @@ function readLedger(bytes) {
   return { entries, torn, keep, last: previous };
 }
 
-// True if the entry nests deeper than a reader reads.
+// True if the entry nests deeper than a reader reads: more than MAX_DEPTH objects
+// and arrays deep, the entry itself the first. The entry is walked one level at a
+// time, without recursion, and the walk stops at the first level past the limit,
+// so an entry nested to any depth is judged without running out of stack.
 function tooDeep(entry) {
-  return strictJson.read(JSON.stringify(entry), { maxDepth: MAX_DEPTH }).refused === 'too-deep';
+  let level = [entry];
+  for (let depth = 1; level.length > 0; depth += 1) {
+    if (depth > MAX_DEPTH) return true;
+    const next = [];
+    for (const value of level) {
+      for (const member of Object.values(value)) {
+        if (member !== null && typeof member === 'object') next.push(member);
+      }
+    }
+    level = next;
+  }
+  return false;
 }
 
 module.exports = { encodeEntry, decodeLine, readLedger, tooDeep };
