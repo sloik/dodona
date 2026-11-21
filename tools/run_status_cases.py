@@ -14,14 +14,16 @@ tools/project_status.py, are each run on their own copy. A case matches when:
   `scenario` command gives as the last result for what it judged; and the statuses the case names,
   written by hand from the status rules, are the report's.
 
-The expected refusals and statuses are never taken from a kernel. KERNEL is used only to recompute
-the report from what the command says it judged, so that it cannot show one thing and judge another.
+The curated refusals and statuses are never taken from a kernel. KERNEL recomputes the report
+from the reference's scenario, which must equal what the command says it judged.
+An incomplete process or broken reference premise leaves the case unfinished.
 """
 from __future__ import annotations
 
 import argparse
 import concurrent.futures
 import copy
+import errno
 import hashlib
 import json
 import os
@@ -39,8 +41,14 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 CASES = ROOT / "conformance" / "project" / "cases.json"
 FIXTURE = ROOT / "conformance" / "project" / "fixture_provider.py"
 REFERENCE = [sys.executable, str(ROOT / "tools" / "project_status.py")]
+
+
 class Skip(Exception):
     """A case this system cannot set up, such as one that needs a symbolic link. Never a match."""
+
+
+class Unfinished(Exception):
+    """The judge lacks a completed answer or a usable reference premise."""
 
 
 def same(a, b) -> bool:
@@ -48,7 +56,9 @@ def same(a, b) -> bool:
     return json.dumps(a, sort_keys=True, ensure_ascii=False) == json.dumps(b, sort_keys=True, ensure_ascii=False)
 
 
-COMPARED = ("judged", "coverage", "ledger", "not_served", "not_checkable", "policy_not_applied", "policy_source", "project_doubts")
+REFERENCE_FIELDS = {"judged": dict, "coverage": dict, "ledger": dict, "not_served": list, "not_checkable": list,
+                    "policy_not_applied": list, "policy_source": str, "project_doubts": list}
+COMPARED = tuple(REFERENCE_FIELDS)
 OUT_KEYS = set(COMPARED) | {"report", "project_status"}
 
 
@@ -82,6 +92,19 @@ def fill(value, preimages: dict):
     return value
 
 
+def make_link(target: pathlib.Path, link: pathlib.Path, *, symbolic: bool = True) -> None:
+    kind = "a symbolic" if symbolic else "a hard"
+    try:
+        (os.symlink if symbolic else os.link)(target, link)
+    except NotImplementedError:
+        raise Skip(f"this system cannot make {kind} link") from None
+    except OSError as err:
+        unsupported = (errno.ENOSYS, getattr(errno, "ENOTSUP", -1), getattr(errno, "EOPNOTSUPP", -1))
+        if isinstance(err, PermissionError) or err.errno in unsupported or getattr(err, "winerror", None) in (1, 50, 1314):
+            raise Skip(f"this system cannot make {kind} link") from err
+        raise
+
+
 def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tuple[bytes, pathlib.Path, pathlib.Path]:
     """The project of a case in where/root, the providers' answer files and records in where/aux; returns the input."""
     root, aux = where / "root", where / "aux"
@@ -91,10 +114,7 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_bytes(text.encode("utf-8"))
     for rel, target in case.get("links", {}).items():
-        try:
-            os.symlink(root / target, root / rel)
-        except (OSError, NotImplementedError):
-            raise Skip("this system cannot make a symbolic link") from None
+        make_link(root / target, root / rel)
     providers = {}
     for name, p in case["providers"].items():
         answers, record = aux / f"{name}.answers.json", aux / f"{name}.record.jsonl"
@@ -115,16 +135,10 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
             (root / "records").rmdir()
             (root / "records-real").mkdir()
             (root / "records-real" / "owner.ledger").write_bytes(data)
-            try:
-                os.symlink(root / "records-real", root / "records")
-            except (OSError, NotImplementedError):
-                raise Skip("this system cannot make a symbolic link") from None
+            make_link(root / "records-real", root / "records")
         elif owner.get("link"):
             (root / "records" / "elsewhere.ledger").write_bytes(data)
-            try:
-                os.symlink(root / "records" / "elsewhere.ledger", root / "records" / "owner.ledger")
-            except (OSError, NotImplementedError):
-                raise Skip("this system cannot make a symbolic link") from None
+            make_link(root / "records" / "elsewhere.ledger", root / "records" / "owner.ledger")
         else:
             (root / "records" / "owner.ledger").write_bytes(data)
     ledgers = []
@@ -137,29 +151,17 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
         path = root / item["path"]
         path.parent.mkdir(parents=True, exist_ok=True)
         if item.get("dangling"):
-            try:
-                os.symlink(root / "l" / "nothing-here.ledger", path)
-            except (OSError, NotImplementedError):
-                raise Skip("this system cannot make a symbolic link") from None
+            make_link(root / "l" / "nothing-here.ledger", path)
             continue
         if item.get("hardlink_to_owner"):
-            try:
-                os.link(root / "records" / "owner.ledger", path)
-            except (OSError, NotImplementedError):
-                raise Skip("this system cannot make a hard link") from None
+            make_link(root / "records" / "owner.ledger", path, symbolic=False)
             continue
         if item.get("link_to"):
             (root / item["link_to"]).write_bytes(ledger_bytes(fill(item["entries"], preimages)))
-            try:
-                os.symlink(root / item["link_to"], path)
-            except (OSError, NotImplementedError):
-                raise Skip("this system cannot make a symbolic link") from None
+            make_link(root / item["link_to"], path)
             continue
         if item.get("link_to_owner"):
-            try:
-                os.symlink(root / "records" / "owner.ledger", path)
-            except (OSError, NotImplementedError):
-                raise Skip("this system cannot make a symbolic link") from None
+            make_link(root / "records" / "owner.ledger", path)
             continue
         if "raw_entries" in item:  # entries the reference encoder writes whole, chained, whatever they hold
             data = ledger_bytes(item["raw_entries"])
@@ -187,10 +189,7 @@ def set_up(case: dict, site: dict, where: pathlib.Path, preimages: dict) -> tupl
             for item in case["ledgers"]:
                 if item["path"].startswith(rel + "/") and "entries" in item:
                     (target / item["path"][len(rel) + 1:]).write_bytes(ledger_bytes(fill(item["entries"], preimages)))
-        try:
-            os.symlink(target, root / rel)
-        except (OSError, NotImplementedError):
-            raise Skip("this system cannot make a symbolic link") from None
+        make_link(target, root / rel)
         if "mode" in spec:
             if os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0):
                 raise Skip("this system cannot make a folder its own user cannot enter")
@@ -220,53 +219,133 @@ def requests(aux: pathlib.Path) -> dict:
     return seen
 
 
-def run(command: list[str], case: dict, site: dict, preimages: dict, timeout: int = 120) -> tuple[dict | None, dict, str]:
+def answer(command: list[str], stdin: bytes, role: str, *, cwd: pathlib.Path | None = None, env: dict | None = None) -> dict:
+    try:
+        done = subprocess.run(command, input=stdin, capture_output=True, timeout=120, cwd=cwd, env=env)
+    except OSError as err:
+        raise Unfinished(f"{role} could not start: {err}") from err
+    except subprocess.TimeoutExpired as err:
+        raise Unfinished(f"{role} timed out") from err
+    if done.returncode != 0:
+        detail = done.stderr.decode("utf-8", "replace")[-300:]
+        raise Unfinished(f"{role} exited with {done.returncode}: {detail}")
+    try:
+        # A report carries ledger entries up to 64 levels deep, so it can nest deeper.
+        result = host.strict_load(done.stdout.rstrip(b"\n"), limit=None)
+    except (host.Refused, RecursionError) as err:
+        raise Unfinished(f"{role} gave invalid JSON: {err}") from err
+    if not isinstance(result, dict):
+        raise Unfinished(f"{role} gave no JSON object")
+    return result
+
+
+def run(command: list[str], case: dict, site: dict, preimages: dict, role: str) -> tuple[dict, dict]:
     with tempfile.TemporaryDirectory() as tmp:
-        stdin, root, aux = set_up(case, site, pathlib.Path(tmp), preimages)
+        where = pathlib.Path(tmp)
+        root, aux = where / "root", where / "aux"
         try:
-            where = None
+            stdin, root, aux = set_up(case, site, where, preimages)
+            cwd = None
             if case.get("started_in_root"):  # so that a root read as "wherever the command was started" finds the project
                 command = [str(pathlib.Path(arg).resolve()) if pathlib.Path(arg).is_file() else arg for arg in command]
-                where = root
-            env = dict(os.environ, PWD=str(root)) if where else None  # so a command that reads $PWD finds the project too
-            done = subprocess.run(command, input=stdin, capture_output=True, timeout=timeout, cwd=where, env=env)
-        except subprocess.TimeoutExpired:
-            return None, requests(aux), "timed out"
+                cwd = root
+            env = dict(os.environ, PWD=str(root)) if cwd else None  # so a command that reads $PWD finds the project too
+            got = answer(command, stdin, role, cwd=cwd, env=env)
+            return got, requests(aux)
         finally:
-            for rel in list(case.get("unreadable", [])) + list(case.get("unreadable_mode", {})):
-                os.chmod(root / rel, 0o755)  # so the folder can be removed
-            for rel, spec in case.get("outside_links", {}).items():
-                target = aux / ("outside-" + rel.replace("/", "-"))
-                if target.exists() or not spec.get("missing"):
-                    try:
-                        os.chmod(target, 0o755)
-                    except OSError:
-                        pass
-        if done.returncode != 0:
-            return None, requests(aux), f"exit {done.returncode}: " + done.stderr.decode("utf-8", "replace")[-300:]
-        try:
-            # Read strictly: a key given twice would let a reader that takes the first see something else.
-            # a report holds ledger entries up to 64 levels deep, so it may nest deeper: no depth limit on the answer
-            return host.strict_load(done.stdout.rstrip(b"\n"), limit=None), requests(aux), done.stderr.decode("utf-8", "replace")[-300:]
-        except Exception as err:  # noqa: BLE001
-            return None, requests(aux), f"not one strict JSON object ({err}): " + done.stdout[:200].decode("utf-8", "replace")
+            closed = [root / rel for rel in list(case.get("unreadable", [])) + list(case.get("unreadable_mode", {}))]
+            closed.extend(aux / ("outside-" + rel.replace("/", "-")) for rel, spec in case.get("outside_links", {}).items()
+                          if "mode" in spec and not spec.get("missing"))
+            for path in closed:
+                try:
+                    os.chmod(path, 0o755)  # so the fixture can be removed, including after partial setup
+                except FileNotFoundError:
+                    pass
+
+
+def refusal(answer: dict) -> bool:
+    return set(answer) == {"refused", "detail"} and isinstance(answer["refused"], str) and isinstance(answer["detail"], str)
+
+
+def reference_status(case: dict, site: dict, preimages: dict) -> tuple[dict, dict]:
+    ref, asked = run(REFERENCE, case, site, preimages, "reference status")
+    if "refused" in ref:
+        if not refusal(ref):
+            raise Unfinished("the reference gave a malformed refusal")
+        return ref, asked
+    if set(ref) != set(COMPARED) or any(not isinstance(ref[key], kind) for key, kind in REFERENCE_FIELDS.items()):
+        raise Unfinished("the reference gave no complete status premise")
+    view = ref["judged"]
+    if not (view.get("kind") == "status" and view.get("name") == "this-project"
+            and all(isinstance(view.get(key), dict) for key in ("self", "policy", "obligations", "intents"))
+            and isinstance(view.get("steps"), list) and view["steps"] and all(isinstance(step, dict) for step in view["steps"])):
+        raise Unfinished("the reference gave no scenario to judge")
+    return ref, asked
 
 
 def _preimages(case: dict, site: dict) -> dict:
     bare = dict(case, ledgers=[], owner_ledger=None, input_edit=[], unreadable=[], unreadable_mode={})
-    ref, _, _ = run(REFERENCE, bare, site, {})
-    view = (ref or {}).get("judged", {})
-    found = {n: o["preimage"] for n, o in view.get("obligations", {}).items()}
-    found["$intents"] = view.get("intents", {})
+    ref, _ = reference_status(bare, site, {})
+    if "refused" in ref:
+        return {}  # a fixture can be refused before it gets to any of its ledger contents
+    view = ref["judged"]
+    found = {n: o["preimage"] for n, o in view["obligations"].items()}
+    found["$intents"] = view["intents"]
     return found
 
 
-def judge(case: dict, site: dict, command: list[str], kernel: list[str]) -> list[str]:
+def scenario_report(kernel: list[str], view: dict) -> dict:
+    got = answer(kernel + ["scenario"], json.dumps(view).encode("utf-8"), "independent scenario")
+    results = got.get("results")
+    if (set(got) != {"results"} or not isinstance(results, list) or len(results) != len(view["steps"])
+            or any(not isinstance(item, dict) for item in results)):
+        raise Unfinished("the independent scenario gave no complete set of results")
+    report = results[-1]
+    if not (set(report) == {"obligations", "intents", "project", "rejected"}
+            and isinstance(report["project"], dict) and isinstance(report["project"].get("status"), str)
+            and type(report["rejected"]) is int):
+        raise Unfinished("the independent scenario gave no final status report")
+    for field in ("obligations", "intents"):
+        group = report[field]
+        if not (isinstance(group, dict) and all(isinstance(item, dict) and isinstance(item.get("status"), str)
+                                               for item in group.values())):
+            raise Unfinished(f"the independent scenario gave no usable {field} report")
+    return report
+
+
+def expected_differences(out: dict, report: dict, headline: str, expect: dict) -> list[str]:
+    problems = []
+    status = expect.get("status", {})
+    for group in ("obligations", "intents"):
+        for name, want in status.get(group, {}).items():
+            if report[group].get(name, {}).get("status") != want:
+                problems.append(f"{group} {name}: expected {want}")
+    if "project" in status and report["project"]["status"] != status["project"]:
+        problems.append(f"project: expected {status['project']}, got {report['project']}")
+    if "project_status" in expect and headline != expect["project_status"]:
+        problems.append(f"project_status: expected {expect['project_status']}, got {headline}")
+    for field in ("not_served", "not_checkable", "ledger", "policy_not_applied", "project_doubts"):
+        if field in expect and not same(out[field], expect[field]):
+            problems.append(f"{field}: expected {expect[field]}, got {out[field]}")
+    return problems
+
+
+def judge(case: dict, site: dict, command: list[str], kernel: list[str], generated: bool = False) -> list[str]:
     # The current preimages, for ledgers that hold results under the current key: from the reference.
-    preimages = {}
-    if "$" in json.dumps(case["ledgers"]) + json.dumps(case.get("owner_ledger")):
-        preimages = _preimages(case, site)
-    got, asked, err = run(command, case, site, preimages)
+    needs_preimages = "$" in json.dumps(case["ledgers"]) + json.dumps(case.get("owner_ledger"))
+    preimages = _preimages(case, site) if needs_preimages else {}
+    got, asked = run(command, case, site, preimages, "status command")
+    ref, ref_asked = reference_status(case, site, preimages)
+    expect = ({"refused": ref["refused"]} if "refused" in ref else {}) if generated else case["expect"]
+    if "refused" in expect:
+        if ref.get("refused") != expect["refused"]:
+            raise Unfinished(f"the reference did not give the fixture's refusal {expect['refused']}")
+    elif "refused" in ref:
+        raise Unfinished(f"the reference refused {ref['refused']} where the fixture expects a report")
+    elif needs_preimages and not preimages:
+        raise Unfinished("the reference refused to read the fixture's preimages")
+
+    problems = []
     deadline = dict(site, **case.get("site_edit", {})).get("deadline_ms")
     for path, value in case.get("input_edit", []):
         if path == ["site", "deadline_ms"]:
@@ -276,60 +355,35 @@ def judge(case: dict, site: dict, command: list[str], kernel: list[str]) -> list
         sent = [m for record in asked.values() for m in record if m["type"] in ("hello", "request")]
         late = [m for m in sent if (m["limits"] or {}).get("deadline_ms", m["deadline_ms"]) != deadline]
         if late:
-            return [f"a provider was sent a deadline other than the {deadline} ms given"]
-    ref, ref_asked, ref_err = run(REFERENCE, case, site, preimages)
-    problems = []
-    expect = case["expect"]
-    if not isinstance(got, dict):
-        return [f"no JSON object answered ({err if got is None else type(got).__name__})"]
+            problems.append(f"a provider was sent a deadline other than the {deadline} ms given")
     if "refused" in expect:
-        if (ref or {}).get("refused") != expect["refused"]:
-            problems.append(f"the kit is wrong: the reference gives {ref} ({ref_err})")
-        if got.get("refused") != expect["refused"] or set(got) != {"refused", "detail"} or not isinstance(got.get("detail"), str):
+        if not refusal(got) or got["refused"] != expect["refused"]:
             problems.append(f"expected exactly refused {expect['refused']} with a detail, got {json.dumps(got)[:200]}")
         # Nothing after the broken rule is done: the providers started, and what each was asked, are the reference's.
         if not same(asked, ref_asked):
             problems.append(f"refused at {expect['refused']}, but the providers started or asked differ from the reference's")
         return problems
+
+    # Use the known input even if the command's `judged` is itself wrong.
+    own = scenario_report(kernel, ref["judged"])
+    status = own["project"]["status"]
+    headline = "unknown" if ref["project_doubts"] and status in ("passed", "nothing-required") else status
+    wrong_premises = expected_differences(ref, own, headline, expect)
+    if wrong_premises:
+        raise Unfinished("the reference and independent scenario disagree with the fixture: " + "; ".join(wrong_premises))
     if "refused" in got:
-        return [f"refused {got['refused']} ({got.get('detail')}), expected a report"]
+        return problems + [f"refused {got['refused']} ({got.get('detail')}), expected a report"]
     if set(got) != OUT_KEYS:
         problems.append(f"the answer holds {sorted(set(got) ^ OUT_KEYS)} where it should not or does not")
-    if ref is None or "refused" in ref:
-        return [f"the kit is wrong: the reference gives {ref} ({ref_err})"]
     for field in COMPARED:
-        if not same(got.get(field), ref.get(field)):
+        if not same(got.get(field), ref[field]):
             problems.append(f"{field} differs from the reference")
     if not same(asked, ref_asked):
         problems.append("the requests sent to the providers differ from the reference's")
-    answer = subprocess.run(kernel + ["scenario"], input=json.dumps(got.get("judged")).encode("utf-8"), capture_output=True, timeout=120)
-    try:
-        own = json.loads(answer.stdout)["results"][-1]
-    except (ValueError, KeyError, IndexError):
-        own = None
-    if own is None:
-        problems.append("the scenario command gives no report for what was judged")
-    elif not same(got.get("report"), own):
+    if not same(got.get("report"), own):
         problems.append("the report is not what the scenario command gives for what was judged")
-    report = got.get("report") or {}
-    status = expect.get("status", {})
-    for name, want in status.get("obligations", {}).items():
-        if report.get("obligations", {}).get(name, {}).get("status") != want:
-            problems.append(f"obligation {name}: expected {want}")
-    for name, want in status.get("intents", {}).items():
-        if report.get("intents", {}).get(name, {}).get("status") != want:
-            problems.append(f"intent {name}: expected {want}")
-    if "project" in status and report.get("project", {}).get("status") != status["project"]:
-        problems.append(f"project: expected {status['project']}, got {report.get('project')}")
-    if "project_status" in expect and got.get("project_status") != expect["project_status"]:
-        problems.append(f"project_status: expected {expect['project_status']}, got {got.get('project_status')}")
-    if own is not None and got.get("project_status") != (
-            "unknown" if got.get("project_doubts") and own.get("project", {}).get("status") in ("passed", "nothing-required")
-            else own.get("project", {}).get("status")):
+    if got.get("project_status") != headline:
         problems.append("project_status is not the report's status as its doubts allow")
-    for field in ("not_served", "not_checkable", "ledger", "policy_not_applied", "project_doubts"):
-        if field in expect and not same(got.get(field), expect[field]):
-            problems.append(f"{field}: expected {expect[field]}, got {got.get(field)}")
     return problems
 
 
@@ -452,44 +506,50 @@ def main() -> int:
     kernel = args.kernel
     if "--" in kernel:
         kernel, command = kernel[:kernel.index("--")], kernel[kernel.index("--") + 1:]
-    spec = json.loads(CASES.read_text(encoding="utf-8"))
-    kit_problems = 0
-    if args.variants:
-        def expected(case):
-            pre = _preimages(case, spec["site"]) if "$" in json.dumps(case["ledgers"]) + json.dumps(case.get("owner_ledger")) else {}
-            ref, _, err = run(REFERENCE, case, spec["site"], pre)
-            return case, ref, err
-        made = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-            for case, ref, err in pool.map(expected, variants(spec)):
-                if ref is None:
-                    print(f"KIT      {case['name']}: the reference gives no answer ({err})")
-                    kit_problems += 1
-                    continue
-                case["expect"] = {"refused": ref["refused"]} if "refused" in ref else {}
-                made.append(case)
-        spec = dict(spec, cases=made)
-
-    def one(case):
+    def one(case: dict) -> list[str] | Exception:
         try:
-            return case, judge(case, spec["site"], command, kernel), None
-        except Skip as why:
-            return case, None, why
-        except Exception as err:  # noqa: BLE001 - a case the judge cannot run is a mismatch, never a crash or a pass
-            return case, [f"the judge could not run this case: {type(err).__name__}: {err}"], None
-    matched, skipped = 0, 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        results = list(pool.map(one, spec["cases"]))
-    for case, problems, why in results:
-        if why is not None:
+            return judge(case, spec["site"], command, kernel, generated=args.variants)
+        except Exception as err:  # fixture and process failures need a result too
+            return err
+
+    try:
+        spec = json.loads(CASES.read_text(encoding="utf-8"))
+        cases = variants(spec) if args.variants else spec["cases"]
+        names = [case["name"] for case in cases]
+        if any(not isinstance(name, str) or not name for name in names) or len(set(names)) != len(names):
+            raise ValueError("cases must have distinct nonempty names")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
+            results = list(pool.map(one, cases))
+    except Exception as err:
+        print(f"UNFINISHED the judge could not prepare its cases: {type(err).__name__}: {err}")
+        return finish(0, 0, 0, [], 1)
+
+    matched = skipped = unfinished = 0
+    rejected = []
+    for name, result in zip(names, results, strict=True):
+        if isinstance(result, Skip):
             skipped += 1
-            print(f"skipped  {case['name']}: {why}")
-            continue
-        matched += not problems
-        print(("match    " if not problems else "MISMATCH ") + case["name"] + ("" if not problems else ": " + "; ".join(problems)))
-    judged = len(spec["cases"]) - skipped
-    print(json.dumps({"cases": len(spec["cases"]), "judged": judged, "skipped": skipped, "matched": matched, "all_matched": matched == judged}))
-    return 0 if judged and matched == judged and not kit_problems else 1
+            print(f"skipped  {name}: {result}")
+        elif isinstance(result, Exception):
+            unfinished += 1
+            print(f"UNFINISHED {name}: {type(result).__name__}: {result}")
+        elif result:
+            rejected.append(name)
+            print(f"MISMATCH {name}: " + "; ".join(result))
+        else:
+            matched += 1
+            print(f"match    {name}")
+    return finish(len(cases), skipped, matched, rejected, unfinished)
+
+
+def finish(cases: int, skipped: int, matched: int, rejected: list[str], unfinished: int) -> int:
+    judged = cases - skipped
+    all_matched = judged > 0 and unfinished == 0 and not rejected
+    print(json.dumps({"cases": cases, "judged": judged, "skipped": skipped, "matched": matched, "all_matched": all_matched,
+                      "rejected": rejected, "unfinished": unfinished}))
+    if unfinished or not judged:
+        return 2
+    return 0 if all_matched else 1
 
 
 if __name__ == "__main__":

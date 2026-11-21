@@ -36,6 +36,7 @@ import run_key_vectors  # noqa: E402
 import run_kit  # noqa: E402
 import run_ledger_cases  # noqa: E402
 import run_provider_cases  # noqa: E402
+import run_status_cases  # noqa: E402
 
 problems: list[str] = []
 
@@ -2216,6 +2217,136 @@ class PlantJsTests(unittest.TestCase):
                 self.assertFalse(self.registered(workflow.replace(self.command, replacement)))
 
 
+class StatusJudgeTests(unittest.TestCase):
+    """A project status mismatch requires three completed processes and a sound reference premise."""
+
+    case = {"name": "an empty ledger has a report", "files": {}, "providers": {}, "ledgers": [], "policy": {}, "expect": {}}
+    reference = {"judged": {"kind": "status", "name": "this-project", "self": {}, "policy": {},
+                            "obligations": {}, "intents": {}, "steps": [{}]}, "coverage": {}, "ledger": {},
+                 "not_served": [], "not_checkable": [], "policy_not_applied": [], "policy_source": "policy",
+                 "project_doubts": []}
+    report = {"obligations": {}, "intents": {}, "project": {"status": "nothing-required"}, "rejected": 0}
+    right = dict(reference, report=report, project_status="nothing-required")
+
+    @staticmethod
+    def answered(payload, code=0, stderr=b""):
+        return subprocess.CompletedProcess([], code, json.dumps(payload).encode("utf-8"), stderr)
+
+    def exercise(self, answers, cases=None, variants=None):
+        argv = ["run_status_cases.py", "--jobs", "1", "--kernel", "peer", "--", "kernel", "status"]
+        if variants is not None:
+            argv.insert(1, "--variants")
+        cases = [self.case] if cases is None else cases
+        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_status_cases.sys, "argv", argv), \
+                patch.object(run_status_cases, "CASES") as spec, patch.object(run_status_cases, "variants") as generated, \
+                patch.object(run_status_cases.subprocess, "run", side_effect=answers):
+            spec.read_text.return_value = json.dumps({"cases": cases, "site": {}})
+            generated.return_value = variants
+            code = run_status_cases.main()
+        lines = output.getvalue().splitlines()
+        return code, json.loads(lines[-1]), lines[:-1]
+
+    def test_peer_report_from_failed_process_cannot_pass(self):
+        code, summary, _ = self.exercise([
+            self.answered(self.right), self.answered(self.reference),
+            self.answered({"results": [self.report]}, 1, b"ENOSPC"),
+        ])
+        self.assertEqual(code, 2)
+        self.assertEqual((summary["matched"], summary["unfinished"], summary["rejected"]), (0, 1, []))
+
+    def replies(self):
+        return [self.answered(self.right), self.answered(self.reference), self.answered({"results": [self.report]})]
+
+    def test_launch_timeout_exit_and_invalid_json_are_unfinished_for_each_role(self):
+        failures = [FileNotFoundError("missing command"), subprocess.TimeoutExpired("command", 120),
+                    OSError(errno.ENOSPC, "No space left on device"), self.answered({}, -15),
+                    self.answered({}, 0xC0000005), self.answered({}, 1, b"No space left on device"),
+                    subprocess.CompletedProcess([], 0, b'{"x":1,"x":2}', b""), self.answered([])]
+        for index, role in enumerate(("status command", "reference status", "independent scenario")):
+            for failure in failures:
+                with self.subTest(role=role, failure=failure):
+                    answers = self.replies()
+                    answers[index] = failure
+                    code, summary, lines = self.exercise(answers)
+                    self.assertEqual(code, 2)
+                    self.assertEqual((summary["matched"], summary["unfinished"], summary["rejected"]), (0, 1, []))
+                    self.assertIn(role, lines[0])
+
+    def test_completed_wrong_status_is_named(self):
+        answers = self.replies()
+        answers[0] = self.answered(dict(self.right, judged={}, project_status="failed"))
+        replies = iter(answers)
+
+        def run(command, **kwargs):
+            if command[-1] == "scenario":
+                self.assertEqual(json.loads(kwargs["input"]), self.reference["judged"])
+            return next(replies)
+
+        code, summary, lines = self.exercise(run)
+        self.assertEqual(code, 1)
+        self.assertEqual(summary, {"cases": 1, "judged": 1, "skipped": 0, "matched": 0, "all_matched": False,
+                                   "unfinished": 0, "rejected": [self.case["name"]]})
+        self.assertIn("judged differs from the reference", lines[0])
+        self.assertIn("project_status", lines[0])
+
+    def test_expected_refusal_with_exit_zero_can_match(self):
+        case = dict(self.case, expect={"refused": "provider-not-started"})
+        expected = {"refused": "provider-not-started", "detail": "the fixture's provider is absent"}
+        code, summary, _ = self.exercise([self.answered(expected)] * 2, cases=[case])
+        self.assertEqual((code, summary["matched"], summary["unfinished"], summary["all_matched"]), (0, 1, 0, True))
+        wrong = self.answered(dict(expected, refused="bad-manifest"))
+        code, summary, _ = self.exercise([wrong, self.answered(expected)], cases=[case])
+        self.assertEqual((code, summary["rejected"], summary["unfinished"]), (1, [case["name"]], 0))
+
+    def test_incomplete_reference_or_scenario_and_wrong_premises_are_unfinished(self):
+        for index, payload in [(1, {}), (1, dict(self.reference, coverage=[])),
+                               (1, {"refused": "bad-input", "detail": "unexpected"}),
+                               (2, {"results": []}), (2, {"results": [{}]})]:
+            with self.subTest(role=index, payload=payload):
+                answers = self.replies()
+                answers[index] = self.answered(payload)
+                code, summary, _ = self.exercise(answers)
+                self.assertEqual((code, summary["rejected"], summary["unfinished"]), (2, [], 1))
+        case = dict(self.case, expect={"status": {"project": "passed"}})
+        code, summary, lines = self.exercise(self.replies(), cases=[case])
+        self.assertEqual((code, summary["rejected"], summary["unfinished"]), (2, [], 1))
+        self.assertIn("disagree with the fixture", lines[0])
+
+    def test_variants_count_failed_references_and_use_completed_reference_refusals(self):
+        cases = [dict(self.case, name="lost reference"), dict(self.case, name="expected refusal")]
+        refused = self.answered({"refused": "bad-input", "detail": "variant input is invalid"})
+        code, summary, lines = self.exercise([self.answered(self.right), OSError(errno.ENOSPC, "disk full"), refused, refused],
+                                             variants=cases)
+        self.assertEqual((code, summary), (2, {"cases": 2, "judged": 2, "skipped": 0, "matched": 1, "all_matched": False,
+                                              "unfinished": 1, "rejected": []}))
+        self.assertTrue(lines[0].startswith("UNFINISHED lost reference:"))
+        self.assertEqual(lines[1], "match    expected refusal")
+
+    def test_unfinished_takes_precedence_over_a_completed_rejection(self):
+        cases = [dict(self.case, name="wrong status"), dict(self.case, name="timed out")]
+        answers = self.replies()
+        answers[0] = self.answered(dict(self.right, project_status="failed"))
+        answers.append(subprocess.TimeoutExpired("status command", 120))
+        code, summary, _ = self.exercise(answers, cases=cases)
+        self.assertEqual((code, summary["matched"], summary["unfinished"], summary["rejected"]), (2, 0, 1, ["wrong status"]))
+
+    def test_a_refused_preimage_read_cannot_supply_a_completed_report(self):
+        case = dict(self.case, owner_ledger={"entries": [{"kind": "act", "body": {"target": "$baseline:i1"}}]})
+        refused = self.answered({"refused": "bad-input", "detail": "no preimages"})
+        code, summary, lines = self.exercise([refused, *self.replies()], cases=[case])
+        self.assertEqual((code, summary["unfinished"], summary["rejected"]), (2, 1, []))
+        self.assertIn("refused to read the fixture's preimages", lines[0])
+
+    def test_link_capability_skip_differs_from_fixture_io_failure(self):
+        cases = [dict(self.case, name="requires a link", links={"link": "target"}), self.case]
+        with patch.object(run_status_cases.os, "symlink", side_effect=PermissionError(errno.EPERM, "links unavailable")):
+            code, summary, _ = self.exercise(self.replies(), cases=cases)
+        self.assertEqual((code, summary["judged"], summary["skipped"], summary["matched"], summary["unfinished"]), (0, 1, 1, 1, 0))
+        with patch.object(run_status_cases.os, "symlink", side_effect=OSError(errno.ENOSPC, "disk full")):
+            code, summary, _ = self.exercise(self.replies(), cases=cases)
+        self.assertEqual((code, summary["judged"], summary["skipped"], summary["matched"], summary["unfinished"]), (2, 2, 0, 1, 1))
+
+
 class JudgeTests(unittest.TestCase):
     """The judge must never turn an unfinished or wrong run into a match."""
 
@@ -2285,6 +2416,7 @@ def main() -> int:
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(AttestJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(HarnessJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ProviderJudgeTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(StatusJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantJsTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
