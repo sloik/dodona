@@ -1904,6 +1904,13 @@
       "file": "src/project_status.rs",
       "find": "        if !doubts.is_empty() && matches!(stated.as_str(), \"passed\" | \"nothing-required\") {\n",
       "replace": "        if doubts.len() > 9 && matches!(stated.as_str(), \"passed\" | \"nothing-required\") {\n"
+    },
+    {
+      "name": "ledger: a line nested deeper than 64 is read",
+      "model_case": null,
+      "file": "src/ledger.rs",
+      "find": "    if depth > crate::wire::MAX_DEPTH {\n",
+      "replace": "    if depth > usize::MAX - 1 {\n"
     }
   ]
 }
