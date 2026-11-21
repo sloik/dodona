@@ -44,6 +44,8 @@ A kernel reads every input as strictly as the [canonical encoding](../protocol/c
 
 `tools/run_vectors.py -- <kernel command>` judges the canonical-encoding vectors. The command must exit 0 with a JSON object naming the exact canonical text and SHA-256 digest, or the exact refusal reason. A completed usable answer that differs is a named mismatch. A launch failure, timeout, nonzero exit, explicit disk-full diagnostic, or output without a usable acceptance or refusal leaves the vector unfinished. The footer counts `vectors`, `matched` and `unfinished`, lists mismatch names in `rejected`, and reports `all_matched`. The judge exits 0 for a complete match, 1 for completed mismatches, and 2 if a vector or the judge was unfinished or no vector ran.
 
+The path-vector judge uses the same footer and exit meanings for its single-path and collision commands. It gives text accepts, text refusals, byte refusals and named collision cases distinct identifiers. A path answer requires a boolean acceptance or a string refusal, and a collision answer requires a list of two-string pairs. A completed answer that differs from the exact expectation is a named mismatch. A failed process, disk-full diagnostic or unusable answer leaves the vector unfinished. Pair order does not matter, but extra pairs, duplicates and unrelated paths are mismatches.
+
 ### Evidence scenarios
 
 A scenario gives the obligations with what each depends on, the starting content of every definition, the starting tool, and whether the backend is up. Content and tools are opaque strings standing for identities.

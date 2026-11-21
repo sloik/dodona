@@ -819,20 +819,19 @@ def run_path_vectors_with(answer_for_set) -> tuple[int, str]:
         singles[item["hex"]] = {"refused": item["reason"]}
     sets = {tuple(item["paths"]): item["collide"] for item in vectors["collisions"]}
 
-    def ask(command: list[str], payload: dict) -> dict | None:
+    def run(command: list[str], *, input: bytes, **kwargs) -> subprocess.CompletedProcess:
+        payload = json.loads(input)
         if command[-1] == "one":
-            return singles.get(payload["hex"])
-        return {"collisions": answer_for_set(list(payload["paths"]), sets[tuple(payload["paths"])])}
+            answer = singles[payload["hex"]]
+        else:
+            pair = payload["paths"]
+            answer = {"collisions": answer_for_set(pair, sets[tuple(pair)])}
+        return subprocess.CompletedProcess(command, 0, json.dumps(answer).encode("utf-8"), b"")
 
-    saved_ask, saved_argv = run_path_vectors.ask, sys.argv
-    out = io.StringIO()
-    try:
-        run_path_vectors.ask = ask
-        sys.argv = ["run_path_vectors.py", "--", "mock-kernel", "one", "many"]
-        with contextlib.redirect_stdout(out):
-            code = run_path_vectors.main()
-    finally:
-        run_path_vectors.ask, sys.argv = saved_ask, saved_argv
+    argv = ["run_path_vectors.py", "--", "mock-kernel", "one", "many"]
+    with patch.object(run_path_vectors.subprocess, "run", side_effect=run), patch.object(sys, "argv", argv), \
+            contextlib.redirect_stdout(io.StringIO()) as out:
+        code = run_path_vectors.main()
     return code, out.getvalue()
 
 
@@ -865,16 +864,27 @@ def gap_path_vector_judge_is_strict() -> None:
         "an empty object": lambda pair: {},
         "the vector's own pair": lambda pair: [pair],
     }
+    malformed = {"a truthy string", "a pair of three", "a pair of one", "a pair that is not a list",
+                 "a pair that is a string", "zero", "null", "an empty string", "false", "an empty object"}
+
+    def require_fault(label: str, wrong, positive: bool) -> None:
+        code, out = run_path_vectors_with(lambda pair, collide: wrong(pair) if collide == positive else ([pair] if collide else []))
+        names = [f"collision case {name!a}" for name in (positives if positive else negatives)]
+        unfinished = label in malformed
+        mark = "UNFINISHED" if unfinished else "MISMATCH"
+        summary = json.loads(out.splitlines()[-1])
+        if (code != (2 if unfinished else 1) or summary["all_matched"]
+                or summary["rejected"] != ([] if unfinished else names)
+                or summary["unfinished"] != (len(names) if unfinished else 0)):
+            problems.append(f"tools/run_path_vectors.py misclassifies {label}: {summary}")
+        for name in names:
+            if f"{mark} {name}: " not in out:
+                problems.append(f"tools/run_path_vectors.py accepts or misclassifies {label} for {name}")
+
     for label, wrong in false_on_positives.items():
-        _, out = run_path_vectors_with(lambda pair, collide: wrong(pair) if collide else [])
-        for name in positives:
-            if f"MISMATCH collision case {name!r}" not in out:
-                problems.append(f"tools/run_path_vectors.py accepts {label} for collision case {name!r}")
+        require_fault(label, wrong, True)
     for label, wrong in false_on_negatives.items():
-        _, out = run_path_vectors_with(lambda pair, collide: [pair] if collide else wrong(pair))
-        for name in negatives:
-            if f"MISMATCH collision case {name!r}" not in out:
-                problems.append(f"tools/run_path_vectors.py accepts {label} for collision case {name!r}")
+        require_fault(label, wrong, False)
     # Positive controls: a right answer, in either order, passes every vector.
     for label, right in {"the pair as given": lambda pair: [pair], "the pair reversed": lambda pair: [pair[::-1]]}.items():
         code, out = run_path_vectors_with(lambda pair, collide: right(pair) if collide else [])
@@ -1793,6 +1803,118 @@ class CanonicalVectorJudgeTests(unittest.TestCase):
         ]
         for reply in replies:
             with self.subTest(reply=reply), patch.object(pathlib.Path, "read_text", side_effect=[reply]):
+                code, summary, _, calls = self.judge([])
+                self.assertEqual((code, summary["vectors"], summary["matched"], summary["rejected"], calls),
+                                 (2, 0, 0, [], []))
+                self.assertFalse(summary["all_matched"])
+
+
+class PathVectorJudgeTests(unittest.TestCase):
+    """The path judge keeps incomplete executions separate from named wrong answers."""
+
+    @staticmethod
+    def vectors():
+        vectors = json.loads((ROOT / "conformance" / "vectors" / "paths.json").read_text(encoding="utf-8"))
+        cases = [(f"accept {p!a}", "one", {"hex": p.encode("utf-8").hex()}, {"accepted": True})
+                 for p in vectors["accept"]]
+        cases.extend((f"reject {v['path']!a}", "one",
+                      {"hex": v["path"].encode("utf-8", errors="surrogatepass").hex()}, {"refused": v["reason"]})
+                     for v in vectors["reject"])
+        cases.extend((f"reject bytes {v['hex']}", "one", {"hex": v["hex"]}, {"refused": v["reason"]})
+                     for v in vectors["reject_bytes"])
+        cases.extend((f"collision case {v['name']!a}", "many", {"paths": v["paths"]},
+                      {"collisions": [v["paths"]] if v["collide"] else []}) for v in vectors["collisions"])
+        return cases
+
+    @staticmethod
+    def answered(want, code=0, stderr=b""):
+        stdout = want if isinstance(want, bytes) else json.dumps(want).encode("utf-8")
+        return subprocess.CompletedProcess(["kernel"], code, stdout, stderr)
+
+    def right(self):
+        return [self.answered(want) for _, _, _, want in self.vectors()]
+
+    def judge(self, answers):
+        argv = ["run_path_vectors.py", "--", "kernel", "one", "many"]
+        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_path_vectors.sys, "argv", argv), \
+                patch.object(run_path_vectors.subprocess, "run", side_effect=answers) as run:
+            code = run_path_vectors.main()
+        lines = output.getvalue().splitlines()
+        return code, json.loads(lines[-1]), lines[:-1], run.call_args_list
+
+    def test_disk_full_stdout_cannot_pass_for_the_expected_pair(self):
+        cases = self.vectors()
+        index = next(i for i, case in enumerate(cases) if case[0] == "collision case 'plain case'")
+        answers = self.right()
+        answers[index] = self.answered(cases[index][3], stderr=b"No space left on device")
+        code, summary, lines, _ = self.judge(answers)
+        self.assertEqual(code, 2)
+        self.assertEqual((summary["unfinished"], summary["rejected"]), (1, []))
+        self.assertTrue(any(line.startswith("UNFINISHED " + cases[index][0]) for line in lines))
+
+
+    def test_all_existing_vectors_keep_exact_payloads_and_both_pair_orders(self):
+        cases = self.vectors()
+        for reverse in (False, True):
+            answers = [self.answered({"collisions": [want["collisions"][0][::-1]]})
+                       if reverse and want.get("collisions") else self.answered(want) for _, _, _, want in cases]
+            code, summary, _, calls = self.judge(answers)
+            self.assertEqual((code, summary), (0, {"vectors": len(cases), "matched": len(cases), "all_matched": True,
+                                                   "unfinished": 0, "rejected": []}))
+            self.assertEqual([call.args[0] for call in calls], [["kernel", sub] for _, sub, _, _ in cases])
+            self.assertEqual([call.kwargs["input"] for call in calls],
+                             [json.dumps(payload).encode("utf-8") for _, _, payload, _ in cases])
+
+    def test_completed_wrong_answers_keep_distinct_identifiers(self):
+        cases = self.vectors()
+        named = ("accept ", "reject '", "reject bytes ", "collision case ")
+        indices = [next(i for i, case in enumerate(cases) if case[0].startswith(prefix)) for prefix in named]
+        wrong = [{"refused": "wrong"}, {"accepted": True}, {"refused": "wrong"},
+                 {"collisions": [["unrelated/1", "unrelated/2"]]}]
+        answers = self.right()
+        for index, reply in zip(indices, wrong, strict=True):
+            answers[index] = self.answered(reply)
+        code, summary, lines, _ = self.judge(answers)
+        names = [cases[index][0] for index in indices]
+        self.assertEqual((code, summary["matched"], summary["rejected"], summary["unfinished"]),
+                         (1, len(cases) - len(indices), names, 0))
+        for name in names:
+            self.assertTrue(any(line.startswith(f"MISMATCH {name}: ") for line in lines))
+
+    def test_failed_processes_and_unusable_answers_are_unfinished(self):
+        cases = self.vectors()
+        for index in (0, -1):
+            want = cases[index][3]
+            malformed = {"accepted": 1} if index == 0 else {"collisions": [["a", 1]]}
+            failures = [FileNotFoundError("missing command"), OSError(errno.ENOSPC, "disk full"),
+                        subprocess.TimeoutExpired("kernel", 30), self.answered(want, -15),
+                        self.answered(want, 0xC0000005), self.answered(want, 1, b"failure"),
+                        self.answered(want, stderr=b"ENOSPC"), self.answered(b"not JSON"),
+                        self.answered(b"\xff"), self.answered([]), self.answered({}), self.answered(malformed)]
+            for failed in failures:
+                with self.subTest(case=cases[index][0], failed=failed):
+                    answers = self.right()
+                    answers[index] = failed
+                    code, summary, lines, _ = self.judge(answers)
+                    self.assertEqual((code, summary["matched"], summary["unfinished"], summary["rejected"]),
+                                     (2, len(cases) - 1, 1, []))
+                    self.assertTrue(any(line.startswith(f"UNFINISHED {cases[index][0]}: ") for line in lines))
+
+    def test_unfinished_takes_precedence_but_retains_completed_names(self):
+        answers = self.right()
+        answers[0] = self.answered({"accepted": False})
+        answers[-1] = subprocess.TimeoutExpired("kernel", 30)
+        code, summary, _, _ = self.judge(answers)
+        self.assertEqual((code, summary["unfinished"], summary["rejected"]),
+                         (2, 1, [self.vectors()[0][0]]))
+
+    def test_empty_duplicate_and_unreadable_fixtures_launch_nothing(self):
+        empty = {"accept": [], "reject": [], "reject_bytes": [], "collisions": []}
+        duplicate = {"name": "duplicate", "paths": ["a", "A"], "collide": True}
+        for source in (json.dumps(empty), json.dumps(dict(empty, collisions=[duplicate, duplicate])),
+                       json.dumps(dict(empty, accept=[1])), json.dumps(dict(empty, accept="path")),
+                       "{", OSError(errno.ENOSPC, "No space left on device")):
+            with self.subTest(source=source), patch.object(pathlib.Path, "read_text", side_effect=[source]):
                 code, summary, _, calls = self.judge([])
                 self.assertEqual((code, summary["vectors"], summary["matched"], summary["rejected"], calls),
                                  (2, 0, 0, [], []))
@@ -2771,6 +2893,7 @@ def main() -> int:
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(InputJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KeyVectorJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(CanonicalVectorJudgeTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PathVectorJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(AttestJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(HarnessJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ProviderJudgeTests))
