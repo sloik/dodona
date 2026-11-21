@@ -2819,6 +2819,293 @@ mod run_input {
         }
     }
 
+    // Step 13. What a run records.
+
+    /// The level an evidence record states, from the rank of the final's
+    /// strength, read as the host checks read it.
+    pub(super) fn level_of(strength: &Value) -> Option<&'static str> {
+        match strength.text("rank")? {
+            "documented" => Some("asserted"),
+            "sampled" => Some("sampled"),
+            "bounded" => Some("bounded"),
+            "exhaustive" => Some("proven"),
+            _ => None,
+        }
+    }
+
+    /// Step 13, before anything is written. For each ended check, in the order
+    /// the checks were started, whose verdict is `passed` or `failed`: every
+    /// input file is read again (`identity_of` gives a path's identity now, or
+    /// None if it cannot be read), and each must still have the identity it
+    /// was keyed with. A check one of whose inputs changed or cannot be read
+    /// becomes `error`, with no strength, and is not recorded. The evidence
+    /// bodies of the others, in that order. No other verdict is recorded.
+    pub(super) fn evidence(
+        finished: &mut [Finished],
+        checks: &[Checkable],
+        platform: &str,
+        writer: &str,
+        identity_of: &mut dyn FnMut(&str) -> Option<String>,
+    ) -> Vec<Value> {
+        let mut bodies = Vec::new();
+        for f in finished.iter_mut() {
+            let (verdict, strength) = match &f.ended {
+                Ended::Verdict { verdict, strength } if verdict == "passed" || verdict == "failed" => {
+                    (verdict.clone(), strength.clone())
+                }
+                _ => continue,
+            };
+            let checkable = checks.iter().find(|c| c.binding == f.binding && c.name == f.name);
+            let kept = checkable.filter(|c| {
+                c.inputs
+                    .iter()
+                    .all(|(path, id)| identity_of(path.as_str()).as_deref() == Some(id.as_str()))
+            });
+            let (c, level) = match (kept, level_of(&strength)) {
+                (Some(c), Some(level)) => (c, level),
+                _ => {
+                    f.ended = Ended::Verdict { verdict: "error".to_owned(), strength: Value::Null };
+                    continue;
+                }
+            };
+            bodies.push(json::object(vec![
+                ("obligation", json::string(&f.name)),
+                ("preimage", c.preimage.clone()),
+                ("core_key", json::string(&canonical::identity(&c.preimage))),
+                ("platform", json::string(platform)),
+                ("verdict", json::string(&verdict)),
+                ("writer", json::string(writer)),
+                ("strength", strength),
+                ("level", json::string(level)),
+            ]));
+        }
+        bodies
+    }
+
+    /// The identity of a file under `root` as it is now, following links, as
+    /// an input is read again before recording.
+    pub(super) fn reread(root: &Path) -> impl FnMut(&str) -> Option<String> + '_ {
+        move |path: &str| fs::read(root.join(path)).ok().map(|bytes| file_identity(&bytes))
+    }
+
+    /// How long the run waits for the ledger's lock.
+    pub(super) const LEDGER_WAIT: Duration = Duration::from_secs(60);
+
+    /// Append the bodies to the run's ledger as entries of kind `evidence`, all
+    /// in one append. With none, nothing is touched. Any failure is
+    /// `ledger-not-written`, after which nothing is done: nothing was written,
+    /// and the next run checks those obligations again.
+    pub(super) fn record(root: &Path, ledger: &str, bodies: &[Value], wait: Duration) -> Step<Vec<String>> {
+        if bodies.is_empty() {
+            return Ok(Vec::new());
+        }
+        let path = root.join(ledger);
+        let Some(text) = path.to_str() else {
+            return stop("ledger-not-written", format!("{ledger}: a path that is not UTF-8"));
+        };
+        crate::ledger::append_entries(text, "evidence", bodies, wait)
+            .or_else(|e| stop("ledger-not-written", format!("{ledger}: {e:?}")))
+    }
+
+    #[cfg(test)]
+    mod record_tests {
+        use super::*;
+
+        const A: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const B: &str = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+        fn v(s: &str) -> Value {
+            json::parse(s.as_bytes()).unwrap()
+        }
+        fn checkable(name: &str, inputs: &[(&str, &str)]) -> Checkable {
+            Checkable {
+                binding: "t".to_owned(),
+                name: name.to_owned(),
+                obligation: Value::Object(vec![]),
+                inputs: inputs.iter().map(|(p, i)| (p.to_string(), i.to_string())).collect(),
+                tools: Value::Array(vec![]),
+                platform: Value::Object(vec![]),
+                preimage: v(&format!(r#"{{"obligation":"key-of-{name}","kind":"check"}}"#)),
+            }
+        }
+        fn ended(name: &str, e: Ended) -> Finished {
+            Finished { binding: "t".to_owned(), name: name.to_owned(), runs: 1, ended: e }
+        }
+        fn verdict(v: &str, strength: Value) -> Ended {
+            Ended::Verdict { verdict: v.to_owned(), strength }
+        }
+        /// Every check of the scripted run, ended every way a check can end.
+        fn run() -> (Vec<Finished>, Vec<Checkable>) {
+            let finished = vec![
+                ended("o1", verdict("passed", v(r#"{"class":"model","rank":"bounded","note":"n"}"#))),
+                ended("o2", verdict("failed", v(r#"{"class":"model","rank":"documented"}"#))),
+                ended("o3", Ended::Refused("neither-or-both")),
+                ended("o4", verdict("error", Value::Null)),
+                ended("o5", verdict("unavailable", Value::Null)),
+                ended("o6", verdict("unsupported", Value::Null)),
+            ];
+            let checks = ["o1", "o2", "o3", "o4", "o5", "o6"]
+                .iter()
+                .map(|n| checkable(n, &[("a.txt", A), ("b.txt", B)]))
+                .collect();
+            (finished, checks)
+        }
+        /// The files as they are now.
+        fn files(now: &[(&str, Option<&str>)]) -> impl FnMut(&str) -> Option<String> + '_ {
+            move |path: &str| {
+                now.iter()
+                    .find(|(p, _)| *p == path)
+                    .and_then(|(_, i)| i.map(str::to_owned))
+            }
+        }
+        fn verdict_of(f: &Finished) -> &str {
+            match &f.ended {
+                Ended::Verdict { verdict, .. } => verdict,
+                Ended::Refused(r) => r,
+            }
+        }
+        fn scratch(name: &str) -> PathBuf {
+            let dir = std::env::temp_dir().join(format!("dodona-record-{}-{name}", std::process::id()));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            dir
+        }
+        fn read_back(path: &Path) -> Value {
+            let asked = json::object(vec![("ledger", json::string(path.to_str().unwrap()))]);
+            crate::ledger::read(&asked).unwrap()
+        }
+
+        #[test]
+        fn only_final_passed_and_failed_verdicts_become_evidence() {
+            let (mut finished, checks) = run();
+            let mut now = files(&[("a.txt", Some(A)), ("b.txt", Some(B))]);
+            let bodies = evidence(&mut finished, &checks, "linux/x86_64", "w", &mut now);
+            assert_eq!(bodies.len(), 2);
+            let (first, second) = (&bodies[0], &bodies[1]);
+            assert_eq!(first.text("obligation"), Some("o1"));
+            assert_eq!(second.text("obligation"), Some("o2"));
+            // The key the check was measured under, and its own identity.
+            assert_eq!(json::encode(first.get("preimage")), json::encode(&checks[0].preimage));
+            assert_eq!(first.text("core_key"), Some(canonical::identity(&checks[0].preimage).as_str()));
+            assert_eq!(first.text("platform"), Some("linux/x86_64"));
+            assert_eq!(first.text("writer"), Some("w"));
+            assert_eq!(first.text("verdict"), Some("passed"));
+            // The provider's strength exactly, and the level read from its rank.
+            assert_eq!(first.get("strength").text("note"), Some("n"));
+            assert_eq!(first.text("level"), Some("bounded"));
+            assert_eq!(second.text("verdict"), Some("failed"));
+            assert_eq!(second.text("level"), Some("asserted"));
+            // Exactly these fields.
+            let fields: Vec<&str> = first.object().iter().map(|(k, _)| k.as_str()).collect();
+            assert_eq!(
+                fields,
+                ["obligation", "preimage", "core_key", "platform", "verdict", "writer", "strength", "level"]
+            );
+            // Nothing else changed its verdict.
+            let left: Vec<&str> = finished.iter().map(verdict_of).collect();
+            assert_eq!(left, ["passed", "failed", "neither-or-both", "error", "unavailable", "unsupported"]);
+        }
+
+        #[test]
+        fn an_input_changed_or_unreadable_since_the_check_is_an_error_and_is_not_recorded() {
+            let (mut finished, checks) = run();
+            // b.txt changed: neither verdict stands.
+            let mut changed = files(&[("a.txt", Some(A)), ("b.txt", Some(A))]);
+            assert!(evidence(&mut finished, &checks, "p", "w", &mut changed).is_empty());
+            assert_eq!(verdict_of(&finished[0]), "error");
+            assert_eq!(verdict_of(&finished[1]), "error");
+            assert!(matches!(&finished[0].ended, Ended::Verdict { strength: Value::Null, .. }));
+            // a.txt cannot be read.
+            let (mut finished, checks) = run();
+            let mut gone = files(&[("a.txt", None), ("b.txt", Some(B))]);
+            assert!(evidence(&mut finished, &checks, "p", "w", &mut gone).is_empty());
+            assert_eq!(verdict_of(&finished[0]), "error");
+            // With nothing to record, nothing is touched: not even the ledger's folder.
+            let root = scratch("nothing");
+            assert_eq!(record(&root, "l/run.ledger", &[], Duration::from_millis(10)).ok(), Some(vec![]));
+            assert!(!root.join("l").exists());
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn verdicts_are_appended_in_one_append_under_one_lock() {
+            let (mut finished, checks) = run();
+            let mut now = files(&[("a.txt", Some(A)), ("b.txt", Some(B))]);
+            let bodies = evidence(&mut finished, &checks, "linux/x86_64", "w", &mut now);
+            let root = scratch("two");
+            let ids = match record(&root, "l/run.ledger", &bodies, Duration::from_millis(100)) {
+                Ok(ids) => ids,
+                Err(s) => panic!("{} {}", s.reason, s.detail),
+            };
+            let read = read_back(&root.join("l/run.ledger"));
+            let entries = read.get("entries").array();
+            assert_eq!(entries.len(), 2);
+            assert!(matches!(read.get("torn"), Value::Bool(false)));
+            for (entry, body) in entries.iter().zip(&bodies) {
+                assert_eq!(entry.text("kind"), Some("evidence"));
+                assert_eq!(json::encode(entry.get("body")), json::encode(body));
+            }
+            // Chained in order, and the identities given back are theirs.
+            assert_eq!(entries[1].text("previous"), Some(canonical::identity(&entries[0]).as_str()));
+            assert_eq!(ids, entries.iter().map(canonical::identity).collect::<Vec<_>>());
+            // The lock was released.
+            assert!(!root.join("l/run.ledger.lock").exists());
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn a_torn_ending_is_cut_off_and_older_entries_keep_their_order() {
+            let root = scratch("torn");
+            let ledger = root.join("run.ledger");
+            let path = ledger.to_str().unwrap();
+            let first = crate::ledger::append_entries(path, "note", &[v(r#"{"n":1}"#)], Duration::ZERO).unwrap();
+            let mut bytes = fs::read(&ledger).unwrap();
+            bytes.extend_from_slice(b"dodona1 99 abc {\"previ");
+            fs::write(&ledger, &bytes).unwrap();
+            assert!(matches!(read_back(&ledger).get("torn"), Value::Bool(true)));
+            record(&root, "run.ledger", &[v(r#"{"n":2}"#), v(r#"{"n":3}"#)], Duration::ZERO).ok().unwrap();
+            let read = read_back(&ledger);
+            let entries = read.get("entries").array();
+            assert!(matches!(read.get("torn"), Value::Bool(false)));
+            assert_eq!(entries.len(), 3);
+            assert_eq!(canonical::identity(&entries[0]), first[0]);
+            assert_eq!(entries[0].text("kind"), Some("note"));
+            assert_eq!(entries[1].text("previous"), Some(first[0].as_str()));
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn a_corrupt_ledger_is_not_written() {
+            let root = scratch("corrupt");
+            let ledger = root.join("run.ledger");
+            fs::write(&ledger, b"garbage\n").unwrap();
+            let got = record(&root, "run.ledger", &[v("{}")], Duration::ZERO);
+            assert_eq!(got.err().map(|s| s.reason), Some("ledger-not-written"));
+            assert_eq!(fs::read(&ledger).unwrap(), b"garbage\n");
+            assert!(!root.join("run.ledger.lock").exists());
+            assert_eq!(
+                crate::ledger::append_entries(ledger.to_str().unwrap(), "evidence", &[v("{}")], Duration::ZERO),
+                Err(crate::ledger::NotWritten::Corrupt(1))
+            );
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn a_lock_held_by_another_is_waited_for_and_left_alone() {
+            let root = scratch("locked");
+            let lock = root.join("run.ledger.lock");
+            fs::write(&lock, b"").unwrap();
+            let begun = Instant::now();
+            let got = record(&root, "run.ledger", &[v("{}")], Duration::from_millis(50));
+            assert_eq!(got.err().map(|s| s.reason), Some("ledger-not-written"));
+            assert!(begun.elapsed() >= Duration::from_millis(50));
+            // Nothing written, and the other holder's lock still there.
+            assert!(!root.join("run.ledger").exists());
+            assert!(lock.exists());
+            let _ = fs::remove_dir_all(&root);
+        }
+    }
+
     #[cfg(test)]
     mod executor_tests {
         use super::*;

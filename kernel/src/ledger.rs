@@ -215,6 +215,83 @@ fn append_read(v: &Value, body_depth: usize) -> Result<Value, String> {
         json::string(&canonical::identity(&entry)),
     )]))
 }
+/// Why the append did not complete.
+#[derive(Debug, PartialEq)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub enum NotWritten {
+    /// Someone else held the lock for all of the wait.
+    Locked,
+    /// The ledger is corrupt at this line, counting from 1.
+    Corrupt(usize),
+    /// A folder could not be made, the ledger read, or the lock taken.
+    Failed(String),
+}
+
+/// Append one entry of `kind` for each body, in order, all in one append, as
+/// a run records its verdicts: the folders on the ledger's path that are not
+/// there made, the lock beside the ledger taken (waiting up to `wait`), the
+/// ledger read as `ledger-read` reads it and refused if corrupt, an ending cut
+/// short cut off, every entry added as one line after the last, the file
+/// synced to disk, and the lock released. The identities of the entries
+/// appended. With no bodies nothing is touched, not even a folder.
+///
+/// A write failure can leave complete entries and a torn ending. The next
+/// append reads the complete prefix and cuts off any torn ending.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn append_entries(
+    path: &str,
+    kind: &str,
+    bodies: &[Value],
+    wait: Duration,
+) -> Result<Vec<String>, NotWritten> {
+    if bodies.is_empty() {
+        return Ok(Vec::new());
+    }
+    fn failed(what: &str, e: impl std::fmt::Display) -> NotWritten {
+        NotWritten::Failed(format!("{what}: {e}"))
+    }
+    if let Some(folder) = std::path::Path::new(path)
+        .parent()
+        .filter(|f| !f.as_os_str().is_empty())
+    {
+        fs::create_dir_all(folder).map_err(|e| failed("cannot make the ledger's folder", e))?;
+    }
+    let Some(_lock) = lock(path, wait).map_err(NotWritten::Failed)? else {
+        return Err(NotWritten::Locked);
+    };
+    // From here the lock is held, and released when `_lock` is dropped,
+    // after the file has been written, synced and closed.
+    let data = load(path).map_err(NotWritten::Failed)?;
+    let contents = parse(&data).map_err(NotWritten::Corrupt)?;
+    let mut previous = contents.entries.last().map(canonical::identity);
+    let mut lines = String::new();
+    let mut appended = Vec::new();
+    for body in bodies {
+        let entry = json::object(vec![
+            ("previous", previous.as_deref().map_or(Value::Null, json::string)),
+            ("kind", json::string(kind)),
+            ("body", body.clone()),
+        ]);
+        let id = canonical::identity(&entry);
+        lines.push_str(&line(&entry));
+        previous = Some(id.clone());
+        appended.push(id);
+    }
+    let write = || -> std::io::Result<()> {
+        let mut f = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path)?;
+        f.set_len(contents.end as u64)?;
+        f.seek(SeekFrom::End(0))?;
+        f.write_all(lines.as_bytes())?;
+        f.sync_all()
+    };
+    write().map_err(|e| failed("cannot write the ledger", e))?;
+    Ok(appended)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
