@@ -1035,6 +1035,18 @@ def gap_own_policy_fits_the_schema() -> None:
     _fits(policy, schema, schema.get("$defs", {}), "policy")
 
 
+def gap_evidence_strength_follows_kind() -> None:
+    """The evidence schema once described the strength rule without expressing it."""
+    schema = json.loads((ROOT / "protocol" / "evidence-record.schema.json").read_text(encoding="utf-8"))
+    conditions = schema.get("allOf", [])
+    for kinds, requirement in (
+        ({"enum": ["check", "conformance"]}, {"required": ["strength"]}),
+        ({"const": "build"}, {"not": {"required": ["strength"]}}),
+    ):
+        if {"if": {"properties": {"kind": kinds}}, "then": requirement} not in conditions:
+            problems.append(f"evidence-record.schema.json: no strength condition for {kinds}")
+
+
 def gap_no_generated_files_are_tracked() -> None:
     """Compiled caches were once committed by mistake."""
     import shutil
@@ -1077,7 +1089,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_workflows_are_safe, gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
-              gap_own_policy_fits_the_schema, gap_no_generated_files_are_tracked,
+              gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,

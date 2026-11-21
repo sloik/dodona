@@ -21,6 +21,7 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_every_modelled_case_has_a_scenario` | A defect planted in a formal model protects a kernel only if a scenario carries it into the kit. Every modelled case needs a scenario or a stated reason |
 | `gap_kit_judge_is_strict` | The judge of model runs once misread a result. The kit's judge must refuse an empty, short or wrong answer |
 | `gap_own_policy_fits_the_schema` | dodona's own policy file was first written with field names the policy schema did not have |
+| `gap_evidence_strength_follows_kind` | The evidence schema described when strength is required or absent, but accepted checks and conformance without strength and builds with it. This check requires the kind conditions in the schema. `tools/check_examples.py` validates three synthetic record pairs with the pinned JSON Schema validator. Each pair differs only by the presence of strength and has one accepted and one rejected record |
 | `gap_no_generated_files_are_tracked` | Compiled caches were committed by mistake, and build output contains private paths |
 | `gap_provider_cases_match_the_provider` | A misbehaviour case that names a mode the provider does not have would quietly test the well-behaved path and pass |
 | `gap_every_check_is_listed` | A check whose reason is lost gets deleted by mistake |
