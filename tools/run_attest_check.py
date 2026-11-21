@@ -8,6 +8,19 @@ not contain, and a kernel must grade them as vouched for; and it must stop
 doing so when the record is changed afterwards, the key is not the one policy
 lists, or a field is left uncovered. The key is the kit's fixture: public by
 design and worth nothing.
+
+The kernel grades the seven records in one scenario run, which exits 0. A
+completed grade that differs, or a per-case answer that is missing or
+malformed (output that is not JSON included), is `MISMATCH`, named in
+`rejected`. A kernel that could not be started, ran out of time, was ended by
+a signal or exited other than 0 graded nothing: every case is `UNFINISHED`.
+So is a case whose check by the signer itself did not finish or gave the other
+answer than the fixture expects (a failure of the judge), and a run whose
+records the fixture and signer could not make. The last line is
+`{"cases", "matched", "all_matched", "unfinished", "rejected"}`. Exit status
+is 0 if every case matched, 1 if the run completed with mismatches, and 2 if
+any case or the judge itself did not finish, after mismatches too, or no case
+ran (issue 41).
 """
 from __future__ import annotations
 
@@ -24,11 +37,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 FACTS = ["actor", "brief", "fresh_context", "given", "known_bad", "transcript", "worker", "kind", "target", "result", "lineage", "ticket"]
 
 
-def main() -> int:
-    if "--" not in sys.argv or sys.argv[-1] == "--":
-        print(__doc__)
-        return 2
-    command = sys.argv[sys.argv.index("--") + 1:]
+def make_cases() -> tuple[dict, bytes, list[tuple[str, dict, str, str, bool]]]:
+    """The policy, the fixture's key and the seven records with the grade each must earn."""
     source = json.loads((ROOT / "conformance" / "kernel" / "acts" / "attested_facts_earn_their_level.json").read_text(encoding="utf-8"))
     policy = source["policy"]
     key = bytes.fromhex(policy["attestors"]["harness-1"])
@@ -51,21 +61,71 @@ def main() -> int:
              ("signed without what was judged", unbound, "helper", "declared", True),
              ("signed with a key policy does not list", other_key, "helper", "declared", False),
              ("one fact left uncovered", partly, "helper", "declared", True)]
-    scenario = {"kind": "acts", "name": "made-now", "policy": policy, "steps": [{"do": {"grade": record}} for _, record, _, _, _ in cases]}
+    return policy, key, cases
+
+
+def grade(command: list[str], scenario: dict) -> tuple[list | None, str]:
+    """The kernel's per-case answers from a run that completed with exit 0, or None and why it gave none.
+    Output that is not JSON, or has no list of results, is a completed answer in which every case is missing."""
     try:
         done = subprocess.run(command, input=json.dumps(scenario).encode("utf-8"), capture_output=True, timeout=60)
-        results = json.loads(done.stdout.decode("utf-8"))["results"] if done.returncode == 0 else []
-    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError):
-        results = []
-    failed = 0
-    for number, (name, record, level, origin, valid) in enumerate(cases):
-        got = results[number] if number < len(results) else {}
-        ours = attest.verify(record, key)
-        ok = got.get("level") == level and got.get("source") == origin and ours == valid
-        failed += not ok
-        print(f"{'match   ' if ok else 'MISMATCH'} {name}: kernel says {got.get('level')}, {got.get('source')}; the signer's own check says {ours}")
-    print(json.dumps({"cases": len(cases), "matched": len(cases) - failed, "all_matched": failed == 0}))
-    return 1 if failed else 0
+    except (OSError, subprocess.TimeoutExpired) as err:
+        return None, f"{type(err).__name__}: {err}"
+    if done.returncode != 0:
+        return None, f"the kernel exited with {done.returncode}"
+    try:
+        results = json.loads(done.stdout.decode("utf-8"))["results"]
+    except (ValueError, KeyError, TypeError):
+        return [], ""
+    return results if isinstance(results, list) else [], ""
+
+
+def main() -> int:
+    if "--" not in sys.argv or sys.argv[-1] == "--":
+        print(__doc__)
+        return 2
+    command = sys.argv[sys.argv.index("--") + 1:]
+    cases: list[tuple[str, dict, str, str, bool]] = []
+    rejected: list[str] = []
+    unfinished = 0
+    try:
+        policy, key, cases = make_cases()
+    except Exception as err:  # the fixture or the signer could not make the records: nothing was judged, which is not a mismatch
+        cases = []
+        unfinished = 1
+        print(f"UNFINISHED the records could not be made: {type(err).__name__}: {err}")
+    if cases:
+        scenario = {"kind": "acts", "name": "made-now", "policy": policy, "steps": [{"do": {"grade": record}} for _, record, _, _, _ in cases]}
+        results, why = grade(command, scenario)
+        if results is None:
+            unfinished = len(cases)
+            for name, _, _, _, _ in cases:
+                print(f"UNFINISHED {name}: {why}")
+        else:
+            for number, (name, record, level, origin, valid) in enumerate(cases):
+                got = results[number] if number < len(results) else None
+                got = got if isinstance(got, dict) else {}
+                try:
+                    ours = attest.verify(record, key)
+                except Exception as err:  # the signer's own check did not finish: this case showed nothing either way
+                    unfinished += 1
+                    print(f"UNFINISHED {name}: the signer's own check did not finish: {type(err).__name__}: {err}")
+                    continue
+                if ours != valid:  # the reference got its own known fixture wrong: a failure of the judge, not of the kernel
+                    unfinished += 1
+                    print(f"UNFINISHED {name}: the signer's own check says {ours} where the fixture says {valid}")
+                    continue
+                ok = got.get("level") == level and got.get("source") == origin
+                if not ok:
+                    rejected.append(name)
+                print(f"{'match   ' if ok else 'MISMATCH'} {name}: kernel says {got.get('level')}, {got.get('source')}; the signer's own check says {ours}")
+    matched = len(cases) - len(rejected) - unfinished if cases else 0
+    print(json.dumps({"cases": len(cases), "matched": matched,
+                      "all_matched": not rejected and not unfinished and bool(cases),
+                      "unfinished": unfinished, "rejected": rejected}))
+    if unfinished or not cases:
+        return 2
+    return 1 if rejected else 0
 
 
 if __name__ == "__main__":
