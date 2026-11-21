@@ -23,7 +23,7 @@ Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with
 | [intents.py](intents.py) | Reads the intent files one way only, and writes each one's criteria table |
 | [keep.py](keep.py) | Moves what one model run keeps for the next, and reports about reuse |
 | [kernel_differential.py](kernel_differential.py) | Compares two kernels on inputs the conformance kit does not contain |
-| [kit_adequacy.py](kit_adequacy.py) | Plants each listed defect in the first kernel and requires the kit to reject it |
+| [kit_adequacy.py](kit_adequacy.py) | Plants each listed defect in the first kernel and requires the kit to reject it. An optional `--shard INDEX/COUNT` selects part of the manifest |
 | [ledger.py](ledger.py) | Reads and writes the reference ledger format |
 | [path_differential.py](path_differential.py) | Compares a kernel's path check with the reference on random paths |
 | [pathcheck.py](pathcheck.py) | Reference implementation of the [path check](../protocol/path-check.md) |
@@ -45,3 +45,9 @@ Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with
 | [run_vectors.py](run_vectors.py) | Judges a kernel against the canonical-encoding vectors |
 | [status.py](status.py) | Reports the status of this project from its ledger, worked out by a kernel |
 | [tooltree.py](tooltree.py) | Reference for the [digest of a tool tree](../protocol/tool-tree-digest.md) |
+
+## Rust planted-defect shards
+
+`python tools/kit_adequacy.py --shard 2/3` runs the second of three shards. The index and count start at 1, the index cannot exceed the count, and the count cannot exceed the number of listed defects. Shard 2 takes positions 2, 5, 8 and so on, in [manifest order](../kernel/defects.json). Each invocation judges an unchanged kernel first and uses the same per-defect replay as the full run.
+
+A shard ends with its `index` and `count` in `shard`, the manifest's exact byte SHA-256 and defect count in `inventory`, and `covered` pairs of one-based position and name for completed catches. `defects` is the selected count. Exit 0 and `shard_passed: true` apply to that shard, and `all_caught` is false in shard mode. Full coverage requires completed successful receipts from the same source revision with the same inventory digest and shard count, every shard index present once, and disjoint `covered` pairs that together equal the manifest. A missing or failed receipt leaves that coverage incomplete.

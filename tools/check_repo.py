@@ -1506,6 +1506,92 @@ class KitAdequacyTests(unittest.TestCase):
             self.assertEqual(build[build.index("--target-dir") + 1], str(copy / "target"))
 
 
+class RustShardTests(unittest.TestCase):
+    """A Rust shard covers exactly its assigned manifest positions after a clean baseline."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = pathlib.Path(temp.name)
+        self.kernel = self.root / "kernel"
+        self.kernel.mkdir()
+        self.names = ["last by alphabet", "middle", "first by alphabet", "another", "last in the manifest"]
+        defects = [{"name": name, "file": f"fixture-{index}.rs", "find": "original", "replace": "planted"}
+                   for index, name in enumerate(self.names, 1)]
+        for defect in defects:
+            (self.kernel / defect["file"]).write_text("original", encoding="utf-8")
+        self.manifest = (json.dumps({"defects": defects}, indent=1) + "\n").encode("utf-8")
+        (self.kernel / "defects.json").write_bytes(self.manifest)
+
+    def run_shard(self, selector=None, *, clean=True, unfinished=None):
+        argv = None if selector is None else ["--shard", selector]
+        calls: list[int | None] = []
+
+        def passes_kit(copy, defect_file=None):
+            planted = [index for index in range(1, len(self.names) + 1)
+                       if (copy / f"fixture-{index}.rs").read_text(encoding="utf-8") == "planted"]
+            if defect_file is None:
+                calls.append(None)
+                self.assertEqual(planted, [])
+                return (True, []) if clean else (False, ["scenario-judge unfinished"])
+            index, = planted
+            self.assertEqual(defect_file, f"fixture-{index}.rs")
+            calls.append(index)
+            return False, ["scenario-judge unfinished" if index == unfinished else "status/named"]
+
+        with patch.object(kit_adequacy, "ROOT", self.root), \
+                patch.object(kit_adequacy, "passes_kit", side_effect=passes_kit), contextlib.redirect_stdout(io.StringIO()) as output:
+            code = kit_adequacy.main(argv)
+        return code, json.loads(output.getvalue().splitlines()[-1]), calls
+
+    def test_every_shard_count_partitions_the_exact_manifest_order(self):
+        total = len(self.names)
+        original = [{"index": index, "name": name} for index, name in enumerate(self.names, 1)]
+        identity = hashlib.sha256(self.manifest).hexdigest()
+        for count in range(1, total + 1):
+            covered = []
+            for index in range(1, count + 1):
+                with self.subTest(shard=f"{index}/{count}"):
+                    code, receipt, calls = self.run_shard(f"{index}/{count}")
+                    selected = original[index - 1::count]
+                    self.assertEqual(calls, [None, *(entry["index"] for entry in selected)])
+                    self.assertEqual((code, receipt), (0, {"defects": len(selected), "caught": len(selected), "unfinished": 0,
+                                                         "all_caught": False, "shard": {"index": index, "count": count},
+                                                         "inventory": {"sha256": identity, "count": total}, "covered": selected,
+                                                         "baseline_passed": True, "shard_passed": True}))
+                    covered.extend(receipt["covered"])
+            self.assertEqual(sorted(covered, key=lambda entry: entry["index"]), original)
+
+    def test_no_selector_keeps_the_full_serial_footer(self):
+        code, receipt, calls = self.run_shard()
+        self.assertEqual(calls, [None, 1, 2, 3, 4, 5])
+        self.assertEqual((code, receipt), (0, {"defects": 5, "caught": 5, "unfinished": 0, "all_caught": True}))
+
+    def test_incomplete_shard_has_no_pass_and_only_covers_completed_catches(self):
+        code, receipt, calls = self.run_shard("2/2", unfinished=2)
+        self.assertEqual((code, calls), (1, [None, 2, 4]))
+        self.assertEqual(receipt["covered"], [{"index": 4, "name": self.names[3]}])
+        self.assertEqual((receipt["defects"], receipt["caught"], receipt["unfinished"]), (2, 1, 1))
+        self.assertTrue(receipt["baseline_passed"])
+        self.assertFalse(receipt["shard_passed"])
+        self.assertFalse(receipt["all_caught"])
+        code, receipt, calls = self.run_shard("2/2", clean=False)
+        self.assertEqual((code, calls, receipt["covered"]), (1, [None], []))
+        self.assertFalse(receipt["baseline_passed"])
+        self.assertFalse(receipt["shard_passed"])
+        self.assertFalse(receipt["all_caught"])
+
+    def test_invalid_or_empty_selectors_stop_before_copying_or_building(self):
+        for suffix in (["--shard"], *(["--shard", bad] for bad in ("", "0/1", "1/0", "2/1", "1/6", "01/2", "1", "1/2/3"))):
+            with self.subTest(argv=suffix), patch.object(kit_adequacy, "ROOT", self.root), \
+                    patch.object(kit_adequacy.shutil, "copytree") as copy, patch.object(kit_adequacy, "passes_kit") as judge, \
+                    contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as stopped:
+                kit_adequacy.main(suffix)
+            self.assertEqual(stopped.exception.code, 2)
+            copy.assert_not_called()
+            judge.assert_not_called()
+
+
 class FakeWriter:
     """A `--write` child as the ledger judge sees it; `code` is None while it runs."""
 
@@ -3188,6 +3274,7 @@ def main() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(JudgeTests)
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ToolPinTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitAdequacyTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(RustShardTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(LedgerJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(InputJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KeyVectorJudgeTests))

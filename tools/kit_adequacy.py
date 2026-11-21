@@ -2,7 +2,7 @@
 
 Stage-0 helper (decision 0023).
 
-    python tools/kit_adequacy.py
+    python tools/kit_adequacy.py [--shard INDEX/COUNT]
 
 Copies kernel/ to a temporary directory, checks that the unchanged copy passes
 the kit, then plants each defect listed in kernel/defects.json, one at a time,
@@ -19,15 +19,19 @@ without this evidence is UNFINISHED (issue 41). A defect that names a case of a
 formal model must be rejected by a scenario that says it covers that case;
 otherwise the scenario's label is wrong. Exit status is 0 only if the
 unchanged kernel passes and every planted defect is caught, by the right
-scenario where one is named.
+scenario where one is named. With --shard, exit 0 and shard_passed describe only
+the requested shard. The unchanged copy is still judged first.
 
 This measures the kit against defects someone thought of. It says nothing
 about defects nobody thought of.
 """
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -173,8 +177,46 @@ def run_judge(label: str, tool: str, extra: list[str], binary: pathlib.Path) -> 
     return "rejected"
 
 
-def main() -> int:
-    defects = json.loads((ROOT / "kernel" / "defects.json").read_text(encoding="utf-8"))["defects"]
+def shard_selector(value: str) -> tuple[int, int]:
+    try:
+        if re.fullmatch(r"[1-9][0-9]*/[1-9][0-9]*", value):
+            index, count = map(int, value.split("/"))
+            if index <= count:
+                return index, count
+    except ValueError:
+        pass
+    raise argparse.ArgumentTypeError("expected INDEX/COUNT with 1 <= INDEX <= COUNT")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--shard", metavar="INDEX/COUNT", type=shard_selector,
+                        help="run one 1-based shard of the defect manifest")
+    args = parser.parse_args(argv if argv is not None else [])
+    manifest = (ROOT / "kernel" / "defects.json").read_bytes()
+    defects = json.loads(manifest.decode("utf-8"))["defects"]
+    selected = list(enumerate(defects, start=1))
+    if args.shard is not None:
+        index, count = args.shard
+        if count > len(selected):
+            parser.error("shard count must not exceed the number of defects in the manifest")
+        selected = selected[index - 1::count]
+
+    caught = []
+    unfinished = 0
+
+    def finish(baseline_passed: bool) -> int:
+        passed = baseline_passed and len(caught) == len(selected)
+        receipt = {"defects": len(selected), "caught": len(caught), "unfinished": unfinished,
+                   "all_caught": args.shard is None and passed}
+        if args.shard is not None:
+            index, count = args.shard
+            receipt.update(shard={"index": index, "count": count}, baseline_passed=baseline_passed,
+                           inventory={"sha256": hashlib.sha256(manifest).hexdigest(), "count": len(defects)},
+                           covered=caught, shard_passed=passed)
+        print(json.dumps(receipt))
+        return 0 if passed else 1
+
     covers: dict[str, set[str]] = {}
     for path in sorted(ROOT.glob("conformance/kernel/*/*.json")):
         for case in json.loads(path.read_text(encoding="utf-8")).get("covers", []):
@@ -185,9 +227,8 @@ def main() -> int:
         clean, failing = passes_kit(copy)
         if not clean:
             print("the unchanged kernel does not pass the kit:", failing)
-            return 1
-        caught = unfinished = 0
-        for defect in defects:
+            return 1 if args.shard is None else finish(False)
+        for position, defect in selected:
             source = copy / defect["file"]
             original = source.read_text(encoding="utf-8")
             if defect["find"] not in original:
@@ -211,12 +252,10 @@ def main() -> int:
                 print(f"MISLABELLED {defect['name']}: no scenario that says it covers {case} rejects it; "
                       f"rejected only by {', '.join(failing[:4])}")
             else:
-                caught += 1
+                caught.append({"index": position, "name": defect["name"]})
                 print(f"caught   {defect['name']}: rejected by {', '.join(failing)}")
-    print(json.dumps({"defects": len(defects), "caught": caught, "unfinished": unfinished,
-                      "all_caught": caught == len(defects)}))
-    return 0 if caught == len(defects) else 1
+    return finish(True)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
