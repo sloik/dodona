@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-40-native-status-pair-proof'
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -149,6 +150,7 @@ jobs:
   # planted in each kernel in turn and the kit must reject it. Slow, so it has
   # its own job.
   planted-defects:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-40-native-status-pair-proof'
     strategy:
       fail-fast: false
       matrix:
@@ -173,3 +175,56 @@ jobs:
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every listed defect and check some judge rejects each
         run: ${{ matrix.run }}
+
+  native-status-pair:
+    name: Retained native status pair (one-off)
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
+      && github.ref == 'refs/heads/dodona-eight-40-native-status-pair-proof'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind the recorded checkout and exercise replay controls
+        run: |
+          python3 -B .github/site/replay_retained_status.py --check-checkout
+          python3 -B .github/site/test_replay_retained_status.py
+          python3 -B tools/check_repo.py
+      - name: Fetch the two pinned archives and their metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          D="$RUNNER_TEMP/native-status-pair"
+          mkdir "$D" "$D/retained" "$D/prior"
+          fetch_archive() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$2" > "$1/run.json"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$3" > "$1/artifact.json"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$3/zip" > "$1/archive.zip"
+          }
+          fetch_archive "$D/retained" 44626497885 14582487546
+          fetch_archive "$D/prior" 44925244772 14716281818
+      - name: Build the first native status command
+        run: cargo build --release --locked --manifest-path kernel/Cargo.toml
+      - name: Compare both native status outputs with the prior receipt
+        shell: bash
+        run: |
+          D="$RUNNER_TEMP/native-status-pair"
+          V="$D/policy-env"
+          python3 -m venv "$V"
+          "$V/bin/python" -m pip install --quiet jsonschema==4.26.0
+          "$V/bin/python" -B .github/site/replay_retained_status.py "$D/retained" "$D/prior" "$D/receipt"
+      - name: Keep the digest-bound native status receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-status-pair-receipt
+          path: ${{ runner.temp }}/native-status-pair/receipt
+          if-no-files-found: error
+          retention-days: 90

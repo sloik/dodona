@@ -17,15 +17,19 @@ import replay_retained_status as replay
 
 class RetainedProofTests(unittest.TestCase):
     def test_checkout_allows_only_the_proof_files(self):
+        records = ("\0".join(sorted(replay.RECORD_PATHS)) + "\0").encode()
         for changed in (b".github/site/replay_retained_status.py\0", b"kernel/src/main.rs\0"):
             with self.subTest(changed=changed), patch.object(
-                replay, "command", side_effect=[b"head\n", changed, b"", b"tree\n"],
+                replay, "command", side_effect=[b"head\n", records, changed, b"", b"tree\n"],
             ):
                 if changed.startswith(b"kernel"):
                     with self.assertRaisesRegex(ValueError, "pinned status source"):
                         replay.checkout("head")
                 else:
                     self.assertEqual(replay.checkout("head"), "tree")
+        with patch.object(replay, "command", side_effect=[b"head\n", records + b"kernel/src/main.rs\0"]):
+            with self.assertRaisesRegex(ValueError, "recorded Run 15 head"):
+                replay.checkout("head")
         with patch.object(replay, "command", return_value=b"other head\n"):
             with self.assertRaisesRegex(ValueError, "dispatched commit"):
                 replay.checkout("head")

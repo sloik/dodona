@@ -27,6 +27,15 @@ from run_status_cases import OUT_KEYS, same  # noqa: E402
 
 REPOSITORY = "sloik/dodona"
 STATUS_SOURCE = "4462d9bce3851027cfa7f37d2d1ceb49f0085a3e"
+RECORDED_SOURCE = "ee24e67b2b830a8810403021e721fb5aede67798"
+QUALIFICATION_HEAD = "a1dba84ea83b45f696fc2c2eea58a1ce31147b03"
+RECORD_PATHS = {"README.md", "spec/CLAIMS.md", "spec/runs/index.json"} | {
+    f"spec/runs/run-15/every-state/{name}.txt" for name in (
+        "built-kernel.sha256", "complete", "evidence-first-kernel", "evidence-second-kernel",
+        "head", "input-files.sha256", "intent-first-kernel", "intent-second-kernel",
+        "provenance.json", "tool-versions",
+    )
+}
 POLICY_COMMIT = "f43ae21f53f7d3a84e2315e6dcd6fc458dbc5ba2"
 POLICY_SHA256 = "6be5e567e42bd590ac54f6790cea04e4b533d4cd1149571365fc3957cb60a9f6"
 SOURCE_RUN = 44626497885
@@ -92,7 +101,9 @@ def read_object(raw: bytes) -> dict:
 def checkout(expected_head: str) -> str:
     head = command(["git", "rev-parse", "HEAD"]).decode().strip()
     require(head == expected_head, "checkout differs from dispatched commit")
-    changed = command(["git", "diff", "--name-only", "-z", STATUS_SOURCE, head]).decode().split("\0")
+    records = command(["git", "diff", "--name-only", "-z", STATUS_SOURCE, RECORDED_SOURCE]).decode().split("\0")
+    require(set(records) - {""} == RECORD_PATHS, "recorded Run 15 head differs outside its record paths")
+    changed = command(["git", "diff", "--name-only", "-z", RECORDED_SOURCE, head]).decode().split("\0")
     require(set(changed).issubset({"", *PROOF_FILES}), "checkout changes the pinned status source")
     require(not command(["git", "status", "--porcelain", "--untracked-files=all"]), "checkout is dirty")
     return command(["git", "rev-parse", "HEAD^{tree}"]).decode().strip()
@@ -295,6 +306,7 @@ def replay(retained: Path, prior: Path, output: Path) -> None:
 
     summary = {
         "head": head, "tree": tree, "status_source": STATUS_SOURCE,
+        "recorded_source": RECORDED_SOURCE, "qualification_head": QUALIFICATION_HEAD,
         "proof_run": os.environ["GITHUB_RUN_ID"], "proof_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
         "source": {"run": SOURCE_RUN, "head": SOURCE_COMMIT, "artifact": ARTIFACT_ID,
                    "zip_sha256": ZIP_SHA256, "member_sha256": MEMBER_DIGESTS},

@@ -12,7 +12,9 @@ Where dodona's own model checks run, for this repository only ([decision 0023](.
 
 ## Retained native status pair
 
-[replay_retained_status.py](replay_retained_status.py) is a hosted proof for the composed Rust and JavaScript status sources at `4462d9b`. On the proof checkout, `python .github/site/replay_retained_status.py --check-checkout` binds `GITHUB_SHA` to the checkout and permits only the proof's site files and manual workflow entry to differ from that source. Run `cargo build --release --locked --manifest-path kernel/Cargo.toml` before the replay. Use Python with `jsonschema` installed for the existing policy reader.
+[replay_retained_status.py](replay_retained_status.py) is a hosted proof for the composed Rust and JavaScript status sources at `4462d9b`, qualified at `a1dba84` and recorded as Run 15 at `ee24e67`. On the proof checkout, `python .github/site/replay_retained_status.py --check-checkout` binds `GITHUB_SHA` to the checkout. It checks the exact record paths between the runtime and recorded commits, then permits only the proof's site files and manual workflow to differ from the recorded commit.
+
+The `native-status-pair` job in Repository checks runs on manual dispatch of the `dodona-eight-40-native-status-pair-proof` branch. It builds the first kernel with `cargo build --release --locked --manifest-path kernel/Cargo.toml` and uses an isolated Python environment with `jsonschema` for the existing policy reader.
 
 Fetch each archive and its GitHub API metadata into its own runner temporary directory. Both `RETAINED` and `PRIOR` hold `run.json` from `actions/runs/{run}`, `artifact.json` from `actions/artifacts/{artifact}`, and `archive.zip` from `actions/artifacts/{artifact}/zip` in `sloik/dodona`. `RETAINED` uses run `44626497885` and artifact `14582487546`. `PRIOR` uses run `44925244772` and artifact `14716281818`. Invoke `python .github/site/replay_retained_status.py RETAINED PRIOR RECEIPT` with `RECEIPT` a fresh output directory.
 
