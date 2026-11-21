@@ -55,7 +55,7 @@ const STATUS_JOBS = process.env.DODONA_STATUS_JOBS || '3';
 
 // Each judge: a name, the tool, the tool's own arguments before `--`, and the
 // arguments after `node <kernel>`. Reporting judges end with a structured footer. `count` names the total
-// used for that judge. The status judge counts its skips separately.
+// used for that judge. Host-check and status count their skips separately.
 const JUDGES = [
   { name: 'run_kit', tool: 'run_kit.py', args: ['scenario'], count: 'scenarios' },
   { name: 'run_ledger_cases', tool: 'run_ledger_cases.py', args: [], count: 'checks' },
@@ -63,10 +63,10 @@ const JUDGES = [
   { name: 'run_attest_check', tool: 'run_attest_check.py', args: ['scenario'], count: 'cases' },
   { name: 'run_input_cases', tool: 'run_input_cases.py', args: [], count: 'cases' },
   { name: 'run_harness_check', tool: 'run_harness_check.py', args: ['scenario'], count: 'cases' },
-  { name: 'run_vectors', tool: 'run_vectors.py', args: ['canonical'] },
-  { name: 'run_path_vectors', tool: 'run_path_vectors.py', args: ['path', 'path-set'] },
+  { name: 'run_vectors', tool: 'run_vectors.py', args: ['canonical'], count: 'vectors' },
+  { name: 'run_path_vectors', tool: 'run_path_vectors.py', args: ['path', 'path-set'], count: 'vectors' },
   { name: 'run_provider_cases', tool: 'run_provider_cases.py', args: ['session'], count: 'cases' },
-  { name: 'run_check_cases', tool: 'run_check_cases.py', args: ['check'] },
+  { name: 'run_check_cases', tool: 'run_check_cases.py', args: ['check'], count: 'judged' },
   { name: 'run_status_cases', tool: 'run_status_cases.py', before: ['--jobs', STATUS_JOBS, '--kernel', OTHER_KERNEL], args: ['status'], count: 'judged' },
 ];
 

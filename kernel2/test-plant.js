@@ -59,13 +59,16 @@ const harness = (rejected, { status = rejected.length ? 1 : 0, unfinished = 0, k
 
 function caseReport(rejected, totals, { status = rejected.length ? 1 : 0, unfinished = 0, fields = {} } = {}) {
   const footer = {
-    ...totals, matched: (totals.judged ?? totals.cases) - rejected.length - unfinished, rejected,
+    ...totals, matched: (totals.judged ?? totals.cases ?? totals.vectors) - rejected.length - unfinished, rejected,
     unfinished, all_matched: rejected.length === 0 && unfinished === 0, ...fields,
   };
   return done(status, rejected.map((name) => `MISMATCH ${name}: detail\n`).join('') + JSON.stringify(footer) + '\n');
 }
 const session = (rejected, options) => caseReport(rejected, { cases: 22 }, options);
 const projectStatus = (rejected, options) => caseReport(rejected, { cases: 252, judged: 243, skipped: 9 }, options);
+const hostCheck = (rejected, options) => caseReport(rejected, { cases: 132, judged: 129, skipped: 3 }, options);
+const canonical = (rejected, options) => caseReport(rejected, { vectors: 25 }, options);
+const paths = (rejected, options) => caseReport(rejected, { vectors: 71 }, options);
 
 // A spawn that answers each process, named by its tool, from a queue; one with nothing queued accepts the copy.
 function fake(answers, onJudge = () => {}) {
@@ -89,6 +92,9 @@ function fake(answers, onJudge = () => {}) {
     if (name === 'run_harness_check') return harness([]);
     if (name === 'run_provider_cases') return session([]);
     if (name === 'run_status_cases') return projectStatus([]);
+    if (name === 'run_check_cases') return hostCheck([]);
+    if (name === 'run_vectors') return canonical([]);
+    if (name === 'run_path_vectors') return paths([]);
     return name === 'run_ledger_cases' ? ledger([]) : done(0);
   };
   return { spawn, calls };
@@ -297,9 +303,13 @@ test('a harness report that is unfinished or of the old shape is not credited, e
 });
 
 const statusCase = 'an empty ledger has a report';
+const hostCheckCase = 'well-behaved (exited) [a05c3820fa457e37]';
 for (const [tool, report, name, other] of [
   ['run_provider_cases', session, 'wrong-id', 'garbage'],
   ['run_status_cases', projectStatus, statusCase, 'two ledgers are read in order'],
+  ['run_check_cases', hostCheck, hostCheckCase, 'well-behaved (timed-out) [d3f9eab0f80b830f]'],
+  ['run_vectors', canonical, 'empty object', 'empty array'],
+  ['run_path_vectors', paths, "accept 'a'", "accept 'README.md'"],
 ]) {
   test(`${tool} credits the exact case repeated on replay`, () => {
     assert.deepEqual(judge({ [tool]: [report([name, other]), report([name])] }),
@@ -328,14 +338,25 @@ test('the status tally accounts for all selected cases including skips', () => {
   assert.deepEqual(judge({ run_status_cases: [zero] }), unfinished('run_status_cases'));
 });
 
-// The other auxiliary judges name no case the runner reads; run_vectors (the canonical judge) stands for them.
+test('the host-check tally accounts for all selected cases including skips', () => {
+  for (const fields of [{ cases: 131 }, { skipped: -1, cases: 128 }, { skipped: true }, { skipped: undefined }]) {
+    const answer = hostCheck([hostCheckCase], { fields });
+    assert.deepEqual(judge({ run_check_cases: [answer, answer] }), unfinished('run_check_cases'));
+  }
+  const zero = caseReport([], { cases: 132, judged: 0, skipped: 132 });
+  assert.deepEqual(judge({ run_check_cases: [zero] }), unfinished('run_check_cases'));
+});
+
+// A stand-in keeps the fallback for judges without a typed report under test.
+const standIn = { name: 'stand_in', tool: 'stand_in.py', args: [] };
+const judgeStandIn = (answers) => plant.judgeCopy('copy', [standIn], { replay: true, spawn: fake({ stand_in: answers }).spawn });
 test('an auxiliary rejection must repeat, and one without a mismatch is named as such', () => {
-  assert.deepEqual(judge({ run_vectors: [done(1, 'MISMATCH canonical\n'), done(1, 'MISMATCH canonical\n')] }),
-    { outcome: 'rejected', name: 'run_vectors', mismatch: true, cases: [] });
-  assert.deepEqual(judge({ run_vectors: [done(1, 'refused\n'), done(1, 'refused\n')] }),
-    { outcome: 'rejected', name: 'run_vectors', mismatch: false, cases: [] });
-  assert.deepEqual(judge({ run_vectors: [done(1, 'MISMATCH canonical\n'), done(0)] }),
-    unfinished('run_vectors', 'did not reject again on replay'));
+  assert.deepEqual(judgeStandIn([done(1, 'MISMATCH stand-in\n'), done(1, 'MISMATCH stand-in\n')]),
+    { outcome: 'rejected', name: standIn.name, mismatch: true, cases: [] });
+  assert.deepEqual(judgeStandIn([done(1, 'refused\n'), done(1, 'refused\n')]),
+    { outcome: 'rejected', name: standIn.name, mismatch: false, cases: [] });
+  assert.deepEqual(judgeStandIn([done(1, 'MISMATCH stand-in\n'), done(0)]),
+    unfinished(standIn.name, 'did not reject again on replay'));
 });
 
 test('an auxiliary judge that could not run, was signalled or broke is not credited', () => {
@@ -343,11 +364,11 @@ test('an auxiliary judge that could not run, was signalled or broke is not credi
     usage: done(2),
     signal: killed('SIGTERM'),
     launch_error: failed('ENOENT'),
-    traceback: done(1, 'MISMATCH canonical\n', 'Traceback (most recent call last):\n'),
+    traceback: done(1, 'MISMATCH stand-in\n', 'Traceback (most recent call last):\n'),
     disk_full: done(1, 'OSError: [Errno 28] No space left on device\n'),
   };
   for (const [name, answer] of Object.entries(cases)) {
-    assert.deepEqual(judge({ run_vectors: [answer] }), unfinished('run_vectors'), name);
+    assert.deepEqual(judgeStandIn([answer]), unfinished(standIn.name), name);
   }
 });
 
@@ -479,12 +500,17 @@ test('a unit-test run that did not finish is unfinished, not missed', (t) => {
 });
 
 test('a provisional auxiliary rejection cannot finish a batch successfully', (t) => {
-  const wrong = () => done(1, 'MISMATCH canonical\n');
-  const run = batch(t, { run_kit: [kit([]), kit([]), kit(['plan/b']), kit(['plan/b'])], run_vectors: [done(0), wrong(), wrong()] });
-  assert.equal(run.code, 2);
-  assert.deepEqual([run.report.caught, run.report.caught_provisionally, run.report.all_caught], [1, 1, false]);
-  assert.match(run.verdicts[0], /^caught provisionally \(run_vectors, no case named\)/);
-  assert.match(run.verdicts[1], /^caught \(run_kit: plan\/b\)/);
+  const wrong = () => done(1, 'MISMATCH stand-in\n');
+  plant.JUDGES.push(standIn);
+  try {
+    const run = batch(t, { run_kit: [kit([]), kit([]), kit(['plan/b']), kit(['plan/b'])], stand_in: [done(0), wrong(), wrong()] });
+    assert.equal(run.code, 2);
+    assert.deepEqual([run.report.caught, run.report.caught_provisionally, run.report.all_caught], [1, 1, false]);
+    assert.match(run.verdicts[0], /^caught provisionally \(stand_in, no case named\)/);
+    assert.match(run.verdicts[1], /^caught \(run_kit: plan\/b\)/);
+  } finally {
+    plant.JUDGES.pop();
+  }
 });
 
 test('an attest catch on a repeated named case is caught, not provisionally', (t) => {
