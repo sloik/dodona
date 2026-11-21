@@ -39,6 +39,24 @@ docs = ["records/README.md", "intents/README.md"]
 why = "The owner's ledger that confirm.py writes, and how intents are read and their status reported, are described there."
 
 [[rule]]
+id = "project-commands"
+code = ["tools/project_status.py", "tools/project_run.py", "tools/policy_input.py"]
+docs = ["conformance/README.md", "decisions/0034-a-kernel-runs-a-project-and-reports-its-status.md"]
+why = "The kit and decision give the status and run commands' inputs, policy preparation and reports."
+
+[[rule]]
+id = "intents-provider"
+code = ["providers/intents/*.py", "tools/check_intents_provider.py"]
+docs = ["intents/README.md", "protocol/README.md"]
+why = "The intent files' format and the provider's capability are described together here."
+
+[[rule]]
+id = "ledger-reference"
+code = ["tools/ledger.py"]
+docs = ["protocol/ledger.md"]
+why = "The reference reads and writes the ledger format defined by the protocol."
+
+[[rule]]
 id = "harness"
 code = ["tools/attest.py", "tools/harness.py", "tools/run_attest_check.py", "tools/run_harness_check.py",
         "conformance/harness/*.py"]
@@ -49,14 +67,15 @@ why = "What the harness signs and how a kernel grades it is in the kit's Acts sc
 id = "kit-judges"
 code = ["tools/run_kit.py", "tools/run_vectors.py", "tools/run_path_vectors.py", "tools/run_key_vectors.py",
         "tools/run_ledger_cases.py", "tools/run_input_cases.py", "tools/run_provider_cases.py",
-        "tools/run_check_cases.py", "tools/kernel_differential.py", "tools/path_differential.py",
+        "tools/run_check_cases.py", "tools/run_status_cases.py", "tools/run_run_cases.py",
+        "tools/kernel_differential.py", "tools/path_differential.py",
         "tools/kit_adequacy.py"]
 docs = ["conformance/README.md", "docs/gap-checks.md"]
 why = "How a kernel or host is judged is written in the kit's README, and the judges that run as their own tools are listed with the gap behind each."
 
 [[rule]]
 id = "kit-data"
-code = ["conformance/kernel/**", "conformance/ledger/*", "conformance/vectors/*", "conformance/provider/*",
+code = ["conformance/kernel/**", "conformance/ledger/*", "conformance/vectors/*", "conformance/provider/*", "conformance/project/*",
         "tools/gen_kit_vectors.py", "tools/gen_wrong_types.py"]
 docs = ["conformance/README.md"]
 why = "Every scenario, vector and case tests a rule written in the kit's README, which also lists what is in the kit. The README's counts are checked on their own."
@@ -131,13 +150,3 @@ why = "Written by tools/confirm.py at the owner's first confirmation; records/RE
 [[absent]]
 path = "tools/widthcheck"
 why = "A path inside the example project of the provider guide, not in this repository."
-
-[[known]]
-check = "docs_usage_matches_the_parser"
-problem = "tools/host.py: subcommand 'check' is not shown in its usage lines"
-why = "tools/host.py is part of every model check's key: changing even its docstring makes all 121 kept results run again on the shared queue. Branch kernel-run changes tools/host.py anyway and shows the command there, which removes this entry. Listed by the agent that found it; the owner accepts it by merging."
-
-[[known]]
-check = "docs_usage_matches_the_parser"
-problem = "tools/host.py: flag --policy-ref of `host.py plan` is not shown in its usage lines"
-why = "As the entry above: tools/host.py is part of every model check's key, so its usage is corrected with branch kernel-run, which changes the file anyway. Listed by the agent that found it; the owner accepts it by merging."

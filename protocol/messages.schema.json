@@ -208,7 +208,8 @@
         "specified_by",
         "targets",
         "expect",
-        "config"
+        "config",
+        "inputs"
       ],
       "additionalProperties": false,
       "properties": {
@@ -251,6 +252,14 @@
         "config": {
           "type": "object",
           "description": "Bounds, flags, seeds, worker counts and limits. Provider-defined; integers, strings, booleans, arrays and objects only, no floating point. The kernel hashes it into the core key."
+        },
+        "inputs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common.schema.json#/$defs/relpath"
+          },
+          "description": "The paths of the files a check of this obligation may read, sorted, each one of the files the request listed. The host gives a check these files and no others; a check that needs a file not listed cannot read it, which ends in an error, never a pass."
         }
       },
       "allOf": [
@@ -990,12 +999,6 @@
           "gate"
         ]
       },
-      "then": {
-        "required": [
-          "condition",
-          "limit_days"
-        ]
-      },
       "else": {
         "not": {
           "anyOf": [
@@ -1011,6 +1014,12 @@
             }
           ]
         }
+      },
+      "then": {
+        "required": [
+          "condition",
+          "limit_days"
+        ]
       }
     },
     "intent": {
@@ -1020,6 +1029,7 @@
         "name",
         "file",
         "statement",
+        "text",
         "owner",
         "criteria",
         "children",
@@ -1036,6 +1046,10 @@
         },
         "statement": {
           "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "description": "The intent as written, all of it: what an owner confirms. Changing any of it changes the baseline."
         },
         "owner": {
           "type": "object",
@@ -1054,6 +1068,25 @@
               ]
             }
           }
+        },
+        "worker": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "person",
+                "agent"
+              ]
+            }
+          },
+          "description": "Who does the work the intent asks for, when the file says."
         },
         "criteria": {
           "type": "array",
@@ -1212,6 +1245,26 @@
             "$ref": "#/$defs/file_ref"
           },
           "description": "Claimed files, sorted by path."
+        },
+        "obligations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "binding",
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "binding": {
+                "$ref": "common.schema.json#/$defs/name"
+              },
+              "name": {
+                "$ref": "common.schema.json#/$defs/name"
+              }
+            }
+          },
+          "description": "Every obligation the project's bindings enumerated, sorted by binding then name, so the provider can say which obligations check each criterion. Absent or empty when there are none."
         }
       }
     },

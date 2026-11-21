@@ -46,7 +46,7 @@ A binding attaches one provider, for a set of its capabilities, to the files it 
 
 Details:
 
-- **`match`** is needed for capabilities that read files: `intent.index`, `decision.index`, `definition.index` and `obligation.enumerate`, `obligation.check`, `artifact.build`, `conformance.check`. It is left out for `run.submit`, `tool.resolve` and `store.blob`. The pattern language is not decided beyond what the repository's file uses: `*` inside a path segment and `[0-9]` for a digit. Whether `**` is allowed is not decided.
+- **`match`** is needed for capabilities that read files: `intent.index`, `decision.index`, `definition.index` and `obligation.enumerate`, `obligation.check`, `artifact.build`, `conformance.check`. It is left out for `run.submit`, `tool.resolve` and `store.blob`. A pattern matches a relative path segment by segment, with as many segments as the path: in a segment, `*` is any run of characters other than `/`, and `[0-9]` is one character in that range. There is no `?`, no `**` and no escape (decision 0034). Only regular files are claimed, never a link.
 - **Two bindings may not claim the same file for the same capability.** That is an error at resolve time ([decision 0004](../decisions/0004-definition-identity-comes-from-the-language-provider.md)).
 - **A file no binding claims** gets file identity: the hash of its bytes, with dependencies as declared in configuration. How dependencies of such a file are declared in configuration is not decided.
 - **A binding that lists `obligation.check`, `artifact.build` or `conformance.check`** must also list `obligation.enumerate`, and the provider must offer both.

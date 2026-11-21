@@ -9,6 +9,7 @@ Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with
 | [metrics.py](metrics.py) | Counts how complete and how well checked dodona is, from its own files, and fails a change that takes a ratcheted item away ([metrics](../docs/metrics.md)) |
 | [check_docs.py](check_docs.py) | Checks that the documents still describe the code, across the repository and for one change ([gap checks](../docs/gap-checks.md)) |
 | [check_examples.py](check_examples.py) | Validates the schemas, the provider guide's examples and dodona's own policy with a JSON Schema validator |
+| [check_intents_provider.py](check_intents_provider.py) | Checks how the Markdown intents provider reports criteria and the obligations that check them |
 | [check_models.py](check_models.py) | Judges every model-check case listed in `spec/*/expected.json` |
 | [check_repo.py](check_repo.py) | The repository checks that need no model checker; must pass before a push ([gap checks](../docs/gap-checks.md)) |
 | [check_states.py](check_states.py) | Requires a kernel to give the model's own answer on every state a model reached |
@@ -23,8 +24,12 @@ Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with
 | [keep.py](keep.py) | Moves what one model run keeps for the next, and reports about reuse |
 | [kernel_differential.py](kernel_differential.py) | Compares two kernels on inputs the conformance kit does not contain |
 | [kit_adequacy.py](kit_adequacy.py) | Plants each listed defect in the first kernel and requires the kit to reject it |
+| [ledger.py](ledger.py) | Reads and writes the reference ledger format |
 | [path_differential.py](path_differential.py) | Compares a kernel's path check with the reference on random paths |
 | [pathcheck.py](pathcheck.py) | Reference implementation of the [path check](../protocol/path-check.md) |
+| [policy_input.py](policy_input.py) | Validates a policy and prepares the fields and defaults a kernel uses |
+| [project_run.py](project_run.py) | Reference command for running a project's checks and recording verdicts |
+| [project_status.py](project_status.py) | Reference command for reporting a project's status from providers, ledgers and policy |
 | [provider_host.py](provider_host.py) | A small reference host for one provider session |
 | [run_attest_check.py](run_attest_check.py) | Has a kernel grade check values the reference signer makes at test time |
 | [run_check_cases.py](run_check_cases.py) | Judges `tools/host.py` against a checker that breaks one rule at a time |
@@ -35,6 +40,8 @@ Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with
 | [run_ledger_cases.py](run_ledger_cases.py) | Judges a kernel's ledger, with damage at every byte and two writers at once |
 | [run_path_vectors.py](run_path_vectors.py) | Judges a kernel against the path-check vectors |
 | [run_provider_cases.py](run_provider_cases.py) | Judges a host against the misbehaving provider |
+| [run_run_cases.py](run_run_cases.py) | Judges a project's run against scripted providers and a batch executor |
+| [run_status_cases.py](run_status_cases.py) | Judges a project's status against scripted providers and the reference report |
 | [run_vectors.py](run_vectors.py) | Judges a kernel against the canonical-encoding vectors |
 | [status.py](status.py) | Reports the status of this project from its ledger, worked out by a kernel |
 | [tooltree.py](tooltree.py) | Reference for the [digest of a tool tree](../protocol/tool-tree-digest.md) |

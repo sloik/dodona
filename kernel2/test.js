@@ -456,6 +456,30 @@ test('status: an evidence entry with a wrongly typed field is not a record and i
   }
 });
 
+test('status: an obligation named __proto__ is kept as its own name in the report', () => {
+  const { plain } = require('./plain');
+  const { runScenario } = require('./scenario');
+  const name = '__proto__';
+  const pre = { obligation: 'sha256:a', kind: 'check', inputs: { targets: ['sha256:1'] }, provider: { name: 'p', version: '1', protocol: '0.2' } };
+  const scenario = {
+    kind: 'status',
+    self: { writer: 'k', platform: 'p1' },
+    policy: { min_hard_gates: 1, required: [], trusted_writers: [], floors: {}, attestors: {}, makes: [] },
+    // A computed key: a literal `__proto__:` would set the prototype and define nothing.
+    obligations: { [name]: { preimage: pre } },
+    intents: { i: { owner: 'o', worker: 'w', children: [], criteria: { c: { gate: 'hard', checked_by: [name] } } } },
+    steps: [{ do: { append: { kind: 'evidence', body: { obligation: name, preimage: pre, core_key: identity.identityOf(pre), platform: 'p1', verdict: 'passed', writer: 'k' } } } }],
+  };
+  // Written out and read back as the status command reads what it judged.
+  const read = strictJson.read(JSON.stringify(scenario));
+  assert.equal(read.refused, undefined);
+  const last = runScenario(plain(read.value)).results.at(-1);
+  assert.ok(Object.hasOwn(last.obligations, name));
+  assert.equal(JSON.stringify(last.obligations), '{"__proto__":{"status":"passed"}}');
+  assert.deepEqual(last.intents.i.score, { met: 1, of: 1 });
+  assert.equal(last.intents.i.shown.level, 'asserted');
+});
+
 test('evidence: the reason is the attempt asked for last, not the one that ended last', () => {
   const steps = [
     { submit: { obligation: 'o', as: 'j1' } }, { backend: { to: 'down' } }, { submit: { obligation: 'o', as: 'j2' } },
@@ -747,4 +771,69 @@ test('the processes below a command are found through parents that have gone, ne
   assert.deepEqual(pids(below([e(14, 10, 90)], 10, 100n, false)), []);
   // The command has exited and its id was taken at 200 by 10': what 10' started is not the command's.
   assert.deepEqual(pids(below([e(10, 5, 200), e(11, 10, 110), e(15, 10, 210), e(16, 15, 220)], 10, 100n, true)), [11]);
+});
+
+test('the status command reads its input as one JSON object, with at most one line feed after it', () => {
+  const { readInput } = require('./project-status');
+  assert.deepEqual(readInput(bytes('{"a":1}')), { a: 1 });
+  assert.deepEqual(readInput(bytes('{"a":1}\n')), { a: 1 });
+  assert.equal(readInput(bytes('{"a":1}\n\n')), null);
+  assert.equal(readInput(bytes('{"a":1}\r\n')), null);
+  assert.equal(readInput(bytes('{"a":1} ')), null);
+  assert.equal(readInput(bytes(' {"a":1}')), null);
+  assert.equal(readInput(bytes('{"a":1,"a":2}')), null);
+  assert.equal(readInput(bytes('{"a":1.5}')), null);
+  assert.equal(readInput(bytes(`{"a":${'['.repeat(64)}${']'.repeat(64)}}`)), null);
+  assert.deepEqual(readInput(bytes(`{"a":${'['.repeat(63)}${']'.repeat(63)}}`)).a.length, 1);
+});
+
+test('relative paths and match patterns of the status command', () => {
+  const { isRelative, isPattern, segmentMatches } = require('./project-status');
+  for (const ok of ['a', 'a/b.txt', '.git/x', 'a..b']) assert.equal(isRelative(ok), true, ok);
+  for (const bad of ['', '/a', 'a/', 'a//b', './a', 'a/../b', 'c:x', 'a\\b', 'a\u0000b', 7]) assert.equal(isRelative(bad), false, String(bad));
+  for (const ok of ['m/*.txt', 'intents/[0-9]*.md', '[---]', 'é/*']) assert.equal(isPattern(ok), true, ok);
+  for (const bad of ['', '/m', 'm/../x', 'a:b', '[9-0]', '[a]', '[a-]]', 'a\\b', '[é-z]', '[a-b', 'a]']) assert.equal(isPattern(bad), false, bad);
+  assert.equal(segmentMatches('*.txt', 'a.txt'), true);
+  assert.equal(segmentMatches('*.txt', '.txt'), true);
+  assert.equal(segmentMatches('*.txt', 'a.txt2'), false);
+  assert.equal(segmentMatches('[0-9]*', '7x'), true);
+  assert.equal(segmentMatches('[0-9]*', 'x7'), false);
+  assert.equal(segmentMatches('a*b*c', 'aXbYbc'), true);
+  assert.equal(segmentMatches('?', '?'), true);
+  assert.equal(segmentMatches('*', '😀'), true);
+  assert.equal(segmentMatches('[a-z]', '😀'), false);
+});
+
+test('the project file is read in the subset of TOML the contract allows', () => {
+  const { readProject, Stop } = require('./project-status');
+  const read = (text) => {
+    try {
+      return readProject(bytes(text));
+    } catch (error) {
+      if (error instanceof Stop) return error.reason;
+      throw error;
+    }
+  };
+  const good = '# c\n[project]\nname = "p"   # n\n\n[[binding]]\nname = "b"\nprovider = "x"\ncapabilities = [ "obligation.enumerate" ,"y" ]\nmatch = []\n';
+  assert.deepEqual(read(good), [{ name: 'b', provider: 'x', capabilities: ['obligation.enumerate', 'y'], match: [] }]);
+  assert.deepEqual(read('[[binding]]\n__proto__ = "z"\nname = "b"\nprovider = "x"\ncapabilities = []\n')[0].name, 'b');
+  for (const bad of ['﻿[project]\n', '[project]\n[project]\n', 'name = "p"\n', '[project]\nname = "p"\nname = "q"\n', '[project]\nname = \'p\'\n',
+    '[project]\nname = "a\\"b"\n', '[project]\nn = 1\n', '[project]\n name = "p"\n', '[project]\nname = "p"\r\n', '[project]\nname = "p"\t# c\n',
+    '[project]\nname = "p"# c\n', '[other]\n', '[[binding]]\nname = "b"\ncapabilities = []\n', '[[binding]]\nname = "b"\nprovider = "x"\ncapabilities = "c"\n',
+    '[[binding]]\nname = "b"\nprovider = "x"\ncapabilities = []\nmatch = ["a:b"]\n', '[project]\nname = "\u0085"\n', '[project]\nkey2 = "v"\n',
+    '[[binding]]\nname = "b"\nprovider = "x"\ncapabilities = []\n[[binding]]\nname = "b"\nprovider = "y"\ncapabilities = []\n']) {
+    assert.equal(read(bad), 'bad-project', JSON.stringify(bad));
+  }
+  assert.deepEqual(read('[project]\nname = "a #   b" # c  \n'), []);
+});
+
+test('coverage: where each intent tree\'s hard gates sit', () => {
+  const { coverageOf } = require('./project-status');
+  const intent = (gates, children = []) => ({ children, criteria: Object.fromEntries(gates.map((gate, at) => [String(at), { gate }])) });
+  const intents = new Map([['r', intent(['hard', 'soft'], ['a', 'b', 'ghost'])], ['a', intent(['Hard', 'deferred'])], ['b', intent([])]]);
+  const parent = new Map([['a', 'r'], ['b', 'r'], ['ghost', 'r']]);
+  const coverage = coverageOf(intents, parent, 2);
+  assert.deepEqual(coverage.intents.r, { own_hard: 1, subtree_hard: 2, root: 'r', tree_hard: 2, floor: 2, floor_met_only_over_tree: false });
+  assert.deepEqual(coverage.intents.a, { own_hard: 1, subtree_hard: 1, root: 'r', tree_hard: 2, floor: 2, floor_met_only_over_tree: true });
+  assert.deepEqual(coverage.thinnest, { r: 'b' });
 });

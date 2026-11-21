@@ -3,7 +3,10 @@
 // plants each defect from defects.json in the copy one at a time, and runs ALL
 // the judges against it.
 //
-//     node kernel2/plant.js
+//     node kernel2/plant.js [FILE...]
+//
+// With FILE names (such as project-status.js), only the defects planted in those files
+// are tried; the unchanged copy is still put to every judge first.
 //
 // Per defect it prints
 //   caught  the first judge that rejected the defective copy (judges are tried one at a
@@ -26,7 +29,16 @@ const UNIT_TESTS = 'node --test';
 // The judges are Python programs. Windows installs Python as `python`, not `python3`.
 const PYTHON = process.env.DODONA_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
 
-// Each judge: a name, the tool, and the arguments after `node <kernel>`.
+// The status judge recomputes each report with another kernel's `scenario` command, so
+// that this kernel does not certify its own report: the first kernel's, built where its
+// own build puts it, or the program DODONA_OTHER_KERNEL names.
+const OTHER_KERNEL = process.env.DODONA_OTHER_KERNEL
+  || path.join(root, 'kernel', 'target', 'release', process.platform === 'win32' ? 'dodona-kernel.exe' : 'dodona-kernel');
+// How many status cases are judged at once.
+const STATUS_JOBS = process.env.DODONA_STATUS_JOBS || '3';
+
+// Each judge: a name, the tool, the tool's own arguments before `--`, and the
+// arguments after `node <kernel>`.
 const JUDGES = [
   { name: 'run_kit', tool: 'run_kit.py', args: ['scenario'] },
   { name: 'run_ledger_cases', tool: 'run_ledger_cases.py', args: [] },
@@ -38,6 +50,7 @@ const JUDGES = [
   { name: 'run_path_vectors', tool: 'run_path_vectors.py', args: ['path', 'path-set'] },
   { name: 'run_provider_cases', tool: 'run_provider_cases.py', args: ['session'] },
   { name: 'run_check_cases', tool: 'run_check_cases.py', args: ['check'] },
+  { name: 'run_status_cases', tool: 'run_status_cases.py', before: ['--jobs', STATUS_JOBS, '--kernel', OTHER_KERNEL], args: ['status'] },
 ];
 
 // Which judges a defect in a host module is put to first: the ones meant to catch it,
@@ -48,6 +61,7 @@ const FIRST_JUDGES = {
   'session.js': ['run_provider_cases', 'run_check_cases'],
   'wire.js': ['run_provider_cases', 'run_check_cases'],
   'processes.js': ['run_provider_cases', 'run_check_cases'],
+  'project-status.js': ['run_status_cases'],
 };
 
 function judgesFor(file) {
@@ -66,7 +80,7 @@ function loads(copy) {
 // rejected the copy, but not by finding a case it answers wrongly.
 function firstRejection(copy, judges = JUDGES) {
   for (const judge of judges) {
-    const run = spawnSync(PYTHON, [path.join('tools', judge.tool), '--', 'node', path.join(copy, 'dodona-kernel2.js'), ...judge.args], {
+    const run = spawnSync(PYTHON, [path.join('tools', judge.tool), ...(judge.before || []), '--', 'node', path.join(copy, 'dodona-kernel2.js'), ...judge.args], {
       cwd: root,
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
@@ -81,7 +95,14 @@ function firstRejection(copy, judges = JUDGES) {
 }
 
 function main() {
-  const { defects } = JSON.parse(fs.readFileSync(path.join(__dirname, 'defects.json'), 'utf8'));
+  if (!fs.existsSync(OTHER_KERNEL)) {
+    console.log(`no kernel to recompute status reports with at ${OTHER_KERNEL}: build the first kernel, or name one in DODONA_OTHER_KERNEL; nothing was planted`);
+    process.exitCode = 2;
+    return;
+  }
+  const only = process.argv.slice(2);
+  const { defects: listed } = JSON.parse(fs.readFileSync(path.join(__dirname, 'defects.json'), 'utf8'));
+  const defects = only.length === 0 ? listed : listed.filter((defect) => only.includes(defect.file));
   const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'kernel2-plant-'));
   fs.cpSync(__dirname, copy, { recursive: true });
   const counts = { caught: 0, missed: 0, stale: 0, broken: 0, caught_without_mismatch: 0 };

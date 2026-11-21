@@ -600,8 +600,8 @@
       "name": "a record from another platform raises the level shown",
       "model_case": "(round 3)",
       "file": "status.js",
-      "find": "levels[name] = obligationLevel(obligations[name].status, records);",
-      "replace": "levels[name] = obligationLevel(obligations[name].status, records.concat(ledger.filter((e) => e.kind === 'evidence' && e.body.obligation === name && e.body.core_key === identityOf(details.preimage)).map((e) => e.body)));"
+      "find": "put(levels, name, obligationLevel(judged.status, records));",
+      "replace": "put(levels, name, obligationLevel(judged.status, records.concat(ledger.filter((e) => e.kind === 'evidence' && e.body.obligation === name && e.body.core_key === identityOf(details.preimage)).map((e) => e.body))));"
     },
     {
       "name": "a refused exception is counted",
@@ -1708,6 +1708,531 @@
       "file": "session.js",
       "find": "    if (performance.now() >= graceEnds) return null;",
       "replace": "    if (performance.now() >= graceEnds) return 'deadline';"
+    },
+    {
+      "name": "status step 1: standard input followed by a space is read",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (body.length === 0 || body[0] !== 0x7b || body[body.length - 1] !== 0x7d) return null;",
+      "replace": "if (body.length === 0 || body[0] !== 0x7b) return null;"
+    },
+    {
+      "name": "status step 1: a deadline longer than a day is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "deadline >= 1 && deadline <= MOST_DEADLINE_MS;",
+      "replace": "deadline >= 1 && deadline <= 2 * MOST_DEADLINE_MS;"
+    },
+    {
+      "name": "status step 1: a code path listed twice is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (new Set(provider.code).size !== provider.code.length) throw",
+      "replace": "if (new Set(provider.code).size > provider.code.length) throw"
+    },
+    {
+      "name": "status step 1: not_applied need not be sorted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (!isStrings(policy.not_applied) || !isSortedSet(policy.not_applied)) return",
+      "replace": "if (!isStrings(policy.not_applied)) return"
+    },
+    {
+      "name": "status step 1: a policy with a field more is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (!isObject(policy) || Object.keys(policy).sort().join(',') !== POLICY_FIELDS.join(',')) {",
+      "replace": "if (!isObject(policy) || !POLICY_FIELDS.every((field) => Object.hasOwn(policy, field))) {"
+    },
+    {
+      "name": "status step 1: a link on the way to a file is followed",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    if (status.isSymbolicLink()) return 'link';\n    if (i === steps.length - 1) return status.isFile()",
+      "replace": "    if (i === steps.length - 1) return status.isFile()"
+    },
+    {
+      "name": "status step 1: provider code that cannot be read is hashed as empty",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "        put(files, rel, sha256Hex(fs.readFileSync(path.join(root, rel))));\n      } catch (error) {\n        throw new Stop('unreadable-file',",
+      "replace": "        put(files, rel, sha256Hex(fs.readFileSync(path.join(root, rel))));\n      } catch (error) {\n        put(files, rel, sha256Hex(Buffer.alloc(0)));\n        continue;\n        throw new Stop('unreadable-file',"
+    },
+    {
+      "name": "status step 2: a tab is allowed in a line",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "const FORBIDDEN = /[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f]/;",
+      "replace": "const FORBIDDEN = /[\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]/;"
+    },
+    {
+      "name": "status step 2: a key given twice in one table is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (here === null || here.has(pair[1])) throw",
+      "replace": "if (here === null) throw"
+    },
+    {
+      "name": "status step 2: a [project] header given twice is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (singles.has(header[1])) throw",
+      "replace": "if (false) throw"
+    },
+    {
+      "name": "status step 2: a byte-order mark is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (text.startsWith('\\ufeff')) throw new Stop('bad-project', 'a byte-order mark');",
+      "replace": "if (text.startsWith('\\ufeff')) text = text.slice(1);"
+    },
+    {
+      "name": "status step 2: a colon is allowed in a pattern",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "const PATTERN_SEGMENT = new RegExp(`^(?:[^\\\\[\\\\]\\\\\\\\*:]|",
+      "replace": "const PATTERN_SEGMENT = new RegExp(`^(?:[^\\\\[\\\\]\\\\\\\\*]|"
+    },
+    {
+      "name": "status step 2: the project file reached through a link is read",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (how !== 'file') throw new Stop('bad-project'",
+      "replace": "if (how !== 'file' && how !== 'link') throw new Stop('bad-project'"
+    },
+    {
+      "name": "status step 2: two bindings with one name are accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (new Set(bindings.map((binding) => binding.name)).size !== bindings.length) throw",
+      "replace": "if (new Set(bindings.map((binding) => binding.name)).size > bindings.length) throw"
+    },
+    {
+      "name": "status step 3: a capability listed twice is named twice as not served",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "for (const capability of sortedSet(binding.capabilities)) {",
+      "replace": "for (const capability of binding.capabilities) {"
+    },
+    {
+      "name": "status step 3: a provider the site does not have is not refused",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    if (!Object.hasOwn(site.providers, binding.provider)) throw new Stop('no-provider', binding.provider);\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 4: files in .git are claimed",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (entry.name === '.git' || entry.isSymbolicLink()) continue;",
+      "replace": "if (entry.isSymbolicLink()) continue;"
+    },
+    {
+      "name": "status step 4: a folder that cannot be listed is passed over",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "      throw new Stop('unreadable-file', `${rel || '.'}: ${error.code || error.message}`);",
+      "replace": "      continue;"
+    },
+    {
+      "name": "status step 4: claimed files sorted by code point",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "return files.filter((rel) => patterns.some((pattern) => pathMatches(pattern, rel))).sort(compareUnits).map(",
+      "replace": "return files.filter((rel) => patterns.some((pattern) => pathMatches(pattern, rel))).sort((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b))).map("
+    },
+    {
+      "name": "status step 4: a range in a pattern leaves out its last character",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": ": token.low <= code && code <= token.high;",
+      "replace": ": token.low <= code && code < token.high;"
+    },
+    {
+      "name": "status step 4: two bindings may claim one file for one capability",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (owners.has(file.path)) throw new Stop('overlapping-bindings'",
+      "replace": "if (false) throw new Stop('overlapping-bindings'"
+    },
+    {
+      "name": "status step 5: hello offers a smaller line limit",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "limits: { max_line_bytes: MAX_LINE_BYTES, deadline_ms: deadline }",
+      "replace": "limits: { max_line_bytes: 65536, deadline_ms: deadline }"
+    },
+    {
+      "name": "status step 5: requests carry the deadline rounded to whole seconds",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "{ type: 'request', id: '1', deadline_ms: deadline, capability, body }",
+      "replace": "{ type: 'request', id: '1', deadline_ms: Math.round(deadline / 1000) * 1000, capability, body }"
+    },
+    {
+      "name": "status step 5: a manifest's protocol is not compared with the one offered",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "own(manifest, 'protocol') !== PROTOCOL) {",
+      "replace": "!isString(own(manifest, 'protocol'))) {"
+    },
+    {
+      "name": "status step 5: a provider that is not the one the binding names is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "  if (manifest.name !== binding.provider) {",
+      "replace": "  if (false) {"
+    },
+    {
+      "name": "status step 5: no shutdown is sent at the end of a session",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    wire.post({ type: 'shutdown' });\n    wire.close();\n    await Promise.race",
+      "replace": "    wire.close();\n    await Promise.race"
+    },
+    {
+      "name": "status step 5: a provider whose command cannot be started is reported as closed",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    throw new Stop('provider-not-started', binding.provider);",
+      "replace": "    throw new Stop('closed', binding.provider);"
+    },
+    {
+      "name": "status step 5: a rejected entry need not have a string name",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "!rejected.every((entry) => isString(own(entry, 'name')))",
+      "replace": "!rejected.every(isObject)"
+    },
+    {
+      "name": "status step 5: inputs need not be sorted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (!isStrings(item.inputs) || !isSortedSet(item.inputs) || ",
+      "replace": "if (!isStrings(item.inputs) || "
+    },
+    {
+      "name": "status step 5: a specified_by file outside the inputs is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (![...item.specified_by, ...item.targets].every(",
+      "replace": "if (![...item.targets].every("
+    },
+    {
+      "name": "status step 5: bindings are not taken in order of name",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": ".filter((b) => b.capabilities.includes('obligation.enumerate')).sort(byName)) {",
+      "replace": ".filter((b) => b.capabilities.includes('obligation.enumerate'))) {"
+    },
+    {
+      "name": "status step 5: obligations a provider rejected are not listed",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    unchecked = unchecked.concat(rejected.map((entry) => entry.name));\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 5: an obligation name given by an earlier binding is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (found.has(item.name)) throw new Stop('duplicate-obligation', item.name);",
+      "replace": "if (listed.some((o) => o.binding === binding.name && o.name === item.name)) throw new Stop('duplicate-obligation', item.name);"
+    },
+    {
+      "name": "status step 6: the provider's code digest is cut to 15 digits",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "identityOf(files).slice('sha256:'.length, 'sha256:'.length + 16)",
+      "replace": "identityOf(files).slice('sha256:'.length, 'sha256:'.length + 15)"
+    },
+    {
+      "name": "status step 6: the closure holds file identities without their paths",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "closure: sortedSet(given.map((file) => identityOf({ path: file.path, identity: file.identity }))),",
+      "replace": "closure: sortedSet(given.map((file) => file.identity)),"
+    },
+    {
+      "name": "status step 6: the runner and the code digest swapped in the provider's version",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "const version = `${manifest.version}+${digests.get(binding.provider)}+${site.runner}`;",
+      "replace": "const version = `${manifest.version}+${site.runner}+${digests.get(binding.provider)}`;"
+    },
+    {
+      "name": "status step 6: the key's tools carry their version",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": ".map((tool) => ({ name: tool.name, digest: tool.digest })),",
+      "replace": ".map((tool) => ({ name: tool.name, version: tool.version, digest: tool.digest })),"
+    },
+    {
+      "name": "status step 6: the key's config is the config itself, not its identity",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "config: identityOf(item.config),",
+      "replace": "config: item.config,"
+    },
+    {
+      "name": "status step 7: an intent with no worker is given its owner as worker",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "worker: Object.hasOwn(it, 'worker') ? it.worker.id : '',",
+      "replace": "worker: Object.hasOwn(it, 'worker') ? it.worker.id : it.owner.id,"
+    },
+    {
+      "name": "status step 7: a rejected intent file is passed over",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    if (rejected.length > 0) throw new Stop('intent-unreadable',",
+      "replace": "    if (false) throw new Stop('intent-unreadable',"
+    },
+    {
+      "name": "status step 7: a child with two parents is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "      if (parent.has(child)) throw new Stop('two-parents', child);\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 7: a link to an obligation nobody listed is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "        if (!known.has(JSON.stringify([link.binding, link.obligation]))) {",
+      "replace": "        if (false) {"
+    },
+    {
+      "name": "status step 7: a criterion id given twice is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (new Set(it.criteria.map((criterion) => criterion.id)).size !== it.criteria.length) throw",
+      "replace": "if (false) throw"
+    },
+    {
+      "name": "status step 7: an intent given twice keeps the last",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    if (intents.has(it.name)) throw new Stop('duplicate-intent', it.name);\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 7: an intent with an empty name is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "return isObject(it) && isString(own(it, 'name')) && it.name !== '' && ",
+      "replace": "return isObject(it) && isString(own(it, 'name')) && "
+    },
+    {
+      "name": "status step 7: a criterion's words are the intent's text",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "put(criteria, criterion.id, { words: criterion.statement,",
+      "replace": "put(criteria, criterion.id, { words: it.text,"
+    },
+    {
+      "name": "status step 7: runs that must agree are not a doubt",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "\n    || criterion.links.some((link) => Object.hasOwn(link, 'varying'))));",
+      "replace": "));"
+    },
+    {
+      "name": "status step 7: intents in a cycle are accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "      if (seen.has(here)) throw new Stop('intent-cycle', name);",
+      "replace": "      if (seen.has(here)) break;"
+    },
+    {
+      "name": "status step 8: the owner's ledger may be reached through a link",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "  if (!ownerReachedWithoutLink(root, ownerRel)) throw new Stop('owner-ledger-link', ownerRel);\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 8: the owner's ledger named again among the ledgers is read twice",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    if (present && id !== null && seen.includes(id)) continue;\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 8: acts are read from every ledger",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": ".filter((entry) => (entry.kind === 'act') === source.owner));",
+      "replace": ".filter((entry) => entry.kind === 'act' || !source.owner));"
+    },
+    {
+      "name": "status step 8: a ledger that is a link to nothing is absent",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "      return 'unreadable'; // a link to nothing",
+      "replace": "      return 'absent'; // a link to nothing"
+    },
+    {
+      "name": "status step 8: a torn owner's ledger is not reported",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    torn = torn || read.torn;",
+      "replace": "    torn = torn || (read.torn && !source.owner);"
+    },
+    {
+      "name": "status step 8: a ledger that is a folder has no entries",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "  if (!regular) throw new Stop('corrupt-ledger', `${rel} is not a file`);",
+      "replace": "  if (!regular) return { entries: [], torn: false, absent: false };"
+    },
+    {
+      "name": "status step 8: a corrupt ledger is read as empty",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "  if (read.refused !== undefined) throw new Stop('corrupt-ledger', `${rel}, line ${read.at}`);",
+      "replace": "  if (read.refused !== undefined) return { entries: [], torn: false, absent: false };"
+    },
+    {
+      "name": "status step 8: the owner's ledger that is a folder is not refused",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (ownerState === 'present' && isRegular(path.join(root, ownerRel)) !== true) throw",
+      "replace": "if (ownerState === 'present' && isRegular(path.join(root, ownerRel)) === null) throw"
+    },
+    {
+      "name": "status step 8: the ledger note counts the ledgers read, not the entries",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "  return { entries, note: { entries: entries.length, torn }, absent };",
+      "replace": "  return { entries, note: { entries: sources.length, torn }, absent };"
+    },
+    {
+      "name": "status step 9: a floor of 0 is handed over as 0",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "min_hard_gates: Math.max(asked.policy.min_hard_gates, 1),",
+      "replace": "min_hard_gates: asked.policy.min_hard_gates,"
+    },
+    {
+      "name": "status step 9: this kernel's writer is listed as trusted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    trusted_writers: [],\n",
+      "replace": "    trusted_writers: [site.writer],\n"
+    },
+    {
+      "name": "status step 10: no step that names nothing",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "...read.entries.map((entry) => ({ do: { append: { kind: entry.kind, body: entry.body } } })), NOTHING],",
+      "replace": "...read.entries.map((entry) => ({ do: { append: { kind: entry.kind, body: entry.body } } }))],"
+    },
+    {
+      "name": "status step 10: the platform joined with a dash",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "platform: `${site.platform.os}/${site.platform.arch}`",
+      "replace": "platform: `${site.platform.os}-${site.platform.arch}`"
+    },
+    {
+      "name": "status step 10: nothing required is stated as such despite doubts",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "project_status: doubts.length > 0 && (status === 'passed' || status === 'nothing-required') ? 'unknown' : status,",
+      "replace": "project_status: doubts.length > 0 && status === 'passed' ? 'unknown' : status,"
+    },
+    {
+      "name": "status step 10: a ledger the site names that does not exist is not a doubt",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "  if (read.absent.length > 0) doubts.push(DOUBTS.absent);\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 10: a required intent with children is not a doubt",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "  if (policy.required.some((name) => intents.has(name) && intents.get(name).children.length > 0)) doubts.push(DOUBTS.children);\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 10: the report is the first result, not the last",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "  return results[results.length - 1];",
+      "replace": "  return results[0];"
+    },
+    {
+      "name": "status step 11: a root is said to meet its floor only over its tree",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "floor_met_only_over_tree: name !== root && subtree < floor,",
+      "replace": "floor_met_only_over_tree: subtree < floor,"
+    },
+    {
+      "name": "status step 11: a deferred gate counts as hard in coverage",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "filter((criterion) => criterion.gate !== 'soft' && criterion.gate !== 'deferred').length",
+      "replace": "filter((criterion) => criterion.gate !== 'soft').length"
+    },
+    {
+      "name": "status step 11: the thinnest intent on a tie is the last",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "if (best === null || out[name].own_hard < out[best].own_hard) put(thinnest, root, name);",
+      "replace": "if (best === null || out[name].own_hard <= out[best].own_hard) put(thinnest, root, name);"
+    },
+    {
+      "name": "status step 11: the tree's count is the intent's own subtree",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "tree_hard: subtreeHard(root),",
+      "replace": "tree_hard: subtree,"
+    },
+    {
+      "name": "status step 1: a provider command holding a NUL is accepted",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": " && command.every((word) => !word.includes('\\u0000')) && isStrings(own(provider, 'code'));",
+      "replace": " && isStrings(own(provider, 'code'));"
+    },
+    {
+      "name": "status step 6: the key holds every site tool, not only those the manifest names",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "tools: site.tools.filter((tool) => uses.has(tool.name)).map(",
+      "replace": "tools: site.tools.map("
+    },
+    {
+      "name": "ledger: an entry nested deeper than 64 levels is read",
+      "model_case": "(ledger depth kit)",
+      "file": "ledger.js",
+      "find": "  if (strictJson.read(payloadText, { maxDepth: MAX_DEPTH }).refused !== undefined) return null;\n",
+      "replace": ""
+    },
+    {
+      "name": "ledger: an entry nested deeper than 64 levels is appended",
+      "model_case": "(ledger depth kit)",
+      "file": "ledger-file.js",
+      "find": "  if (ledger.tooDeep({ previous: null, kind: request.kind, body: request.body })) return { refused: 'bad-request' };\n",
+      "replace": ""
+    },
+    {
+      "name": "status step 1: a relative path may hold a NUL",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": " && !rel.includes('\\u0000')",
+      "replace": ""
+    },
+    {
+      "name": "status step 1: a code path behind a folder that cannot be entered is unreadable, not bad input",
+      "model_case": "(project status)",
+      "file": "project-status.js",
+      "find": "    } catch (error) {\n      return 'missing';\n    }",
+      "replace": "    } catch (error) {\n      return error.code === 'EACCES' ? 'file' : 'missing';\n    }"
     }
   ]
 }

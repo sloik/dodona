@@ -763,6 +763,51 @@ def run_blocks(text: str) -> str:
     return "\n".join(out)
 
 
+def gap_run_refuses_ambiguous_write_paths() -> None:
+    """The run refuses names that can alias another file on a system that drops a trailing dot or space."""
+    import project_run
+    control = {"ledger": "l/run.ledger", "ledgers": ["l/run.ledger"], "owner_ledger": "l/owner.ledger",
+               "project": "project.json", "executor": ["fixture"], "transcript": "trace.json"}
+    variants = ({"ledger": "l/owner.ledger.", "ledgers": ["l/owner.ledger."]},
+                {"ledger": "l /run.ledger", "ledgers": ["l /run.ledger"]},
+                {"owner_ledger": "l/run.ledger."}, {"transcript": "l/run.ledger "},
+                {"ledgers": ["l/run.ledger", "trace.json."]}, {"project": "trace.json "})
+    project_run.check_run_input(control)
+    for changed in variants:
+        try:
+            project_run.check_run_input(control | changed)
+        except project_run.Stop as err:
+            if err.reason == "bad-input":
+                continue
+        problems.append(f"tools/project_run.py: must refuse ambiguous write paths in {changed}")
+
+
+def gap_status_keeps_literal_obligation_names() -> None:
+    """A name that is special to a language still needs a passing case in the project status kit."""
+    path = ROOT / "conformance" / "project" / "cases.json"
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    if not any(case.get("expect", {}).get("status", {}).get("obligations", {}).get("__proto__") == "passed"
+               for case in spec["cases"]):
+        problems.append("conformance/project/cases.json: no status case for a passed obligation named __proto__")
+
+
+def gap_js_planted_defect_anchors_exist() -> None:
+    """A missing source anchor means the configured JavaScript defect is never planted."""
+    kernel = ROOT / "kernel2"
+    defects = json.loads((kernel / "defects.json").read_text(encoding="utf-8"))["defects"]
+    sources: dict[str, str | None] = {}
+    for defect in defects:
+        file = defect["file"]
+        if file not in sources:
+            try:
+                sources[file] = (kernel / file).read_bytes().decode("utf-8")
+            except (OSError, UnicodeError):
+                sources[file] = None
+        source = sources[file]
+        if source is None or defect["find"] not in source:
+            problems.append(f"kernel2/defects.json: {defect['name']!r}: anchor absent from kernel2/{file}")
+
+
 def gap_every_check_is_listed() -> None:
     """A gap check that nobody can find the reason for will be deleted by mistake."""
     listed = (ROOT / "docs" / "gap-checks.md").read_text(encoding="utf-8")
@@ -932,12 +977,74 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_no_generated_files_are_tracked,
-              gap_provider_cases_match_the_provider, gap_every_check_is_listed,
+              gap_provider_cases_match_the_provider, gap_js_planted_defect_anchors_exist, gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
-              gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown, gap_documents_follow_the_code]
+              gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
+              gap_status_keeps_literal_obligation_names,
+              gap_thin_coverage_is_shown, gap_documents_follow_the_code]
+
+
+class ToolPinTests(unittest.TestCase):
+    """A tool pinned by a floor (the queue's Java) is accepted at that version or later, and only then."""
+
+    pinned = {"java": {"name": "java", "file": "java/bin/java", "floor": "21.0.13", "sha256": None},
+              "tla2tools": {"name": "tla2tools", "file": "t.jar", "sha256": "ab"}}
+    measured = {"java/bin/java": "any", "t.jar": "ab"}
+
+    def faults(self, version, measured=None):
+        import host
+        return host.tool_faults(self.pinned, measured or self.measured, {} if version is None else {"java/bin/java": version})
+
+    def test_the_floor_and_later_are_accepted(self):
+        for version in ("21.0.13", "21.0.13.1", "21.0.100", "21.1", "22", "25.0.1", "100.0.1"):
+            self.assertEqual(self.faults(version), ([], []), version)
+
+    def test_below_the_floor_is_a_mismatch(self):
+        for version in ("21.0.12", "21.0.9", "21.0.1", "21"):  # compared as numbers: 9 is below 13
+            self.assertEqual(self.faults(version), ([], ["java"]), version)
+
+    def test_an_older_major_version_is_a_mismatch(self):
+        for version in ("3.0", "20.0.2", "1.8.0"):
+            self.assertEqual(self.faults(version), ([], ["java"]), version)
+
+    def test_a_job_on_java_below_the_floor_proves_nothing(self):
+        import host
+        _, pinned = host.lock_tools()
+        good = {"reachable": True, "complete": True,
+                "measured": {t["file"]: (t["sha256"] or "x") for t in pinned.values()},
+                "versions": {t["file"]: t["floor"] for t in pinned.values() if t.get("floor")}}
+        self.assertIsNone(host.job_fault(good))
+        for version in ("21.0.9", None, "20.0.2"):
+            low = dict(good, versions={f: version for f in good["versions"]})
+            self.assertEqual(host.job_fault(low), "tool-mismatch", version)
+
+    def test_the_driver_reads_only_a_released_version_on_its_own_line(self):
+        sys.path.insert(0, str(ROOT / ".github" / "site"))
+        import batch_driver
+        read = batch_driver.stated_version
+        self.assertEqual(read(b'openjdk version "21.0.13" 2026-10-21 LTS\nOpenJDK Runtime Environment\n', 0), "21.0.13")
+        self.assertEqual(read(b'java version "21.0.15"\n', 0), "21.0.15")
+        self.assertIsNone(read(b'openjdk version "21.0.13-ea" 2026-10-21\n', 0))
+        self.assertIsNone(read(b'openjdk version "21.0.13"\n', 1))
+        self.assertEqual(read(b'Picked up JAVA_TOOL_OPTIONS: -Dx=version "99"\nopenjdk version "21.0.9"\n', 0), "21.0.9")
+
+    def test_an_unreadable_or_missing_version_is_a_mismatch(self):
+        for version in ("garbage", "", None, "21.0.13-ea", "v21.0.13", " 21.0.13"):
+            self.assertEqual(self.faults(version), ([], ["java"]), version)
+
+    def test_an_exact_pin_still_compares_its_digest(self):
+        self.assertEqual(self.faults("21.0.13", {"java/bin/java": "any", "t.jar": "other"}), ([], ["tla2tools"]))
+
+    def test_an_unmeasured_tool_is_unmeasured(self):
+        self.assertEqual(self.faults("21.0.13", {"t.jar": "ab"})[0], ["java"])
+
+    def test_the_key_holds_the_floor_not_the_build(self):
+        import host
+        self.assertEqual(host.floor_digest(self.pinned["java"]), host.floor_digest(dict(self.pinned["java"], sha256="x")))
+        self.assertNotEqual(host.floor_digest(self.pinned["java"]), host.floor_digest(dict(self.pinned["java"], floor="21.0.14")))
 
 
 class JudgeTests(unittest.TestCase):
@@ -1001,6 +1108,7 @@ def main() -> int:
                   check_indexes] + GAP_CHECKS:
         check()
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(JudgeTests)
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ToolPinTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
         print("PROBLEM", line)

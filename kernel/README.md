@@ -2,7 +2,7 @@
 
 A small first kernel, written from [the conformance kit](../conformance/README.md) and [the ledger format](../protocol/ledger.md). It is not a usable dodona: it hosts one provider session or one check at a time ([decision 0033](../decisions/0033-a-kernel-hosts-providers.md)), but plans no work and has no agent interface. Passing the kit is sampled evidence, not a proof.
 
-It uses the standard library only. The one module with unsafe code is `proc.rs`: the calls to the operating system that end a whole process tree (a process group on Unix, a job object on Windows), which the standard library does not offer.
+It uses the standard library only. Unsafe operating-system calls in `proc.rs` end a process group on Unix or a job object on Windows. On Windows, `project_status.rs` queries the volume and file number of an open file.
 
 ## Commands
 
@@ -19,6 +19,7 @@ The kernel reads one JSON value on standard input, takes the command as its one 
 | `ledger-append` | Adds one entry to a ledger file, or refuses with `locked`, `corrupt` or `bad-request` |
 | `session --deadline-ms N --max-line N --max-log N -- <provider>` | Holds one session with the provider command and reports `ok` or the reason it failed. Reads no input |
 | `check` | Takes one obligation through the provider command to a verdict, giving each run to the executor command, or refuses the check with the reason |
+| `status` | Reports the status of a whole project from its project file, its providers and its ledgers, or refuses it with the reason. Runs nothing |
 
 A refusal the contract names is an answer, with exit status 0. Anything else the kernel cannot handle (an unknown command or kind, input of the wrong shape, a file it cannot read or write) prints nothing on standard output and ends with a status that is not 0.
 
@@ -41,9 +42,15 @@ JSON from a provider or an executor is read by `jsonread.rs`, without recursion,
 
 The host's own input, the manifest, the numbered rules for a run and the rules for a final are pure functions in `host.rs` (`read_input`, `manifest`, `run_fault`, `report_fault`, `final_verdict`), each rule on its own line in the contract's order. The executor is started in `root` as the root of a process tree of its own, ended when it returns, and waited for the run's `wall_ms` and a minute more, at most 24 hours; its report is its first line, ended by a line feed alone. After `shutdown` a provider has a second to exit and is then ended, its answer standing. On Windows a process that cannot be put in a job of its own, or let run once it is in it, is ended and the command fails: nothing runs unconfined. Where the contract leaves a choice: a check reads lines of at most 1 MiB; a manifest that declares no strength for `obligation.check` has no ceiling, so any `passed` or `failed` is above it; a check whose input is not JSON at all is refused as `bad-input`, like one that is JSON but not an object.
 
+## A project's status
+
+`status` follows conformance/README.md, "How a project's status is judged", step by step, in `project_status.rs` ([decision 0034](../decisions/0034-a-kernel-runs-a-project-and-reports-its-status.md)). It answers every input with one JSON object and exit status 0, a refusal included. The first rule broken gives the reason and nothing after it is done: every provider's code and every claimed file is read before any provider is started, and a session that said `hello` always ends with `shutdown` and every process of the provider ended.
+
+It holds no status rules of its own. The scenario it judged is run through `status::run`, the code of the `scenario` command, and the report is its last result. Sessions use the check's reading (`wire.rs`, `host::manifest`); ledgers are read by `ledger-read`'s code, so a ledger is exactly as strict here as there. A provider that cannot be confined to a process tree of its own is `provider-not-started`. A claimed file whose name is outside UTF-8 is `unreadable-file`. The kernel compares ledger identity by device and file number on Unix, by volume and file number on Windows, and by resolved path on other systems. On Windows the kernel compares full 128-bit file numbers with both handles open. If either handle cannot supply an identity, it compares resolved paths.
+
 ## The ledger
 
-`ledger-append` refuses a request with no `kind` that is a non-empty string, or with no `body`, before it touches anything. Otherwise it takes the lock file, reads the ledger, cuts off a torn ending, writes the new line, syncs the file, and only then removes the lock. The lock is removed on every way out, including errors. A lock left by a kernel that crashed stays, as the format says. Syncing the directory after the file is first created is not done: the standard library has no portable way.
+`ledger-append` refuses a request with no `kind` that is a non-empty string, or with no `body`, or whose entry would nest deeper than 64 levels, before it touches anything. Its request is read by `jsonread.rs`, as strictly as any other command's input, and the depth of the body measured on the text, so a body nested thousands deep is refused like one nested 65 deep, and costs no stack; only a request no deeper than 64 is read as other commands read theirs. A request that is deep only outside its body is judged by its body. Otherwise it takes the lock file, reads the ledger, cuts off a torn ending, writes the new line, syncs the file, and only then removes the lock. The lock is removed on every way out, including errors. A lock left by a kernel that crashed stays, as the format says. Syncing the directory after the file is first created is not done: the standard library has no portable way.
 
 ## Build and judge
 
@@ -59,6 +66,7 @@ python3 tools/run_key_vectors.py -- kernel/target/release/dodona-kernel key
 python3 tools/run_ledger_cases.py -- kernel/target/release/dodona-kernel
 python3 tools/run_provider_cases.py -- kernel/target/release/dodona-kernel session
 python3 tools/run_check_cases.py -- kernel/target/release/dodona-kernel check
+python3 tools/run_status_cases.py --kernel node kernel2/dodona-kernel2.js -- kernel/target/release/dodona-kernel status
 python3 tools/kit_adequacy.py
 ```
 

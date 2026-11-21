@@ -25,12 +25,17 @@ jobs:
           - os: macos-26
             system: macos
             python: python3
+            rust_kernel: kernel/target/release/dodona-kernel
           - os: ubuntu-26.04
             system: linux
             python: python3
+            rust_kernel: kernel/target/release/dodona-kernel
+          # The file's own name: a case started in the project's folder turns the command's paths absolute only if
+          # they name a file, and on Windows the built file ends in .exe.
           - os: windows-2025
             system: windows
             python: python
+            rust_kernel: kernel/target/release/dodona-kernel.exe
     runs-on: ${{ matrix.os }}
     # The run itself takes seconds. The allowance is for waiting on a hosted
     # machine, which for macOS can be long.
@@ -56,12 +61,20 @@ jobs:
           python3 -m venv .venv-examples
           .venv-examples/bin/python -m pip install --quiet jsonschema==4.26.0
           .venv-examples/bin/python tools/check_examples.py
+          .venv-examples/bin/python tools/policy_input.py --self-test
+      - name: Test this site's batch executor for a kernel's run, against a fake queue
+        run: ${{ matrix.python }} .github/site/test_kernel_executor.py
       - name: Judge the reference host with the misbehaving provider
         run: ${{ matrix.python }} tools/run_provider_cases.py -- ${{ matrix.python }} tools/provider_host.py
       - name: Judge the stage-0 host with a checker that breaks one rule at a time
         run: ${{ matrix.python }} tools/run_check_cases.py -- ${{ matrix.python }} tools/host.py check
+      - name: The intents provider answers what the stage-0 helper reads (decision 0034)
+        run: ${{ matrix.python }} tools/check_intents_provider.py
       - name: Build the seed kernel
+        id: build_seed
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
+      - name: Judge the reference status command with the project cases (decision 0034)
+        run: ${{ matrix.python }} tools/run_status_cases.py --kernel kernel/target/release/dodona-kernel -- ${{ matrix.python }} tools/project_status.py --kernel kernel/target/release/dodona-kernel
       - name: Kernel unit tests
         run: cargo test --locked --manifest-path kernel/Cargo.toml
       - name: Judge the kernel with the conformance kit
@@ -118,6 +131,19 @@ jobs:
         run: ${{ matrix.python }} tools/run_check_cases.py -- node kernel2/dodona-kernel2.js check
       - name: Compare the two kernels on inputs the kit does not contain
         run: ${{ matrix.python }} tools/kernel_differential.py --rounds 8 --a kernel/target/release/dodona-kernel --b node kernel2/dodona-kernel2.js
+      # Each kernel's own status command, its report recomputed by the other kernel's scenario command. They run
+      # even if an earlier judge failed, so one failure does not hide another, but never without the built kernel.
+      - name: Judge the first kernel's status command with the project cases (decision 0034)
+        if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
+        run: ${{ matrix.python }} tools/run_status_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js -- ${{ matrix.rust_kernel }} status
+      - name: Judge the second kernel's status command with the project cases (decision 0034)
+        if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
+        run: ${{ matrix.python }} tools/run_status_cases.py --jobs 2 --kernel ${{ matrix.rust_kernel }} -- node kernel2/dodona-kernel2.js status
+      # The reference run and status commands, both driving the first kernel, judged with the run cases; each
+      # report is recomputed by the second kernel, so the kernel that ran the project does not grade it.
+      - name: Judge the reference run command with the run cases (decision 0034)
+        if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
+        run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js --status "${{ matrix.python }} tools/project_status.py --kernel ${{ matrix.rust_kernel }}" -- ${{ matrix.python }} tools/project_run.py --kernel ${{ matrix.rust_kernel }}
 
   # A kit that no defective kernel fails proves nothing. Every listed defect is
   # planted in each kernel in turn and the kit must reject it. Slow, so it has
@@ -141,5 +167,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The status judge recomputes each report with the other kernel's scenario command, so the second kernel's
+      # defects need the first kernel built (the first kernel's run uses Node, which the runner has).
+      - name: Build the first kernel, whose scenario command the second kernel's status judge uses
+        run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every listed defect and check some judge rejects each
         run: ${{ matrix.run }}

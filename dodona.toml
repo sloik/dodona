@@ -37,7 +37,7 @@ match = ["spec/kernel/*.tla", "spec/kernel/*.cfg"]
 name = "kernel-models"
 capabilities = ["obligation.enumerate", "obligation.check"]
 provider = "dodona.tla"
-match = ["spec/kernel/*.cfg"]
+match = ["spec/*/*.tla", "spec/*/*.cfg", "spec/*/expected.json"]
 reproducibility = "evidence"   # default for this binding's obligations
 
 [[tool]]

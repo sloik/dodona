@@ -24,6 +24,8 @@ Each model directory has an `expected.json` listing every configuration, the out
 
 `tools/check_models.py` runs every case through an executor you name in a site file and judges the results; `--replay` judges outputs you already have. It never starts the model checker itself. Where the model checker runs is a site choice ([decision 0007](../decisions/0007-execution-backend-is-separate-from-the-verifier.md)): run the pinned tool with the listed arguments through whatever executor your site uses. A run that did not finish is not a pass.
 
+The model-checker provider lists the input files of each obligation. The provider and runner identities form part of its evidence key, so changing either requires fresh results before those obligations can be reused. [Decision 0034](../decisions/0034-a-kernel-runs-a-project-and-reports-its-status.md) describes the move from the helper to the kernel.
+
 ## Claims
 
 [CLAIMS.md](CLAIMS.md) maps each architecture claim to the check behind it and records whether that check has actually run.
