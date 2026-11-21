@@ -1100,8 +1100,31 @@ class KitAdequacyTests(unittest.TestCase):
     def test_other_auxiliary_judges_keep_their_exit_status_treatment(self):
         failed = self.result(1, "MISMATCH attest\n")
         passed = self.key_report(0, [])
-        self.assertEqual(self.after_scenarios(self.ledger(0, []), passed, failed, failed), (False, ["attest-judge"]))
         self.assertEqual(self.after_scenarios(self.ledger(0, []), passed, failed, self.result(0)), (False, ["attest-judge unsteady"]))
+
+    def test_repeated_untyped_auxiliary_rejection_is_provisional_not_caught(self):
+        # Two identical exits 1 that name no case may be one environment failure twice (issue 41).
+        failed = self.result(1, "MISMATCH attest\n")
+        self.assertEqual(self.after_scenarios(self.ledger(0, []), self.key_report(0, []), failed, failed),
+                         (False, ["attest-judge provisional"]))
+
+    def test_provisional_replay_leaves_the_batch_unfinished(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            kernel = root / "kernel"
+            kernel.mkdir()
+            (kernel / "fixture.rs").write_text("old", encoding="utf-8")
+            defects = [{"name": name, "file": "fixture.rs", "find": "old", "replace": "planted"}
+                       for name in ("named", "untyped")]
+            (kernel / "defects.json").write_text(json.dumps({"defects": defects}), encoding="utf-8")
+            results = [(True, []), (False, ["plan/named"]), (False, ["attest-judge provisional"])]
+            with patch.object(kit_adequacy, "ROOT", root), patch.object(kit_adequacy, "passes_kit", side_effect=results), \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                status = kit_adequacy.main()
+        self.assertEqual(status, 1)
+        self.assertIn("PROVISIONAL untyped", output.getvalue())
+        summary = json.loads(output.getvalue().splitlines()[-1])
+        self.assertEqual(summary, {"defects": 2, "caught": 1, "unfinished": 1, "all_caught": False})
 
     # The core-key judge ends with the same footer, its count under `vectors`; it runs after the ledger judge (issue 41).
     def key_report(self, code, rejected, unfinished=0, key="vectors"):

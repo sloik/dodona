@@ -13,8 +13,9 @@ host's own files, the host judges next. A scenario, ledger, core-key or strict-i
 report from the judge (the ledger's counts `checks`, the core-key judge's `vectors` and the strict-input judge's
 `cases` where the scenarios' counts `scenarios`), and the same named case must reject on replay; the caught line names
 those cases. Another auxiliary judge can reject
-with exit 1 and no traceback or disk-full error, and that rejection must repeat. A run that ends without this evidence
-is UNFINISHED (issue 41). A defect that names a case of a
+with exit 1 and no traceback or disk-full error; because it names no case, a repeat of it may be the same
+environment failure twice, so it is PROVISIONAL, never caught, and leaves the batch unfinished. A run that ends
+without this evidence is UNFINISHED (issue 41). A defect that names a case of a
 formal model must be rejected by a scenario that says it covers that case;
 otherwise the scenario's label is wrong. Exit status is 0 only if the
 unchanged kernel passes and every planted defect is caught, by the right
@@ -94,7 +95,11 @@ def passes_kit(kernel_dir: pathlib.Path, defect_file: str | None = None) -> tupl
             confirmed = [case for case in cases if case in repeated]
             if repeat != "rejected" or (label in REPORTING and not confirmed):
                 return False, [f"{label}-judge unsteady"]
-            failing.extend([f"{label}-judge: {case}" for case in confirmed] if label in REPORTING else [f"{label}-judge"])
+            if label not in REPORTING:
+                # A repeated exit 1 that names no case may be the same environment failure twice: provisional,
+                # never a catch, and the batch is unfinished (issue 41).
+                return False, [f"{label}-judge provisional"]
+            failing.extend(f"{label}-judge: {case}" for case in confirmed)
             break
     return ok, failing
 
@@ -169,7 +174,7 @@ def main() -> int:
         if not clean:
             print("the unchanged kernel does not pass the kit:", failing)
             return 1
-        caught = 0
+        caught = unfinished = 0
         for defect in defects:
             source = copy / defect["file"]
             original = source.read_text(encoding="utf-8")
@@ -184,7 +189,11 @@ def main() -> int:
                 print(f"MISSED   {defect['name']}: the kit accepts a kernel with this defect")
             elif failing == ["did not build"]:
                 print(f"BROKEN   {defect['name']}: the kernel does not build with this defect, so nothing was shown")
+            elif len(failing) == 1 and failing[0].endswith(" provisional"):
+                unfinished += 1
+                print(f"PROVISIONAL {defect['name']}: {failing[0]}, a repeated exit 1 naming no case, so nothing was shown")
             elif len(failing) == 1 and failing[0].endswith((" unfinished", " unsteady")):
+                unfinished += 1
                 print(f"UNFINISHED {defect['name']}: {failing[0]}, so nothing was shown")
             elif case and not covers.get(case, set()) & set(failing):
                 print(f"MISLABELLED {defect['name']}: no scenario that says it covers {case} rejects it; "
@@ -192,7 +201,8 @@ def main() -> int:
             else:
                 caught += 1
                 print(f"caught   {defect['name']}: rejected by {', '.join(failing)}")
-    print(json.dumps({"defects": len(defects), "caught": caught, "all_caught": caught == len(defects)}))
+    print(json.dumps({"defects": len(defects), "caught": caught, "unfinished": unfinished,
+                      "all_caught": caught == len(defects)}))
     return 0 if caught == len(defects) else 1
 
 
