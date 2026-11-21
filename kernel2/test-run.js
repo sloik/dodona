@@ -14,7 +14,7 @@ const path = require('node:path');
 
 const {
   preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange, checkAll, batchWait,
-  executeBatch, recordVerdicts,
+  executeBatch, recordVerdicts, runProject,
 } = require('./project-run');
 const { runKey } = require('./check');
 const crypto = require('node:crypto');
@@ -414,6 +414,7 @@ const PROVIDER = `'use strict';
 const fs = require('node:fs');
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
+const starts = {};
 let buffer = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => {
@@ -426,7 +427,13 @@ process.stdin.on('data', (chunk) => {
       fs.appendFileSync(config.log, JSON.stringify(seen) + '\\n');
     }
     if (message.type === 'hello') send({ type: 'manifest', echo: message.echo, manifest: config.manifest });
-    else if (message.type === 'request') send({ type: 'result', id: message.id, capability: message.capability, body: config.answers[message.body.binding] });
+    else if (message.type === 'request' && message.capability === 'obligation.check') {
+      // Each obligation's answers in turn, by the name its start gave.
+      const body = message.body;
+      if (body.op === 'start') starts[message.id] = body.obligation.name;
+      const name = body.op === 'start' ? body.obligation.name : starts[body.check];
+      send({ type: 'result', id: message.id, capability: 'obligation.check', body: config.checks[name].shift() });
+    } else if (message.type === 'request') send({ type: 'result', id: message.id, capability: message.capability, body: config.answers[message.body.binding] });
     else if (message.type === 'shutdown') process.exit(0);
   }
 });
@@ -511,7 +518,7 @@ const MANIFEST = {
 
 // A project of `bindings` ([name, capabilities, folder]) answered from `answers`, each
 // message its providers read logged; the run's input for it.
-function sessionProject(root, bindings, answers) {
+function sessionProject(root, bindings, answers, checks = {}) {
   fs.writeFileSync(path.join(root, 'dodona.toml'), bindings.map(([name, capabilities, folder]) => `[[binding]]\nname = "${name}"\nprovider = "t.check"\n`
     + `capabilities = [${capabilities.map((c) => `"${c}"`).join(', ')}]\nmatch = ["${folder}/*.txt"]\n`).join('\n'));
   for (const [, , folder] of bindings) {
@@ -520,7 +527,7 @@ function sessionProject(root, bindings, answers) {
   }
   fs.writeFileSync(path.join(root, 'code', 'provider.js'), PROVIDER);
   const log = path.join(root, 'messages.log');
-  fs.writeFileSync(path.join(root, 'code', 'answers.json'), JSON.stringify({ manifest: MANIFEST, answers, log }));
+  fs.writeFileSync(path.join(root, 'code', 'answers.json'), JSON.stringify({ manifest: MANIFEST, answers, log, checks }));
   const site = input(root).site;
   const asked = input(root, {
     site: {
@@ -1449,4 +1456,208 @@ test('planted: a run reported twice taken as reported once', async () => {
   };
   assert.deepEqual(await ends({ checkAll }), ['error', 'error']);
   assert.deepEqual(await ends(damaged), ['passed', 'passed']);
+});
+
+// Steps 1 to 14 composed, with a real provider process and a scripted executor.
+
+const RUN_M = {
+  program: { tool: 'checker', path: 'bin/check' }, args: ['m/a.txt'], inputs: [{ path: 'm/a.txt', identity: sha('m\n') }], outputs: [],
+  tools: [{ name: 'checker', digest: CHECKER.digest }], platform: PLATFORM,
+};
+
+function runFixture(root) {
+  return sessionProject(root, [['zeta', ['obligation.enumerate', 'obligation.check'], 'm']],
+    { zeta: { obligations: [obligation('a1', 'm/a.txt'), obligation('a2', 'm/a.txt')], rejected: [{ name: 'ghost' }] } },
+    { a1: [{ next: RUN_M }, { final: FINAL }], a2: [{ next: RUN_M }, { final: { verdict: 'failed', strength: { class: 'c', rank: 'sampled' } } }] });
+}
+
+const COUNT_ZERO = { passed: 0, failed: 0, error: 0, unavailable: 0, unsupported: 0, refused: 0 };
+
+function countsAddUp(counts) {
+  assert.equal(counts.reused + counts.checked, counts.obligations, 'reused and checked add up to the obligations');
+  assert.equal(['passed', 'failed', 'error', 'unavailable', 'unsupported', 'refused'].reduce((sum, key) => sum + counts[key], 0), counts.checked,
+    'the verdicts and refusals add up to the checks');
+}
+
+function everyProcessShutDown(log) {
+  for (const [pid, seen] of messagesByProcess(log)) assert.equal(seen[seen.length - 1].type, 'shutdown', `process ${pid}`);
+}
+
+test('run: checked, recorded and reported as the status command reports; a second run reuses exactly what is recorded', async () => {
+  const root = project();
+  try {
+    const { asked, log } = runFixture(root);
+    const first = scripted((runs) => reportsFor(runs));
+    const out = await runProject(asked, { execute: first.execute });
+    assert.deepEqual(out.counts, { obligations: 2, reused: 0, checked: 2, ...COUNT_ZERO, passed: 1, failed: 1, not_checkable: 1 });
+    countsAddUp(out.counts);
+    assert.deepEqual(first.batches.map(({ batch }) => batch.runs.length), [2]);
+    assert.deepEqual([out.report.obligations.a1.status, out.report.obligations.a2.status], ['passed', 'failed']);
+    assert.deepEqual(out.ledger, { entries: 2, torn: false });
+    // Its report is what the status command reports straight after.
+    const { counts, ...reported } = out;
+    assert.deepEqual(reported, await projectStatus(Buffer.from(JSON.stringify(asked))));
+    everyProcessShutDown(log);
+    // Again: everything current is reused, nothing is sent to the executor, nothing more recorded.
+    const second = scripted((runs) => reportsFor(runs));
+    const again = await runProject(asked, { execute: second.execute });
+    assert.equal(second.batches.length, 0);
+    assert.deepEqual(again.counts, { obligations: 2, reused: 2, checked: 0, ...COUNT_ZERO, not_checkable: 1 });
+    countsAddUp(again.counts);
+    const { counts: unused, ...reportedAgain } = again;
+    assert.deepEqual(reportedAgain, reported);
+    everyProcessShutDown(log);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('run: no verdict from the executor records nothing, and the counts still add up', async () => {
+  const root = project();
+  try {
+    const { asked, log } = runFixture(root);
+    const out = await runProject(asked, { execute: scripted(() => ({})).execute });
+    assert.deepEqual(out.counts, { obligations: 2, reused: 0, checked: 2, ...COUNT_ZERO, unavailable: 2, not_checkable: 1 });
+    countsAddUp(out.counts);
+    assert.equal(fs.existsSync(path.join(root, 'l', 'run.ledger')), false);
+    everyProcessShutDown(log);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('run: a ledger that turns corrupt before the report refuses at step 14, and what was recorded stays', async () => {
+  const root = project();
+  try {
+    const { asked, log } = runFixture(root);
+    asked.ledgers.push('l/other.ledger');
+    const { execute } = scripted((runs) => {
+      fs.writeFileSync(path.join(root, 'l', 'other.ledger'), 'not a ledger\n');
+      return reportsFor(runs);
+    });
+    await assert.rejects(runProject(asked, { execute }), (error) => error instanceof Stop && error.reason === 'corrupt-ledger');
+    assert.deepEqual(ledgerFile.read({ ledger: path.join(root, 'l', 'run.ledger') }).entries.map((entry) => entry.body.obligation), ['a1', 'a2']);
+    everyProcessShutDown(log);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('transcript: every message both ways, in order, as the provider took and gave them, written as a new file', async () => {
+  const root = project();
+  try {
+    const { asked, log } = runFixture(root);
+    asked.transcript = 'transcript.json';
+    const out = await runProject(asked, { execute: scripted((runs) => reportsFor(runs)).execute });
+    assert.deepEqual([out.counts.passed, out.counts.failed], [1, 1]);
+    const kept = JSON.parse(fs.readFileSync(path.join(root, 'transcript.json'), 'utf8'));
+    assert.deepEqual(kept.map((entry) => [entry.to, entry.message.type, entry.message.id]), [
+      ['provider', 'hello', undefined], ['kernel', 'manifest', undefined],
+      ['provider', 'request', '1'], ['kernel', 'result', '1'],
+      ['provider', 'request', '2'], ['kernel', 'result', '2'],
+      ['provider', 'request', '3'], ['kernel', 'result', '3'],
+      ['provider', 'request', '4'], ['kernel', 'result', '4'],
+      ['provider', 'request', '5'], ['kernel', 'result', '5'],
+      ['provider', 'shutdown', undefined],
+    ]);
+    // What it says went to the provider is what the provider logged taking, shutdown included.
+    const [, seen] = processOf(messagesByProcess(log), 'zeta');
+    const brief = (message) => [message.type, message.id, message.body && message.body.binding];
+    assert.deepEqual(kept.filter((entry) => entry.to === 'provider').map((entry) => brief(entry.message)), seen.map((m) => [m.type, m.id, m.binding]));
+    // And each answer is the provider's own, as it was scripted.
+    assert.deepEqual(kept[5].message.body, { next: RUN_M });
+    assert.deepEqual(kept[11].message.body, { final: { verdict: 'failed', strength: { class: 'c', rank: 'sampled' } } });
+    assert.deepEqual(kept[4].message.body.inputs, [{ path: 'm/a.txt', identity: sha('m\n') }]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('transcript: a file there by the time it is written refuses the run, and the verdicts stay recorded', async () => {
+  const root = project();
+  try {
+    const { asked, log } = runFixture(root);
+    asked.transcript = 'transcript.json';
+    const { execute } = scripted((runs) => {
+      fs.writeFileSync(path.join(root, 'transcript.json'), 'someone else\'s');
+      return reportsFor(runs);
+    });
+    await assert.rejects(runProject(asked, { execute }), (error) => error instanceof Stop && error.reason === 'transcript-not-written');
+    assert.equal(fs.readFileSync(path.join(root, 'transcript.json'), 'utf8'), 'someone else\'s', 'not written over');
+    assert.deepEqual(ledgerFile.read({ ledger: path.join(root, 'l', 'run.ledger') }).entries.map((entry) => entry.body.verdict), ['passed', 'failed']);
+    everyProcessShutDown(log);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('transcript: a run refused before it reports writes none', async () => {
+  const root = project();
+  try {
+    const { asked } = runFixture(root);
+    asked.transcript = 'transcript.json';
+    asked.ledgers.push('l/other.ledger');
+    const { execute } = scripted((runs) => {
+      fs.writeFileSync(path.join(root, 'l', 'other.ledger'), 'not a ledger\n');
+      return reportsFor(runs);
+    });
+    await assert.rejects(runProject(asked, { execute }), (error) => error instanceof Stop && error.reason === 'corrupt-ledger');
+    assert.equal(fs.existsSync(path.join(root, 'transcript.json')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('recording: the target judged again: a ledger not a regular file, a step not a folder, a step not to be looked at', () => {
+  const refusedWith = (pattern) => (error) => error instanceof Stop && error.reason === 'ledger-not-written' && pattern.test(error.detail);
+  recordingProject(({ root, session, asked, snapshot }) => {
+    fs.mkdirSync(path.join(root, 'l', 'run.ledger'), { recursive: true });
+    assert.throws(() => recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2)), refusedWith(/not a regular file/));
+  });
+  recordingProject(({ root, session, asked, snapshot }) => {
+    fs.writeFileSync(path.join(root, 'l'), 'a file where a folder belongs');
+    assert.throws(() => recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2)), refusedWith(/not a folder/));
+  });
+  if (process.platform !== 'win32' && process.getuid?.() !== 0) {
+    recordingProject(({ root, session, asked, snapshot }) => {
+      fs.mkdirSync(path.join(root, 'l'));
+      fs.chmodSync(path.join(root, 'l'), 0o000);
+      try {
+        assert.throws(() => recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2)), refusedWith(/cannot be looked at/));
+      } finally {
+        fs.chmodSync(path.join(root, 'l'), 0o755);
+      }
+    });
+  }
+  // An input that is no longer a regular file is not read: its verdict is an error.
+  recordingProject(({ root, session, asked, snapshot }) => {
+    fs.rmSync(path.join(root, 'm', 'a.txt'));
+    fs.mkdirSync(path.join(root, 'm', 'a.txt'));
+    assert.deepEqual(recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 1)), ['error']);
+  });
+});
+
+test('recording: a lock that cannot be released is said, with what was seen done under it', () => {
+  recordingProject(({ session, asked, snapshot, ledger }) => {
+    const release = (descriptor) => {
+      fs.closeSync(descriptor);
+      throw new Error('EPERM on unlink');
+    };
+    assert.throws(() => recordVerdicts(asked, [session], snapshot, ENDS.slice(0, 2), { release }),
+      (error) => error instanceof Stop && error.reason === 'ledger-not-written'
+        && /its entries were written and flushed; the lock could not be released: EPERM on unlink/.test(error.detail));
+    assert.equal(ledgerFile.read({ ledger }).entries.length, 2, 'the entries are not undone');
+  });
+  heldLedger(({ ledger, whole }) => {
+    const got = ledgerFile.appendAll(ledger, TWO, 1000, {
+      io: ioWith({ writeSync: () => 0 }),
+      release: (descriptor) => {
+        fs.closeSync(descriptor);
+        throw new Error('EPERM on unlink');
+      },
+    });
+    assert.equal(got.refused, 'not-unlocked');
+    assert.deepEqual([got.held.refused, got.held.rolled_back], ['not-written', true]);
+    assert.deepEqual(fs.readFileSync(ledger), whole);
+  });
 });

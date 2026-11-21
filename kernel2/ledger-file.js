@@ -112,12 +112,37 @@ function writeWhole(io, descriptor, bytes, at) {
 // that was done. { appended: [identities] }, or { refused: 'locked', 'corrupt', 'unsafe'
 // or 'not-written', detail, rolled_back }. An entry that cannot be encoded throws before
 // anything is written. `io` is node:fs unless a test gives another.
-function appendAll(path, entries, waitMs, { check = () => null, io = fs } = {}) {
+//
+// Where the cleanup ends: the lock is released last. If that fails, the answer is
+// { refused: 'not-unlocked', detail, held }, where `held` is what was done under the lock
+// (an append whose entries are written and flushed, or a refusal with its rolled_back),
+// as far as it was seen; nothing further is undone, and the lock file may remain.
+function appendAll(path, entries, waitMs, { check = () => null, io = fs, release = releaseLock } = {}) {
   fs.mkdirSync(require('node:path').dirname(path), { recursive: true });
   const lockPath = `${path}.lock`;
   const held = takeLock(lockPath, waitMs);
   if (held === null) return { refused: 'locked' };
+  let done;
   try {
+    done = appendHeld(path, entries, check, io);
+  } catch (failure) {
+    try {
+      release(held, lockPath);
+    } catch (unlock) {
+      failure.message = `${failure.message}; and the lock not released: ${unlock.message}`;
+    }
+    throw failure;
+  }
+  try {
+    release(held, lockPath);
+  } catch (unlock) {
+    return { refused: 'not-unlocked', detail: unlock.message, held: done };
+  }
+  return done;
+}
+
+function appendHeld(path, entries, check, io) {
+  {
     const unsafe = check();
     if (unsafe !== null) return { refused: 'unsafe', detail: unsafe };
     const before = ledger.readLedger(readBytes(path));
@@ -151,8 +176,6 @@ function appendAll(path, entries, waitMs, { check = () => null, io = fs } = {}) 
     } finally {
       io.closeSync(descriptor);
     }
-  } finally {
-    releaseLock(held, lockPath);
   }
 }
 

@@ -28,7 +28,7 @@ const ledgerFile = require('./ledger-file');
 const EXECUTOR_MARGIN_MS = 60000;
 const EXECUTOR_MOST_MS = 24 * 60 * 60 * 1000;
 const {
-  readInput, isRelative, checkInput, isDirectory, fileId, stepsOf, snapshotOf, endSession, Stop,
+  readInput, isRelative, checkInput, isDirectory, fileId, stepsOf, snapshotOf, endSession, reportOf, rereadOf, Stop,
 } = require('./project-status');
 
 // The statuses that are a current result: reused, nothing sent for them.
@@ -205,11 +205,11 @@ function countsOf(plan, outcomes) {
 // (step 5 of the run), whether or not anything of it is planned: `sessions`, in the
 // order the bindings were asked, each with what its checks start from. Whoever is given
 // them ends them with closeSessions; a refusal before that ends them here.
-async function planRun(asked) {
+async function planRun(asked, record = null) {
   const digests = preflight(asked);
   const sessions = [];
   try {
-    const snapshot = await snapshotOf(asked, digests, sessions);
+    const snapshot = await snapshotOf(asked, digests, sessions, record);
     return { digests, snapshot, plan: planOf(snapshot), sessions };
   } catch (error) {
     throw await afterClosing(error, sessions);
@@ -473,10 +473,13 @@ async function checkAll(sessions, plan, root, execute) {
 const LEVEL_OF_RANK = { documented: 'asserted', sampled: 'sampled', bounded: 'bounded', exhaustive: 'proven' };
 const LEDGER_WAIT_MS = 60000;
 
+// Each input read again (following links, as the kit notes) only if it is a regular file.
 function stillTheSame(root, inputs) {
   return inputs.every(({ path: rel, identity }) => {
     try {
-      return `sha256:${crypto.createHash('sha256').update(fs.readFileSync(path.join(root, rel))).digest('hex')}` === identity;
+      const where = path.join(root, rel);
+      if (!fs.statSync(where).isFile()) return false;
+      return `sha256:${crypto.createHash('sha256').update(fs.readFileSync(where)).digest('hex')}` === identity;
     } catch (error) {
       return false;
     }
@@ -490,7 +493,7 @@ function stillTheSame(root, inputs) {
 // it is shown again to be reached without a link and not the owner's ledger. Nothing is
 // written when nothing is kept. Returns each check's outcome, in the same order, for
 // countsOf. A ledger that cannot be appended to is `ledger-not-written`.
-function recordVerdicts(asked, sessions, snapshot, ends, { waitMs = LEDGER_WAIT_MS, io = fs } = {}) {
+function recordVerdicts(asked, sessions, snapshot, ends, { waitMs = LEDGER_WAIT_MS, io = fs, release } = {}) {
   const { root, site } = asked;
   const outcomes = [];
   const entries = [];
@@ -527,9 +530,16 @@ function recordVerdicts(asked, sessions, snapshot, ends, { waitMs = LEDGER_WAIT_
   if (early !== null) throw new Stop('ledger-not-written', early);
   let written;
   try {
-    written = ledgerFile.appendAll(path.join(root, asked.ledger), entries, waitMs, { check: problem, io });
+    written = ledgerFile.appendAll(path.join(root, asked.ledger), entries, waitMs, { check: problem, io, release });
   } catch (error) {
     throw new Stop('ledger-not-written', `${asked.ledger}: ${error.code || error.message}`);
+  }
+  if (written.refused === 'not-unlocked') {
+    // Only what was seen is said: the append under the lock, then a lock not released.
+    const held = written.held;
+    const under = held.appended !== undefined ? 'its entries were written and flushed'
+      : held.rolled_back === true ? `not written (${held.detail}), and cut back` : `not written (${held.refused}${held.detail ? `: ${held.detail}` : ''})`;
+    throw new Stop('ledger-not-written', `${asked.ledger}: ${under}; the lock could not be released: ${written.detail}`);
   }
   if (written.refused !== undefined) {
     const said = [written.refused, written.detail, written.rolled_back === false ? 'the ledger could not be cut back to what it held' : null];
@@ -538,13 +548,105 @@ function recordVerdicts(asked, sessions, snapshot, ends, { waitMs = LEDGER_WAIT_
   return outcomes;
 }
 
-// Why the run's ledger may not be written now, or null: reached through a link, or the
-// same file as the owner's ledger.
+// Why the run's ledger may not be written now, or null. Each step of its path is looked
+// at without following it: one that is not there ends the walk (what is missing will be
+// made); a link, a step on the way that is not a folder, a ledger that is there and not a
+// regular file, or any other error in looking is a reason. So is the same file as the
+// owner's ledger, as the operating system identifies files, when its identity cannot be
+// read for any reason but its absence.
 function ledgerProblem(root, ledgerRel, ownerRel) {
-  if (!reachedWithoutLink(root, ledgerRel)) return `${ledgerRel} is reached through a link`;
-  const ledgerId = fileId(path.join(root, ledgerRel));
-  if (ledgerId !== null && ledgerId === fileId(path.join(root, ownerRel))) return `${ledgerRel} is the owner's ledger`;
-  return null;
+  const steps = stepsOf(root, ledgerRel);
+  for (let at = 0; at < steps.length; at += 1) {
+    let status;
+    try {
+      status = fs.lstatSync(steps[at]);
+    } catch (error) {
+      if (error.code === 'ENOENT') break;
+      return `${ledgerRel} cannot be looked at (${error.code || error.message})`;
+    }
+    if (status.isSymbolicLink()) return `${ledgerRel} is reached through a link`;
+    const last = at === steps.length - 1;
+    if (!last && !status.isDirectory()) return `${ledgerRel} has a step that is not a folder`;
+    if (last && !status.isFile()) return `${ledgerRel} is not a regular file`;
+  }
+  const identity = (rel) => {
+    try {
+      const status = fs.statSync(path.join(root, rel), { bigint: true });
+      return { id: `${status.dev}:${status.ino}` };
+    } catch (error) {
+      return error.code === 'ENOENT' ? { id: null } : { problem: `${rel}: its identity cannot be read (${error.code || error.message})` };
+    }
+  };
+  const ledgerId = identity(ledgerRel);
+  if (ledgerId.problem !== undefined) return ledgerId.problem;
+  if (ledgerId.id === null) return null;
+  const ownerId = identity(ownerRel);
+  if (ownerId.problem !== undefined) return ownerId.problem;
+  return ownerId.id === ledgerId.id ? `${ledgerRel} is the owner's ledger` : null;
+}
+
+// Steps 1 to 14, composed: the plan on the sessions kept at step 5, the checks with their
+// batches given to the site's executor (`execute`, executeBatch with the input's
+// `executor` unless a test gives another), the verdicts recorded, the kept sessions
+// ended, then the ledgers read again and the output made as the status command makes it,
+// with `counts`. A refusal up to the recording ends every kept session before it is
+// given; a refusal at step 14 comes after the recording, which stays. The providers are
+// not asked again for the report. With `transcript`, every message sent to a provider and
+// read from one, on every session, is kept in order, and once the run reports it is
+// written there as a new file; one that cannot be is `transcript-not-written`, the
+// verdicts staying recorded. A run refused before it reports writes no transcript.
+async function runProject(asked, { execute, plan: planStage = planRun, waitMs, io, release } = {}) {
+  const run = execute || ((batch, wait) => executeBatch(asked.executor, asked.root, batch, wait));
+  const transcript = Object.hasOwn(asked, 'transcript') ? [] : null;
+  const record = transcript === null ? null : (to, message) => transcript.push({ to, message });
+  const { snapshot, plan, sessions } = await planStage(asked, record);
+  let outcomes;
+  try {
+    const ends = await checkAll(sessions, plan, asked.root, run);
+    outcomes = recordVerdicts(asked, sessions, snapshot, ends, { waitMs, io, release });
+  } catch (failure) {
+    const refusal = await afterClosing(failure, sessions);
+    throw refusal;
+  }
+  await closeSessions(sessions);
+  const counts = countsOf(plan, outcomes);
+  const output = { ...reportOf(asked, rereadOf(asked, snapshot)), counts };
+  if (transcript !== null) writeTranscript(asked.root, asked.transcript, transcript);
+  return output;
+}
+
+// The transcript as a new file: its place judged again as at step 1, then created only if
+// nothing is there (no link followed at its last step), written whole and flushed.
+function writeTranscript(root, rel, messages) {
+  const problem = transcriptPlaceProblem(root, rel);
+  if (problem !== null) throw new Stop('transcript-not-written', `${rel} ${problem}`);
+  const bytes = Buffer.from(`${JSON.stringify(messages)}\n`, 'utf8');
+  let descriptor;
+  try {
+    descriptor = fs.openSync(path.join(root, rel), fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL);
+  } catch (error) {
+    throw new Stop('transcript-not-written', `${rel}: ${error.code || error.message}`);
+  }
+  try {
+    let done = 0;
+    while (done < bytes.length) {
+      const wrote = fs.writeSync(descriptor, bytes, done, bytes.length - done, done);
+      if (!(wrote > 0)) throw new Error(`a write made no progress (${wrote})`);
+      done += wrote;
+    }
+    fs.fsyncSync(descriptor);
+  } catch (error) {
+    fs.closeSync(descriptor);
+    descriptor = null;
+    try {
+      fs.unlinkSync(path.join(root, rel)); // the file this run created, not left half written
+    } catch (ignored) {
+      // gone already
+    }
+    throw new Stop('transcript-not-written', `${rel}: ${error.code || error.message}`);
+  } finally {
+    if (descriptor !== null) fs.closeSync(descriptor);
+  }
 }
 
 // The bytes of standard input to `{ready: digests}`, or the refusal the command would print.
@@ -559,5 +661,5 @@ function preflightBytes(bytes) {
 
 module.exports = {
   preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange, SESSION_BROKE,
-  checkAll, batchWait, executeBatch, recordVerdicts,
+  checkAll, batchWait, executeBatch, recordVerdicts, runProject,
 };

@@ -405,13 +405,38 @@ async function endSession(wire, child) {
 // broken, unless `keep` is given and the answer was read: then `keep` is handed the
 // open session, whose next request takes id 2, and whoever holds it ends it (the run
 // command, for the checks of a binding that lists obligation.check).
-async function ask(root, site, binding, capability, body, keep = null) {
+// With `record` (the run command's transcript), every message this wire writes to the
+// provider, while its input is still open to take it, and every message read from it
+// that decodes, is handed to `record(to, message)` as it happens: 'provider' or 'kernel'.
+function recordOn(wire, record) {
+  const writable = () => !wire.closed && wire.child.stdin.writable && !wire.child.stdin.destroyed;
+  const copy = (message) => JSON.parse(JSON.stringify(message));
+  const send = wire.send.bind(wire);
+  const post = wire.post.bind(wire);
+  const next = wire.next.bind(wire);
+  wire.send = (message, until) => {
+    if (writable()) record('provider', copy(message));
+    return send(message, until);
+  };
+  wire.post = (message) => {
+    if (writable()) record('provider', copy(message));
+    return post(message);
+  };
+  wire.next = async (until) => {
+    const got = await next(until);
+    if (got.message !== undefined) record('kernel', copy(got.message));
+    return got;
+  };
+}
+
+async function ask(root, site, binding, capability, body, keep = null, record = null) {
   const child = processes.start(site.providers[binding.provider].command, root);
   if (child.pid === undefined) {
     await child.exited;
     throw new Stop('provider-not-started', binding.provider);
   }
   const wire = new Wire(child, { maxLine: MAX_LINE_BYTES, maxLog: MAX_LOG_BYTES, strict: true });
+  if (record !== null) recordOn(wire, record);
   let answer = null;
   try {
     answer = await converse(wire, binding, site.deadline_ms, capability, body);
@@ -437,7 +462,7 @@ function obligationHasShape(item) {
 // `kept`, given only by the run command, is a list each session of a binding that lists
 // obligation.check is added to as soon as its answer is read, so that whoever holds the
 // list can end it on any later refusal as well as at the end of the run.
-async function obligationsOf(root, site, digests, bindings, claims, kept = null) {
+async function obligationsOf(root, site, digests, bindings, claims, kept = null, record = null) {
   const found = new Map();
   const listed = [];
   let unchecked = [];
@@ -450,7 +475,7 @@ async function obligationsOf(root, site, digests, bindings, claims, kept = null)
       session = held;
       kept.push(held);
     } : null;
-    const { manifest, body } = await ask(root, site, binding, 'obligation.enumerate', request, keep);
+    const { manifest, body } = await ask(root, site, binding, 'obligation.enumerate', request, keep, record);
     const items = own(body, 'obligations');
     const rejected = Object.hasOwn(body, 'rejected') ? body.rejected : [];
     if (!Array.isArray(items) || !Array.isArray(rejected) || !rejected.every((entry) => isString(own(entry, 'name')))
@@ -525,10 +550,10 @@ function intentHasShape(it) {
       && criterion.links.every((link) => isString(own(link, 'binding')) && isString(own(link, 'obligation'))));
 }
 
-async function intentsOf(root, site, bindings, listed, claims) {
+async function intentsOf(root, site, bindings, listed, claims, record = null) {
   const answers = [];
   for (const binding of bindings.filter((b) => b.capabilities.includes('intent.index')).sort(byName)) {
-    const { body } = await ask(root, site, binding, 'intent.index', { binding: binding.name, files: claims.get(binding.name), obligations: listed });
+    const { body } = await ask(root, site, binding, 'intent.index', { binding: binding.name, files: claims.get(binding.name), obligations: listed }, null, record);
     const items = own(body, 'intents');
     const rejected = Object.hasOwn(body, 'rejected') ? body.rejected : [];
     if (!Array.isArray(items) || !Array.isArray(rejected) || !rejected.every((entry) => isString(own(entry, 'path')) && entry.path !== '')
@@ -742,7 +767,7 @@ function objectOf(map) {
 // judged, from which the status command makes its output and the run command its plan.
 // `kept` as in obligationsOf: the status command gives none, and every session ends
 // after its answer.
-async function snapshotOf(asked, digests, kept = null) {
+async function snapshotOf(asked, digests, kept = null, record = null) {
   const root = asked.root;
   const site = asked.site;
   // Step 2.
@@ -783,8 +808,8 @@ async function snapshotOf(asked, digests, kept = null) {
     }
   }
   // Steps 5 to 7.
-  const obligations = await obligationsOf(root, site, digests, bindings, claims, kept);
-  const { intents, parent, unread } = await intentsOf(root, site, bindings, obligations.listed, claims);
+  const obligations = await obligationsOf(root, site, digests, bindings, claims, kept, record);
+  const { intents, parent, unread } = await intentsOf(root, site, bindings, obligations.listed, claims, record);
   // Step 8.
   const read = entriesOf(root, asked.owner_ledger, asked.ledgers);
   // Step 9.
@@ -834,6 +859,16 @@ function reportOf(asked, { judged, report, policy, obligations, intents, parent,
   };
 }
 
+// The run command's step 14: the ledgers read again as at step 8, and what is judged and
+// its report made again from them; nothing else asked again, no provider started.
+function rereadOf(asked, snapshot) {
+  const read = entriesOf(asked.root, asked.owner_ledger, asked.ledgers);
+  const steps = read.entries.map((one) => ({ do: { append: { kind: one.kind, body: one.body } } }));
+  steps.push(NOTHING);
+  const judged = { ...snapshot.judged, steps };
+  return { ...snapshot, judged, report: ownReport(judged), read };
+}
+
 async function judge(asked) {
   const digests = checkInput(asked); // step 1
   return reportOf(asked, await snapshotOf(asked, digests));
@@ -854,5 +889,5 @@ module.exports = {
   // Reused by the run command's checks of its own input (project-run.js).
   checkInput, isDirectory, fileId, stepsOf,
   // Reused by its plan: the same steps 2 to 10 and the same output.
-  snapshotOf, reportOf, endSession,
+  snapshotOf, reportOf, endSession, rereadOf,
 };
