@@ -9,7 +9,7 @@
 // are tried; the unchanged copy is still put to every judge first.
 //
 // Per defect it prints
-//   caught      the scenario, ledger, core-key, attest or strict-input judge rejected the defective copy with a complete report and,
+//   caught      the scenario, ledger, core-key, attest, strict-input or harness judge rejected the defective copy with a complete report and,
 //               run a second time, rejected it again on a case it named both times; those cases are
 //               printed (judges are tried one at a time and the first rejection ends the defect's turn),
 //   caught provisionally
@@ -53,15 +53,16 @@ const OTHER_KERNEL = process.env.DODONA_OTHER_KERNEL
 const STATUS_JOBS = process.env.DODONA_STATUS_JOBS || '3';
 
 // Each judge: a name, the tool, the tool's own arguments before `--`, and the
-// arguments after `node <kernel>`. The scenario, ledger, core-key, attest and strict-input judges end with the
-// same structured report; `count` is the key under which each counts what it ran.
+// arguments after `node <kernel>`. The scenario, ledger, core-key, attest, strict-input and harness judges end with the
+// same structured report; `count` is the key under which each counts what it ran. The harness judge's eight cases
+// are its seven kernel cases and its known-answer control.
 const JUDGES = [
   { name: 'run_kit', tool: 'run_kit.py', args: ['scenario'], count: 'scenarios' },
   { name: 'run_ledger_cases', tool: 'run_ledger_cases.py', args: [], count: 'checks' },
   { name: 'run_key_vectors', tool: 'run_key_vectors.py', args: ['key'], count: 'vectors' },
   { name: 'run_attest_check', tool: 'run_attest_check.py', args: ['scenario'], count: 'cases' },
   { name: 'run_input_cases', tool: 'run_input_cases.py', args: [], count: 'cases' },
-  { name: 'run_harness_check', tool: 'run_harness_check.py', args: ['scenario'] },
+  { name: 'run_harness_check', tool: 'run_harness_check.py', args: ['scenario'], count: 'cases' },
   { name: 'run_vectors', tool: 'run_vectors.py', args: ['canonical'] },
   { name: 'run_path_vectors', tool: 'run_path_vectors.py', args: ['path', 'path-set'] },
   { name: 'run_provider_cases', tool: 'run_provider_cases.py', args: ['session'] },

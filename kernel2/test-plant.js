@@ -47,6 +47,15 @@ const attest = (rejected, { status = rejected.length ? 1 : 0, unfinished = 0, ke
     [key]: 7, matched: 7 - rejected.length - unfinished, unfinished, rejected,
     all_matched: rejected.length === 0 && unfinished === 0,
   }) + '\n');
+// What tools/run_harness_check.py prints: the known-answer control and a line per record graded, then the same footer
+// with its count under `cases`: seven kernel cases and the control (issue 41).
+const NODS = 'a checker that agrees with everything';
+const NO_KNOWN = 'the same with no known cases';
+const harness = (rejected, { status = rejected.length ? 1 : 0, unfinished = 0, key = 'cases' } = {}) =>
+  done(status, rejected.map((c) => `MISMATCH ${c}: the checker agreed; kernel says None, None\n`).join('') + JSON.stringify({
+    [key]: 8, matched: 8 - rejected.length - unfinished, unfinished, rejected,
+    all_matched: rejected.length === 0 && unfinished === 0,
+  }) + '\n');
 
 // A spawn that answers each process, named by its tool, from a queue; one with nothing queued accepts the copy.
 function fake(answers, onJudge = () => {}) {
@@ -67,6 +76,7 @@ function fake(answers, onJudge = () => {}) {
     if (name === 'run_input_cases') return input([]);
     if (name === 'run_key_vectors') return keys([]);
     if (name === 'run_attest_check') return attest([]);
+    if (name === 'run_harness_check') return harness([]);
     return name === 'run_ledger_cases' ? ledger([]) : done(0);
   };
   return { spawn, calls };
@@ -237,14 +247,51 @@ test('an attest report that is unfinished or of the old shape is not credited, e
   }
 });
 
-// The other auxiliary judges name no case the runner reads; run_harness_check stands for them.
+test('a harness rejection that repeats on a named case is credited with the cases that repeated', () => {
+  assert.deepEqual(judge({ run_harness_check: [harness([NODS, NO_KNOWN]), harness([NODS])] }),
+    { outcome: 'rejected', name: 'run_harness_check', mismatch: true, cases: [NODS] });
+});
+
+test('a harness replay that names another case, accepts or does not finish is not credited', () => {
+  for (const second of [harness([NO_KNOWN]), harness([]), harness([], { status: 2, unfinished: 7 }),
+    done(1, `MISMATCH ${NODS}: kernel says None, None\n`), killed('SIGTERM')]) {
+    assert.deepEqual(judge({ run_harness_check: [harness([NODS]), second] }),
+      unfinished('run_harness_check', 'did not reject again on replay'));
+  }
+});
+
+test('a harness report that is unfinished or of the old shape is not credited, even when it repeats', () => {
+  // The old judge folded a kernel that did not finish into seven mismatches, and a failed known-answer control into an
+  // eighth, under a seven-case footer with exit 1.
+  const old = done(1, Array.from({ length: 7 }, (_, n) => `MISMATCH case ${n}: kernel says None, None\n`).join('')
+    + 'MISMATCH the known cases did not tell the real checker from the one that agrees with everything\n'
+    + JSON.stringify({ cases: 7, matched: 0, all_matched: false }) + '\n');
+  const cases = {
+    old_footer: old,
+    usage: done(2),
+    stderr: done(1, harness([NODS]).stdout, 'Traceback (most recent call last):\n'),
+    kernel_did_not_finish: harness([], { status: 2, unfinished: 7 }),
+    control_did_not_hold: harness([], { status: 2, unfinished: 1 }),
+    unfinished_after_a_mismatch: harness([NODS], { status: 2, unfinished: 1 }),
+    exit_status_only: done(1, `MISMATCH ${NODS}\n`),
+    passed_without_footer: done(0),
+    vectors_key: harness([NODS], { key: 'vectors' }),
+    signal: killed('SIGTERM'),
+    launch_error: failed('ENOENT'),
+  };
+  for (const [name, answer] of Object.entries(cases)) {
+    assert.deepEqual(judge({ run_harness_check: [answer, answer] }), unfinished('run_harness_check'), name);
+  }
+});
+
+// The other auxiliary judges name no case the runner reads; run_vectors (the canonical judge) stands for them.
 test('an auxiliary rejection must repeat, and one without a mismatch is named as such', () => {
-  assert.deepEqual(judge({ run_harness_check: [done(1, 'MISMATCH harness\n'), done(1, 'MISMATCH harness\n')] }),
-    { outcome: 'rejected', name: 'run_harness_check', mismatch: true, cases: [] });
-  assert.deepEqual(judge({ run_harness_check: [done(1, 'refused\n'), done(1, 'refused\n')] }),
-    { outcome: 'rejected', name: 'run_harness_check', mismatch: false, cases: [] });
-  assert.deepEqual(judge({ run_harness_check: [done(1, 'MISMATCH harness\n'), done(0)] }),
-    unfinished('run_harness_check', 'did not reject again on replay'));
+  assert.deepEqual(judge({ run_vectors: [done(1, 'MISMATCH canonical\n'), done(1, 'MISMATCH canonical\n')] }),
+    { outcome: 'rejected', name: 'run_vectors', mismatch: true, cases: [] });
+  assert.deepEqual(judge({ run_vectors: [done(1, 'refused\n'), done(1, 'refused\n')] }),
+    { outcome: 'rejected', name: 'run_vectors', mismatch: false, cases: [] });
+  assert.deepEqual(judge({ run_vectors: [done(1, 'MISMATCH canonical\n'), done(0)] }),
+    unfinished('run_vectors', 'did not reject again on replay'));
 });
 
 test('an auxiliary judge that could not run, was signalled or broke is not credited', () => {
@@ -252,11 +299,11 @@ test('an auxiliary judge that could not run, was signalled or broke is not credi
     usage: done(2),
     signal: killed('SIGTERM'),
     launch_error: failed('ENOENT'),
-    traceback: done(1, 'MISMATCH harness\n', 'Traceback (most recent call last):\n'),
+    traceback: done(1, 'MISMATCH canonical\n', 'Traceback (most recent call last):\n'),
     disk_full: done(1, 'OSError: [Errno 28] No space left on device\n'),
   };
   for (const [name, answer] of Object.entries(cases)) {
-    assert.deepEqual(judge({ run_harness_check: [answer] }), unfinished('run_harness_check'), name);
+    assert.deepEqual(judge({ run_vectors: [answer] }), unfinished('run_vectors'), name);
   }
 });
 
@@ -388,11 +435,11 @@ test('a unit-test run that did not finish is unfinished, not missed', (t) => {
 });
 
 test('a provisional auxiliary rejection cannot finish a batch successfully', (t) => {
-  const wrong = () => done(1, 'MISMATCH harness\n');
-  const run = batch(t, { run_kit: [kit([]), kit([]), kit(['plan/b']), kit(['plan/b'])], run_harness_check: [done(0), wrong(), wrong()] });
+  const wrong = () => done(1, 'MISMATCH canonical\n');
+  const run = batch(t, { run_kit: [kit([]), kit([]), kit(['plan/b']), kit(['plan/b'])], run_vectors: [done(0), wrong(), wrong()] });
   assert.equal(run.code, 2);
   assert.deepEqual([run.report.caught, run.report.caught_provisionally, run.report.all_caught], [1, 1, false]);
-  assert.match(run.verdicts[0], /^caught provisionally \(run_harness_check, no case named\)/);
+  assert.match(run.verdicts[0], /^caught provisionally \(run_vectors, no case named\)/);
   assert.match(run.verdicts[1], /^caught \(run_kit: plan\/b\)/);
 });
 

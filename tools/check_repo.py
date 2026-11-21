@@ -29,6 +29,8 @@ import check_models  # noqa: E402
 import kit_adequacy  # noqa: E402
 import pathcheck  # noqa: E402
 import run_attest_check  # noqa: E402
+import run_harness_check  # noqa: E402
+harness = run_harness_check.harness
 import run_input_cases  # noqa: E402
 import run_key_vectors  # noqa: E402
 import run_kit  # noqa: E402
@@ -1098,17 +1100,59 @@ class KitAdequacyTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(self.after_scenarios(answer), (False, ["ledger-judge unfinished"]))
 
-    # The harness judge names no case the runner reads; it stands for the judges kept on their exit status.
+    # The session judge names no case the runner reads; it stands for the judges kept on their exit status. It runs
+    # after the typed ledger, core-key, attest, harness and strict-input judges.
+    def at_session(self, *results):
+        return self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.attest_report(0, []),
+                                    self.harness_report(0, []), self.input_report(0, []), *results)
+
     def test_other_auxiliary_judges_keep_their_exit_status_treatment(self):
-        failed = self.result(1, "MISMATCH harness\n")
-        self.assertEqual(self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.attest_report(0, []),
-                                              failed, self.result(0)), (False, ["harness-judge unsteady"]))
+        failed = self.result(1, "MISMATCH session\n")
+        self.assertEqual(self.at_session(failed, self.result(0)), (False, ["session-judge unsteady"]))
 
     def test_repeated_untyped_auxiliary_rejection_is_provisional_not_caught(self):
         # Two identical exits 1 that name no case may be one environment failure twice (issue 41).
-        failed = self.result(1, "MISMATCH harness\n")
-        self.assertEqual(self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.attest_report(0, []),
-                                              failed, failed), (False, ["harness-judge provisional"]))
+        failed = self.result(1, "MISMATCH session\n")
+        self.assertEqual(self.at_session(failed, failed), (False, ["session-judge provisional"]))
+
+    # The harness judge ends with the same footer, its count under `cases`: seven kernel cases and the known-answer
+    # control; it runs after the attest judge (issue 41).
+    def harness_report(self, code, rejected, unfinished=0, key="cases"):
+        summary = {key: 8, "matched": 8 - len(rejected) - unfinished, "unfinished": unfinished, "rejected": rejected,
+                   "all_matched": not rejected and not unfinished}
+        lines = "".join(f"MISMATCH {case}: the checker agreed; kernel says None, None\n" for case in rejected)
+        return self.result(code, lines + json.dumps(summary) + "\n")
+
+    def at_harness(self, *results):
+        return self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.attest_report(0, []), *results)
+
+    def test_harness_rejection_is_credited_with_the_cases_that_repeat(self):
+        nods = "a checker that agrees with everything"
+        both = [nods, "the same with no known cases"]
+        self.assertEqual(self.at_harness(self.harness_report(1, both), self.harness_report(1, [nods])),
+                         (False, [f"harness-judge: {nods}"]))
+
+    def test_harness_replay_on_another_case_or_unfinished_is_unsteady(self):
+        first = self.harness_report(1, ["a checker that agrees with everything"])
+        for second in (self.harness_report(1, ["the same with no known cases"]), self.harness_report(0, []),
+                       self.harness_report(2, [], unfinished=7), self.result(1, "MISMATCH harness\n")):
+            with self.subTest(second=second.stdout):
+                self.assertEqual(self.at_harness(first, second), (False, ["harness-judge unsteady"]))
+
+    def test_harness_report_that_is_unfinished_or_of_the_old_shape_is_unfinished_even_when_it_repeats(self):
+        # The old judge folded a kernel that did not finish into seven mismatches, and a failed known-answer control
+        # into an eighth, under a seven-case footer with exit 1.
+        old = self.result(1, "".join(f"MISMATCH case {n}: kernel says None, None\n" for n in range(7))
+                          + "MISMATCH the known cases did not tell the real checker from the one that agrees with everything\n"
+                          + json.dumps({"cases": 7, "matched": 0, "all_matched": False}) + "\n")
+        rejected = self.harness_report(1, ["a checker that agrees with everything"])
+        for answer in (old, self.harness_report(2, [], unfinished=7), self.harness_report(2, [], unfinished=1),
+                       self.harness_report(2, ["a checker that agrees with everything"], unfinished=1),
+                       self.result(1, "MISMATCH harness\n"), self.harness_report(1, ["a checker that agrees with everything"], key="vectors"),
+                       self.result(-15, rejected.stdout), self.result(0), self.result(2),
+                       self.result(1, rejected.stdout, "Traceback (most recent call last):\n")):
+            with self.subTest(answer=answer.stdout):
+                self.assertEqual(self.at_harness(answer, answer), (False, ["harness-judge unfinished"]))
 
     def test_provisional_replay_leaves_the_batch_unfinished(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1119,7 +1163,7 @@ class KitAdequacyTests(unittest.TestCase):
             defects = [{"name": name, "file": "fixture.rs", "find": "old", "replace": "planted"}
                        for name in ("named", "untyped")]
             (kernel / "defects.json").write_text(json.dumps({"defects": defects}), encoding="utf-8")
-            results = [(True, []), (False, ["plan/named"]), (False, ["harness-judge provisional"])]
+            results = [(True, []), (False, ["plan/named"]), (False, ["session-judge provisional"])]
             with patch.object(kit_adequacy, "ROOT", root), patch.object(kit_adequacy, "passes_kit", side_effect=results), \
                     contextlib.redirect_stdout(io.StringIO()) as output:
                 status = kit_adequacy.main()
@@ -1203,7 +1247,7 @@ class KitAdequacyTests(unittest.TestCase):
         return self.result(code, "".join(f"MISMATCH {case} (exit 0)\n" for case in rejected) + json.dumps(summary) + "\n")
 
     def at_input(self, *results):
-        return self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.attest_report(0, []), self.result(0), *results)
+        return self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.attest_report(0, []), self.harness_report(0, []), *results)
 
     def test_input_rejection_is_credited_with_the_cases_that_repeat(self):
         key = "a key repeated in one object is refused"
@@ -1622,6 +1666,94 @@ class AttestJudgeTests(unittest.TestCase):
                           side_effect=lambda record, key: (_ for _ in ()).throw(OSError()) if record.get("result") == "refused" else real(record, key)):
             code, summary, _, _ = self.judge([self.answered(wrong)])
         self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["all_matched"]), (2, 1, [self.names[1]], False))
+
+
+class HarnessJudgeTests(unittest.TestCase):
+    """The harness judge names a completed wrong grade, and reports a kernel that did not finish, or a known-answer control
+    or fixture grade that did not hold, as unfinished. The control is its own line, not one of the seven cases (issue 41)."""
+
+    right = [{"level": "cross-make", "source": "attested"}, {"level": "tested", "source": "attested"},
+             {"level": "apart", "source": "attested"}, {"level": "apart", "source": "attested"}] + [{"level": "helper", "source": "declared"}] * 3
+
+    @staticmethod
+    def cases(real_wrong=True, nods_wrong=False, result="agreed"):
+        record = lambda rejected: {"result": result, "known_bad": {"rejected_wrong": rejected, "accepted_right": True}}  # noqa: E731
+        made = [record(real_wrong)] + [{"result": "agreed"}] * 2 + [record(nods_wrong)] + [{"result": "agreed"}] * 3
+        return {}, [(f"case {n}", r, "agreed", "", "") for n, r in enumerate(made)]
+
+    def judge(self, answer, made=None):
+        made = made or self.cases()
+        names = [name for name, *_ in made[1]]
+        made = (made[0], [(name, r, res, HarnessJudgeTests.right[n]["level"], HarnessJudgeTests.right[n]["source"])
+                          for n, (name, r, res, _, _) in enumerate(made[1])])
+        argv = ["run_harness_check.py", "--", "kernel", "scenario"]
+        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_harness_check.sys, "argv", argv), \
+                patch.object(run_harness_check, "make_cases", return_value=made), \
+                patch.object(run_harness_check.subprocess, "run", side_effect=[answer]):
+            code = run_harness_check.main()
+        lines = output.getvalue().splitlines()
+        return code, json.loads(lines[-1]), lines[:-1], names
+
+    @staticmethod
+    def answered(results, code=0):
+        return subprocess.CompletedProcess(["kernel"], code, json.dumps({"results": results}).encode("utf-8"), b"")
+
+    def test_right_grades_pass_with_the_control_on_its_own_line(self):
+        code, summary, lines, _ = self.judge(self.answered(self.right))
+        self.assertEqual((code, summary), (0, {"cases": 8, "matched": 8, "all_matched": True, "unfinished": 0, "rejected": []}))
+        self.assertTrue(lines[0].startswith(f"match    {run_harness_check.CONTROL}:"))
+
+    def test_a_completed_wrong_grade_is_named(self):
+        wrong = list(self.right)
+        wrong[3] = {"level": "tested", "source": "attested"}  # trusts the checker that agrees with everything
+        code, summary, _, names = self.judge(self.answered(wrong))
+        self.assertEqual((code, summary["rejected"], summary["unfinished"], summary["matched"]), (1, [names[3]], 0, 7))
+
+    def test_a_kernel_that_did_not_finish_is_unfinished(self):
+        for failure in (FileNotFoundError(), OSError(errno.EPIPE, "Broken pipe"), OSError(errno.ENOSPC, "No space left"),
+                        subprocess.TimeoutExpired("kernel", 60), self.answered(self.right, -15), self.answered(self.right, 1)):
+            with self.subTest(failure=failure):
+                code, summary, lines, _ = self.judge(failure)
+                # the control was judged on the harness alone and held; the seven kernel cases showed nothing
+                self.assertEqual((code, summary["cases"], summary["unfinished"], summary["rejected"], summary["matched"]), (2, 8, 7, [], 1))
+                self.assertFalse(any(line.startswith("MISMATCH") for line in lines))
+
+    def test_a_known_control_that_did_not_hold_is_unfinished_not_a_catch(self):
+        # A real checker that crashed reads as `refused` on everything; one that agrees with everything but crashed on the
+        # known-wrong case looks as if it refused it. Neither is the kernel's doing.
+        # A real checker's failed known cases also leave its own record unfinished, so that case is not matched either.
+        for made, unfinished, matched in ((self.cases(real_wrong=False), 2, 6), (self.cases(nods_wrong=True), 1, 7)):
+            # every case is counted once: matched + rejected + unfinished == cases == 8
+            code, summary, lines, _ = self.judge(self.answered(self.right), made)
+            self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["matched"]), (2, unfinished, [], matched))
+            self.assertTrue(lines[0].startswith("UNFINISHED"))
+
+    def test_a_fixture_grade_that_did_not_hold_is_unfinished(self):
+        code, summary, lines, _ = self.judge(self.answered(self.right), self.cases(result="refused"))
+        self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["matched"]), (2, 2, [], 6))
+        self.assertFalse(any(line.startswith("MISMATCH") for line in lines))
+
+    def test_strict_harness_never_reads_an_unfinished_checker_as_a_refusal(self):
+        # The ordinary harness CLI keeps reading anything but a final `agreed` as `refused`; the judge's strict records
+        # raise instead, so a timed-out, failed or verdictless checker cannot pass for a known-wrong rejection.
+        said = lambda code, out: subprocess.CompletedProcess(["checker"], code, out, b"")  # noqa: E731
+        for failure in (subprocess.TimeoutExpired("checker", 600), FileNotFoundError(), OSError(errno.EPIPE, "Broken pipe"),
+                        said(1, b"refused\n"), said(-9, b""), said(0, b"looks fine\n"), said(0, b"")):
+            with self.subTest(failure=failure):
+                with patch.object(harness.subprocess, "run", side_effect=[failure]):
+                    self.assertEqual(harness.ask(["checker"], {"work": b"x"}, []), "refused")
+                with patch.object(harness.subprocess, "run", side_effect=[failure]), self.assertRaises(harness.CheckerUnfinished):
+                    harness.ask(["checker"], {"work": b"x"}, [], strict=True)
+        for verdict in ("agreed", "refused"):
+            with patch.object(harness.subprocess, "run", side_effect=[said(0, f"note\n{verdict}\n".encode())]):
+                self.assertEqual(harness.ask(["checker"], {"work": b"x"}, [], strict=True), verdict)
+
+    def test_records_that_could_not_be_made_are_unfinished(self):
+        argv = ["run_harness_check.py", "--", "kernel"]
+        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_harness_check.sys, "argv", argv), \
+                patch.object(run_harness_check, "make_cases", side_effect=OSError(errno.ENOSPC, "No space left")):
+            code = run_harness_check.main()
+        self.assertEqual((code, json.loads(output.getvalue().splitlines()[-1])["unfinished"]), (2, 1))
 
 
 class PlantJsTests(unittest.TestCase):
