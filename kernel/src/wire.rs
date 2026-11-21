@@ -149,6 +149,8 @@ pub struct Peer {
     rx: Receiver<Event>,
     closed: bool,
     strict: bool,
+    /// Whether a `shutdown` message was written whole by `shutdown`.
+    said_shutdown: bool,
 }
 /// Standard input of the provider, written by a thread of its own, so that a
 /// provider that stops reading cannot hold the host past a deadline.
@@ -187,7 +189,12 @@ impl Peer {
             rx: lines(stdout, max_line),
             closed: false,
             strict,
+            said_shutdown: false,
         }
+    }
+    /// Whether `shutdown` has written its message whole to the provider.
+    pub fn said_shutdown(&self) -> bool {
+        self.said_shutdown
     }
     /// Send one message, written whole no later than `until`. A provider that
     /// cannot be written to has gone away.
@@ -240,10 +247,13 @@ impl Peer {
     /// provider to end, end everything it started, and read what it wrote to the
     /// end. Anything more than nothing is `unexpected`.
     pub fn shutdown(&mut self, until: Instant) -> Result<(), &'static str> {
-        let _ = self.send(
-            &json::object(vec![("type", json::string("shutdown"))]),
-            until,
-        );
+        let said = self
+            .send(
+                &json::object(vec![("type", json::string("shutdown"))]),
+                until,
+            )
+            .is_ok();
+        self.said_shutdown |= said;
         // The provider has a second to exit, less if the deadline is nearer; one
         // still running then is ended with everything it started, its answer standing.
         let grace = (Instant::now() + SHUTDOWN_GRACE).min(until);

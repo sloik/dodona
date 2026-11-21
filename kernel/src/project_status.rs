@@ -187,6 +187,9 @@ struct Input {
     tools_given: Value,
     providers: Vec<(String, Provider)>,
     deadline_ms: u64,
+    /// Where every session notes what it sends a provider and reads from one:
+    /// set by the run command when it keeps a transcript, never by `status`.
+    recorder: Option<Recorder>,
     required: Vec<String>,
     min_hard_gates: i64,
     floors: Value,
@@ -377,6 +380,7 @@ fn read_input(input: &[u8]) -> Step<Input> {
         tools_given,
         providers: read,
         deadline_ms,
+        recorder: None,
         required: strings(policy.opt("required")).unwrap_or_default(),
         min_hard_gates: policy.get("min_hard_gates").number(),
         floors: policy.get("floors").clone(),
@@ -734,6 +738,10 @@ fn file_refs(files: &[(String, String)]) -> Value {
 
 // Steps 5 and 7. A session with a provider, as in a check.
 
+/// Every message sent to a provider and read from one, in order, each as
+/// `{"to": "provider" or "kernel", "message"}`: what a run's transcript holds.
+type Recorder = std::rc::Rc<std::cell::RefCell<Vec<Value>>>;
+
 /// A session owns its connection: the ids of its requests count from 1 on it
 /// alone, and however it is left, by `close` or by being dropped on a refusal,
 /// `shutdown` is sent once and every process the provider started is ended.
@@ -745,6 +753,9 @@ struct Session {
     deadline_ms: u64,
     ids: RequestIds,
     closed: bool,
+    /// The run's recorder, if it keeps a transcript. Noting a message never
+    /// changes what is sent or how an answer is judged.
+    recorder: Option<Recorder>,
 }
 /// The ids of one session's requests: "1", "2" and on, never shared with another session.
 struct RequestIds {
@@ -808,6 +819,7 @@ impl Session {
             deadline_ms: input.deadline_ms,
             ids: RequestIds::new(),
             closed: false,
+            recorder: input.recorder.clone(),
         };
         match s.greet(binding) {
             Ok(()) => Ok(s),
@@ -818,11 +830,11 @@ impl Session {
         }
     }
     fn greet(&mut self, binding: &Binding) -> Result<(), &'static str> {
-        self.peer.send(
+        self.send_and_note(
             &hello(host::MAX_LINE, self.deadline_ms),
-            Instant::now() + self.wait,
         )?;
         let m = self.peer.read(Instant::now() + self.wait)?;
+        self.note("kernel", &m);
         if !manifest_ok(&m) || host::manifest(&m).is_none() {
             return Err("bad-manifest");
         }
@@ -855,7 +867,9 @@ impl Session {
     fn ask(&mut self, capability: &str, body: Value) -> Result<Value, &'static str> {
         let (id, request) = self.request(capability, body);
         self.peer.send(&request, Instant::now() + self.wait)?;
+        self.note("provider", &request);
         let a = self.peer.read(Instant::now() + self.wait)?;
+        self.note("kernel", &a);
         if a.text("id") != Some(id.as_str()) {
             return Err("wrong-id");
         }
@@ -879,8 +893,42 @@ impl Session {
         }
         self.closed = true;
         let _ = self.peer.shutdown(Instant::now() + wire::SHUTDOWN_GRACE);
+        // `shutdown` is the one message the wire layer sends itself: noted
+        // only if it was written whole, and after it was.
+        note_shutdown(self.recorder.as_ref(), self.peer.said_shutdown());
         self.peer.end();
         self.log.settle();
+    }
+    fn send_and_note(&mut self, message: &Value) -> Result<(), &'static str> {
+        self.peer.send(message, Instant::now() + self.wait)?;
+        self.note("provider", message);
+        Ok(())
+    }
+    /// Note a message sent (`to` "provider") or read (`to` "kernel"), if the
+    /// run keeps a transcript.
+    fn note(&self, to: &str, message: &Value) {
+        note_to(self.recorder.as_ref(), to, message);
+    }
+}
+
+/// The one place a transcript entry is made. A message is noted once it was
+/// written whole to a provider (`to` "provider") or read whole from one as a
+/// message (`to` "kernel", noted before it is judged), never before; so the
+/// entries are in the order the messages crossed the wire, over every session.
+/// A send that failed or a line that is no message is not noted.
+fn note_to(recorder: Option<&Recorder>, to: &str, message: &Value) {
+    if let Some(r) = recorder {
+        r.borrow_mut().push(json::object(vec![
+            ("to", json::string(to)),
+            ("message", message.clone()),
+        ]));
+    }
+}
+
+/// Note the `shutdown` the wire layer sent, if it was written whole.
+fn note_shutdown(recorder: Option<&Recorder>, said: bool) {
+    if said {
+        note_to(recorder, "provider", &json::object(vec![("type", json::string("shutdown"))]));
     }
 }
 
@@ -2208,7 +2256,11 @@ mod run_input {
     /// closed when the snapshot is dropped, at the end of the run or on a
     /// refusal. Not served: nothing after step 10 is done.
     pub(super) fn prepare(raw: &[u8]) -> Step<(RunInput, Snapshot, Plan)> {
-        let input = read(raw)?;
+        let mut input = read(raw)?;
+        // Every session from here notes its messages, if a transcript is kept.
+        if input.transcript.is_some() {
+            input.status.recorder = Some(Recorder::default());
+        }
         let snapshot = snapshot(&input.status, true)?;
         let plan = plan(
             &snapshot.obligations.listed,
@@ -2234,10 +2286,13 @@ mod run_input {
         fn send_check(&mut self, body: Value) -> Result<String, &'static str> {
             let (id, request) = self.request("obligation.check", body);
             self.peer.send(&request, Instant::now() + self.wait)?;
+            self.note("provider", &request);
             Ok(id)
         }
         fn read(&mut self) -> Result<Value, &'static str> {
-            self.peer.read(Instant::now() + self.wait)
+            let m = self.peer.read(Instant::now() + self.wait)?;
+            self.note("kernel", &m);
+            Ok(m)
         }
     }
 
@@ -2900,7 +2955,15 @@ mod run_input {
     /// The identity of a file under `root` as it is now, following links, as
     /// an input is read again before recording.
     pub(super) fn reread(root: &Path) -> impl FnMut(&str) -> Option<String> + '_ {
-        move |path: &str| fs::read(root.join(path)).ok().map(|bytes| file_identity(&bytes))
+        // Looked at before it is opened: a pipe or a device could block a read,
+        // and is no file a check read; it is unreadable.
+        move |path: &str| {
+            let path = root.join(path);
+            if !fs::metadata(&path).is_ok_and(|m| m.is_file()) {
+                return None;
+            }
+            fs::read(&path).ok().map(|bytes| file_identity(&bytes))
+        }
     }
 
     /// How long the run waits for the ledger's lock.
@@ -2949,10 +3012,70 @@ mod run_input {
     /// and not the owner's ledger by name or, where both exist, as one file.
     /// Between this and the append nothing more is looked at: a link made in
     /// that moment is not seen.
+    ///
+    /// The owner's ledger is walked the same way. That is the status
+    /// command's own rule for it (step 8: reached without a link at any step,
+    /// a regular file if it exists, unreadable if a folder on its way cannot
+    /// be entered), which step 14 applies again after the write; this only
+    /// makes the run refuse before writing rather than after.
     fn still_permitted(root: &Path, ledger: &str, owner: &str) -> bool {
         disk_name(ledger) != disk_name(owner)
             && !link_on_the_way(root, ledger)
-            && !same_file(&root.join(ledger), &root.join(owner))
+            && absent_or_regular(root, ledger)
+            && absent_or_regular(root, owner)
+            && surely_distinct(&root.join(ledger), &root.join(owner))
+    }
+
+    /// `rel` walked from `root` one step at a time, following no link: every
+    /// step but the last a folder, and the last a regular file; or the walk
+    /// ending, plainly, at a step that is not there, so nothing is there. A
+    /// link or anything else at any step, or a step that cannot be looked at
+    /// for any other reason, and the answer is no: a ledger is not written.
+    fn absent_or_regular(root: &Path, rel: &str) -> bool {
+        let steps: Vec<&str> = rel.split('/').collect();
+        let mut here = root.to_path_buf();
+        for (i, step) in steps.iter().enumerate() {
+            here.push(step);
+            match fs::symlink_metadata(&here) {
+                Ok(m) if i + 1 == steps.len() => return m.file_type().is_file(),
+                Ok(m) if m.file_type().is_dir() => {}
+                Ok(_) => return false,
+                Err(e) => return e.kind() == ErrorKind::NotFound,
+            }
+        }
+        false
+    }
+
+    /// Whether two paths are surely not one file: one of them is plainly not
+    /// there, or both are and the system says they are different files. If
+    /// either cannot be looked at for another reason, no.
+    fn surely_distinct(a: &Path, b: &Path) -> bool {
+        let acceptable = |observed: &std::io::Result<fs::Metadata>| match observed {
+            Ok(metadata) => metadata.is_file(),
+            Err(error) => error.kind() == ErrorKind::NotFound,
+        };
+        let (left, right) = (fs::metadata(a), fs::metadata(b));
+        if !acceptable(&left) || !acceptable(&right) {
+            return false;
+        }
+        let (Ok(left), Ok(right)) = (left, right) else {
+            return true;
+        };
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            (left.dev(), left.ino()) != (right.dev(), right.ino())
+        }
+        #[cfg(windows)]
+        {
+            let _ = (left, right);
+            file_id::same(a, b) == Some(false)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (left, right);
+            false
+        }
     }
 
     /// Steps 11 to 13: every planned check on its binding's session, the runs
@@ -3051,15 +3174,46 @@ mod run_input {
         };
         let counts = counts(plan, &finished);
         let snapshot = rejudge(&run.status, snapshot)?;
+        // The snapshot goes with the report: every kept session is closed, its
+        // `shutdown` noted, before the transcript is written.
         let mut answer = output(&run.status, snapshot);
         if let Value::Object(fields) = &mut answer {
             fields.push(("counts".to_owned(), counts));
         }
+        if let (Some(rel), Some(recorder)) = (&run.transcript, &run.status.recorder) {
+            let messages = recorder.borrow().clone();
+            write_transcript(&run.status.root, rel, &messages)?;
+        }
         Ok(answer)
     }
 
-    /// A whole run with the site's executor. Not served: `main` does not call
-    /// it, and no transcript is written.
+    /// Write the transcript as a new file: never over one that is there, and
+    /// not through a link. It comes after the verdicts are recorded, so a
+    /// transcript that cannot be written is `transcript-not-written` and the
+    /// verdicts stay recorded. A file this made and could not finish is removed.
+    pub(super) fn write_transcript(root: &Path, rel: &str, messages: &[Value]) -> Step<()> {
+        let not_written = |why: String| stop("transcript-not-written", format!("{rel}: {why}"));
+        if link_on_the_way(root, rel) {
+            return not_written("now reached through a link".to_owned());
+        }
+        let path = root.join(rel);
+        let mut f = match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(f) => f,
+            Err(e) => return not_written(e.to_string()),
+        };
+        let text = json::encode(&Value::Array(messages.to_vec()));
+        match f.write_all(text.as_bytes()).and_then(|_| f.sync_all()) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                drop(f);
+                let _ = fs::remove_file(&path);
+                not_written(e.to_string())
+            }
+        }
+    }
+
+    /// A whole run with the site's executor, writing the transcript when the
+    /// input names one. Not served: `main` does not call it.
     pub(super) fn run_native(raw: &[u8]) -> Step<Value> {
         let (run, snapshot, plan) = prepare(raw)?;
         let mut executor = Native {
@@ -3371,6 +3525,118 @@ mod run_input {
             let got = record(&root, "run.ledger", "Run.Ledger", &[v("{}")], Duration::ZERO);
             assert_eq!(got.err().map(|s| s.reason), Some("ledger-not-written"));
             assert_eq!(fs::read(&ledger).unwrap(), before);
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn only_an_absent_or_regular_ledger_is_written() {
+            let root = scratch("kinds");
+            // Both absent, or both regular and distinct: permitted.
+            assert!(still_permitted(&root, "l/run.ledger", OWNER));
+            fs::create_dir_all(root.join("l")).unwrap();
+            fs::create_dir_all(root.join("records")).unwrap();
+            fs::write(root.join("l/run.ledger"), b"").unwrap();
+            fs::write(root.join(OWNER), b"").unwrap();
+            assert!(still_permitted(&root, "l/run.ledger", OWNER));
+            // A folder where the run's ledger or the owner's should be: not.
+            fs::create_dir_all(root.join("l/dir.ledger")).unwrap();
+            assert!(!still_permitted(&root, "l/dir.ledger", OWNER));
+            fs::create_dir_all(root.join("records/dir.ledger")).unwrap();
+            assert!(!still_permitted(&root, "l/run.ledger", "records/dir.ledger"));
+            // A file where a folder on the way should be: the walk finds it
+            // before asking for the path beyond, on every system.
+            fs::write(root.join("flat"), b"").unwrap();
+            assert!(!still_permitted(&root, "flat/run.ledger", OWNER));
+            assert!(!still_permitted(&root, "l/run.ledger", "flat/owner.ledger"));
+            // A step that is plainly not there: nothing is there.
+            assert!(still_permitted(&root, "new/deeper/run.ledger", OWNER));
+            // Through `record`, a folder at the ledger's path is not written.
+            let got = record(&root, "l/dir.ledger", OWNER, &[v("{}")], Duration::ZERO);
+            assert_eq!(got.err().map(|s| s.reason), Some("ledger-not-written"));
+            assert!(!root.join("l/dir.ledger.lock").exists());
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn an_owners_ledger_reached_through_a_link_stops_the_write() {
+            // Status step 8 refuses an owner's ledger reached through a link
+            // (`owner-ledger-link`), and step 14 would refuse after the write;
+            // the run refuses before it instead.
+            let root = scratch("owner-link");
+            fs::write(root.join("elsewhere.ledger"), b"").unwrap();
+            fs::create_dir_all(root.join("records")).unwrap();
+            std::os::unix::fs::symlink(root.join("elsewhere.ledger"), root.join(OWNER)).unwrap();
+            assert!(!still_permitted(&root, "l/run.ledger", OWNER));
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn shutdown_is_noted_only_when_it_was_written() {
+            let recorder = Recorder::default();
+            note_to(Some(&recorder), "provider", &v(r#"{"type":"request"}"#));
+            note_to(Some(&recorder), "kernel", &v(r#"{"type":"result"}"#));
+            note_shutdown(Some(&recorder), false);
+            assert_eq!(recorder.borrow().len(), 2);
+            note_shutdown(Some(&recorder), true);
+            let kept = recorder.borrow();
+            assert_eq!(kept.len(), 3);
+            // In the order noted, the shutdown last, as sent.
+            let to: Vec<&str> = kept.iter().map(|e| e.text("to").unwrap()).collect();
+            assert_eq!(to, ["provider", "kernel", "provider"]);
+            assert_eq!(kept[2].get("message").text("type"), Some("shutdown"));
+            // With no recorder, nothing is kept and nothing fails.
+            note_shutdown(None, true);
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn a_ledger_that_is_a_link_to_nothing_is_not_absent() {
+            let root = scratch("dangling");
+            std::os::unix::fs::symlink(root.join("nowhere"), root.join("run.ledger")).unwrap();
+            assert!(!still_permitted(&root, "run.ledger", OWNER));
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn an_input_that_is_not_a_regular_file_is_unreadable() {
+            let root = scratch("reread");
+            fs::write(root.join("a.txt"), b"data").unwrap();
+            fs::create_dir_all(root.join("folder")).unwrap();
+            let mut now = reread(&root);
+            assert_eq!(now("a.txt"), Some(file_identity(b"data")));
+            assert_eq!(now("folder"), None);
+            assert_eq!(now("missing"), None);
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn a_transcript_is_written_once_as_a_new_file() {
+            let root = scratch("transcript");
+            let said = vec![
+                v(r#"{"to":"provider","message":{"type":"shutdown"}}"#),
+                v(r#"{"to":"kernel","message":{"type":"manifest"}}"#),
+            ];
+            assert!(write_transcript(&root, "t.json", &said).is_ok());
+            let kept = json::parse(&fs::read(root.join("t.json")).unwrap()).unwrap();
+            assert_eq!(kept.array().len(), 2);
+            assert_eq!(kept.array()[0].text("to"), Some("provider"));
+            // Never over a file that is there; that file is left as it was.
+            let again = write_transcript(&root, "t.json", &[]);
+            assert_eq!(again.err().map(|s| s.reason), Some("transcript-not-written"));
+            assert_eq!(json::parse(&fs::read(root.join("t.json")).unwrap()).unwrap().array().len(), 2);
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn a_transcript_now_behind_a_link_is_not_written() {
+            let root = scratch("transcript-link");
+            fs::create_dir_all(root.join("real")).unwrap();
+            std::os::unix::fs::symlink(root.join("real"), root.join("lk")).unwrap();
+            let got = write_transcript(&root, "lk/t.json", &[]);
+            assert_eq!(got.err().map(|s| s.reason), Some("transcript-not-written"));
+            assert!(!root.join("real/t.json").exists());
             let _ = fs::remove_dir_all(&root);
         }
     }
@@ -4316,6 +4582,22 @@ mod run_input {
             assert!(s.read.absent);
             assert_eq!(s.judged.get("steps").array().len(), 3);
             assert!(s.report.opt("obligations").is_some());
+            let _ = fs::remove_dir_all(&root);
+        }
+
+        #[test]
+        fn a_transcript_that_cannot_be_written_leaves_the_verdicts_recorded() {
+            let root = scratch_root("late-transcript");
+            let run = run_input_at(&root, &["l/run.ledger"], "l/run.ledger");
+            let (done, _) = finished_with(&run, &mut unchanged);
+            assert!(done.is_ok());
+            // The transcript's path is taken after step 1 checked it.
+            fs::write(root.join("t.json"), b"someone else's").unwrap();
+            let got = write_transcript(&root, "t.json", &[v(r#"{"to":"kernel","message":{}}"#)]);
+            assert_eq!(got.err().map(|s| s.reason), Some("transcript-not-written"));
+            // The verdicts stay recorded, and the other file is left as it was.
+            assert_eq!(entries_in(&root, "l/run.ledger").len(), 2);
+            assert_eq!(fs::read(root.join("t.json")).unwrap(), b"someone else's");
             let _ = fs::remove_dir_all(&root);
         }
     }
