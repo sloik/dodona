@@ -227,6 +227,61 @@ test('the bytes of standard input to ready or a refusal', () => {
   });
 });
 
+test('a segment ending in a dot or a space: always in the ledgers written and excluded, with a transcript in all it is compared with', () => {
+  withProject((root) => {
+    const without = (change) => {
+      const asked = input(root, change);
+      delete asked.transcript;
+      return outcome(asked);
+    };
+    // Always: the run's ledger and the owner's.
+    for (const ledger of ['l/run.ledger.', 'l/run.ledger ', 'l./run.ledger', 'l /run.ledger']) {
+      assert.equal(without({ ledger, ledgers: [ledger] }), 'bad-input', JSON.stringify(ledger));
+    }
+    for (const owner of ['records/owner.ledger.', 'records/owner.ledger ', 'records./owner.ledger']) {
+      assert.equal(without({ owner_ledger: owner }), 'bad-input', JSON.stringify(owner));
+    }
+    // With a transcript: it, every ledger listed and the project file.
+    for (const [change, why] of [
+      [{ transcript: 'l/t.json.' }, 'the transcript'],
+      [{ transcript: 'l/t.json ' }, 'the transcript, a space'],
+      [{ ledgers: ['l/run.ledger', 'x/other.ledger.'] }, 'another ledger listed'],
+      [{ ledgers: ['l/run.ledger', 'x /other.ledger'] }, 'another ledger listed, a folder'],
+      [{ project: 'dodona.toml.' }, 'the project file'],
+      [{ project: 'p /dodona.toml' }, 'the project file, a folder'],
+    ]) {
+      assert.equal(outcome(input(root, change)), 'bad-input', why);
+    }
+    // Without a transcript, the other ledgers listed and the project are not judged so.
+    assert.equal(without({ ledgers: ['l/run.ledger', 'x/other.ledger.'] }), 'ready');
+    assert.equal(without({ project: 'dodona.toml.' }), 'ready');
+    // A dot or a space elsewhere in a segment is fine.
+    for (const ledger of ['l/.run.ledger', 'l/run..ledger', 'l/run ledger', 'l/ run.ledger']) {
+      assert.equal(outcome(input(root, { ledger, ledgers: [ledger] })), 'ready', JSON.stringify(ledger));
+    }
+    assert.equal(outcome(input(root, { transcript: 'l/.t.json' })), 'ready');
+  });
+});
+
+test('planted: a run ledger ending in a dot is let through once only the owner\'s is judged', () => {
+  const damaged = planted('endsInDotOrSpace(ledger) || endsInDotOrSpace(ownerRel)', 'endsInDotOrSpace(ownerRel)').preflight;
+  withProject((root) => {
+    const asked = input(root, { ledger: 'l/run.ledger.', ledgers: ['l/run.ledger.'] });
+    delete asked.transcript;
+    assert.equal(outcome(asked), 'bad-input');
+    assert.equal(outcome(asked, damaged), 'ready');
+  });
+});
+
+test('planted: with a transcript, a project file ending in a dot is let through once it is not spelt-checked', () => {
+  const damaged = planted('...(isRelative(project) ? [project] : [])', '').preflight;
+  withProject((root) => {
+    const asked = input(root, { project: 'dodona.toml.' });
+    assert.equal(outcome(asked), 'bad-input');
+    assert.equal(outcome(asked, damaged), 'ready');
+  });
+});
+
 // A copy of project-run.js with one guard removed, loaded beside the real modules. The
 // needle must be found exactly once, so a plant that changes nothing cannot pass.
 function planted(needle, replacement) {

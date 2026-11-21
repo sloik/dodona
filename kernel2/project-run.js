@@ -42,6 +42,12 @@ function diskName(text) {
   return unicode.fromCodePoints(unicode.nfc(unicode.fold(unicode.nfc(unicode.toCodePoints(text)))));
 }
 
+// True when a segment of a relative path ends in an ASCII dot or space: a name some
+// disks store without that ending, so that it would write over another path's file.
+function endsInDotOrSpace(rel) {
+  return rel.split('/').some((segment) => segment.endsWith('.') || segment.endsWith(' '));
+}
+
 // True unless a step of the path, looked at without following it, is a symbolic link.
 // A step that is not there, or cannot be looked at, ends the walk: what lies beyond it is
 // no link, and reading or appending then finds it absent or unreadable, as the status
@@ -93,6 +99,8 @@ function checkRunInput(asked) {
   // Membership is by the path as given: what this run records is what the next run reads.
   if (!ledgers.includes(ledger)) refuse('ledger is not one of ledgers');
   if (!isRelative(ownerRel)) refuse('owner_ledger is not a relative path');
+  // The ledger written and the owner's it must not be: each spelt as no disk would alter it.
+  if (endsInDotOrSpace(ledger) || endsInDotOrSpace(ownerRel)) refuse('ledger or owner_ledger has a segment ending in a dot or a space');
   if (diskName(ledger) === diskName(ownerRel)) refuse("ledger names the owner's ledger, as a disk that ignores case and normalization compares names");
   const executor = own(asked, 'executor');
   // A command none of whose words holds a NUL, which no program's arguments can carry.
@@ -103,9 +111,12 @@ function checkRunInput(asked) {
   const transcript = asked.transcript;
   if (given) {
     if (!isRelative(transcript)) refuse('transcript is not a relative path');
+    // The transcript, and every path it is compared with, spelt as no disk would alter it.
+    const project = own(asked, 'project');
+    const spelt = [transcript, ...ledgers.filter(isRelative), ...(isRelative(project) ? [project] : [])];
+    if (spelt.some(endsInDotOrSpace)) refuse('with a transcript, the transcript, a ledger or the project file has a segment ending in a dot or a space');
     // No ledger, no ledger's lock (the owner's included), not the project file.
     const taken = [...ledgers, ownerRel].flatMap((rel) => [rel, `${rel}.lock`]);
-    const project = own(asked, 'project');
     if (isString(project)) taken.push(project);
     const name = diskName(transcript);
     const clash = taken.find((rel) => diskName(rel) === name);
