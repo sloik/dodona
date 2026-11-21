@@ -10,6 +10,9 @@ For one path the kernel is started with {"hex": "<the path's bytes in hex>"}
 on standard input and must print {"accepted": true} or {"refused": "<reason>"}.
 For a set it is started with {"paths": ["...", ...]} and must print
 {"collisions": [["a", "b"], ...]}, empty when no two paths collide.
+Every collision vector holds two paths. Where they collide the answer must be
+exactly one pair naming those two paths as given, in either order; where they
+do not it must be an empty list. Anything else is a mismatch.
 Exit status is 0 only if every vector matched.
 """
 from __future__ import annotations
@@ -31,6 +34,20 @@ def ask(command: list[str], payload: dict) -> dict | None:
         return answer if isinstance(answer, dict) else None
     except (OSError, subprocess.TimeoutExpired, ValueError):
         return None
+
+
+def collisions_match(answer: dict | None, paths: list[str], collide: bool) -> bool:
+    """True only for the exact answer: one pair of the vector's own two paths, or an empty list."""
+    got = answer.get("collisions") if isinstance(answer, dict) else None
+    if not isinstance(got, list):
+        return False
+    if not collide:
+        return got == []
+    if len(got) != 1 or not isinstance(got[0], list) or len(got[0]) != 2:
+        return False
+    first, second = got[0]
+    return (isinstance(first, str) and isinstance(second, str) and first != second
+            and sorted([first, second]) == sorted(paths))
 
 
 def main() -> int:
@@ -57,8 +74,9 @@ def main() -> int:
         expect(f"reject bytes {item['hex']}", ask(command + [one], {"hex": item["hex"]}), {"refused": item["reason"]})
     for item in vectors["collisions"]:
         answer = ask(command + [many], {"paths": item["paths"]})
-        collided = bool(answer and answer.get("collisions")) if answer is not None else None
-        expect(f"collision case {item['name']!r}", collided, item["collide"])
+        want = {"collisions": [item["paths"]] if item["collide"] else []}
+        got = want if collisions_match(answer, item["paths"], item["collide"]) else answer
+        expect(f"collision case {item['name']!r}", got, want)
     print(json.dumps({"vectors": total, "matched": total - failed, "all_matched": failed == 0 and total > 0}))
     return 0 if failed == 0 and total else 1
 
