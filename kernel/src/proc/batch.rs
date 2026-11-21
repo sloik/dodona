@@ -147,6 +147,11 @@ fn close_job_after_request<T>(
 struct HeldGroup<T>(Option<T>);
 
 #[cfg(any(test, unix))]
+struct RetainedExit {
+    only_group_member: bool,
+}
+
+#[cfg(any(test, unix))]
 impl<T: Copy> HeldGroup<T> {
     fn observe<R>(&mut self, look: impl FnOnce(T) -> io::Result<R>) -> io::Result<R> {
         let leader = self.0.ok_or_else(Self::lost)?;
@@ -159,18 +164,51 @@ impl<T: Copy> HeldGroup<T> {
 
     fn request(
         &mut self,
+        waitable: &mut Self,
         verify: impl FnOnce(T) -> io::Result<()>,
         signal: impl FnOnce(T) -> io::Result<()>,
-    ) -> io::Result<T> {
+        after_refusal: impl FnOnce(T, &io::Error) -> Option<RetainedExit>,
+    ) -> io::Result<()> {
         let leader = self.0.take().ok_or_else(Self::lost)?;
         verify(leader)?;
-        signal(leader)?;
-        Ok(leader)
+        let cleanup = match signal(leader) {
+            Ok(()) => Ok(()),
+            Err(error) => match after_refusal(leader, &error) {
+                Some(exit) if exit.only_group_member => Ok(()),
+                Some(_) => Err(error),
+                None => return Err(error),
+            },
+        };
+        waitable.0 = Some(leader);
+        cleanup
     }
 
     fn lost() -> io::Error {
         io::Error::other("the batch process group is no longer owned")
     }
+}
+
+#[cfg(any(test, target_os = "macos"))]
+fn inspect_darwin_refusal<T: Eq>(
+    held: T,
+    errno: Option<i32>,
+    mut observe_exit: impl FnMut() -> io::Result<bool>,
+    snapshot: impl FnOnce() -> (i32, [T; 2]),
+) -> Option<RetainedExit> {
+    const EPERM: i32 = 1; // Darwin bsd/sys/errno.h
+    if !observe_exit().ok()? {
+        return None;
+    }
+    if errno != Some(EPERM) {
+        return Some(RetainedExit {
+            only_group_member: false,
+        });
+    }
+    let (count, [first, _]) = snapshot();
+    // An unconfirmed snapshot can still leave an exact direct child to collect.
+    observe_exit().ok()?.then_some(RetainedExit {
+        only_group_member: count == 1 && first == held,
+    })
 }
 
 #[cfg(all(
@@ -179,7 +217,7 @@ impl<T: Copy> HeldGroup<T> {
     any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
 ))]
 mod platform {
-    use super::{io, Child, Command, HeldGroup, SyncSender};
+    use super::{io, Child, Command, HeldGroup, RetainedExit, SyncSender};
     use std::os::unix::process::CommandExt;
 
     #[cfg(target_os = "macos")]
@@ -239,6 +277,12 @@ mod platform {
         fn kill(pid: i32, signal: i32) -> i32;
     }
 
+    #[cfg(target_os = "macos")]
+    #[link(name = "proc")]
+    extern "C" {
+        fn proc_listpgrppids(pgid: i32, buffer: *mut std::ffi::c_void, size: i32) -> i32;
+    }
+
     #[derive(Clone, Copy)]
     struct Leader(i32);
 
@@ -274,11 +318,12 @@ mod platform {
         }
 
         pub(super) fn request_end(&mut self) -> io::Result<()> {
-            self.waitable = HeldGroup(Some(
-                self.group
-                    .request(verify_waitable_child, request_group_end)?,
-            ));
-            Ok(())
+            self.group.request(
+                &mut self.waitable,
+                verify_waitable_child,
+                request_group_end,
+                inspect_refused_group,
+            )
         }
 
         pub(super) fn verify_collection(&mut self) -> io::Result<()> {
@@ -287,8 +332,47 @@ mod platform {
     }
 
     fn verify_waitable_child(leader: Leader) -> io::Result<()> {
+        observe_owned_exit(leader).map(|_| ())
+    }
+
+    fn observe_owned_exit(leader: Leader) -> io::Result<bool> {
         require_waitable_exits()?;
-        peek(leader).map(|_| ())
+        peek(leader)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn inspect_refused_group(leader: Leader, error: &io::Error) -> Option<RetainedExit> {
+        super::inspect_darwin_refusal(
+            leader.0,
+            error.raw_os_error(),
+            || observe_owned_exit(leader),
+            || group_snapshot(leader),
+        )
+    }
+
+    #[cfg(target_os = "linux")]
+    fn inspect_refused_group(leader: Leader, _error: &io::Error) -> Option<RetainedExit> {
+        observe_owned_exit(leader).ok()?.then_some(RetainedExit {
+            only_group_member: false,
+        })
+    }
+
+    #[cfg(target_os = "macos")]
+    fn group_snapshot(leader: Leader) -> (i32, [i32; 2]) {
+        let mut members = [0i32; 2];
+        // XNU's proc_listpids scans live and zombie members under one process
+        // list lock and fills the buffer before truncating. The libproc wrapper
+        // returns an entry count and can return zero on syscall failure.
+        // SAFETY: the call accepts a held group ID, a writable C int buffer,
+        // and its byte size. Returned IDs are only compared with the owner.
+        let count = unsafe {
+            proc_listpgrppids(
+                leader.0,
+                members.as_mut_ptr().cast(),
+                std::mem::size_of_val(&members) as i32,
+            )
+        };
+        (count, members)
     }
 
     fn allows_retained_wait(handler: usize, flags: i32) -> bool {
@@ -553,7 +637,10 @@ mod platform {
 
 #[cfg(test)]
 mod tests {
-    use super::{close_job_after_request, prepare_job, try_transfer, HeldGroup, KILL_ON_JOB_CLOSE};
+    use super::{
+        close_job_after_request, inspect_darwin_refusal, prepare_job, try_transfer, HeldGroup,
+        RetainedExit, KILL_ON_JOB_CLOSE,
+    };
     use std::cell::RefCell;
     use std::io;
     use std::sync::mpsc;
@@ -638,8 +725,15 @@ mod tests {
     #[test]
     fn losing_the_verified_wait_authority_rules_out_collection_or_transfer() {
         let mut group = HeldGroup(Some(()));
-        let authority = group.request(|()| Ok(()), |()| Ok(())).unwrap();
-        let mut waitable = HeldGroup(Some(authority));
+        let mut waitable = HeldGroup(None);
+        group
+            .request(
+                &mut waitable,
+                |()| Ok(()),
+                |()| Ok(()),
+                |(), _| panic!("no refusal"),
+            )
+            .unwrap();
         assert!(waitable
             .observe(|()| Err::<(), _>(io::Error::other("ownership lost")))
             .is_err());
@@ -651,6 +745,7 @@ mod tests {
     #[test]
     fn a_fresh_check_precedes_the_only_group_request() {
         let mut group = HeldGroup(Some(()));
+        let mut waitable = HeldGroup(None);
         assert!(group.observe(|()| Ok(true)).unwrap());
         let calls = RefCell::new(Vec::new());
         let verify = |()| {
@@ -661,31 +756,150 @@ mod tests {
             calls.borrow_mut().push("signal");
             Ok(())
         };
-        assert!(group.request(verify, signal).is_ok());
-        assert!(group.request(verify, signal).is_err());
+        let after_refusal = |(), _: &io::Error| -> Option<RetainedExit> { panic!("no refusal") };
+        assert!(group
+            .request(&mut waitable, verify, signal, after_refusal)
+            .is_ok());
+        assert!(group
+            .request(&mut waitable, verify, signal, after_refusal)
+            .is_err());
         assert_eq!(calls.into_inner(), ["verify", "signal"]);
     }
 
     #[test]
     fn an_old_exit_observation_cannot_authorize_cleanup_after_loss() {
         let mut group = HeldGroup(Some(()));
+        let mut waitable = HeldGroup(None);
         assert!(group.observe(|()| Ok(true)).unwrap());
         assert!(group
-            .request(|()| Err(io::Error::other("lost")), |()| panic!("no signal"))
+            .request(
+                &mut waitable,
+                |()| Err(io::Error::other("lost")),
+                |()| panic!("no signal"),
+                |(), _| panic!("no fallback")
+            )
             .is_err());
         assert!(group
-            .request(|()| panic!("no new look"), |()| panic!("no signal"))
+            .request(
+                &mut waitable,
+                |()| panic!("no new look"),
+                |()| panic!("no signal"),
+                |(), _| panic!("no fallback")
+            )
             .is_err());
+        assert!(waitable.0.is_none());
     }
 
     #[test]
     fn observation_loss_revokes_the_group_before_cleanup() {
         let mut group = HeldGroup(Some(()));
+        let mut waitable = HeldGroup(None);
         assert!(group
             .observe::<bool>(|()| Err(io::Error::other("lost")))
             .is_err());
         assert!(group
-            .request(|()| panic!("no new look"), |()| panic!("no signal"))
+            .request(
+                &mut waitable,
+                |()| panic!("no new look"),
+                |()| panic!("no signal"),
+                |(), _| panic!("no fallback")
+            )
             .is_err());
+        assert!(waitable.0.is_none());
+    }
+
+    #[test]
+    fn cleanup_refusal_keeps_only_independently_reconfirmed_collection() {
+        for (proof, may_collect, cleanup_confirmed) in [
+            (None, false, false),
+            (
+                Some(RetainedExit {
+                    only_group_member: false,
+                }),
+                true,
+                false,
+            ),
+            (
+                Some(RetainedExit {
+                    only_group_member: true,
+                }),
+                true,
+                true,
+            ),
+        ] {
+            let mut group = HeldGroup(Some("owned child"));
+            let mut waitable = HeldGroup(None);
+            let result = group.request(
+                &mut waitable,
+                |_| Ok(()),
+                |_| Err(io::Error::other("group request refused")),
+                |owner, error| {
+                    assert_eq!(owner, "owned child");
+                    assert_eq!(error.to_string(), "group request refused");
+                    proof
+                },
+            );
+            assert_eq!(result.is_ok(), cleanup_confirmed);
+            assert_eq!(waitable.0, may_collect.then_some("owned child"));
+            assert!(group.0.is_none());
+        }
+    }
+
+    #[test]
+    fn darwin_cleanup_requires_exact_complete_membership_and_retained_exit() {
+        for (count, entries, only_group_member) in [
+            (1, ["held", "empty"], true),
+            (-1, ["held", "empty"], false),
+            (0, ["held", "empty"], false),
+            (1, ["other", "empty"], false),
+            (2, ["held", "other"], false),
+            (2, ["held", "empty"], false),
+            (3, ["held", "other"], false),
+        ] {
+            let calls = RefCell::new(Vec::new());
+            let outcome = inspect_darwin_refusal(
+                "held",
+                Some(1),
+                || {
+                    calls.borrow_mut().push("exit");
+                    Ok(true)
+                },
+                || {
+                    calls.borrow_mut().push("snapshot");
+                    (count, entries)
+                },
+            );
+            assert_eq!(outcome.unwrap().only_group_member, only_group_member);
+            assert_eq!(calls.into_inner(), ["exit", "snapshot", "exit"]);
+        }
+        for lost in [Ok(false), Err(io::Error::other("ownership lost"))] {
+            let mut observations = [Ok(true), lost].into_iter();
+            assert!(inspect_darwin_refusal(
+                "held",
+                Some(1),
+                || observations.next().unwrap(),
+                || (1, ["held", "empty"]),
+            )
+            .is_none());
+        }
+        for lost in [Ok(false), Err(io::Error::other("ownership lost"))] {
+            let mut observations = [lost].into_iter();
+            assert!(inspect_darwin_refusal(
+                "held",
+                Some(1),
+                || observations.next().unwrap(),
+                || panic!("no group lookup without an observed exit"),
+            )
+            .is_none());
+        }
+        for errno in [None, Some(13)] {
+            let outcome = inspect_darwin_refusal(
+                "held",
+                errno,
+                || Ok(true),
+                || panic!("only EPERM can trigger the snapshot"),
+            );
+            assert!(!outcome.unwrap().only_group_member);
+        }
     }
 }
