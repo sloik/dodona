@@ -9,10 +9,10 @@ the kit, then plants each defect listed in kernel/defects.json, one at a time,
 rebuilds and runs the kit again: the scenarios, the ledger cases, the core-key vectors, the check values made at test time, the reference harness, the strict reading of input, the provider session and the host checks (decision 0033). A planted defect counts as caught when the
 changed kernel builds and the kit rejects it. The unchanged kernel is run on every judge; a planted
 defect is judged until the first judge rejects it, the scenarios first and, for a defect in the
-host's own files, the host judges next. A judge that exits other than 0 rejects, unless it crashed
-(a Python traceback) or the disk was full: then the defect is UNFINISHED, never caught. A judge that
-rejects a planted defect is run a second time, and the defect counts as caught only if it rejects
-again; a rejection that does not repeat is UNFINISHED too (issue 41). A defect that names a case of a
+host's own files, the host judges next. A scenario rejection needs a complete report from the judge
+and the same named case must reject on replay. An auxiliary judge can reject with exit 1 and no
+traceback or disk-full error, and that rejection must repeat. A run that ends without this evidence
+is UNFINISHED (issue 41). A defect that names a case of a
 formal model must be rejected by a scenario that says it covers that case;
 otherwise the scenario's label is wrong. Exit status is 0 only if the
 unchanged kernel passes and every planted defect is caught, by the right
@@ -52,17 +52,23 @@ def passes_kit(kernel_dir: pathlib.Path, defect_file: str | None = None) -> tupl
     a defect is caught once any judge rejects it, and running the rest would only cost time. The
     scenarios always run first, so a defect that names a model case is judged by its scenarios."""
     manifest = str(kernel_dir / "Cargo.toml")
-    build = subprocess.run(["cargo", "build", "--release", "--quiet", "--manifest-path", manifest],
+    target = kernel_dir / "target"
+    build = subprocess.run(["cargo", "build", "--release", "--quiet", "--manifest-path", manifest,
+                            "--target-dir", str(target)],
                            capture_output=True, text=True)
     if build.returncode != 0:
         return False, ["did not build"]
-    binary = kernel_dir / "target" / "release" / ("dodona-kernel.exe" if sys.platform == "win32" else "dodona-kernel")
-    run = subprocess.run([sys.executable, str(ROOT / "tools" / "run_kit.py"), "--", str(binary), "scenario"],
-                         capture_output=True, text=True)
-    failing = [line.split()[1] for line in run.stdout.splitlines() if line.startswith("MISMATCH")]
-    ok = run.returncode == 0
+    binary = target / "release" / ("dodona-kernel.exe" if sys.platform == "win32" else "dodona-kernel")
+    verdict, failing = run_scenarios(binary)
+    if verdict == "unfinished":
+        return False, ["scenario-judge unfinished"]
+    ok = verdict == "passed"
     if not ok and defect_file is not None:
-        return ok, failing
+        repeat, repeated = run_scenarios(binary)
+        confirmed = [case for case in failing if case in repeated]
+        if repeat != "rejected" or not confirmed:
+            return False, ["scenario-judge unsteady"]
+        return False, confirmed
     judges = list(JUDGES)
     if defect_file in FIRST_JUDGE:
         first = FIRST_JUDGE[defect_file]
@@ -84,15 +90,40 @@ def passes_kit(kernel_dir: pathlib.Path, defect_file: str | None = None) -> tupl
     return ok, failing
 
 
+def run_scenarios(binary: pathlib.Path) -> tuple[str, list[str]]:
+    command = [sys.executable, str(ROOT / "tools" / "run_kit.py"), "--", str(binary), "scenario"]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+        report = json.loads(result.stdout.splitlines()[-1])
+    except (OSError, ValueError, IndexError):
+        return "unfinished", []
+    if result.stderr or not isinstance(report, dict) or report.get("unfinished") != 0:
+        return "unfinished", []
+    scenarios, matched, rejected = report.get("scenarios"), report.get("matched"), report.get("rejected")
+    if (type(scenarios) is not int or type(matched) is not int or not 0 <= matched <= scenarios or scenarios < 1
+            or not isinstance(rejected, list) or len(rejected) != scenarios - matched
+            or any(not isinstance(case, str) or not case for case in rejected)):
+        return "unfinished", []
+    if result.returncode == 0 and not rejected and report.get("all_matched") is True:
+        return "passed", []
+    if result.returncode == 1 and rejected and report.get("all_matched") is False:
+        return "rejected", rejected
+    return "unfinished", []
+
+
 def run_judge(label: str, tool: str, extra: list[str], binary: pathlib.Path) -> str:
     """Run one judge: 'passed', 'rejected', or 'unfinished' when the judge itself crashed or the
     machine could not run it, which is no rejection of the kernel."""
     before = ["--kernel"] + OTHER_KERNEL if label == "status" else []
-    other = subprocess.run([sys.executable, str(ROOT / "tools" / tool)] + before + ["--", str(binary)] + extra,
-                           capture_output=True, text=True)
+    try:
+        other = subprocess.run([sys.executable, str(ROOT / "tools" / tool)] + before + ["--", str(binary)] + extra,
+                               capture_output=True, text=True)
+    except (OSError, UnicodeError):
+        return "unfinished"
     if other.returncode == 0:
         return "passed"
-    if "Traceback (most recent call last)" in other.stderr or "No space left on device" in other.stderr + other.stdout:
+    if (other.returncode != 1 or "Traceback (most recent call last)" in other.stderr
+            or "No space left on device" in other.stderr + other.stdout):
         return "unfinished"
     return "rejected"
 
@@ -132,7 +163,7 @@ def main() -> int:
                       f"rejected only by {', '.join(failing[:4])}")
             else:
                 caught += 1
-                print(f"caught   {defect['name']}: rejected by {len(failing)} scenario(s)")
+                print(f"caught   {defect['name']}: rejected by {', '.join(failing)}")
     print(json.dumps({"defects": len(defects), "caught": caught, "all_caught": caught == len(defects)}))
     return 0 if caught == len(defects) else 1
 

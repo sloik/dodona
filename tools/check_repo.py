@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import errno
 import io
 import hashlib
 import json
@@ -20,10 +21,12 @@ import re
 import sys
 import tomllib
 import unittest
+from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import check_models  # noqa: E402
+import kit_adequacy  # noqa: E402
 import pathcheck  # noqa: E402
 import run_kit  # noqa: E402
 
@@ -1000,6 +1003,63 @@ class ToolPinTests(unittest.TestCase):
         self.assertNotEqual(host.floor_digest(self.pinned["java"]), host.floor_digest(dict(self.pinned["java"], floor="21.0.14")))
 
 
+class KitAdequacyTests(unittest.TestCase):
+    """A planted defect is credited only for a repeatable rejection, never a broken judge."""
+
+    def result(self, code, stdout="", stderr=""):
+        return subprocess.CompletedProcess([], code, stdout, stderr)
+
+    def rejected(self, case):
+        summary = {"scenarios": 1, "matched": 0, "all_matched": False, "unfinished": 0, "rejected": [case]}
+        return self.result(1, f"MISMATCH {case}\n{json.dumps(summary)}\n")
+
+    def planted(self, *results):
+        with patch.object(kit_adequacy.subprocess, "run", side_effect=[self.result(0), *results]):
+            return kit_adequacy.passes_kit(ROOT / "kernel", "src/main.rs")
+
+    def test_crashed_scenario_judge_ends_unfinished(self):
+        traceback = "Traceback (most recent call last):\n"
+        for stdout in ("", "MISMATCH plan/example\n", self.rejected("plan/example").stdout):
+            with self.subTest(stdout=stdout):
+                self.assertEqual(self.planted(self.result(1, stdout, traceback)), (False, ["scenario-judge unfinished"]))
+
+    def test_scenario_rejection_must_repeat_on_the_same_case(self):
+        first = self.rejected("plan/example")
+        self.assertEqual(self.planted(first, first), (False, ["plan/example"]))
+        self.assertEqual(self.planted(first, self.rejected("plan/other")), (False, ["scenario-judge unsteady"]))
+
+    def test_scenario_environment_failure_has_no_rejection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            folder = root / "conformance" / "kernel" / "plan"
+            folder.mkdir(parents=True)
+            (folder / "example.json").write_text('{"steps": [{"do": {}, "expect": {}}]}', encoding="utf-8")
+            for failure in (OSError(errno.ENOSPC, "No space left on device"), FileNotFoundError(),
+                            subprocess.TimeoutExpired("kernel", 60), self.result(-15)):
+                with self.subTest(failure=failure), contextlib.redirect_stdout(io.StringIO()) as output, \
+                        patch.object(run_kit, "ROOT", root), patch.object(run_kit.sys, "argv", ["run_kit.py", "--", "kernel"]), \
+                        patch.object(run_kit.subprocess, "run", side_effect=[failure]):
+                    self.assertEqual(run_kit.main(), 2)
+                    summary = json.loads(output.getvalue().splitlines()[-1])
+                    self.assertEqual((summary["unfinished"], summary["rejected"], summary["all_matched"]), (1, [], False))
+
+    def test_auxiliary_judge_signal_and_usage_error_are_unfinished(self):
+        for code in (-15, 2):
+            with self.subTest(code=code), patch.object(kit_adequacy.subprocess, "run", return_value=self.result(code)):
+                self.assertEqual(kit_adequacy.run_judge("ledger", "run_ledger_cases.py", [], ROOT / "kernel"), "unfinished")
+
+    def test_a_batch_builds_into_its_own_copy(self):
+        summary = {"scenarios": 1, "matched": 1, "all_matched": True, "unfinished": 0, "rejected": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = pathlib.Path(tmp) / "kernel"
+            with patch.object(kit_adequacy, "JUDGES", ()), \
+                    patch.object(kit_adequacy.subprocess, "run", side_effect=[self.result(0), self.result(0, json.dumps(summary))]) as run:
+                self.assertEqual(kit_adequacy.passes_kit(copy), (True, []))
+            build = run.call_args_list[0].args[0]
+            self.assertIn("--target-dir", build)
+            self.assertEqual(build[build.index("--target-dir") + 1], str(copy / "target"))
+
+
 class JudgeTests(unittest.TestCase):
     """The judge must never turn an unfinished or wrong run into a match."""
 
@@ -1062,6 +1122,7 @@ def main() -> int:
         check()
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(JudgeTests)
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ToolPinTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitAdequacyTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:
         print("PROBLEM", line)
