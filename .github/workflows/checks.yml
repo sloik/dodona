@@ -187,10 +187,16 @@ jobs:
         include:
           - system: linux
             os: ubuntu-26.04
+            python: python3
+            rust_kernel: kernel/target/release/dodona-kernel
           - system: macos
             os: macos-26
+            python: python3
+            rust_kernel: kernel/target/release/dodona-kernel
           - system: windows
             os: windows-2025
+            python: python
+            rust_kernel: kernel/target/release/dodona-kernel.exe
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -207,7 +213,17 @@ jobs:
           cargo --version
           node --version
       - name: Judge the first kernel's private run module
-        run: cargo test --locked --manifest-path kernel/Cargo.toml --bin dodona-kernel 'project_status::run_input::'
+        run: cargo test --locked --manifest-path kernel/Cargo.toml --bin dodona-kernel 'project_status::'
       - name: Judge the second kernel's private run module
         if: ${{ !cancelled() }}
         run: node --test kernel2/test-run.js
+      - name: Build the two-command first kernel
+        id: build_run
+        if: ${{ !cancelled() }}
+        run: cargo build --release --locked --manifest-path kernel/Cargo.toml
+      - name: Judge the first kernel run with the complete project fixture set
+        if: ${{ !cancelled() && steps.build_run.outcome == 'success' }}
+        run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js --status "${{ matrix.rust_kernel }} status" -- ${{ matrix.rust_kernel }} run
+      - name: Judge the second kernel run with the complete project fixture set
+        if: ${{ !cancelled() && steps.build_run.outcome == 'success' }}
+        run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel ${{ matrix.rust_kernel }} --status "node kernel2/dodona-kernel2.js status" -- node kernel2/dodona-kernel2.js run
