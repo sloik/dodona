@@ -57,8 +57,9 @@ def canonical_sorted(items) -> list[str]:
 
 
 def relpath_ok(rel) -> bool:
-    """Relative, and the same on every system: no drive (no `:`), no backslash, no empty, `.` or `..` segment."""
-    return isinstance(rel, str) and bool(rel) and not rel.startswith("/") and "\\" not in rel and ":" not in rel \
+    """Relative, and the same on every system: no drive (no `:`), no backslash, no NUL (no file's name holds one), no
+    empty, `.` or `..` segment."""
+    return isinstance(rel, str) and bool(rel) and not rel.startswith("/") and "\\" not in rel and ":" not in rel and "\0" not in rel \
         and all(seg not in ("", ".", "..") for seg in rel.split("/"))
 
 
