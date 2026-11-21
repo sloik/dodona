@@ -456,6 +456,30 @@ test('status: an evidence entry with a wrongly typed field is not a record and i
   }
 });
 
+test('status: an obligation named __proto__ is kept as its own name in the report', () => {
+  const { plain } = require('./plain');
+  const { runScenario } = require('./scenario');
+  const name = '__proto__';
+  const pre = { obligation: 'sha256:a', kind: 'check', inputs: { targets: ['sha256:1'] }, provider: { name: 'p', version: '1', protocol: '0.2' } };
+  const scenario = {
+    kind: 'status',
+    self: { writer: 'k', platform: 'p1' },
+    policy: { min_hard_gates: 1, required: [], trusted_writers: [], floors: {}, attestors: {}, makes: [] },
+    // A computed key: a literal `__proto__:` would set the prototype and define nothing.
+    obligations: { [name]: { preimage: pre } },
+    intents: { i: { owner: 'o', worker: 'w', children: [], criteria: { c: { gate: 'hard', checked_by: [name] } } } },
+    steps: [{ do: { append: { kind: 'evidence', body: { obligation: name, preimage: pre, core_key: identity.identityOf(pre), platform: 'p1', verdict: 'passed', writer: 'k' } } } }],
+  };
+  // Written out and read back as the status command reads what it judged.
+  const read = strictJson.read(JSON.stringify(scenario));
+  assert.equal(read.refused, undefined);
+  const last = runScenario(plain(read.value)).results.at(-1);
+  assert.ok(Object.hasOwn(last.obligations, name));
+  assert.equal(JSON.stringify(last.obligations), '{"__proto__":{"status":"passed"}}');
+  assert.deepEqual(last.intents.i.score, { met: 1, of: 1 });
+  assert.equal(last.intents.i.shown.level, 'asserted');
+});
+
 test('evidence: the reason is the attempt asked for last, not the one that ended last', () => {
   const steps = [
     { submit: { obligation: 'o', as: 'j1' } }, { backend: { to: 'down' } }, { submit: { obligation: 'o', as: 'j2' } },

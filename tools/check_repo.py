@@ -782,6 +782,15 @@ def gap_run_refuses_ambiguous_write_paths() -> None:
         problems.append(f"tools/project_run.py: must refuse ambiguous write paths in {changed}")
 
 
+def gap_status_keeps_literal_obligation_names() -> None:
+    """A name that is special to a language still needs a passing case in the project status kit."""
+    path = ROOT / "conformance" / "project" / "cases.json"
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    if not any(case.get("expect", {}).get("status", {}).get("obligations", {}).get("__proto__") == "passed"
+               for case in spec["cases"]):
+        problems.append("conformance/project/cases.json: no status case for a passed obligation named __proto__")
+
+
 def gap_every_check_is_listed() -> None:
     """A gap check that nobody can find the reason for will be deleted by mistake."""
     listed = (ROOT / "docs" / "gap-checks.md").read_text(encoding="utf-8")
@@ -957,6 +966,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
+              gap_status_keeps_literal_obligation_names,
               gap_thin_coverage_is_shown, gap_documents_follow_the_code]
 
 
