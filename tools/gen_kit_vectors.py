@@ -390,6 +390,7 @@ def ledger() -> None:
                           "then": {"append": {"kind": "evidence", "body": {"obligation": "ob-10", "verdict": "failed"}},
                                    "file": text + line(note) + line({"previous": canonical.identity(note), "kind": "evidence", "body": {"obligation": "ob-10", "verdict": "failed"}})}},
         "bad_requests": [{"name": "no kind", "request": {"body": {"obligation": "ob-9"}}},
+                         {"name": "a body that would nest the entry 65 levels deep", "request": {"kind": "note", "body": nested(64)}},
                          {"name": "a kind that is a number", "request": {"kind": 7, "body": {"obligation": "ob-9"}}},
                          {"name": "a kind that is null", "request": {"kind": None, "body": {"obligation": "ob-9"}}},
                          {"name": "no body", "request": {"kind": "evidence"}}]})
