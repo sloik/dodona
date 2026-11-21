@@ -38,9 +38,9 @@ def _note(kind):
                 handle.write(nonce)
         except OSError:
             pass
-def wait():
+def wait(rounds=6000):
     probe, stop, told = os.environ.get("DODONA_TEST_PROBE"), os.environ.get("DODONA_TEST_STOP"), False
-    for _ in range(6000):
+    for _ in range(rounds):
         if not told and probe and os.path.exists(probe):
             _note("alive")
             told = True

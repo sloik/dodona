@@ -20,6 +20,7 @@ import subprocess
 import re
 import sys
 import tomllib
+import types
 import unittest
 from unittest.mock import patch
 
@@ -29,6 +30,7 @@ import check_models  # noqa: E402
 import kit_adequacy  # noqa: E402
 import pathcheck  # noqa: E402
 import run_attest_check  # noqa: E402
+import run_check_cases  # noqa: E402
 import run_harness_check  # noqa: E402
 harness = run_harness_check.harness
 import run_input_cases  # noqa: E402
@@ -2548,6 +2550,226 @@ class ProviderJudgeTests(unittest.TestCase):
             self.assertIn(name, fixture)
 
 
+class CheckHostJudgeTests(unittest.TestCase):
+    """The host-check judge (tools/run_check_cases.py) judges only an answer the host completed with exit 0 (issue 41).
+    A host that exited other than 0 after printing a valid refusal, could not start or ran out of time, printed no
+    JSON object, or left records that cannot be read is unfinished, never a match or a mismatch. A completed wrong
+    answer is a mismatch named in `rejected` by its label and content digest. Only the ten curated preflight refusals
+    may leave no transcript and no process id. Every host is a stand-in: no process is started, probed or signalled.
+    The stand-in also answers the judge before issue 41, which started the host through Popen and a pipe."""
+
+    spec = json.loads((ROOT / "conformance" / "provider" / "check-cases.json").read_text(encoding="utf-8"))
+    TRUSTED = ("bad-input", "unknown-file")
+
+    def preflight(self):
+        """The trusted preflight rows, from the curated expectation alone."""
+        return [i for i, c in enumerate(self.spec["cases"])
+                if c.get("outcome") == "refused" and c.get("reason") in self.TRUSTED and c.get("runs") == 0]
+
+    @staticmethod
+    def label(case):
+        return f"{case['mode']} ({case['run']}) [{run_check_cases.case_id(case)}]"
+
+    def judge(self, cases, override=None, platform=None):
+        """Run the judge on `cases` with a stand-in host. `override` maps a case's index in `cases` to another exit
+        code, standard output, transcript, run record or pid file (None removes the file), or an exception."""
+        override = override or {}
+        platform = platform or sys.platform
+        order = [i for i, c in enumerate(cases) if platform not in c.get("not_on", [])]
+        sent: list = []
+        destructive: list = []
+        self.pipes = []
+
+        def behave(env, given):
+            i = order[len(sent)]
+            sent.append(given)
+            case, change = cases[i], override.get(i, {})
+            for name, key in (("transcript", "DODONA_TEST_SEEN"), ("runs", "DODONA_EXECUTOR_RECORD"),
+                              ("pids", "DODONA_TEST_PIDFILE")):
+                if name in change:
+                    path = pathlib.Path(env[key])
+                    if change[name] is None:
+                        path.unlink()
+                    else:
+                        path.write_text(change[name], encoding="utf-8")
+            if "raise" in change:
+                raise change["raise"]
+            right = {k: case[k] for k in ("outcome", "verdict", "reason") if k in case}
+            return change.get("code", 0), change.get("stdout", json.dumps(right).encode("utf-8"))
+
+        def run(command, **kwargs):
+            if command != ["host"]:
+                destructive.append(command)
+                raise OSError("no command but the host is started in these tests")
+            self.pipes.append(subprocess.PIPE in (kwargs.get("stdin"), kwargs.get("stdout")) or "input" in kwargs)
+            given = kwargs["stdin"].read() if hasattr(kwargs.get("stdin"), "read") else kwargs.get("input")
+            code, stdout = behave(kwargs["env"], given)
+            if hasattr(kwargs.get("stdout"), "write"):
+                kwargs["stdout"].write(stdout)
+                stdout = None
+            return subprocess.CompletedProcess(command, code, stdout, None)
+
+        class Popen:  # how the judge before issue 41 started the host
+            def __init__(self, command, **kwargs):
+                if command != ["host"]:
+                    destructive.append(command)
+                    raise OSError("no command but the host is started in these tests")
+                self.env, self.returncode = kwargs["env"], None
+
+            def communicate(self, input=None, timeout=None):
+                self.returncode, stdout = behave(self.env, input)
+                return stdout, None
+
+            def kill(self):
+                destructive.append(("kill", "host"))
+
+        def kill(pid, sig):
+            if sig != 0:
+                destructive.append(("kill", pid, sig))
+            raise ProcessLookupError()
+
+        made = tempfile.mkdtemp
+        fake_sys = types.SimpleNamespace(platform=platform, argv=["run_check_cases.py", "--", "host"],
+                                         executable=sys.executable, path=sys.path)
+        with tempfile.TemporaryDirectory() as base, tempfile.TemporaryDirectory() as kit:
+            pathlib.Path(kit, "check-cases.json").write_text(json.dumps({"cases": cases}), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()) as output, \
+                    patch.object(run_check_cases, "sys", fake_sys), \
+                    patch.object(run_check_cases, "KIT", pathlib.Path(kit)), \
+                    patch.object(run_check_cases.subprocess, "run", side_effect=run), \
+                    patch.object(run_check_cases.subprocess, "Popen", Popen), \
+                    patch.object(run_check_cases.os, "kill", side_effect=kill), \
+                    patch.object(run_check_cases.tempfile, "mkdtemp",
+                                 side_effect=lambda suffix=None, prefix=None, dir=None: made(suffix, prefix, base)), \
+                    patch.object(run_check_cases.time, "sleep", side_effect=lambda seconds: None), \
+                    patch.object(run_provider_cases, "observe", side_effect=lambda pid, deadline: "gone"):
+                code = run_check_cases.main()
+        lines = output.getvalue().splitlines()
+        return code, json.loads(lines[-1]), lines[:-1], sent, destructive
+
+    def only_preflight(self):
+        return [self.spec["cases"][i] for i in self.preflight()]
+
+    def test_the_census_is_the_curated_one(self):
+        cases = self.spec["cases"]
+        pre = self.preflight()
+        self.assertEqual(len(cases), 132)
+        self.assertEqual(sorted(cases[i]["reason"] for i in pre), ["bad-input"] * 8 + ["unknown-file"] * 2)
+        self.assertEqual(sum("win32" in c.get("not_on", []) for c in cases), 3)
+        # The judge's own preflight is read from the curated case alone, and names exactly these ten.
+        self.assertEqual([i for i, c in enumerate(cases) if run_check_cases.preflight(c)], pre)
+        self.assertFalse(run_check_cases.preflight(dict(cases[pre[0]], outcome="verdict")))
+        self.assertFalse(run_check_cases.preflight(dict(cases[pre[0]], runs=1)))
+        # Every case has its own stable identifier of its whole content, beside its readable label.
+        ids = [run_check_cases.case_id(c) for c in cases]
+        self.assertEqual(len(set(ids)), len(cases))
+        self.assertEqual(ids, [run_check_cases.case_id(json.loads(json.dumps(c))) for c in cases])
+
+    def test_valid_refusals_with_exit_0_match_and_the_report_is_typed(self):
+        code, summary, lines, _, destructive = self.judge(self.only_preflight())
+        self.assertEqual((code, summary), (0, {"cases": 10, "judged": 10, "skipped": 0, "matched": 10,
+                                               "all_matched": True, "unfinished": 0, "rejected": []}))
+        self.assertEqual(lines, [f"match    {self.label(c)}" for c in self.only_preflight()])
+        self.assertEqual(destructive, [])
+
+    def test_a_valid_refusal_with_a_nonzero_exit_is_unfinished(self):
+        # The red of issue 41 here: a valid refusal printed by a host that exited 1 was a match.
+        for exit_code in (1, 2, -9, 0xC0000005):
+            with self.subTest(exit_code=exit_code):
+                code, summary, lines, _, _ = self.judge(self.only_preflight(), {0: {"code": exit_code}})
+                self.assertEqual((code, summary.get("unfinished"), summary.get("rejected"), summary.get("matched")),
+                                 (2, 1, [], 9))
+                self.assertTrue(lines[0].startswith("UNFINISHED "))
+
+    def test_exit_0_without_a_json_object_naming_an_outcome_is_unfinished(self):
+        for stdout in (b"not json", b"", b"[]", b"\xff\xfe", b'{"outcome": NaN}', b'{"reason": "bad-input"}',
+                       b'{"outcome": 1}', b"{} {}", b"x" * (run_check_cases.ANSWER_LIMIT + 1)):
+            with self.subTest(stdout=stdout[:20]):
+                code, summary, lines, _, _ = self.judge(self.only_preflight(), {0: {"stdout": stdout}})
+                self.assertEqual((code, summary.get("unfinished"), summary.get("rejected")), (2, 1, []))
+                self.assertTrue(lines[0].startswith("UNFINISHED "))
+
+    def test_a_completed_wrong_answer_is_a_named_mismatch(self):
+        cases = self.only_preflight()
+        for answer in ({"outcome": "refused", "reason": "closed"}, {"outcome": "verdict", "verdict": "passed"}):
+            with self.subTest(answer=answer):
+                code, summary, lines, _, _ = self.judge(cases, {0: {"stdout": json.dumps(answer).encode("utf-8")}})
+                self.assertEqual((code, summary.get("unfinished"), summary.get("rejected"), summary.get("matched")),
+                                 (1, 0, [self.label(cases[0])], 9))
+                self.assertTrue(lines[0].startswith(f"MISMATCH {self.label(cases[0])}: "))
+
+    def test_a_host_that_could_not_start_or_ran_out_of_time_is_unfinished(self):
+        for failure in (FileNotFoundError(), OSError(errno.ENOSPC, "No space left on device"),
+                        subprocess.TimeoutExpired("host", run_check_cases.HOST_SECONDS)):
+            with self.subTest(failure=failure):
+                code, summary, _, _, destructive = self.judge(self.only_preflight(), {0: {"raise": failure}})
+                self.assertEqual((code, summary.get("unfinished"), summary.get("rejected")), (2, 1, []))
+                self.assertEqual(destructive, [])
+
+    def test_records_that_cannot_be_read_are_unfinished(self):
+        cases = self.only_preflight()
+        for name, change in {"malformed run record": {"runs": "{not json\n"},
+                             "run record not objects": {"runs": "[1]\n"},
+                             "run record removed": {"runs": None},
+                             "malformed transcript": {"transcript": "{not json\n"},
+                             "transcript removed": {"transcript": None},
+                             "pid file not ids": {"pids": "abc\n"},
+                             "pid file removed": {"pids": None}}.items():
+            with self.subTest(name=name):
+                code, summary, lines, _, _ = self.judge(cases, {0: change})
+                self.assertEqual((code, summary.get("unfinished"), summary.get("rejected")), (2, 1, []))
+                self.assertTrue(lines[0].startswith("UNFINISHED ") and "kept as evidence" in lines[0])
+
+    def test_only_a_trusted_preflight_may_leave_no_checker_record(self):
+        # A case the host must take to the provider, answered rightly but with no transcript and no process id:
+        # the checker was never seen, so nothing about the host follows. The old judge called it a mismatch.
+        others = [c for i, c in enumerate(self.spec["cases"]) if i not in self.preflight()][:3]
+        code, summary, lines, _, _ = self.judge(others)
+        self.assertEqual((code, summary.get("unfinished"), summary.get("rejected")), (2, 3, []))
+        self.assertTrue(all(line.startswith("UNFINISHED ") for line in lines))
+        # A preflight case whose answer is wrong is judged on its curated expectation, not on what was answered.
+        wrong = json.dumps({"outcome": "verdict", "verdict": "passed"}).encode("utf-8")
+        code, summary, _, _, _ = self.judge(self.only_preflight(), {0: {"stdout": wrong}})
+        self.assertEqual((code, summary.get("unfinished")), (1, 0))
+
+    def test_the_whole_census_on_each_platform(self):
+        total = len(self.spec["cases"])
+        for platform, skipped in (("linux", 0), ("darwin", 0), ("win32", 3)):
+            with self.subTest(platform=platform):
+                code, summary, lines, sent, destructive = self.judge(self.spec["cases"], platform=platform)
+                judged = total - skipped
+                self.assertEqual((summary.get("cases"), summary.get("judged"), summary.get("skipped")),
+                                 (total, judged, skipped))
+                self.assertEqual((len(sent), destructive), (judged, []))
+                self.assertEqual(summary["matched"] + summary["unfinished"] + len(summary["rejected"]), judged)
+                self.assertEqual((summary["matched"], summary["unfinished"], code), (10, judged - 10, 2))
+                self.assertEqual(sum(line.startswith("skip     ") for line in lines), skipped)
+
+    def test_the_exact_text_is_given_through_private_files_not_pipes(self):
+        index = next(i for i, c in enumerate(self.spec["cases"]) if "input_text" in c)
+        case = self.spec["cases"][index]
+        _, _, _, sent, _ = self.judge([case])
+        self.assertEqual((sent, self.pipes), ([case["input_text"].encode("utf-8")], [False]))
+
+    def test_the_judge_has_no_way_to_signal_a_recorded_process(self):
+        source = (ROOT / "tools" / "run_check_cases.py").read_text(encoding="utf-8")
+        for word in ("os.kill", "SIGKILL", "SIGTERM", "taskkill", "tasklist", "TerminateProcess", "killpg", ".kill(",
+                     ".terminate(", "Popen", "communicate", "PIPE"):
+            self.assertNotIn(word, source)
+        self.assertEqual(source.count("subprocess.run("), 1)  # the host, ended on timeout through its own handle
+        self.assertFalse(hasattr(run_check_cases, "alive"))
+        # The probe and stop are the provider judge's own, not a copy.
+        self.assertIn("observing.watch_fixture(", source)
+        self.assertNotIn("PROBE_SECONDS", source)
+        for fixture in ("misbehaving_checker.py", "fake_executor.py"):
+            text = (ROOT / "conformance" / "provider" / fixture).read_text(encoding="utf-8")
+            self.assertIn("from misbehaving_provider import POLL", text)
+            self.assertNotIn("time.sleep(6", text)  # the processes left behind wait cooperatively, not by a bare sleep
+        # Every intentional wait of the checker answers the stop file; the executor's `slow` report delay is its own.
+        checker = (ROOT / "conformance" / "provider" / "misbehaving_checker.py").read_text(encoding="utf-8")
+        self.assertNotIn("time.sleep(", checker)
+
+
 class PlantJsTests(unittest.TestCase):
     """Keep the standalone JavaScript runner tests registered in hosted CI."""
 
@@ -2897,6 +3119,7 @@ def main() -> int:
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(AttestJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(HarnessJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ProviderJudgeTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(CheckHostJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(StatusJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(RunJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantJsTests))
