@@ -29,6 +29,7 @@ import check_models  # noqa: E402
 import kit_adequacy  # noqa: E402
 import pathcheck  # noqa: E402
 import run_input_cases  # noqa: E402
+import run_key_vectors  # noqa: E402
 import run_kit  # noqa: E402
 import run_ledger_cases  # noqa: E402
 
@@ -1048,7 +1049,7 @@ class KitAdequacyTests(unittest.TestCase):
     def test_auxiliary_judge_signal_and_usage_error_are_unfinished(self):
         for code in (-15, 2):
             with self.subTest(code=code), patch.object(kit_adequacy.subprocess, "run", return_value=self.result(code)):
-                self.assertEqual(kit_adequacy.run_judge("core-key", "run_key_vectors.py", ["key"], ROOT / "kernel"), "unfinished")
+                self.assertEqual(kit_adequacy.run_judge("attest", "run_attest_check.py", ["scenario"], ROOT / "kernel"), "unfinished")
 
     # The ledger judge ends with the scenarios' footer, its count under `checks` (issue 41).
     def ledger(self, code, rejected, unfinished=0, key="checks", all_matched=None, before=""):
@@ -1097,9 +1098,42 @@ class KitAdequacyTests(unittest.TestCase):
                 self.assertEqual(self.after_scenarios(answer), (False, ["ledger-judge unfinished"]))
 
     def test_other_auxiliary_judges_keep_their_exit_status_treatment(self):
-        failed = self.result(1, "MISMATCH key vector\n")
-        self.assertEqual(self.after_scenarios(self.ledger(0, []), failed, failed), (False, ["core-key-judge"]))
-        self.assertEqual(self.after_scenarios(self.ledger(0, []), failed, self.result(0)), (False, ["core-key-judge unsteady"]))
+        failed = self.result(1, "MISMATCH attest\n")
+        passed = self.key_report(0, [])
+        self.assertEqual(self.after_scenarios(self.ledger(0, []), passed, failed, failed), (False, ["attest-judge"]))
+        self.assertEqual(self.after_scenarios(self.ledger(0, []), passed, failed, self.result(0)), (False, ["attest-judge unsteady"]))
+
+    # The core-key judge ends with the same footer, its count under `vectors`; it runs after the ledger judge (issue 41).
+    def key_report(self, code, rejected, unfinished=0, key="vectors"):
+        summary = {key: 23, "matched": 23 - len(rejected) - unfinished, "unfinished": unfinished, "rejected": rejected,
+                   "all_matched": not rejected and not unfinished}
+        lines = "".join(f"MISMATCH {case}: expected {{}}, got {{}}\n" for case in rejected)
+        return self.result(code, lines + json.dumps(summary) + "\n")
+
+    def at_key(self, *results):
+        return self.after_scenarios(self.ledger(0, []), *results)
+
+    def test_core_key_rejection_is_credited_with_the_vectors_that_repeat(self):
+        both = ["unsorted closure", "platform field"]
+        self.assertEqual(self.at_key(self.key_report(1, both), self.key_report(1, ["platform field"])),
+                         (False, ["core-key-judge: platform field"]))
+
+    def test_core_key_replay_on_another_vector_or_unfinished_is_unsteady(self):
+        first = self.key_report(1, ["unsorted closure"])
+        for second in (self.key_report(1, ["platform field"]), self.key_report(0, []), self.key_report(2, [], unfinished=1),
+                       self.result(1, "MISMATCH unsorted closure: expected {}, got None\n")):
+            with self.subTest(second=second.stdout):
+                self.assertEqual(self.at_key(first, second), (False, ["core-key-judge unsteady"]))
+
+    def test_core_key_report_that_is_unfinished_or_of_the_old_shape_is_unfinished(self):
+        # The old judge turned a timeout into exit 1 with this footer; two of them in a row were credited as a catch.
+        old = self.result(1, "MISMATCH unsorted closure: expected {}, got None\n"
+                          + json.dumps({"vectors": 23, "matched": 0, "all_matched": False}) + "\n")
+        for answer in (old, self.key_report(2, [], unfinished=23), self.key_report(2, ["unsorted closure"], unfinished=1),
+                       self.result(1, "MISMATCH unsorted closure\n"), self.key_report(1, ["unsorted closure"], key="cases"),
+                       self.result(-15, self.key_report(1, ["unsorted closure"]).stdout)):
+            with self.subTest(answer=answer.stdout):
+                self.assertEqual(self.at_key(answer, answer), (False, ["core-key-judge unfinished"]))
 
     # The strict-input judge ends with the same footer, its count under `cases`; it runs after the ledger, core-key,
     # attest and harness judges (issue 41).
@@ -1109,7 +1143,7 @@ class KitAdequacyTests(unittest.TestCase):
         return self.result(code, "".join(f"MISMATCH {case} (exit 0)\n" for case in rejected) + json.dumps(summary) + "\n")
 
     def at_input(self, *results):
-        return self.after_scenarios(self.ledger(0, []), self.result(0), self.result(0), self.result(0), *results)
+        return self.after_scenarios(self.ledger(0, []), self.key_report(0, []), self.result(0), self.result(0), *results)
 
     def test_input_rejection_is_credited_with_the_cases_that_repeat(self):
         key = "a key repeated in one object is refused"
@@ -1342,6 +1376,86 @@ class InputJudgeTests(unittest.TestCase):
             sent[5].decode("utf-8")
 
 
+class KeyVectorJudgeTests(unittest.TestCase):
+    """The core-key judge names a completed wrong answer, and never reports a key command that did not finish as one.
+    A kernel refuses a preimage with exit 0 and `{"refused": ...}`, so any other exit is no answer (issue 41)."""
+
+    @staticmethod
+    def vectors():
+        cases = []
+        for name in ("core-key.json", "core-key-more.json"):
+            data = json.loads((ROOT / "conformance" / "vectors" / name).read_text(encoding="utf-8"))
+            cases += [(v["name"], {"core_key": v["core_key"]}) for v in data.get("accept", [])]
+            cases += [(v["name"], {"refused": v["reason"]}) for v in data.get("reject", [])]
+        return cases
+
+    @staticmethod
+    def answered(want, code=0):
+        stdout = want if isinstance(want, bytes) else json.dumps(want).encode("utf-8")
+        return subprocess.CompletedProcess(["kernel", "key"], code, stdout, b"")
+
+    def right(self):
+        return [self.answered(want) for _, want in self.vectors()]
+
+    def judge(self, answers):
+        argv = ["run_key_vectors.py", "--", "kernel", "key"]
+        with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_key_vectors.sys, "argv", argv), \
+                patch.object(run_key_vectors.subprocess, "run", side_effect=answers) as run:
+            code = run_key_vectors.main()
+        return code, json.loads(output.getvalue().splitlines()[-1]), run.call_args_list
+
+    def test_every_right_answer_passes(self):
+        total = len(self.vectors())
+        code, summary, calls = self.judge(self.right())
+        self.assertEqual((code, summary), (0, {"vectors": total, "matched": total, "all_matched": True,
+                                               "unfinished": 0, "rejected": []}))
+        self.assertEqual([call.args[0] for call in calls], [["kernel", "key"]] * total)
+
+    def test_a_completed_wrong_answer_is_a_named_rejection(self):
+        cases = self.vectors()
+        for wrong in ({}, b"not json", b"", b"\xff", {"refused": "unknown-field"}):
+            answers = self.right()
+            answers[0] = self.answered(wrong)
+            answers[-1] = self.answered({"core_key": "0" * 64})
+            with self.subTest(wrong=wrong):
+                code, summary, _ = self.judge(answers)
+                self.assertEqual((code, summary["unfinished"], summary["all_matched"]), (1, 0, False))
+                self.assertEqual(summary["rejected"], [cases[0][0], cases[-1][0]])
+                self.assertEqual((summary["vectors"], summary["matched"]), (len(cases), len(cases) - 2))
+
+    def test_a_key_command_that_did_not_finish_is_unfinished_not_a_mismatch(self):
+        right = self.right()[0].stdout
+        for failure in (FileNotFoundError(), OSError(errno.ENOSPC, "No space left on device"),
+                        subprocess.TimeoutExpired("kernel", 30), self.answered(right, -15), self.answered(right, 1),
+                        self.answered(b"", 101), self.answered(right, 0xC0000005)):
+            for at in (0, -1):
+                answers = self.right()
+                answers[at] = failure
+                with self.subTest(failure=failure, at=at):
+                    code, summary, _ = self.judge(answers)
+                    self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["all_matched"]), (2, 1, [], False))
+                    self.assertEqual(summary["matched"], summary["vectors"] - 1)
+
+    def test_every_key_command_timing_out_is_unfinished(self):
+        # What a reviewer saw: every vector timed out, and the judge reported exit 1 with 0 matched.
+        code, summary, _ = self.judge([subprocess.TimeoutExpired("kernel", 30)] * len(self.vectors()))
+        self.assertEqual(code, 2)
+        self.assertEqual((summary["unfinished"], summary["rejected"], summary["matched"]), (len(self.vectors()), [], 0))
+
+    def test_a_mismatch_then_an_unfinished_answer_leaves_the_run_unfinished(self):
+        answers = self.right()
+        answers[0] = self.answered({})
+        answers[1] = subprocess.TimeoutExpired("kernel", 30)
+        code, summary, _ = self.judge(answers)
+        self.assertEqual((code, summary["unfinished"], summary["all_matched"]), (2, 1, False))
+        self.assertEqual(summary["rejected"], [self.vectors()[0][0]])
+
+    def test_vectors_that_cannot_be_read_leave_the_run_unfinished(self):
+        with patch.object(pathlib.Path, "read_text", side_effect=OSError(errno.ENOSPC, "No space left on device")):
+            code, summary, calls = self.judge([])
+        self.assertEqual((code, summary["vectors"], summary["unfinished"], summary["all_matched"], calls), (2, 0, 1, False, []))
+
+
 class PlantJsTests(unittest.TestCase):
     """Keep the standalone JavaScript runner tests registered in hosted CI."""
 
@@ -1435,6 +1549,7 @@ def main() -> int:
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitAdequacyTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(LedgerJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(InputJudgeTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KeyVectorJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantJsTests))
     result = unittest.TextTestRunner(verbosity=1).run(suite)
     for line in problems:

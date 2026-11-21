@@ -33,6 +33,12 @@ const input = (rejected, { status = rejected.length ? 1 : 0, unfinished = 0, key
     [key]: 6, matched: 6 - rejected.length - unfinished, unfinished, rejected,
     all_matched: rejected.length === 0 && unfinished === 0,
   }) + '\n');
+// What tools/run_key_vectors.py prints: a line per wrong answer, then the same footer with its count under `vectors`.
+const keys = (rejected, { status = rejected.length ? 1 : 0, unfinished = 0, key = 'vectors' } = {}) =>
+  done(status, rejected.map((c) => `MISMATCH ${c}: expected {}, got {}\n`).join('') + JSON.stringify({
+    [key]: 23, matched: 23 - rejected.length - unfinished, unfinished, rejected,
+    all_matched: rejected.length === 0 && unfinished === 0,
+  }) + '\n');
 
 // A spawn that answers each process, named by its tool, from a queue; one with nothing queued accepts the copy.
 function fake(answers, onJudge = () => {}) {
@@ -51,6 +57,7 @@ function fake(answers, onJudge = () => {}) {
     if (name === 'loads') return done(0, '{"canonical":"{}","sha256":"0"}');
     if (name === 'run_kit') return kit([]);
     if (name === 'run_input_cases') return input([]);
+    if (name === 'run_key_vectors') return keys([]);
     return name === 'run_ledger_cases' ? ledger([]) : done(0);
   };
   return { spawn, calls };
@@ -155,14 +162,45 @@ test('a strict-input report that is unfinished, partial or of the old shape is n
   }
 });
 
-// The other auxiliary judges name no case the runner reads; run_key_vectors stands for them.
+test('a core-key rejection that repeats on a named vector is credited with the vectors that repeated', () => {
+  assert.deepEqual(judge({ run_key_vectors: [keys(['unsorted closure', 'platform field']), keys(['platform field'])] }),
+    { outcome: 'rejected', name: 'run_key_vectors', mismatch: true, cases: ['platform field'] });
+});
+
+test('a core-key replay that names another vector, accepts or does not finish is not credited', () => {
+  for (const second of [keys(['platform field']), keys([]), keys([], { status: 2, unfinished: 1 }),
+    done(1, 'MISMATCH unsorted closure: expected {}, got None\n'), killed('SIGTERM')]) {
+    assert.deepEqual(judge({ run_key_vectors: [keys(['unsorted closure']), second] }),
+      unfinished('run_key_vectors', 'did not reject again on replay'));
+  }
+});
+
+test('a core-key report that is unfinished or of the old shape is not credited, even when it repeats', () => {
+  // The old judge turned a timeout into exit 1 with this footer; two of them in a row were credited as a catch.
+  const old = done(1, 'MISMATCH unsorted closure: expected {}, got None\n'
+    + JSON.stringify({ vectors: 23, matched: 0, all_matched: false }) + '\n');
+  const cases = {
+    old_footer: old,
+    every_vector_timed_out: keys([], { status: 2, unfinished: 23 }),
+    unfinished_after_a_mismatch: keys(['unsorted closure'], { status: 2, unfinished: 1 }),
+    exit_status_only: done(1, 'MISMATCH key\n'),
+    cases_key: keys(['unsorted closure'], { key: 'cases' }),
+    signal: killed('SIGTERM'),
+    launch_error: failed('ENOENT'),
+  };
+  for (const [name, answer] of Object.entries(cases)) {
+    assert.deepEqual(judge({ run_key_vectors: [answer, answer] }), unfinished('run_key_vectors'), name);
+  }
+});
+
+// The other auxiliary judges name no case the runner reads; run_attest_check stands for them.
 test('an auxiliary rejection must repeat, and one without a mismatch is named as such', () => {
-  assert.deepEqual(judge({ run_key_vectors: [done(1, 'MISMATCH key\n'), done(1, 'MISMATCH key\n')] }),
-    { outcome: 'rejected', name: 'run_key_vectors', mismatch: true, cases: [] });
-  assert.deepEqual(judge({ run_key_vectors: [done(1, 'refused\n'), done(1, 'refused\n')] }),
-    { outcome: 'rejected', name: 'run_key_vectors', mismatch: false, cases: [] });
-  assert.deepEqual(judge({ run_key_vectors: [done(1, 'MISMATCH key\n'), done(0)] }),
-    unfinished('run_key_vectors', 'did not reject again on replay'));
+  assert.deepEqual(judge({ run_attest_check: [done(1, 'MISMATCH attest\n'), done(1, 'MISMATCH attest\n')] }),
+    { outcome: 'rejected', name: 'run_attest_check', mismatch: true, cases: [] });
+  assert.deepEqual(judge({ run_attest_check: [done(1, 'refused\n'), done(1, 'refused\n')] }),
+    { outcome: 'rejected', name: 'run_attest_check', mismatch: false, cases: [] });
+  assert.deepEqual(judge({ run_attest_check: [done(1, 'MISMATCH attest\n'), done(0)] }),
+    unfinished('run_attest_check', 'did not reject again on replay'));
 });
 
 test('an auxiliary judge that could not run, was signalled or broke is not credited', () => {
@@ -170,11 +208,11 @@ test('an auxiliary judge that could not run, was signalled or broke is not credi
     usage: done(2),
     signal: killed('SIGTERM'),
     launch_error: failed('ENOENT'),
-    traceback: done(1, 'MISMATCH key\n', 'Traceback (most recent call last):\n'),
+    traceback: done(1, 'MISMATCH attest\n', 'Traceback (most recent call last):\n'),
     disk_full: done(1, 'OSError: [Errno 28] No space left on device\n'),
   };
   for (const [name, answer] of Object.entries(cases)) {
-    assert.deepEqual(judge({ run_key_vectors: [answer] }), unfinished('run_key_vectors'), name);
+    assert.deepEqual(judge({ run_attest_check: [answer] }), unfinished('run_attest_check'), name);
   }
 });
 
@@ -306,11 +344,11 @@ test('a unit-test run that did not finish is unfinished, not missed', (t) => {
 });
 
 test('a provisional auxiliary rejection cannot finish a batch successfully', (t) => {
-  const wrong = () => done(1, 'MISMATCH key\n');
-  const run = batch(t, { run_kit: [kit([]), kit([]), kit(['plan/b']), kit(['plan/b'])], run_key_vectors: [done(0), wrong(), wrong()] });
+  const wrong = () => done(1, 'MISMATCH attest\n');
+  const run = batch(t, { run_kit: [kit([]), kit([]), kit(['plan/b']), kit(['plan/b'])], run_attest_check: [done(0), wrong(), wrong()] });
   assert.equal(run.code, 2);
   assert.deepEqual([run.report.caught, run.report.caught_provisionally, run.report.all_caught], [1, 1, false]);
-  assert.match(run.verdicts[0], /^caught provisionally \(run_key_vectors, no case named\)/);
+  assert.match(run.verdicts[0], /^caught provisionally \(run_attest_check, no case named\)/);
   assert.match(run.verdicts[1], /^caught \(run_kit: plan\/b\)/);
 });
 
