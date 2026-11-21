@@ -60,7 +60,7 @@ A **run description** (see [messages.schema.json](messages.schema.json)) names: 
 | [messages.schema.json](messages.schema.json) | Every line on the wire: hello, the manifest answer, request, result, error and shutdown envelopes; the request and result body of every capability; the run description and the executor's report; what the indexers and enumeration return |
 | [lock.schema.json](lock.schema.json) | The lock: providers and tools pinned to exact versions, one digest and entry point per platform, upstream source, requirement closure |
 | [policy.schema.json](policy.schema.json) | What must pass: required obligations and intents, minimum evidence, the gate floor, acceptable providers, executors and record origins, the separation floor per kind of act |
-| [status.schema.json](status.schema.json) | The result of the agent-facing `status` command, with its error object and error codes |
+| [status.schema.json](status.schema.json) | The result of the agent-facing `status` command, with its error object and error codes. A passed project report identifies the policy it was judged against |
 
 Two documents sit beside the schemas: the [configuration reference](../docs/configuration.md) for `dodona.toml`, and [writing a provider](../docs/writing-a-provider.md), a walkthrough with a worked session whose every JSON line validates against these schemas.
 

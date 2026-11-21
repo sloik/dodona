@@ -17,6 +17,7 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_path_check_matches_its_vectors` | The path rules were prose only, and reviewers showed names that would be accepted on one platform and refused on another. The reference implementation must agree with every hand-written vector |
 | `gap_repository_paths_are_portable` | dodona's own files must pass dodona's own path rules |
 | `gap_canonical_vectors_are_consistent` | A test vector whose hash is not the hash of its own text would mislead every implementer |
+| `gap_status_report_names_policy_on_pass` | The draft status schema accepted a synthetic passed project report without a policy identity. The repository checker requires the conditional, and `tools/check_examples.py` validates three controls with the pinned JSON Schema validator. A pass with its policy identity and a nothing-required report without a policy both validate. Removing only the identity from the passing report must fail at `policy.identity` |
 | `gap_every_modelled_case_has_a_scenario` | A defect planted in a formal model protects a kernel only if a scenario carries it into the kit. Every modelled case needs a scenario or a stated reason |
 | `gap_kit_judge_is_strict` | The judge of model runs once misread a result. The kit's judge must refuse an empty, short or wrong answer |
 | `gap_own_policy_fits_the_schema` | dodona's own policy file was first written with field names the policy schema did not have |
