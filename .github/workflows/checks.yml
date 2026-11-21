@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-40-js-native-proof'
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -149,6 +150,7 @@ jobs:
   # planted in each kernel in turn and the kit must reject it. Slow, so it has
   # its own job.
   planted-defects:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-40-js-native-proof'
     strategy:
       fail-fast: false
       matrix:
@@ -173,3 +175,130 @@ jobs:
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every listed defect and check some judge rejects each
         run: ${{ matrix.run }}
+
+  js-owned-executor-receipt:
+    name: Private JS owned executor (${{ matrix.platform }})
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
+      && github.ref == 'refs/heads/dodona-eight-40-js-native-proof'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-26.04
+            platform: linux
+          - os: macos-26
+            platform: darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      STATUS_BASE: 3da9675066aa15fa8ac2ee11817d675d2be2007d
+      PROTOTYPE_SOURCE: aa241f829643429521a5d1ec5443dfa19ac225a5
+      EXPECTED_PLATFORM: ${{ matrix.platform }}
+      NODE_OPTIONS: ''
+      NODE_PATH: ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the five reviewed prototype files and unchanged baseline
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          git diff --quiet "$STATUS_BASE" HEAD -- . \
+            ':(exclude).github/workflows/checks.yml' \
+            ':(exclude)kernel2/prototype-supervised-executor.js' \
+            ':(exclude)kernel2/prototype-supervisor-transport.js' \
+            ':(exclude)kernel2/prototype-unix-supervisor.js' \
+            ':(exclude)kernel2/test-prototype-supervised-executor.js' \
+            ':(exclude)kernel2/test-prototype-supervisor-transport.js'
+          shasum -a 256 -c <<'SHA'
+          766eee07714cb248e91ac59d06561eaff66956108733f1bbc89421c5032ac56c  kernel2/prototype-supervised-executor.js
+          bcdf9aafbbc31609039baa9f07f2d5c5cdd37f6abe0cd8a829295a53ccd9a1c1  kernel2/prototype-supervisor-transport.js
+          b7bf3ca7450cf02f9fd9844ae2bfb735d4e9cce14321fd81b66a33ec075321dd  kernel2/prototype-unix-supervisor.js
+          0f8b2d3b406cd6d967b38f7594ee20f22edc39e4da75f73433d8131ebc8d7289  kernel2/test-prototype-supervised-executor.js
+          8b187e87ad65d6054ce512aada959eaf0a8b8540bebd8b3989b047f138002454  kernel2/test-prototype-supervisor-transport.js
+          SHA
+      - name: Observe one owned executor through the reviewed transport
+        shell: bash
+        run: |
+          node <<'JS'
+          const assert = require('node:assert/strict');
+          const { createHash } = require('node:crypto');
+          const { release } = require('node:os');
+          const { superviseBatch } = require('./kernel2/prototype-supervised-executor');
+          const { makeLaunch } = require('./kernel2/prototype-supervisor-transport');
+
+          async function observe() {
+            const { platform, arch } = process;
+            assert.ok(['linux', 'darwin'].includes(platform));
+            assert.equal(platform, process.env.EXPECTED_PLATFORM);
+            assert.deepEqual(process.execArgv, []);
+            assert.equal(process.env.NODE_OPTIONS, '');
+            assert.equal(process.env.NODE_PATH, '');
+            const batch = { runs: [{ number: 1, run_key: 'owned-fixture', run: { kind: 'fixture' } }] };
+            const answer = { ended: true, reports: [{ run_key: 'owned-fixture', report: { end: 'exited' } }] };
+            const input = `${JSON.stringify(batch)}\n`;
+            const output = `${JSON.stringify(answer)}\n`;
+            // A fixed, ordinary child. It checks its own input, emits one line and exits.
+            const executor = [process.execPath, '-e',
+              `const input = require('node:fs').readFileSync(0);\n`
+              + `if (input.equals(Buffer.from(${JSON.stringify(input)}))) process.stdout.write(${JSON.stringify(output)});\n`
+              + 'else process.exitCode = 2;'];
+            const root = process.cwd();
+            const realLaunch = makeLaunch({ platform });
+            const seen = { launches: 0, ownership: null, inputFinished: false, stdoutEof: false,
+              executorExitCode: null, cleanupRequests: 0, cleanupAcknowledgement: null, released: false };
+            let beforeCleanup;
+            const launch = (argv, cwd) => {
+              assert.equal(seen.launches, 0);
+              assert.deepEqual(argv, executor);
+              assert.equal(cwd, root);
+              seen.launches += 1;
+              const owned = realLaunch(argv, cwd);
+              owned.stdin.once('finish', () => { seen.inputFinished = owned.stdin.writableFinished; });
+              owned.stdout.once('end', () => { seen.stdoutEof = owned.stdout.readableEnded; });
+              return {
+                ...owned,
+                ownership: owned.ownership.then((state) => { seen.ownership = state; return state; }),
+                exited: owned.exited.then((code) => { seen.executorExitCode = code; return code; }),
+                requestCleanup() {
+                  beforeCleanup = { ...seen };
+                  seen.cleanupRequests += 1;
+                  return owned.requestCleanup().then((result) => { seen.cleanupAcknowledgement = result; return result; });
+                },
+                release() { owned.release(); seen.released = true; },
+              };
+            };
+            const clock = { wait(ms) {
+              let timer;
+              const promise = new Promise((resolve) => { timer = setTimeout(resolve, ms); });
+              return { promise, cancel: () => clearTimeout(timer) };
+            } };
+            const waitMs = 10_000;
+            const cleanupWaitMs = 3_000;
+            const result = await superviseBatch(executor, root, batch, waitMs, { platform, launch, clock, cleanupWaitMs });
+            assert.deepEqual(result, { answer, cleanup: 'requested' });
+            assert.deepEqual(beforeCleanup, { launches: 1, ownership: 'confirmed', inputFinished: true, stdoutEof: true,
+              executorExitCode: 0, cleanupRequests: 0, cleanupAcknowledgement: null, released: false });
+            assert.equal(seen.cleanupRequests, 1);
+            assert.equal(seen.cleanupAcknowledgement, 'acknowledged');
+            assert.equal(seen.released, true);
+            const sha256 = (text) => createHash('sha256').update(text).digest('hex');
+            console.log(JSON.stringify({
+              scope: 'one ordinary owned executor', head: process.env.GITHUB_SHA, base: process.env.STATUS_BASE,
+              prototypeSource: process.env.PROTOTYPE_SOURCE, run: process.env.GITHUB_RUN_ID,
+              attempt: process.env.GITHUB_RUN_ATTEMPT,
+              runtime: { platform, arch, osRelease: release(), node: process.version, libuv: process.versions.uv,
+                execArgv: process.execArgv, nodeOptions: process.env.NODE_OPTIONS, nodePath: process.env.NODE_PATH,
+                waitMs, cleanupWaitMs },
+              fixtureInputSha256: sha256(input), fixtureLineSha256: sha256(output), result, observed: seen, complete: true,
+            }));
+          }
+          observe().catch((error) => { console.error(error); process.exitCode = 1; });
+          JS
