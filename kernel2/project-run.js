@@ -15,7 +15,7 @@ const unicode = require('./unicode');
 const { isObject } = require('./wire');
 const { compareUnits } = require('./canonical');
 const {
-  readInput, isRelative, checkInput, isDirectory, fileId, stepsOf, snapshotOf, Stop,
+  readInput, isRelative, checkInput, isDirectory, fileId, stepsOf, snapshotOf, endSession, Stop,
 } = require('./project-status');
 
 // The statuses that are a current result: reused, nothing sent for them.
@@ -183,13 +183,53 @@ function countsOf(plan, outcomes) {
   return counts;
 }
 
-// Steps 1 to 10. The providers are asked as the status command asks them, each session
-// closed after its answer: holding a checking binding's session open for the checks
-// (step 5 of the run) is a later part, as are steps 11 to 14.
+// Steps 1 to 10. The providers are asked as the status command asks them, except that
+// the session of every binding that lists obligation.check stays open after its answer
+// (step 5 of the run), whether or not anything of it is planned: `sessions`, in the
+// order the bindings were asked, each with what its checks start from. Whoever is given
+// them ends them with closeSessions; a refusal before that ends them here.
 async function planRun(asked) {
   const digests = preflight(asked);
-  const snapshot = await snapshotOf(asked, digests);
-  return { digests, snapshot, plan: planOf(snapshot) };
+  const sessions = [];
+  try {
+    const snapshot = await snapshotOf(asked, digests, sessions);
+    return { digests, snapshot, plan: planOf(snapshot), sessions };
+  } catch (error) {
+    throw await afterClosing(error, sessions);
+  }
+}
+
+// Ends every kept session: shutdown, a moment to exit, every process ended. The list is
+// emptied first, so no session is ended twice, and each is then ended in turn, in the
+// order the bindings were asked, whether or not one before it could be: ending one can
+// fail (on Windows, reading the process table). Failures are thrown together afterwards,
+// as one AggregateError naming each binding and process.
+async function closeSessions(sessions) {
+  const failures = [];
+  for (const session of sessions.splice(0)) {
+    try {
+      await endSession(session.wire, session.child);
+    } catch (error) {
+      failures.push({ binding: session.binding.name, pid: session.child.pid, error });
+    }
+  }
+  if (failures.length > 0) {
+    const said = failures.map((failure) => `${failure.binding} (process ${failure.pid}): ${failure.error && failure.error.message}`);
+    const error = new AggregateError(failures.map((failure) => failure.error), `kept sessions not all ended: ${said.join('; ')}`);
+    error.failures = failures;
+    throw error;
+  }
+}
+
+// On a refusal: every kept session ended, and the refusal given as it was. A failure to
+// end them does not take its place; it rides along as the refusal's `cleanup`.
+async function afterClosing(error, sessions) {
+  try {
+    await closeSessions(sessions);
+  } catch (cleanup) {
+    if (error !== null && typeof error === 'object') error.cleanup = cleanup;
+  }
+  return error;
 }
 
 // The bytes of standard input to `{ready: digests}`, or the refusal the command would print.
@@ -202,4 +242,4 @@ function preflightBytes(bytes) {
   }
 }
 
-module.exports = { preflight, preflightBytes, diskName, planOf, countsOf, planRun };
+module.exports = { preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing };

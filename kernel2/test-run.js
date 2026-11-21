@@ -13,8 +13,9 @@ const os = require('node:os');
 const path = require('node:path');
 
 const {
-  preflight, preflightBytes, diskName, planOf, countsOf, planRun,
+  preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing,
 } = require('./project-run');
+const crypto = require('node:crypto');
 const { Stop, projectStatus } = require('./project-status');
 const ledgerFile = require('./ledger-file');
 const { identityOf } = require('./identity');
@@ -418,6 +419,10 @@ process.stdin.on('data', (chunk) => {
   for (let at = buffer.indexOf('\\n'); at >= 0; at = buffer.indexOf('\\n')) {
     const message = JSON.parse(buffer.slice(0, at));
     buffer = buffer.slice(at + 1);
+    if (config.log) {
+      const seen = { pid: process.pid, type: message.type, id: message.id, binding: message.body && message.body.binding };
+      fs.appendFileSync(config.log, JSON.stringify(seen) + '\\n');
+    }
     if (message.type === 'hello') send({ type: 'manifest', echo: message.echo, manifest: config.manifest });
     else if (message.type === 'request') send({ type: 'result', id: message.id, capability: message.capability, body: config.answers[message.body.binding] });
     else if (message.type === 'shutdown') process.exit(0);
@@ -457,6 +462,7 @@ test('plan through the status command\'s own steps and status rules', async () =
 
     // Nothing recorded yet: everything listed is checked, by binding and then name.
     const first = await planRun(asked);
+    await closeSessions(first.sessions);
     assert.deepEqual(first.plan.check, [
       { binding: 'alpha', name: 'b1' }, { binding: 'alpha', name: 'c1' }, { binding: 'alpha', name: 'z1' },
       { binding: 'zeta', name: 'a1' }, { binding: 'zeta', name: 'z2' }]);
@@ -474,6 +480,7 @@ test('plan through the status command\'s own steps and status rules', async () =
     record('c1', 'failed');
 
     const second = await planRun(asked);
+    await closeSessions(second.sessions);
     assert.deepEqual(second.plan.check, [{ binding: 'alpha', name: 'z1' }, { binding: 'zeta', name: 'z2' }]);
     assert.deepEqual(second.plan.reused, [
       { binding: 'alpha', name: 'b1', status: 'failed' }, { binding: 'alpha', name: 'c1', status: 'conflict' }, { binding: 'zeta', name: 'a1', status: 'passed' }]);
@@ -488,5 +495,224 @@ test('plan through the status command\'s own steps and status rules', async () =
     assert.deepEqual(status.ledger, { entries: 4, torn: false });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// Step 5 of the run: the sessions kept for checks.
+
+const CHECKER = { name: 'checker', version: '1', digest: `sha256:${'c'.repeat(64)}` };
+const MANIFEST = {
+  protocol: '0.2', name: 't.check', version: '1.0.0',
+  capabilities: [{ capability: 'obligation.enumerate' }, { capability: 'obligation.check', strength: { class: 'c', rank: 'bounded' } }],
+  tools: [{ name: 'checker' }],
+};
+
+// A project of `bindings` ([name, capabilities, folder]) answered from `answers`, each
+// message its providers read logged; the run's input for it.
+function sessionProject(root, bindings, answers) {
+  fs.writeFileSync(path.join(root, 'dodona.toml'), bindings.map(([name, capabilities, folder]) => `[[binding]]\nname = "${name}"\nprovider = "t.check"\n`
+    + `capabilities = [${capabilities.map((c) => `"${c}"`).join(', ')}]\nmatch = ["${folder}/*.txt"]\n`).join('\n'));
+  for (const [, , folder] of bindings) {
+    fs.mkdirSync(path.join(root, folder), { recursive: true });
+    fs.writeFileSync(path.join(root, folder, 'a.txt'), `${folder}\n`);
+  }
+  fs.writeFileSync(path.join(root, 'code', 'provider.js'), PROVIDER);
+  const log = path.join(root, 'messages.log');
+  fs.writeFileSync(path.join(root, 'code', 'answers.json'), JSON.stringify({ manifest: MANIFEST, answers, log }));
+  const site = input(root).site;
+  const asked = input(root, {
+    site: {
+      ...site,
+      tools: [{ name: 'other', version: '2', digest: `sha256:${'d'.repeat(64)}` }, CHECKER],
+      deadline_ms: 20000,
+      providers: { 't.check': { command: [process.execPath, path.join(root, 'code', 'provider.js'), path.join(root, 'code', 'answers.json')], code: ['code/provider.js'] } },
+    },
+  });
+  delete asked.transcript;
+  return { asked, log };
+}
+
+// What each provider process read, by process, in order.
+function messagesByProcess(log) {
+  const by = new Map();
+  for (const line of fs.readFileSync(log, 'utf8').split('\n').filter(Boolean)) {
+    const seen = JSON.parse(line);
+    if (!by.has(seen.pid)) by.set(seen.pid, []);
+    by.get(seen.pid).push(seen);
+  }
+  return by;
+}
+
+function processOf(by, binding) {
+  const found = [...by.entries()].filter(([, seen]) => seen.some((m) => m.type === 'request' && m.binding === binding));
+  assert.equal(found.length, 1, `one process was asked for ${binding}`);
+  return found[0];
+}
+
+test('the run keeps the enumeration session of a checking binding, as it was; a list-only binding\'s ends at once', async () => {
+  const root = project();
+  let sessions = [];
+  try {
+    const zeta = { obligations: [obligation('a1', 'm/a.txt')], rejected: [] };
+    const { asked, log } = sessionProject(root, [['zeta', ['obligation.enumerate', 'obligation.check'], 'm'], ['alpha', ['obligation.enumerate'], 'n']],
+      { zeta, alpha: { obligations: [obligation('b1', 'n/a.txt')] } });
+    const ran = await planRun(asked);
+    sessions = ran.sessions;
+    // One session kept, the checking binding's, though nothing of it need be reused or not.
+    assert.equal(sessions.length, 1);
+    const [kept] = sessions;
+    assert.equal(kept.binding.name, 'zeta');
+    assert.equal(kept.next_id, 2);
+    assert.deepEqual(kept.manifest, MANIFEST);
+    assert.deepEqual(kept.request, {
+      binding: 'zeta', definitions: [], files: [{ path: 'm/a.txt', identity: `sha256:${crypto.createHash('sha256').update('m\n').digest('hex')}` }],
+    });
+    assert.deepEqual(kept.obligations, zeta.obligations);
+    assert.equal(kept.code, ran.digests.get('t.check'));
+    assert.deepEqual(kept.provider, { name: 't.check', version: `1.0.0+${kept.code}+r0`, protocol: '0.2' });
+    assert.deepEqual(kept.provider, ran.snapshot.judged.obligations.a1.preimage.provider);
+    assert.deepEqual(kept.tools, [CHECKER]);
+    assert.equal(kept.platform, asked.site.platform);
+    assert.equal(kept.offers_check, true);
+    assert.equal(kept.child.hasExited, false, 'the kept provider is still running');
+
+    let by = messagesByProcess(log);
+    assert.equal(by.size, 2);
+    const [keptPid, keptSeen] = processOf(by, 'zeta');
+    assert.equal(keptPid, kept.child.pid);
+    assert.deepEqual(keptSeen.map((m) => [m.type, m.id]), [['hello', undefined], ['request', '1']], 'no shutdown yet');
+    const [, listSeen] = processOf(by, 'alpha');
+    assert.deepEqual(listSeen.map((m) => m.type), ['hello', 'request', 'shutdown'], 'the list-only session ended at once');
+
+    // Ended by whoever holds it, once.
+    await closeSessions(sessions);
+    assert.deepEqual(sessions, []);
+    await kept.child.exited;
+    assert.equal(kept.child.hasExited, true);
+    by = messagesByProcess(log);
+    assert.deepEqual(by.get(keptPid).map((m) => m.type), ['hello', 'request', 'shutdown']);
+    await closeSessions(sessions);
+    assert.deepEqual(messagesByProcess(log).get(keptPid).map((m) => m.type), ['hello', 'request', 'shutdown']);
+
+    // The status command keeps nothing: every session it starts ends after its answer.
+    const before = new Set(by.keys());
+    const status = await projectStatus(Buffer.from(JSON.stringify(asked)));
+    assert.equal(status.refused, undefined, status.detail);
+    const after = [...messagesByProcess(log)].filter(([pid]) => !before.has(pid));
+    assert.equal(after.length, 2);
+    for (const [, seen] of after) assert.deepEqual(seen.map((m) => m.type), ['hello', 'request', 'shutdown']);
+  } finally {
+    await closeSessions(sessions);
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a refusal after a session was kept ends it before the refusal is given', async () => {
+  for (const [why, answers, reason] of [
+    ['a later binding\'s answer', { m: { obligations: [obligation('a1', 'm/a.txt')] }, z: { obligations: 5 } }, 'bad-answer'],
+    ['the kept binding\'s own answer', { m: { obligations: [{ ...obligation('a1', 'm/a.txt'), inputs: ['m/nope.txt'] }] }, z: { obligations: [] } }, 'bad-inputs'],
+  ]) {
+    const root = project();
+    try {
+      const { asked, log } = sessionProject(root, [['m', ['obligation.enumerate', 'obligation.check'], 'm'], ['z', ['obligation.enumerate'], 'z']], answers);
+      await assert.rejects(planRun(asked), (error) => error instanceof Stop && error.reason === reason, why);
+      const [, seen] = processOf(messagesByProcess(log), 'm');
+      assert.deepEqual(seen.map((m) => m.type), ['hello', 'request', 'shutdown'], why);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+// A kept session standing in for a real one: ending it logs to `calls`, and fails when
+// `fails` is set, as reading the process table can on Windows. No process is behind it.
+function standIn(name, calls, fails = false) {
+  return {
+    binding: { name },
+    wire: {
+      post(message) {
+        calls.push(`${name}:${message.type}`);
+        if (fails) throw new Error(`${name} could not be ended`);
+      },
+      close() {
+        calls.push(`${name}:close`);
+      },
+    },
+    child: { pid: undefined, exited: Promise.resolve() },
+  };
+}
+
+test('closing: a session that cannot be ended stops none after it, and the failures are thrown together, in order', async () => {
+  const calls = [];
+  const sessions = [standIn('a', calls, true), standIn('b', calls), standIn('c', calls, true)];
+  await assert.rejects(closeSessions(sessions), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.deepEqual(error.errors.map((each) => each.message), ['a could not be ended', 'c could not be ended']);
+    assert.deepEqual(error.failures.map((each) => each.binding), ['a', 'c']);
+    assert.match(error.message, /a \(process undefined\): a could not be ended; c \(process undefined\): c could not be ended/);
+    return true;
+  });
+  assert.deepEqual(calls, ['a:shutdown', 'b:shutdown', 'b:close', 'c:shutdown'], 'each tried once, in order');
+  assert.deepEqual(sessions, []);
+  // Claimed once: closing again tries nothing.
+  await closeSessions(sessions);
+  assert.deepEqual(calls, ['a:shutdown', 'b:shutdown', 'b:close', 'c:shutdown']);
+});
+
+test('closing on a refusal: the refusal is given as it was, with the failure to end a session beside it', async () => {
+  const calls = [];
+  const stop = new Stop('bad-answer', 'binding z: the answer does not have the shape the contract gives');
+  const given = await afterClosing(stop, [standIn('a', calls, true), standIn('b', calls)]);
+  assert.equal(given, stop);
+  assert.equal(given.reason, 'bad-answer');
+  assert.equal(given.detail, 'binding z: the answer does not have the shape the contract gives');
+  assert.ok(given.cleanup instanceof AggregateError);
+  assert.deepEqual(given.cleanup.failures.map((each) => each.binding), ['a']);
+  assert.deepEqual(calls, ['a:shutdown', 'b:shutdown', 'b:close']);
+  // With every session ended, nothing rides along.
+  const clean = await afterClosing(new Stop('bad-inputs', 'a1'), [standIn('c', calls)]);
+  assert.equal(Object.hasOwn(clean, 'cleanup'), false);
+});
+
+test('planted: stopping at the first session that cannot be ended leaves the rest running', async () => {
+  const damaged = planted('      failures.push({ binding: session.binding.name, pid: session.child.pid, error });', '      throw error;');
+  const calls = [];
+  await assert.rejects(damaged.closeSessions([standIn('a', calls, true), standIn('b', calls)]), /a could not be ended/);
+  assert.deepEqual(calls, ['a:shutdown'], 'b was never tried');
+});
+
+test('planted: a kept session never handed to its holder is left running after a refusal', async () => {
+  // The plant gives the refusal without ending the kept sessions, and hands this test
+  // the very sessions it left open, so that the test, not a process id, ends them.
+  const damaged = planted('    throw await afterClosing(error, sessions);', '    error.leftOpen = sessions;\n    throw error;');
+  const root = project();
+  let left = [];
+  try {
+    const { asked, log } = sessionProject(root, [['m', ['obligation.enumerate', 'obligation.check'], 'm'], ['z', ['obligation.enumerate'], 'z']],
+      { m: { obligations: [obligation('a1', 'm/a.txt')] }, z: { obligations: 5 } });
+    let refusal = null;
+    try {
+      left = (await damaged.planRun(asked)).sessions; // not expected: the run must refuse
+    } catch (error) {
+      refusal = error;
+      if (Array.isArray(error.leftOpen)) left = error.leftOpen;
+    }
+    assert.ok(refusal instanceof Stop && refusal.reason === 'bad-answer', String(refusal));
+    assert.equal(left.length, 1);
+    const [pid, seen] = processOf(messagesByProcess(log), 'm');
+    assert.equal(left[0].child.pid, pid, 'the session left open is the provider that was asked');
+    assert.equal(left[0].child.hasExited, false, 'left running');
+    assert.deepEqual(seen.map((m) => m.type), ['hello', 'request'], 'no shutdown was sent');
+  } finally {
+    // Whatever was asserted, the plant's leftover is ended (shutdown, a moment to exit,
+    // its own process group) and waited for before its folder is removed.
+    try {
+      const children = left.map((session) => session.child);
+      await closeSessions(left);
+      const bound = new Promise((resolve) => setTimeout(resolve, 5000).unref());
+      await Promise.race([Promise.all(children.map((child) => child.exited)), bound]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   }
 });

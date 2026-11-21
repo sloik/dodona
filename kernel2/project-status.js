@@ -393,21 +393,32 @@ async function converse(wire, binding, deadline, capability, body) {
   return { manifest, body: answer.message.body };
 }
 
-async function ask(root, site, binding, capability, body) {
+// shutdown at the end of every session, a moment to exit, and every process ended.
+async function endSession(wire, child) {
+  wire.post({ type: 'shutdown' });
+  wire.close();
+  await Promise.race([child.exited, processes.pause(1000)]);
+  await processes.endTree(child);
+}
+
+// One session, one request. The session ends here, after its answer or on any rule
+// broken, unless `keep` is given and the answer was read: then `keep` is handed the
+// open session, whose next request takes id 2, and whoever holds it ends it (the run
+// command, for the checks of a binding that lists obligation.check).
+async function ask(root, site, binding, capability, body, keep = null) {
   const child = processes.start(site.providers[binding.provider].command, root);
   if (child.pid === undefined) {
     await child.exited;
     throw new Stop('provider-not-started', binding.provider);
   }
   const wire = new Wire(child, { maxLine: MAX_LINE_BYTES, maxLog: MAX_LOG_BYTES, strict: true });
+  let answer = null;
   try {
-    return await converse(wire, binding, site.deadline_ms, capability, body);
+    answer = await converse(wire, binding, site.deadline_ms, capability, body);
+    return answer;
   } finally {
-    // shutdown at the end of every session, a moment to exit, and every process ended.
-    wire.post({ type: 'shutdown' });
-    wire.close();
-    await Promise.race([child.exited, processes.pause(1000)]);
-    await processes.endTree(child);
+    if (keep === null || answer === null) await endSession(wire, child);
+    else keep({ binding, wire, child, manifest: answer.manifest, next_id: 2 });
   }
 }
 
@@ -423,14 +434,23 @@ function obligationHasShape(item) {
     && isObject(own(item, 'config')) && Object.hasOwn(item, 'inputs') && (!Object.hasOwn(item, 'defect_of') || isString(item.defect_of));
 }
 
-async function obligationsOf(root, site, digests, bindings, claims) {
+// `kept`, given only by the run command, is a list each session of a binding that lists
+// obligation.check is added to as soon as its answer is read, so that whoever holds the
+// list can end it on any later refusal as well as at the end of the run.
+async function obligationsOf(root, site, digests, bindings, claims, kept = null) {
   const found = new Map();
   const listed = [];
   let unchecked = [];
   for (const binding of bindings.filter((b) => b.capabilities.includes('obligation.enumerate')).sort(byName)) {
     const files = claims.get(binding.name);
     const identities = new Map(files.map((file) => [file.path, file.identity]));
-    const { manifest, body } = await ask(root, site, binding, 'obligation.enumerate', { binding: binding.name, definitions: [], files });
+    const request = { binding: binding.name, definitions: [], files };
+    let session = null;
+    const keep = kept !== null && binding.capabilities.includes('obligation.check') ? (held) => {
+      session = held;
+      kept.push(held);
+    } : null;
+    const { manifest, body } = await ask(root, site, binding, 'obligation.enumerate', request, keep);
     const items = own(body, 'obligations');
     const rejected = Object.hasOwn(body, 'rejected') ? body.rejected : [];
     if (!Array.isArray(items) || !Array.isArray(rejected) || !rejected.every((entry) => isString(own(entry, 'name')))
@@ -465,6 +485,22 @@ async function obligationsOf(root, site, digests, bindings, claims) {
         },
       });
       listed.push({ binding: binding.name, name: item.name });
+    }
+    if (session !== null) {
+      // What the checks on this session start from (step 11): the request as sent, the
+      // obligations as enumerated, the provider as measured, the site's platform as given.
+      // A check's inputs are F, its own obligation's `inputs` taken from request.files,
+      // never every file the binding claims.
+      const named = site.tools.filter((tool) => uses.has(tool.name));
+      Object.assign(session, {
+        request,
+        obligations: items,
+        provider: { name: manifest.name, version, protocol: manifest.protocol },
+        code: digests.get(binding.provider),
+        tools: named.map((tool) => ({ name: tool.name, version: tool.version, digest: tool.digest })),
+        platform: site.platform,
+        offers_check: manifest.capabilities.some((entry) => entry.capability === 'obligation.check'),
+      });
     }
     unchecked = unchecked.concat(rejected.map((entry) => entry.name));
   }
@@ -703,7 +739,9 @@ function objectOf(map) {
 
 // Steps 2 to 10, after step 1 has given the code digests: what was read, asked and
 // judged, from which the status command makes its output and the run command its plan.
-async function snapshotOf(asked, digests) {
+// `kept` as in obligationsOf: the status command gives none, and every session ends
+// after its answer.
+async function snapshotOf(asked, digests, kept = null) {
   const root = asked.root;
   const site = asked.site;
   // Step 2.
@@ -744,7 +782,7 @@ async function snapshotOf(asked, digests) {
     }
   }
   // Steps 5 to 7.
-  const obligations = await obligationsOf(root, site, digests, bindings, claims);
+  const obligations = await obligationsOf(root, site, digests, bindings, claims, kept);
   const { intents, parent, unread } = await intentsOf(root, site, bindings, obligations.listed, claims);
   // Step 8.
   const read = entriesOf(root, asked.owner_ledger, asked.ledgers);
@@ -815,5 +853,5 @@ module.exports = {
   // Reused by the run command's checks of its own input (project-run.js).
   checkInput, isDirectory, fileId, stepsOf,
   // Reused by its plan: the same steps 2 to 10 and the same output.
-  snapshotOf, reportOf,
+  snapshotOf, reportOf, endSession,
 };
