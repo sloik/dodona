@@ -20,12 +20,14 @@ import re
 import sys
 import tomllib
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import check_models  # noqa: E402
 import pathcheck  # noqa: E402
 import run_kit  # noqa: E402
+import run_path_vectors  # noqa: E402
 
 problems: list[str] = []
 
@@ -332,6 +334,73 @@ def gap_tool_tree_digest_matches_its_vectors() -> None:
                 problems.append(f"tool-tree vectors: '{item['name']}' must be refused as {item['reason']}, not {err}")
     if len(vectors["accept"]) < 5 or len(vectors["reject"]) < 5:
         problems.append("tool-tree vectors: too few to mean anything")
+
+
+def gap_tool_tree_refuses_an_incomplete_listing() -> None:
+    """A review denied the listing of one directory inside a tree: the reference walked past it without a word
+    and printed a digest for the rest. A listing that misses part of the tree must be refused, not digested."""
+    import runpy
+    import tooltree
+    real_scandir, real_read_bytes = os.scandir, pathlib.Path.read_bytes
+
+    def denying(name: str):
+        def scandir(path="."):
+            if not isinstance(path, int) and os.path.basename(os.fspath(path)) == name:
+                raise PermissionError(13, "denied by the repository check", os.fspath(path))
+            return real_scandir(path)
+        return scandir
+
+    def refusing(name: str):
+        def read_bytes(self):
+            if self.name == name:
+                raise PermissionError(13, "denied by the repository check", str(self))
+            return real_read_bytes(self)
+        return read_bytes
+
+    def outcome(root: pathlib.Path) -> str:
+        try:
+            return f"the digest {tooltree.digest(tooltree.listing(root))}"
+        except tooltree.Unusable as err:
+            return f"refused: {err}"
+        except OSError as err:
+            return f"an unhandled {type(err).__name__}"
+
+    def command(root: pathlib.Path) -> str:
+        out, argv = io.StringIO(), sys.argv
+        try:
+            sys.argv = ["tooltree.py", str(root)]
+            with contextlib.redirect_stdout(out):
+                runpy.run_path(str(ROOT / "tools" / "tooltree.py"), run_name="__main__")
+            code = 0
+        except SystemExit as stop:
+            code = stop.code
+        except Exception as err:  # an error the command line lets escape, Unusable included
+            code = f"an unhandled {type(err).__name__}"
+        finally:
+            sys.argv = argv
+        return f"exit {code}, printing {out.getvalue().strip()}"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp) / "tree"
+        (root / "sub").mkdir(parents=True)
+        contents = {"top.txt": b"top", "sub/inner.txt": b"inner"}
+        for path, data in contents.items():
+            (root / path).write_bytes(data)
+        whole = [{"path": p, "kind": "file", "identity": "sha256:" + hashlib.sha256(d).hexdigest()} for p, d in contents.items()]
+        # The controls: a tree read in full keeps its digest, and a directory that is not there is still an empty tree.
+        if outcome(root) != f"the digest {tooltree.digest(whole)}":
+            problems.append(f"tools/tooltree.py gives a tree it can read in full {outcome(root)}, not the digest of its two files")
+        if outcome(root / "missing") != "refused: empty":
+            problems.append(f"tools/tooltree.py gives a directory that does not exist {outcome(root / 'missing')}, not refused: empty")
+        for name, patch in (("a child directory it may not list", mock.patch("os.scandir", denying("sub"))),
+                            ("a root directory it may not list", mock.patch("os.scandir", denying("tree"))),
+                            ("a file it may not read", mock.patch.object(pathlib.Path, "read_bytes", refusing("inner.txt")))):
+            with patch:
+                got, shown = outcome(root), command(root)
+            if got != "refused: unreadable":
+                problems.append(f"tools/tooltree.py: a tree with {name} must be refused as unreadable; the reference gives {got}")
+            if shown != 'exit 1, printing {"refused": "unreadable"}':
+                problems.append(f"tools/tooltree.py: a tree with {name} must be refused as unreadable on its command line; it gives {shown}")
 
 
 def gap_thin_coverage_is_shown() -> None:
@@ -836,6 +905,83 @@ def gap_path_check_matches_its_vectors() -> None:
             problems.append(f"path vectors: collision case {item['name']!r} disagrees with the reference")
 
 
+def run_path_vectors_with(answer_for_set) -> tuple[int, str]:
+    """Run tools/run_path_vectors.py in this process against a mock kernel; no child process is started.
+
+    The mock answers every single-path vector with its hand-written expectation and
+    every set with answer_for_set(paths, collide), where collide is the vector's own flag.
+    """
+    vectors = json.loads((ROOT / "conformance" / "vectors" / "paths.json").read_text(encoding="utf-8"))
+    singles = {path.encode("utf-8").hex(): {"accepted": True} for path in vectors["accept"]}
+    for item in vectors["reject"]:
+        singles[item["path"].encode("utf-8", errors="surrogatepass").hex()] = {"refused": item["reason"]}
+    for item in vectors["reject_bytes"]:
+        singles[item["hex"]] = {"refused": item["reason"]}
+    sets = {tuple(item["paths"]): item["collide"] for item in vectors["collisions"]}
+
+    def ask(command: list[str], payload: dict) -> dict | None:
+        if command[-1] == "one":
+            return singles.get(payload["hex"])
+        return {"collisions": answer_for_set(list(payload["paths"]), sets[tuple(payload["paths"])])}
+
+    saved_ask, saved_argv = run_path_vectors.ask, sys.argv
+    out = io.StringIO()
+    try:
+        run_path_vectors.ask = ask
+        sys.argv = ["run_path_vectors.py", "--", "mock-kernel", "one", "many"]
+        with contextlib.redirect_stdout(out):
+            code = run_path_vectors.main()
+    finally:
+        run_path_vectors.ask, sys.argv = saved_ask, saved_argv
+    return code, out.getvalue()
+
+
+def gap_path_vector_judge_is_strict() -> None:
+    """The path-vector judge turned a kernel's collisions into a yes or no, so a truthy string or a pair naming unrelated paths passed."""
+    vectors = json.loads((ROOT / "conformance" / "vectors" / "paths.json").read_text(encoding="utf-8"))
+    positives = [item["name"] for item in vectors["collisions"] if item["collide"]]
+    negatives = [item["name"] for item in vectors["collisions"] if not item["collide"]]
+    unrelated = ["unrelated/1", "unrelated/2"]
+    # Each false answer is given only where it is false; every other set gets its right answer.
+    false_on_positives = {
+        "a truthy string": lambda pair: "yes",
+        "a pair naming unrelated paths": lambda pair: [unrelated],
+        "one path of the pair and one unrelated": lambda pair: [[pair[0], unrelated[0]]],
+        "the right pair and an unrelated pair": lambda pair: [pair, unrelated],
+        "the same pair twice": lambda pair: [pair, pair],
+        "the same pair twice in either order": lambda pair: [pair, pair[::-1]],
+        "a pair of three": lambda pair: [pair + [pair[0]]],
+        "a pair of one": lambda pair: [pair[:1]],
+        "one path twice": lambda pair: [[pair[0], pair[0]]],
+        "a pair that is not a list": lambda pair: [{"a": pair[0], "b": pair[1]}],
+        "a pair that is a string": lambda pair: [" ".join(pair)],
+        "an empty list": lambda pair: [],
+    }
+    false_on_negatives = {
+        "zero": lambda pair: 0,
+        "null": lambda pair: None,
+        "an empty string": lambda pair: "",
+        "false": lambda pair: False,
+        "an empty object": lambda pair: {},
+        "the vector's own pair": lambda pair: [pair],
+    }
+    for label, wrong in false_on_positives.items():
+        _, out = run_path_vectors_with(lambda pair, collide: wrong(pair) if collide else [])
+        for name in positives:
+            if f"MISMATCH collision case {name!r}" not in out:
+                problems.append(f"tools/run_path_vectors.py accepts {label} for collision case {name!r}")
+    for label, wrong in false_on_negatives.items():
+        _, out = run_path_vectors_with(lambda pair, collide: [pair] if collide else wrong(pair))
+        for name in negatives:
+            if f"MISMATCH collision case {name!r}" not in out:
+                problems.append(f"tools/run_path_vectors.py accepts {label} for collision case {name!r}")
+    # Positive controls: a right answer, in either order, passes every vector.
+    for label, right in {"the pair as given": lambda pair: [pair], "the pair reversed": lambda pair: [pair[::-1]]}.items():
+        code, out = run_path_vectors_with(lambda pair, collide: right(pair) if collide else [])
+        if code != 0 or "MISMATCH" in out or '"all_matched": true' not in out:
+            problems.append(f"tools/run_path_vectors.py refuses a right answer ({label}): {out.strip()[-300:]}")
+
+
 def gap_repository_paths_are_portable() -> None:
     """dodona's own files must pass dodona's own path rules."""
     paths = [p.relative_to(ROOT).as_posix() for p in repo_files()]
@@ -934,6 +1080,18 @@ def gap_own_policy_fits_the_schema() -> None:
     _fits(policy, schema, schema.get("$defs", {}), "policy")
 
 
+def gap_evidence_strength_follows_kind() -> None:
+    """The evidence schema once described the strength rule without expressing it."""
+    schema = json.loads((ROOT / "protocol" / "evidence-record.schema.json").read_text(encoding="utf-8"))
+    conditions = schema.get("allOf", [])
+    for kinds, requirement in (
+        ({"enum": ["check", "conformance"]}, {"required": ["strength"]}),
+        ({"const": "build"}, {"not": {"required": ["strength"]}}),
+    ):
+        if {"if": {"properties": {"kind": kinds}}, "then": requirement} not in conditions:
+            problems.append(f"evidence-record.schema.json: no strength condition for {kinds}")
+
+
 def gap_no_generated_files_are_tracked() -> None:
     """Compiled caches were once committed by mistake."""
     import shutil
@@ -973,15 +1131,16 @@ def gap_documents_follow_the_code() -> None:
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
-              gap_workflows_are_safe, gap_path_check_matches_its_vectors,
+              gap_workflows_are_safe, gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
-              gap_own_policy_fits_the_schema, gap_no_generated_files_are_tracked,
+              gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_js_planted_defect_anchors_exist, gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
-              gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
+              gap_tool_tree_refuses_an_incomplete_listing, gap_every_tool_compiles,
+              gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
               gap_status_keeps_literal_obligation_names,
               gap_thin_coverage_is_shown, gap_documents_follow_the_code]

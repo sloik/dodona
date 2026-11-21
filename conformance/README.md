@@ -32,7 +32,7 @@ It covers what the formal models cover and no more: obligation status, intent st
 | `harness/checker_reads.py`, `harness/checker_nods.py` | Two checkers for judging the reference harness: one that reads the files it was given, and one that agrees with everything |
 | `vectors/tool-tree.json` | The [digest of a tool tree](../protocol/tool-tree-digest.md): listings of trees with their digest, and listings that must be refused, with the reason |
 | `vectors/canonical.json` | The [canonical encoding](../protocol/canonical-encoding.md): values with their exact text and hash, and inputs that must be refused |
-| `vectors/paths.json` | The [path check](../protocol/path-check.md): accepted paths, refused paths with the reason, and sets that collide |
+| `vectors/paths.json` | The [path check](../protocol/path-check.md): accepted paths, refused paths with the reason, and sets that collide. Each set holds two paths; `tools/run_path_vectors.py` passes a colliding set only when the kernel names exactly that one pair, in either order, and a set that does not collide only when it reports an empty list |
 
 Every scenario names the claim it bears on and the model cases it covers. Each planted defect in the formal models has at least one scenario that a kernel repeating that defect fails. The repository checks enforce this.
 
