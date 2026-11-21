@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-41-shard-proof'
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -182,3 +183,19 @@ jobs:
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every second kernel defect in order and judge its evidence
         run: node kernel2/plant.js
+  qualified-rust-shard:
+    name: Rust one-defect shard receipt
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dodona-eight-41-shard-proof'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Preserve one complete shard with the original manifest
+        shell: bash
+        run: |
+          inventory="$(jq -er '.defects | length' kernel/defects.json)"
+          test "$inventory" -gt 1
+          python3 -u tools/kit_adequacy.py --shard "1/$inventory"
