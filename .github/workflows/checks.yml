@@ -181,7 +181,7 @@ jobs:
         run: ${{ matrix.run }}
 
   typed-producer-proof:
-    name: Typed status and provider judges (${{ matrix.system }})
+    name: Typed provider and host-check judges (${{ matrix.system }})
     if: >-
       github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
       && github.ref == 'refs/heads/dodona-eight-41-producer-proof'
@@ -223,9 +223,12 @@ jobs:
       - name: Judge the second kernel provider host
         if: ${{ !cancelled() }}
         run: ${{ matrix.python }} tools/run_provider_cases.py -- node kernel2/dodona-kernel2.js session
-      - name: Judge the first kernel project status
+      - name: Judge the reference host check
         if: ${{ !cancelled() }}
-        run: ${{ matrix.python }} tools/run_status_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js -- ${{ matrix.kernel }} status
-      - name: Judge the second kernel project status
+        run: ${{ matrix.python }} tools/run_check_cases.py -- ${{ matrix.python }} tools/host.py check
+      - name: Judge the first kernel host check
         if: ${{ !cancelled() }}
-        run: ${{ matrix.python }} tools/run_status_cases.py --jobs 2 --kernel ${{ matrix.kernel }} -- node kernel2/dodona-kernel2.js status
+        run: ${{ matrix.python }} tools/run_check_cases.py -- ${{ matrix.kernel }} check
+      - name: Judge the second kernel host check
+        if: ${{ !cancelled() }}
+        run: ${{ matrix.python }} tools/run_check_cases.py -- node kernel2/dodona-kernel2.js check
