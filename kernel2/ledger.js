@@ -3,9 +3,11 @@
 
 const crypto = require('node:crypto');
 const canonical = require('./canonical');
+const strictJson = require('./strict-json');
 
 const MARKER = 'dodona1';
 const LF = 0x0a;
+const MAX_DEPTH = 64;
 
 function sha256Hex(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
@@ -40,6 +42,8 @@ function decodeLine(line) {
     return null;
   }
   if (canonical.canonicalize(payloadText).canonical !== payloadText) return null;
+  // Nested no deeper than 64 levels, the entry itself the first (protocol/ledger.md, "Reading").
+  if (strictJson.read(payloadText, { maxDepth: MAX_DEPTH }).refused !== undefined) return null;
   const entry = JSON.parse(payloadText);
   // An entry has exactly previous, kind and body; kind is a non-empty string.
   const shapeOk = isObject(entry) && Object.keys(entry).sort().join(',') === 'body,kind,previous'
@@ -69,4 +73,23 @@ function readLedger(bytes) {
   return { entries, torn, keep, last: previous };
 }
 
-module.exports = { encodeEntry, decodeLine, readLedger };
+// True if the entry nests deeper than a reader reads: more than MAX_DEPTH objects
+// and arrays deep, the entry itself the first. The entry is walked one level at a
+// time, without recursion, and the walk stops at the first level past the limit,
+// so an entry nested to any depth is judged without running out of stack.
+function tooDeep(entry) {
+  let level = [entry];
+  for (let depth = 1; level.length > 0; depth += 1) {
+    if (depth > MAX_DEPTH) return true;
+    const next = [];
+    for (const value of level) {
+      for (const member of Object.values(value)) {
+        if (member !== null && typeof member === 'object') next.push(member);
+      }
+    }
+    level = next;
+  }
+  return false;
+}
+
+module.exports = { encodeEntry, decodeLine, readLedger, tooDeep };

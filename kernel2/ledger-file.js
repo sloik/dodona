@@ -67,6 +67,8 @@ function append(request) {
   if (typeof request.kind !== 'string' || request.kind === '' || request.body === undefined || typeof request.ledger !== 'string') {
     return { refused: 'bad-request' };
   }
+  // No entry nested deeper than a reader reads (protocol/ledger.md): it is never written.
+  if (ledger.tooDeep({ previous: null, kind: request.kind, body: request.body })) return { refused: 'bad-request' };
   try {
     ledger.encodeEntry({ previous: null, kind: request.kind, body: request.body });
   } catch (error) {
