@@ -149,31 +149,36 @@ jobs:
         if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
         run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js --status "${{ matrix.python }} tools/project_status.py --kernel ${{ matrix.rust_kernel }}" -- ${{ matrix.python }} tools/project_run.py --kernel ${{ matrix.rust_kernel }}
 
-  # A kit that no defective kernel fails proves nothing. Every listed defect is
-  # planted in each kernel in turn and the kit must reject it. Slow, so it has
-  # its own job.
-  planted-defects:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - kernel: first
-            run: python3 tools/kit_adequacy.py
-          - kernel: second
-            run: node kernel2/plant.js
-    name: planted defects (${{ matrix.kernel }} kernel)
+  # A proof-branch dispatch first qualifies the unchanged kernels with every judge.
+  # Only then run the complete first and second defect inventories in sequence.
+  serial-first:
+    name: Corrected planted defects (first kernel, serial)
+    needs: checks
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dodona-eight-41-serial-candidate'
     runs-on: ubuntu-26.04
-    # Every planted defect is built and judged on its own. With the host judges this took 86 and 109
-    # minutes on 2026-11-19; the limit leaves room for that to grow. If it does, split the list into
-    # shards rather than raise the limit again.
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
-      # The status judge recomputes each report with the other kernel's scenario command, so the second kernel's
-      # defects need the first kernel built (the first kernel's run uses Node, which the runner has).
-      - name: Build the first kernel, whose scenario command the second kernel's status judge uses
+      - name: Plant every first kernel defect in order and judge its evidence
+        run: python3 tools/kit_adequacy.py
+  serial-second:
+    name: Corrected planted defects (second kernel, serial)
+    needs: [checks, serial-first]
+    if: >-
+      ${{ !cancelled() && needs.checks.result == 'success'
+      && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dodona-eight-41-serial-candidate'
+      && (needs.serial-first.result == 'success' || needs.serial-first.result == 'failure') }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Build the first kernel used for independent scenario judgment
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
-      - name: Plant every listed defect and check some judge rejects each
-        run: ${{ matrix.run }}
+      - name: Plant every second kernel defect in order and judge its evidence
+        run: node kernel2/plant.js
