@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-3-retained-status'
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -149,6 +150,7 @@ jobs:
   # planted in each kernel in turn and the kit must reject it. Slow, so it has
   # its own job.
   planted-defects:
+    if: github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/dodona-eight-3-retained-status'
     strategy:
       fail-fast: false
       matrix:
@@ -173,3 +175,51 @@ jobs:
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant every listed defect and check some judge rejects each
         run: ${{ matrix.run }}
+
+  issue-3-retained-status:
+    name: Issue 3 retained project status (one-off)
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.repository == 'sloik/dodona'
+      && github.ref == 'refs/heads/dodona-eight-3-retained-status'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind the checkout and exercise the replay's refusal controls
+        run: |
+          python3 -B .github/site/replay_retained_status.py --check-checkout
+          python3 -B .github/site/test_replay_retained_status.py
+      - name: Fetch the identified retained status archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          D="$RUNNER_TEMP/issue-3-retained"
+          mkdir "$D"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/44626497885" > "$D/run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14582487546" > "$D/artifact.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/14582487546/zip" > "$D/archive.zip"
+      - name: Build the native project status command
+        run: cargo build --release --locked --manifest-path kernel/Cargo.toml
+      - name: Judge the actual project with retained evidence and compare the scenario
+        shell: bash
+        run: |
+          V="$RUNNER_TEMP/issue-3-policy-env"
+          python3 -m venv "$V"
+          "$V/bin/python" -m pip install --quiet jsonschema==4.26.0
+          "$V/bin/python" -B .github/site/replay_retained_status.py \
+            "$RUNNER_TEMP/issue-3-retained" "$RUNNER_TEMP/issue-3-receipt"
+      - name: Keep the digest-bound report and completion receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: issue-3-retained-status-receipt
+          path: ${{ runner.temp }}/issue-3-receipt
+          if-no-files-found: error
+          retention-days: 90
