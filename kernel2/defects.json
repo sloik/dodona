@@ -600,8 +600,8 @@
       "name": "a record from another platform raises the level shown",
       "model_case": "(round 3)",
       "file": "status.js",
-      "find": "levels[name] = obligationLevel(obligations[name].status, records);",
-      "replace": "levels[name] = obligationLevel(obligations[name].status, records.concat(ledger.filter((e) => e.kind === 'evidence' && e.body.obligation === name && e.body.core_key === identityOf(details.preimage)).map((e) => e.body)));"
+      "find": "put(levels, name, obligationLevel(judged.status, records));",
+      "replace": "put(levels, name, obligationLevel(judged.status, records.concat(ledger.filter((e) => e.kind === 'evidence' && e.body.obligation === name && e.body.core_key === identityOf(details.preimage)).map((e) => e.body))));"
     },
     {
       "name": "a refused exception is counted",
