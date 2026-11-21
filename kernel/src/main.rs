@@ -37,6 +37,11 @@ fn answer(command: &str, input: &[u8]) -> Result<Value, String> {
     if command == "canonical" {
         return Ok(canonical::answer(input));
     }
+    // An append reads its own input, without recursion, so that a body nested too
+    // deep for any reader is refused as `bad-request` at any depth.
+    if command == "ledger-append" {
+        return ledger::append(input);
+    }
     let v = match json::parse(input) {
         Ok(v) => v,
         Err(reason) if command == "key" => {
@@ -54,7 +59,6 @@ fn answer(command: &str, input: &[u8]) -> Result<Value, String> {
         "key" => canonical::key(&v),
         "path" => path::one(&v),
         "path-set" => path::set(&v),
-        "ledger-append" => ledger::append(&v)?,
         "ledger-read" => ledger::read(&v)?,
         "check" => host::check(&v)?,
         "scenario" => results(match kind()? {
@@ -125,6 +129,17 @@ mod tests {
         assert!(answer("scenario", br#"{"kind":"nothing"}"#).is_err());
         assert!(answer("states", br#"{"kind":"plan"}"#).is_err());
         assert!(answer("ledger-read", b"{}").is_err());
+        assert!(answer("ledger-append", b"{").is_err());
+        // A body too deep for any reader is refused, not read by recursion, and
+        // before the ledger it names is touched.
+        let deep = format!(
+            r#"{{"body":{}{},"kind":"note","ledger":"never-written.ledger","wait_ms":0}}"#,
+            "[".repeat(100_000),
+            "]".repeat(100_000)
+        );
+        let r = answer("ledger-append", deep.as_bytes()).unwrap();
+        assert_eq!(json::encode(&r), r#"{"refused":"bad-request"}"#);
+        assert!(!std::path::Path::new("never-written.ledger.lock").exists());
         assert!(answer("nothing", b"{}").is_err());
         assert!(answer("", b"{}").is_err());
         let r = answer("scenario", br#"{"kind":"assurance","steps":[]}"#).unwrap();
