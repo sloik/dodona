@@ -358,6 +358,108 @@ mod platform {
         Err(error)
     }
 
+    #[cfg(all(test, target_os = "macos"))]
+    mod darwin_diagnostic {
+        use super::require_waitable_exits;
+        use crate::proc::batch::BatchChild;
+        use std::io::{self, Read, Write};
+        use std::process::{Command, Stdio};
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        const CHILD: &str = "proc::batch::platform::darwin_diagnostic::probe_child";
+        const INPUT: &[u8] = b"{\"runs\":[]}\n";
+        const ANSWER: &[u8] = b"{\"ended\":true,\"reports\":[]}\n";
+        const LIMIT: Duration = Duration::from_secs(5);
+
+        #[test]
+        #[ignore = "run only as the diagnostic's direct child"]
+        fn probe_child() -> io::Result<()> {
+            let mut input = Vec::new();
+            io::stdin().read_to_end(&mut input)?;
+            assert_eq!(input, INPUT);
+            io::stdout().write_all(ANSWER)?;
+            io::stdout().flush()
+        }
+
+        fn report<T>(stage: &str, result: io::Result<T>) -> io::Result<T> {
+            match &result {
+                Ok(_) => eprintln!("batch-diagnostic {stage}: ok"),
+                Err(error) => eprintln!(
+                    "batch-diagnostic {stage}: kind={:?} raw_os_error={:?} {error}",
+                    error.kind(),
+                    error.raw_os_error()
+                ),
+            }
+            result
+        }
+
+        #[test]
+        #[ignore = "focused diagnostic for the macOS batch owner"]
+        fn report_owned_batch_stages() -> io::Result<()> {
+            report("before-spawn-sigchld", require_waitable_exits())?;
+            let mut child = report(
+                "spawn",
+                BatchChild::spawn(
+                    Command::new(std::env::current_exe()?)
+                        .args(["--ignored", "--exact", CHILD, "--nocapture"])
+                        .stdin(Stdio::piped())
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::null()),
+                ),
+            )?;
+            let mut stdout = child.take_stdout().expect("piped diagnostic output");
+            let (done, output) = mpsc::sync_channel(1);
+            let reader = std::thread::Builder::new().spawn(move || {
+                let mut bytes = Vec::new();
+                let read = stdout.read_to_end(&mut bytes).map(|_| bytes);
+                let _ = done.send(read);
+            })?;
+            report(
+                "write-input",
+                child.take_stdin().expect("piped input").write_all(INPUT),
+            )?;
+            let until = Instant::now() + LIMIT;
+            let bytes = report(
+                "stdout-eof",
+                output
+                    .recv_timeout(LIMIT)
+                    .map_err(|e| io::Error::new(io::ErrorKind::TimedOut, e))
+                    .and_then(|read| read),
+            )?;
+            reader.join().expect("diagnostic output reader");
+            assert!(bytes.windows(ANSWER.len()).any(|window| window == ANSWER));
+
+            let observed = loop {
+                match child.observe_exit() {
+                    Ok(true) => break Ok(()),
+                    Ok(false) if Instant::now() < until => {
+                        std::thread::sleep(Duration::from_millis(5))
+                    }
+                    Ok(false) => {
+                        break Err(io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            "direct exit was not seen",
+                        ))
+                    }
+                    Err(error) => break Err(error),
+                }
+            };
+            let observed = report("waitid-exit", observed);
+            let disposition = report("before-cleanup-sigchld", require_waitable_exits());
+            let cleanup = report("checked-group-cleanup", child.request_end());
+            let collected = report("direct-collect", child.try_collect());
+            if let Ok(Some(status)) = &collected {
+                eprintln!("batch-diagnostic direct-exit-code: {:?}", status.code());
+            }
+            observed?;
+            disposition?;
+            cleanup?;
+            assert!(collected?.is_some_and(|status| status.success()));
+            Ok(())
+        }
+    }
+
     #[cfg(test)]
     #[test]
     fn automatic_or_independent_reaping_cannot_grant_group_cleanup() {
