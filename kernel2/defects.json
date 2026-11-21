@@ -2205,6 +2205,20 @@
       "file": "project-status.js",
       "find": "tools: site.tools.filter((tool) => uses.has(tool.name)).map(",
       "replace": "tools: site.tools.map("
+    },
+    {
+      "name": "ledger: an entry nested deeper than 64 levels is read",
+      "model_case": "(ledger depth kit)",
+      "file": "ledger.js",
+      "find": "  if (strictJson.read(payloadText, { maxDepth: MAX_DEPTH }).refused !== undefined) return null;\n",
+      "replace": ""
+    },
+    {
+      "name": "ledger: an entry nested deeper than 64 levels is appended",
+      "model_case": "(ledger depth kit)",
+      "file": "ledger-file.js",
+      "find": "  if (ledger.tooDeep({ previous: null, kind: request.kind, body: request.body })) return { refused: 'bad-request' };\n",
+      "replace": ""
     }
   ]
 }

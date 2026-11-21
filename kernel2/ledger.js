@@ -3,9 +3,11 @@
 
 const crypto = require('node:crypto');
 const canonical = require('./canonical');
+const strictJson = require('./strict-json');
 
 const MARKER = 'dodona1';
 const LF = 0x0a;
+const MAX_DEPTH = 64;
 
 function sha256Hex(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
@@ -40,6 +42,8 @@ function decodeLine(line) {
     return null;
   }
   if (canonical.canonicalize(payloadText).canonical !== payloadText) return null;
+  // Nested no deeper than 64 levels, the entry itself the first (protocol/ledger.md, "Reading").
+  if (strictJson.read(payloadText, { maxDepth: MAX_DEPTH }).refused !== undefined) return null;
   const entry = JSON.parse(payloadText);
   // An entry has exactly previous, kind and body; kind is a non-empty string.
   const shapeOk = isObject(entry) && Object.keys(entry).sort().join(',') === 'body,kind,previous'
@@ -69,4 +73,9 @@ function readLedger(bytes) {
   return { entries, torn, keep, last: previous };
 }
 
-module.exports = { encodeEntry, decodeLine, readLedger };
+// True if the entry nests deeper than a reader reads.
+function tooDeep(entry) {
+  return strictJson.read(JSON.stringify(entry), { maxDepth: MAX_DEPTH }).refused === 'too-deep';
+}
+
+module.exports = { encodeEntry, decodeLine, readLedger, tooDeep };
