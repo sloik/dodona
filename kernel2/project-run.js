@@ -597,7 +597,7 @@ function ledgerProblem(root, ledgerRel, ownerRel) {
 // verdicts staying recorded. A run refused before it reports writes no transcript.
 async function runProject(asked, { execute, plan: planStage = planRun, waitMs, io, release } = {}) {
   const run = execute || ((batch, wait) => executeBatch(asked.executor, asked.root, batch, wait));
-  const transcript = Object.hasOwn(asked, 'transcript') ? [] : null;
+  const transcript = Object.hasOwn(asked ?? {}, 'transcript') ? [] : null;
   const record = transcript === null ? null : (to, message) => transcript.push({ to, message });
   const { snapshot, plan, sessions } = await planStage(asked, record);
   let outcomes;
@@ -649,6 +649,18 @@ function writeTranscript(root, rel, messages) {
   }
 }
 
+// The `run` command: bytes of standard input to the one object it prints, its output or
+// `{refused, detail}`, as the status command answers. Any other failure is thrown, and
+// the command ends with a status other than 0.
+async function projectRun(bytes) {
+  try {
+    return await runProject(readInput(bytes));
+  } catch (error) {
+    if (error instanceof Stop) return { refused: error.reason, detail: error.detail };
+    throw error;
+  }
+}
+
 // The bytes of standard input to `{ready: digests}`, or the refusal the command would print.
 function preflightBytes(bytes) {
   try {
@@ -661,5 +673,5 @@ function preflightBytes(bytes) {
 
 module.exports = {
   preflight, preflightBytes, diskName, planOf, countsOf, planRun, closeSessions, afterClosing, startCheck, exchange, SESSION_BROKE,
-  checkAll, batchWait, executeBatch, recordVerdicts, runProject,
+  checkAll, batchWait, executeBatch, recordVerdicts, runProject, projectRun,
 };

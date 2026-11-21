@@ -1661,3 +1661,69 @@ test('recording: a lock that cannot be released is said, with what was seen done
     assert.deepEqual(fs.readFileSync(ledger), whole);
   });
 });
+
+// The `run` command itself, started as the run judge starts it: its input on standard
+// input, one object on standard output, exit status 0.
+
+// An executor that answers each run of its batch with a report of the run as described.
+const EXECUTOR = `'use strict';
+const fs = require('node:fs');
+const batch = JSON.parse(fs.readFileSync(0, 'utf8'));
+const reports = batch.runs.map((item) => ({ run_key: item.run_key, report: { end: 'exited', platform: item.run.platform, tools_ran: item.run.tools } }));
+process.stdout.write(JSON.stringify({ ended: true, reports }) + '\\n');
+`;
+
+function command(name, input, cwd) {
+  const { spawnSync } = require('node:child_process');
+  const done = spawnSync(process.execPath, [path.join(__dirname, 'dodona-kernel2.js'), name], { input, cwd, timeout: 60000 });
+  assert.equal(done.status, 0, `${name} exits 0: ${done.stderr}`);
+  const text = done.stdout.toString('utf8');
+  assert.ok(text.endsWith('\n') && text.indexOf('\n') === text.length - 1, 'one line');
+  return JSON.parse(text);
+}
+
+test('the run command refuses input it cannot take before any provider is started', () => {
+  const root = project();
+  try {
+    const { asked, log } = runFixture(root);
+    for (const [input, why] of [
+      [Buffer.from(JSON.stringify({ ...asked, executor: [] })), 'an executor that is no command'],
+      [Buffer.from(JSON.stringify({ ...asked, ledger: 'l/other.ledger' })), 'a ledger not among the ledgers'],
+      [Buffer.from(JSON.stringify({ ...asked, transcript: 'dodona.toml' })), 'a transcript over the project file'],
+      [Buffer.from('{"root":'), 'no JSON object'],
+    ]) {
+      const answer = command('run', input, root);
+      assert.deepEqual(Object.keys(answer), ['refused', 'detail'], why);
+      assert.equal(answer.refused, 'bad-input', why);
+    }
+    assert.equal(fs.existsSync(log), false, 'no provider was started');
+    assert.equal(fs.existsSync(path.join(root, 'l', 'run.ledger')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the run command checks, records and reports as status does, with counts', () => {
+  const root = project();
+  try {
+    const { asked, log } = runFixture(root);
+    fs.writeFileSync(path.join(root, 'code', 'executor.js'), EXECUTOR);
+    asked.executor = [process.execPath, path.join(root, 'code', 'executor.js')];
+    asked.transcript = 'transcript.json';
+    const out = command('run', Buffer.from(JSON.stringify(asked)), root);
+    assert.deepEqual(Object.keys(out), ['judged', 'report', 'coverage', 'policy_source', 'ledger', 'not_served', 'not_checkable',
+      'policy_not_applied', 'project_doubts', 'project_status', 'counts']);
+    assert.deepEqual(out.counts, { obligations: 2, reused: 0, checked: 2, ...COUNT_ZERO, passed: 1, failed: 1, not_checkable: 1 });
+    const { counts, ...reported } = out;
+    const status = command('status', Buffer.from(JSON.stringify(asked)), root);
+    assert.deepEqual(reported, status);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'transcript.json'), 'utf8')).length, 13);
+    everyProcessShutDown(log);
+    // Again, without the transcript (one is written once, to a new file): nothing left to check.
+    delete asked.transcript;
+    const again = command('run', Buffer.from(JSON.stringify(asked)), root);
+    assert.deepEqual(again.counts, { obligations: 2, reused: 2, checked: 0, ...COUNT_ZERO, not_checkable: 1 });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
