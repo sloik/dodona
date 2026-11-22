@@ -24,6 +24,10 @@ After the first release, a record is never edited to change its meaning. A chang
 
 Every record ends with **What would show this wrong**: an observable outcome that would falsify the decision. A decision without one is an opinion.
 
+## Owner approvals
+
+- [PR 40 documentation bindings](owner-approvals/0040-documentation-bindings.md)
+
 ## Index
 
 | Id | Decision | Status |

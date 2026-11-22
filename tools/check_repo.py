@@ -772,6 +772,51 @@ def gap_nothing_private_or_unportable() -> None:
                 problems.append(f"{rel}: contains a private or absolute path")
 
 
+def gap_owner_rule_review_is_exact() -> None:
+    """An approval cannot move with a new head, merge base or map."""
+    import check_docs
+
+    review = getattr(check_docs, "owner_rule_review", None)
+    if review is None:
+        problems.append("check_docs.py: the protected owner's exact map review cannot be applied")
+        return
+    parent, head = "1" * 40, "2" * 40
+    before, after = "previous rules", "reviewed rules"
+    digest = lambda text: hashlib.sha256(text.encode("utf-8")).hexdigest()
+    approvals = {(parent, head, digest(before), digest(after)): "0037"}
+    inputs = (parent, head, before, before, after)
+    if review(approvals, *inputs) != "0037":
+        problems.append("check_docs.py: the exact approved map review was refused")
+    for position, unapproved in enumerate(("3" * 40, "4" * 40, "old map", "new main map", "edited map")):
+        changed = list(inputs)
+        changed[position] = unapproved
+        if review(approvals, *changed) is not None:
+            problems.append(f"check_docs.py: an owner review carried across changed input {position + 1}")
+    if review(approvals, parent, None, before, before, after) is not None:
+        problems.append("check_docs.py: an owner review accepted a working tree")
+
+    base_map = {"rule": [], "exempt": [], "absent": [], "known": []}
+    rule = {"id": "probe", "code": ["newdir/tool.py"], "docs": ["README.md"], "why": "explains the tool"}
+    head_map = {**base_map, "rule": [rule]}
+    changed = [("A", "newdir/tool.py")]
+    reviewed = {"rule_review": "0040"}
+    rejected, _ = check_docs.judge_change(changed, {"README.md"}, [], base_map, head_map)
+    passed, notes = check_docs.judge_change(changed, {"README.md"}, [], base_map, head_map, **reviewed)
+    if len(rejected) != 1 or not rejected[0].endswith(check_docs.JUDGING) or passed or not any("owner review 0040" in n for n in notes):
+        problems.append("check_docs.py: the owner review did not resolve only the rule-change diagnostic")
+    for extra_changes, docs, proposed_map, expected in (
+        ([], set(), head_map, "rule probe:"),
+        ([("M", "tools/check_docs.py")], {"README.md"}, head_map, f"tools/check_docs.py: this change {check_docs.JUDGING}"),
+        ([("M", "decisions/owner-approvals/0040-documentation-bindings.md")], {"README.md"}, head_map,
+         f"decisions/owner-approvals/0040-documentation-bindings.md: this change {check_docs.JUDGING}"),
+        ([], {"README.md"}, {**head_map, "exempt": [{"paths": ["legacy/*"], "why": "new exception"}]}, "adds or alters [[exempt]]"),
+        ([], {"README.md"}, {**head_map, "known": [{"check": "probe", "problem": "new drift"}]}, "adds or alters [[known]]"),
+    ):
+        found, _ = check_docs.judge_change(changed + extra_changes, docs, [], base_map, proposed_map, **reviewed)
+        if not any(expected in problem for problem in found):
+            problems.append(f"check_docs.py: an owner review hid {expected!r}")
+
+
 def gap_workflows_are_safe() -> None:
     """Self-hosted runners must never run code from a pull request; actions are pinned."""
     for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
@@ -1237,7 +1282,8 @@ def gap_documents_follow_the_code() -> None:
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
-              gap_workflows_are_safe, gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
+              gap_workflows_are_safe, gap_owner_rule_review_is_exact,
+              gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,

@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import ast
 import functools
+import hashlib
 import json
 import os
 import pathlib
@@ -56,6 +57,15 @@ import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MAP_FILE = "docs/doc-map.toml"
+# The workflow runs this checker from protected main. No value from the PR grants a review.
+OWNER_RULE_REVIEWS = {
+    (
+        "32e8ce3fd216a512fa07799179ccf39c0d6b3bf7",
+        "6a381dca88a1fc2eddc3e214f238597c919ab732",
+        "dac6a5335a4592a2449403c78eaedae297762e4dcb58aed1629a38535442ac3f",
+        "ef5b836c07acde1006f9d1aec03115f1b575913791e42cc426558b616525ceac",
+    ): "decisions/owner-approvals/0040-documentation-bindings.md",
+}
 WAIVER = re.compile(r"^Docs-unchanged: ([a-z0-9][a-z0-9-]*): (.+)$")
 MIN_REASON_CHARS, MIN_REASON_WORDS = 40, 6
 # The files that decide how a change is judged. A change to any of them, or to a [[rule]] of the map,
@@ -65,8 +75,8 @@ JUDGING_FILES = ("tools/check_docs.py", ".github/workflows/docs.yml", ".github/C
 # checks.yml and tools/check_repo.py run the repository-wide checks in CI as the change has them, so a change can
 # switch them off there. They are not judging files: docs.yml also runs the base's checker over the whole
 # repository as the change leaves it (`whole`), which nothing in the change can switch off.
-# Everything under these is run by the judging job (the YAML parser's wheel), so it judges changes too.
-JUDGING_DIRS = (".github/vendor/",)
+# These directories supply the workflow's parser and the owner's approved rule reviews.
+JUDGING_DIRS = (".github/vendor/", "decisions/owner-approvals/")
 
 
 def as_merged(found: list[str], notes: list[str]) -> tuple[list[str], list[str]]:
@@ -924,9 +934,20 @@ def report_problems(body: str) -> list[str]:
     return problems
 
 
+def owner_rule_review(approvals: dict[tuple[str, str, str, str], str], merge_base: str, head: str | None,
+                      before: str | None, current: str | None, after: str) -> str | None:
+    """A prior review applies only to the recorded immutable change on the reviewed main map."""
+    if head is None or before is None or before != current:
+        return None
+    old_digest = hashlib.sha256(before.encode("utf-8")).hexdigest()
+    new_digest = hashlib.sha256(after.encode("utf-8")).hexdigest()
+    return approvals.get((merge_base, head, old_digest, new_digest))
+
+
 def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], messages: list[str],
                  base_map: dict | None, head_map: dict, decisions: dict[str, list[str]] | None = None,
-                 head_files: list[str] | None = None, main_map: dict | None = None) -> tuple[list[str], list[str]]:
+                 head_files: list[str] | None = None, main_map: dict | None = None,
+                 rule_review: str | None = None) -> tuple[list[str], list[str]]:
     """The rule for a change. `changed` is (status, path) with status A, M or D; `docs_changed` the
     documents whose substance changed. `base_map` is the map where the change branched off, `main_map` the map
     on the branch it goes into now: a file either binds to a rule triggers that rule, so a change cannot escape
@@ -987,6 +1008,14 @@ def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], message
         for kind in ("rule", "exempt", "absent", "known"):
             before = {json.dumps(e, sort_keys=True) for e in base_map[kind]}
             after = {json.dumps(e, sort_keys=True) for e in head_map[kind]}
+            if kind == "rule":
+                for action, entries in (("adds or alters", after - before), ("removes or alters", before - after)):
+                    for entry in sorted(entries):
+                        if rule_review is None:
+                            problems.append(f"{MAP_FILE}: this change {action} [[rule]] {entry}: it {JUDGING}")
+                        else:
+                            notes.append(f"{MAP_FILE}: owner review {rule_review}: this change {action} [[rule]] {entry}")
+                continue
             # What an exemption or known drift excuses is its paths or its problem; rewording its reason is not new.
             excused = {"exempt": lambda e: {(p,) for p in e.get("paths", [])},
                        "absent": lambda e: {(e.get("path"),)},
@@ -1008,16 +1037,11 @@ def judge_change(changed: list[tuple[str, str]], docs_changed: set[str], message
                     problems.append(f"{MAP_FILE}: this change adds or alters [[{kind}]] {e}. An exemption, absent path or known "
                                     "drift added by the change it excuses is granting yourself an exception (AGENTS.md rule 8): "
                                     "the owner adds it, in a change of its own or by merging over this failure")
-                elif kind == "rule":
-                    problems.append(f"{MAP_FILE}: this change adds or alters [[rule]] {e}: it {JUDGING}")
                 else:
                     notes.append(f"{MAP_FILE}: this change adds or alters [[{kind}]] {e}; review it")
             for e in sorted(before - after):
-                if kind == "rule":
-                    problems.append(f"{MAP_FILE}: this change removes or alters [[rule]] {e}: it {JUDGING}")
-                else:
-                    notes.append(f"{MAP_FILE}: this change removes or alters [[{kind}]] {e}; "
-                                 "files the base's entry covers are still judged by it here")
+                notes.append(f"{MAP_FILE}: this change removes or alters [[{kind}]] {e}; "
+                             "files the base's entry covers are still judged by it here")
     for num, governed in sorted((decisions or {}).items()):
         hit = sorted({p for _, p in changed for g in governed if not p.endswith(".md")
                       and (p == g.rstrip("/") or (g.endswith("/") and p.startswith(g)))})
@@ -1271,12 +1295,17 @@ def diff(root: pathlib.Path, base: str, head: str | None, pr_body: str | None,
     def git(root, *args):  # noqa: F811 - the module's git, with this call's environment
         return globals()["git"](root, *args, env=env)
 
-    for rev, what in ((base, "base"), (head_rev, "head")):
+    def verified_commit(rev: str, what: str) -> str:
         try:
-            git(root, "rev-parse", "--verify", "--quiet", rev + "^{commit}")
+            return git(root, "rev-parse", "--verify", "--quiet", rev + "^{commit}").decode().strip()
         except CannotRun:
             raise CannotRun(f"the {what} {rev} is not in this repository's history. If the branch was force-pushed, "
                             "the commits it replaced are gone and the change cannot be judged: judge it by hand") from None
+
+    base = verified_commit(base, "base")
+    head_rev = verified_commit(head_rev, "head")
+    if head is not None:
+        head = head_rev
     try:
         merge_base = git(root, "merge-base", base, head_rev).decode().strip()
     except CannotRun:
@@ -1334,7 +1363,12 @@ def diff(root: pathlib.Path, base: str, head: str | None, pr_body: str | None,
     head_files = [f for f in git(root, "ls-tree", "-r", "--name-only", "-z", head_rev).decode("utf-8").split("\0") if f]
     if head is None:
         head_files = Repo(root).files
-    problems, notes = judge_change(changed, docs_changed, messages, base_map, head_map, decisions, head_files, main_map)
+    approval = None
+    if pr_body is not None and head is not None:
+        approval = owner_rule_review(OWNER_RULE_REVIEWS, merge_base, head, base_text, main_text, head_text)
+        if approval and front_matter(at(base, approval) or "").get("status") != "accepted":
+            approval = None
+    problems, notes = judge_change(changed, docs_changed, messages, base_map, head_map, decisions, head_files, main_map, approval)
     if pr_body is not None:
         problems += report_problems(pr_body)
     return problems, notes
