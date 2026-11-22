@@ -40,6 +40,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 FORMAT = "dodona-metrics/2"
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -342,15 +343,22 @@ def _check_list(tree, rel: str, name: str) -> set[str]:
     except SyntaxError as err:
         raise Unmeasurable(f"{rel}: does not parse: {err}") from None
     # One binding, and nothing that changes it afterwards: otherwise the list read is not the list that runs.
-    stores = [n for n in ast.walk(module) if isinstance(n, ast.Name) and n.id == name and not isinstance(n.ctx, ast.Load)]
-    changed = [n for n in ast.walk(module) if (isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == name
-                                               and n.attr in ("append", "extend", "insert", "remove", "pop", "clear", "sort", "reverse"))
-               or (isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id == name
-                   and not isinstance(n.ctx, ast.Load))]
+    # The tree is walked once: it is read on every measurement, and the self-test measures thousands of times.
+    stores, changed, subscripted = [], [], []
+    for n in ast.walk(module):
+        if isinstance(n, ast.Name) and n.id == name and not isinstance(n.ctx, ast.Load):
+            stores.append(n)
+        elif isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == name \
+                and n.attr in ("append", "extend", "insert", "remove", "pop", "clear", "sort", "reverse"):
+            changed.append(n)
+        elif isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id == name:
+            subscripted.append(n)
+            if not isinstance(n.ctx, ast.Load):
+                changed.append(n)
     if len(stores) != 1 or changed:
         raise Unmeasurable(f"{rel}: {name} must be bound exactly once and never changed ({len(stores)} bindings, {len(changed)} changes)")
     # Read whole wherever it is read: a slice or an index (GAP_CHECKS[:0]) would run fewer checks than are counted.
-    if any(isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id == name for n in ast.walk(module)):
+    if subscripted:
         raise Unmeasurable(f"{rel}: {name} is sliced or indexed where it is read, so the checks that run are not the ones counted")
     for node in module.body:
         if (isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets)
@@ -925,9 +933,12 @@ def self_test(mutants: bool) -> int:
     results: list[tuple[str, bool, str]] = []
     skipped: list[str] = []
     me = pathlib.Path(__file__).resolve()
+    started = time.monotonic()
 
     def record(label: str, ok: bool, detail: str = "") -> None:
         results.append((label, ok, detail))
+        # Each judgement as it is made, so a run stopped by a time limit still shows how far it got.
+        print(_ascii(f"[{time.monotonic() - started:7.1f}s] {'ok  ' if ok else 'FAIL'}  {label}"), flush=True)
 
     with tempfile.TemporaryDirectory(prefix="dodona-metrics-") as tmp:
         tmpdir = pathlib.Path(tmp)
@@ -1448,12 +1459,14 @@ def self_test(mutants: bool) -> int:
                 (root / "tools").mkdir(exist_ok=True)
                 (root / "tools/metrics.py").write_text(mutated, encoding="utf-8")
                 jobs.append((label, root / "tools/metrics.py"))
+            # Recorded as each finishes, so a run stopped by a time limit still shows the mutants judged so far.
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-                done = list(pool.map(lambda j: (j[0], cli("self-test", "--no-mutants", tool=j[1])), jobs))
-            for label, (code, out) in done:
-                # Caught means the self-test judged and failed (1), not that the mutated tool crashed (2).
-                record(f"mutant '{label}' is caught by the self-test", code == 1 and "planted changes judged as expected" in out,
-                       f"its self-test exited {code}")
+                pending = {pool.submit(cli, "self-test", "--no-mutants", tool=tool): label for label, tool in jobs}
+                for finished in concurrent.futures.as_completed(pending):
+                    label, (code, out) = pending[finished], finished.result()
+                    # Caught means the self-test judged and failed (1), not that the mutated tool crashed (2).
+                    record(f"mutant '{label}' is caught by the self-test",
+                           code == 1 and "planted changes judged as expected" in out, f"its self-test exited {code}")
 
     failed = [r for r in results if not r[1]]
     for label, ok, detail in results:

@@ -115,3 +115,5 @@ Each change is compared with its own base, so a removal that the owner merged ov
 - that the jobs guard finds the gate's job name and job id in another `.yml` or `.yaml` workflow, and does not find the gate's own workflow;
 - the workflow guard: the gate workflow passes it, and each unsafe edit planted in it is noticed (among them write permissions, a secret, a self-hosted runner, `git -c ... checkout`, `read-tree -u`, a pipe into `bash` or `tar`, `eval`, and a loosened bootstrap test);
 - that each fault planted in the tool makes its own self-test fail. `MUTANTS` in `tools/metrics.py` lists the faults, each named for what it breaks.
+
+Each judgement is printed as it is made, with the seconds since the self-test started, and the faulty copies of the tool are reported as each one finishes. A run stopped by its time limit therefore shows how far it got and which part was slow. The full list, the count and the exit code follow at the end as before. `metrics-self-test.yml` allows the job an hour: on Windows the self-test has taken 21 to 30 minutes.
