@@ -391,6 +391,9 @@ A run with nothing to check starts no provider session for checks and no executo
 
 `tools/run_harness_check.py -- <kernel> scenario` runs the reference harness, `tools/harness.py`, which really starts a checker in a directory holding only what it was given. With `harness/checker_reads.py`, which reads its files, the kernel must grade the signed record `cross-make`, `tested` or `apart` according to what the harness was given. With `harness/checker_nods.py`, which agrees with everything, the known-wrong case exposes it and the grade stops at `apart`. A record changed after signing, signed with a key policy does not list, or written without the harness, stays at `helper`. The judge reports eight outcomes: the seven records the kernel grades and the known-answer control, "the known cases tell the real checker from the one that agrees with everything", which is judged on the harness alone. It makes its records in strict mode, so a checker that could not start, timed out, exited other than 0 or gave no `agreed` or `refused` is never read as a refusal. A kernel that did not finish, a control that did not hold, or a checker grade that is not the fixture's is unfinished (exit 2), never a mismatch. Only a completed wrong grade is a mismatch, named in `rejected` (exit 1). The ordinary harness CLI is unchanged.
 
+
+The validation mutants exercise withheld refusals through an observable wrong answer. They can drop invalid entries, omit a required report step, wrongly pass an invalid argument or exceed a provider deadline while still giving the judge time to receive an answer. The unchanged baseline still runs the full judge. A defect with a named witness must reject in that exact case on both passes through the judge.
+
 ## Rules for the kit
 
 - A scenario is added before the behaviour it tests, and is committed before any kernel that will be judged by it.

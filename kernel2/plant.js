@@ -220,6 +220,10 @@ function judgeDefect(copy, defect, counts, spawn) {
     return 'MISSED by the kit (only node --test rejects it)';
   }
   if (result.cases.length) {
+    if (Object.hasOwn(defect, 'witness') && !result.cases.some((name) => `${result.name}: ${name}` === defect.witness)) {
+      counts.missed += 1;
+      return `MISSED (the named witness did not reject on both runs: ${defect.witness})`;
+    }
     counts.caught += 1;
     return `caught (${result.name}: ${result.cases.join(', ')})`;
   }
@@ -339,7 +343,8 @@ function readDefects(file) {
   defects.forEach((defect, number) => {
     const fields = defect !== null && typeof defect === 'object' ? defect : {};
     const strings = ['name', 'file', 'find', 'replace'].every((key) => typeof fields[key] === 'string');
-    if (!strings || fields.name === '' || fields.find === '' || fields.file === '' || path.isAbsolute(fields.file)
+    const validWitness = !Object.hasOwn(fields, 'witness') || (typeof fields.witness === 'string' && fields.witness.trim() !== '');
+    if (!strings || !validWitness || fields.name === '' || fields.find === '' || fields.file === '' || path.isAbsolute(fields.file)
         || fields.file.split(/[\\/]/).includes('..')) {
       throw new Error(`defect ${number} in ${path.basename(file)} is malformed`);
     }

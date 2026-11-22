@@ -72,6 +72,8 @@ python3 tools/kit_adequacy.py
 
 `defects.json` lists defects to plant in this kernel, one text replacement each. `tools/kit_adequacy.py` plants them one at a time in a copy and reports whether the kit rejects each.
 
+A defect with a `witness` names the exact judge and case that must reject the planted kernel on both runs. The validation witnesses cover run description shape, attachment shape and type, and refusal of invalid project status input.
+
 ## Unicode tables
 
 The checked-in tables use Unicode 15.1.0. To regenerate them, put the five official data files named in the table header in a directory and run:

@@ -1583,6 +1583,26 @@ class KitAdequacyTests(unittest.TestCase):
             with self.subTest(answer=answer.stdout):
                 self.assertEqual(self.at_harness(answer, answer), (False, ["harness-judge unfinished"]))
 
+    def test_a_named_witness_must_be_present_in_the_replayed_rejections(self):
+        witness = "status-judge: a duplicate intent"
+        for rejected, want in ((witness, 0), ("status-judge: another case", 1)):
+            with self.subTest(rejected=rejected), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                kernel = root / "kernel"
+                kernel.mkdir()
+                (kernel / "fixture.rs").write_text("old", encoding="utf-8")
+                defect = {"name": "duplicate", "file": "fixture.rs", "find": "old",
+                          "replace": "planted", "witness": witness}
+                (kernel / "defects.json").write_text(json.dumps({"defects": [defect]}), encoding="utf-8")
+                results = [(True, []), (False, [rejected])]
+                with patch.object(kit_adequacy, "ROOT", root), \
+                        patch.object(kit_adequacy, "passes_kit", side_effect=results), \
+                        contextlib.redirect_stdout(io.StringIO()) as output:
+                    status = kit_adequacy.main()
+                self.assertEqual(status, want)
+                summary = json.loads(output.getvalue().splitlines()[-1])
+                self.assertEqual((summary["caught"], summary["all_caught"]), (int(want == 0), want == 0))
+
     def test_provisional_replay_leaves_the_batch_unfinished(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

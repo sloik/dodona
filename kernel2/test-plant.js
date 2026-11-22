@@ -466,6 +466,19 @@ test('an unfinished replay prevents a JavaScript shard from succeeding', (t) => 
   assert.deepEqual([run.report.shard_caught, run.report.all_caught, run.report.unfinished], [false, false, 1]);
 });
 
+test('a repeated unrelated mismatch cannot substitute for the named witness', (t) => {
+  const manifest = JSON.stringify({ defects: [
+    { name: 'first', file: 'rule.js', find: 'a = 1', replace: 'a = 0', witness: 'run_kit: plan/a' },
+  ] });
+  for (const [rejected, expected] of [['plan/a', 0], ['plan/b', 1]]) {
+    const run = batch(t, { run_kit: [kit([]), kit([rejected]), kit([rejected])] }, { manifest });
+    assert.equal(run.code, expected);
+    assert.equal(run.report.caught, Number(expected === 0));
+    assert.equal(run.report.missed, Number(expected !== 0));
+    assert.equal(run.report.all_caught, expected === 0);
+  }
+});
+
 test('a defect whose replay rejects another case is unfinished, not caught', (t) => {
   const run = batch(t, { run_kit: [kit([]), kit(['plan/a']), kit(['plan/a']), kit(['plan/a']), kit(['plan/b'])] });
   assert.equal(run.code, 2);

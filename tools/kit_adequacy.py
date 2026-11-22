@@ -229,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
             elif case and not covers.get(case, set()) & set(failing):
                 print(f"MISLABELLED {defect['name']}: no scenario that says it covers {case} rejects it; "
                       f"rejected only by {', '.join(failing[:4])}")
+            elif "witness" in defect and defect["witness"] not in failing:
+                print(f"MISLABELLED {defect['name']}: the named witness did not reject on both runs: {defect['witness']}")
             else:
                 caught += 1
                 print(f"caught   {defect['name']}: rejected by {', '.join(failing)}")
