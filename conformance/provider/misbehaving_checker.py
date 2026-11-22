@@ -239,9 +239,9 @@ def main() -> None:
             if MODE == "another-strength-class":
                 answer = {"final": {"verdict": "passed", "strength": {"class": "proof", "rank": RANK}}}
             if MODE == "runs-without-end":
-                answer = {"next": run(body_of_start)}
+                answer = {"next": run(body_of_start)}  # noqa: F821
             if MODE == "eight-runs":
-                answer = {"next": run(body_of_start)} if body["run"] < 8 else passed
+                answer = {"next": run(body_of_start)} if body["run"] < 8 else passed  # noqa: F821
             if MODE == "final-error":
                 answer = {"final": {"verdict": "error", "reason": "checker-crashed"}}
             if MODE == "failed-another-class":
@@ -305,11 +305,11 @@ def main() -> None:
             if MODE == "final-error-saying-unavailable":
                 answer = {"final": {"verdict": "error", "reason": "run-unavailable"}}
             if MODE == "same-run-twice":
-                answer = {"next": run(body_of_start)} if body["run"] == 1 else passed
+                answer = {"next": run(body_of_start)} if body["run"] == 1 else passed  # noqa: F821
             if MODE == "invented-verdict":
                 answer = {"final": {"verdict": "probably-fine"}}
             if MODE == "second-run-with-new-input":
-                answer = {"next": dict(run(body_of_start), inputs=[{"path": "later.txt", "identity": "sha256:" + "1" * 64}])} if body["run"] == 1 else passed
+                answer = {"next": dict(run(body_of_start), inputs=[{"path": "later.txt", "identity": "sha256:" + "1" * 64}])} if body["run"] == 1 else passed  # noqa: F821
         if body["op"] == "start":
             globals()["body_of_start"] = body
         message = {"type": "result", "id": request["id"], "capability": request["capability"], "body": answer}

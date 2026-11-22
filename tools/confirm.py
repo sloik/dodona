@@ -25,7 +25,6 @@ which stops accidents and nothing more.
 from __future__ import annotations
 
 import argparse
-import json
 import pathlib
 import secrets
 import sys

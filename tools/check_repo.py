@@ -456,7 +456,7 @@ def gap_an_intent_reads_one_way_only() -> None:
     """Free-form criteria tables could always be written so that a person and the reader saw different things,
     and results written by hand into the owner's ledger counted as passed."""
     import intents
-    problems_before = len(problems)
+    problems_before = len(problems)  # noqa: F841
     try:
         for path in sorted((ROOT / "intents").glob("[0-9]*.md")):
             intents.read(path)
@@ -833,6 +833,16 @@ def gap_workflows_are_safe() -> None:
         if "permissions:" not in text:
             problems.append(f"{path.name}: no explicit permissions")
         problems.extend(f"{path.name}: {p}" for p in pull_request_target_problems(text))
+        problems.extend(f"{path.name}: {p}" for p in checkout_and_trigger_problems(text))
+    # Every checkout drops its credentials, and no workflow is started by another's run: each is planted.
+    for name, old, new in (("checks.yml", "persist-credentials: false", "persist-credentials: true"),
+                           ("lint.yml", "        with:\n          persist-credentials: false\n", ""),
+                           ("docs.yml", "on:\n", "on:\n  workflow_run:\n    workflows: [Repository checks]\n"),
+                           ("metrics.yml", "on:\n", "on:\n  workflow_run:\n    workflows: [Repository checks]\n")):
+        planted = ROOT / ".github" / "workflows" / name
+        text = planted.read_text(encoding="utf-8") if planted.exists() else ""
+        if old not in text or not checkout_and_trigger_problems(text.replace(old, new, 1)):
+            problems.append(f".github/workflows/{name}: the checkout and trigger guard does not notice {new.strip() or 'a checkout without persist-credentials'!r}")
     # The guard must be seen to fail: each unsafe edit of the workflow that uses pull_request_target is planted.
     docs = ROOT / ".github" / "workflows" / "docs.yml"
     text = docs.read_text(encoding="utf-8") if docs.exists() else ""
@@ -849,6 +859,70 @@ def gap_workflows_are_safe() -> None:
                      ("run: |\n", 'run: |\n          echo "${{ github.head_ref }}"\n')):
         if "pull_request_target" in text and (old not in text or not pull_request_target_problems(text.replace(old, new, 1))):
             problems.append(f".github/workflows/docs.yml: the pull_request_target guard does not notice {new.strip()!r}")
+
+
+def checkout_and_trigger_problems(text: str) -> list[str]:
+    """A checkout that keeps its credentials leaves the token on disk for every later step, and a workflow
+    started by workflow_run runs with the base's token on the outcome of a run that may be a fork's."""
+    found = []
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        m = re.match(r"(\s*)-\s", line)
+        if not m:
+            continue
+        indent, step = len(m.group(1)), [line]
+        for later in lines[i + 1:]:
+            if later.strip() and not later.lstrip().startswith("#") and len(later) - len(later.lstrip()) <= indent:
+                break
+            step.append(later)
+        body = "\n".join(s for s in step if not s.lstrip().startswith("#"))
+        if re.search(r"uses:\s*actions/checkout@", body) and not re.search(r"persist-credentials:\s*false\b", body):
+            found.append(f"line {i + 1}: a checkout that does not set persist-credentials: false")
+    trigger = text.split("\njobs:")[0]
+    if re.search(r"\bworkflow_run\b", "\n".join(t for t in trigger.split("\n") if not t.lstrip().startswith("#"))):
+        found.append("is started by workflow_run, which runs with the base's token on another run's outcome")
+    return found
+
+
+def lint_aggregate_problems(text: str) -> list[str]:
+    """The ruleset requires the one job `lint`; a lint job it does not need fails without blocking anything."""
+    jobs = text.split("\njobs:\n", 1)[1] if "\njobs:\n" in text else ""
+    blocks, current = {}, None
+    for line in jobs.split("\n"):
+        m = re.match(r"  ([A-Za-z0-9_-]+):\s*$", line)
+        if m:
+            current = m.group(1)
+            blocks[current] = []
+        elif current is not None:
+            blocks[current].append(line)
+    if "lint-all" not in blocks:
+        return ["has no job lint-all"]
+    body = "\n".join(blocks.pop("lint-all"))
+    found = []
+    m = re.search(r"^    needs:\s*\[([^\]]*)\]", body, flags=re.M)
+    needs = {n.strip() for n in m.group(1).split(",") if n.strip()} if m else set()
+    for job in sorted(set(blocks) - needs):
+        found.append(f"lint-all does not need the job {job}, so its failure blocks nothing")
+    for job in sorted(needs - set(blocks)):
+        found.append(f"lint-all needs {job}, which is not a job")
+    if not re.search(r"^    if:\s*(\$\{\{\s*always\(\)\s*\}\}|always\(\))\s*$", body, flags=re.M):
+        found.append("lint-all does not run with if: always(), so a failed job above skips it, and a skipped check can pass")
+    if not re.search(r"^    name:\s*lint\s*$", body, flags=re.M):
+        found.append("lint-all is not named lint, the name the ruleset requires")
+    return found
+
+
+def gap_lint_aggregate_needs_every_job() -> None:
+    """A lint job left out of the needs of `lint`, the one the ruleset requires, could fail and block nothing."""
+    path = ROOT / ".github" / "workflows" / "lint.yml"
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    problems.extend(f".github/workflows/lint.yml: {p}" for p in lint_aggregate_problems(text))
+    extra = "\n  planted:\n    name: lint (planted)\n    runs-on: ubuntu-26.04\n    steps:\n      - run: exit 1\n"
+    for what, old, new in (("a job not in its needs", "\n  lint-all:\n", extra + "\n  lint-all:\n"),
+                           ("if: always() removed", "    if: ${{ always() }}\n", ""),
+                           ("a needed job dropped", "needs: [python-and-workflows, javascript, rust]", "needs: [python-and-workflows, javascript]")):
+        if old not in text or not lint_aggregate_problems(text.replace(old, new, 1)):
+            problems.append(f".github/workflows/lint.yml: the lint aggregate guard does not notice {what}")
 
 
 def pull_request_target_problems(text: str) -> list[str]:
@@ -1282,7 +1356,7 @@ def gap_documents_follow_the_code() -> None:
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
-              gap_workflows_are_safe, gap_owner_rule_review_is_exact,
+              gap_workflows_are_safe, gap_lint_aggregate_needs_every_job, gap_owner_rule_review_is_exact,
               gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,

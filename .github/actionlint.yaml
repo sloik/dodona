@@ -1,0 +1,8 @@
+# actionlint, run by .github/workflows/lint.yml (decision 0037).
+self-hosted-runner:
+  labels:
+    # A hosted image newer than the list built into the pinned actionlint.
+    - ubuntu-26.04
+    # This project's own runner (oracle-static.yml, models.yml).
+    - oracle
+    - dodona

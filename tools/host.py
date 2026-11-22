@@ -49,7 +49,6 @@ import tomllib
 # An integer of any length is read whole, so that a long one is not-an-integer, never refused as malformed.
 if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)
-import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import canonical  # noqa: E402

@@ -1,0 +1,103 @@
+name: Static analysis
+# Linters for each language and format the repository holds, so that a mistake a tool can see is
+# caught before anything runs (decision 0037, docs/static-checks.md). Each tool is pinned to one
+# version and reads its rules from a file in the repository: ruff.toml, eslint.config.mjs,
+# .github/actionlint.yaml and .github/zizmor.yml. JSON, TOML, line endings and whether every tool
+# compiles are checked by tools/check_repo.py in checks.yml and are not repeated here.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  python-and-workflows:
+    name: lint (Python and workflows)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # ruff and zizmor from PyPI, each file checked against the hashes in the list; outside the checkout,
+      # so that nothing installed becomes a file the checks must account for.
+      - name: Install the pinned Python tools
+        run: |
+          python3 -I -m venv "$RUNNER_TEMP/lint"
+          "$RUNNER_TEMP/lint/bin/python" -I -m pip install --quiet --no-deps --require-hashes -r .github/lint-tools.txt
+      - name: Python, with ruff (ruff.toml)
+        run: '"$RUNNER_TEMP/lint/bin/ruff" check --no-cache --output-format=full .'
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.27.1'
+          cache: false
+      # Built from source at a tagged version; Go's checksum database verifies every module it fetches.
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: Workflows, with actionlint and the shellcheck of the runner image (.github/actionlint.yaml)
+        run: '"$(go env GOPATH)/bin/actionlint"'
+      # The read-only token lets zizmor ask GitHub whether each pinned commit belongs to the action it names.
+      - name: Workflow security, with zizmor (.github/zizmor.yml)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: '"$RUNNER_TEMP/lint/bin/zizmor" .github/workflows'
+
+  javascript:
+    name: lint (JavaScript)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # One exact ESLint version; the second kernel itself has no dependencies and gains none.
+      - name: The second kernel, with ESLint (eslint.config.mjs)
+        run: npx --yes eslint@10.15.0 kernel2
+
+  rust:
+    # The kernel has code for one system only (cfg(unix), cfg(windows)), so it is linted on each.
+    name: lint (Rust, ${{ matrix.system }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            system: macos
+          - os: ubuntu-26.04
+            system: linux
+          - os: windows-2025
+            system: windows
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Clippy's default lints; only those that are errors by default fail the job (decision 0037).
+      - name: The first kernel, with clippy
+        run: cargo clippy --locked --all-targets --manifest-path kernel/Cargo.toml
+
+  # The one name main's ruleset requires (docs/static-checks.md): renaming a job or changing a matrix above
+  # never leaves a required check waiting. It runs whatever happened above, and passes only if every lint
+  # job succeeded; a job that failed, was skipped or was cancelled fails it.
+  lint-all:
+    name: lint
+    needs: [python-and-workflows, javascript, rust]
+    if: ${{ always() }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Require successful completion of every lint job
+        env:
+          PYTHON_AND_WORKFLOWS: ${{ needs.python-and-workflows.result }}
+          JAVASCRIPT: ${{ needs.javascript.result }}
+          RUST: ${{ needs.rust.result }}
+        run: |
+          echo "python-and-workflows: $PYTHON_AND_WORKFLOWS, javascript: $JAVASCRIPT, rust: $RUST"
+          test "$PYTHON_AND_WORKFLOWS" = success
+          test "$JAVASCRIPT" = success
+          test "$RUST" = success

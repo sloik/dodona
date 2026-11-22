@@ -1,0 +1,17 @@
+# zizmor, run by .github/workflows/lint.yml (decision 0037). Each exception names its file and why.
+rules:
+  # Each ignore names the line and column of the one finding it excuses, so any other trigger added there
+  # (workflow_run, say) is a finding of its own and fails.
+  # pull_request_target is the point of these two trusted gates: they run main's checker over the pull
+  # request's commits read as git objects. tools/check_repo.py (gap_workflows_are_safe) and the metrics
+  # workflow guard check that neither checks out or runs anything from the pull request.
+  dangerous-triggers:
+    ignore:
+      - docs.yml:24:3
+      - metrics.yml:45:3
+  # strategy.job-index and strategy.job-total are numbers GitHub sets from the matrix; nothing from a
+  # pull request's author reaches them. Two informational findings, one for each.
+  template-injection:
+    ignore:
+      - checks.yml:163:59
+      - checks.yml:163:85
