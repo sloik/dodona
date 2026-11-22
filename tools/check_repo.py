@@ -1099,6 +1099,49 @@ def gap_project_intent_criteria_have_a_schema() -> None:
         problems.append("project intent criteria have no schema")
 
 
+def gap_owner_rule_review_is_exact() -> None:
+    """An approval cannot move with a new head, merge base or map."""
+    import check_docs
+
+    review = getattr(check_docs, "owner_rule_review", None)
+    if review is None:
+        problems.append("check_docs.py: the protected owner's exact map review cannot be applied")
+        return
+    parent, head = "1" * 40, "2" * 40
+    before, after = "previous rules", "reviewed rules"
+    digest = lambda text: hashlib.sha256(text.encode("utf-8")).hexdigest()
+    approvals = {(parent, head, digest(before), digest(after)): "0037"}
+    inputs = (parent, head, before, before, after)
+    if review(approvals, *inputs) != "0037":
+        problems.append("check_docs.py: the exact approved map review was refused")
+    for position, unapproved in enumerate(("3" * 40, "4" * 40, "old map", "new main map", "edited map")):
+        changed = list(inputs)
+        changed[position] = unapproved
+        if review(approvals, *changed) is not None:
+            problems.append(f"check_docs.py: an owner review carried across changed input {position + 1}")
+    if review(approvals, parent, None, before, before, after) is not None:
+        problems.append("check_docs.py: an owner review accepted a working tree")
+
+    base_map = {"rule": [], "exempt": [], "absent": [], "known": []}
+    rule = {"id": "probe", "code": ["newdir/tool.py"], "docs": ["README.md"], "why": "explains the tool"}
+    head_map = {**base_map, "rule": [rule]}
+    changed = [("A", "newdir/tool.py")]
+    reviewed = {"rule_review": "0040"}
+    rejected, _ = check_docs.judge_change(changed, {"README.md"}, [], base_map, head_map)
+    passed, notes = check_docs.judge_change(changed, {"README.md"}, [], base_map, head_map, **reviewed)
+    if len(rejected) != 1 or not rejected[0].endswith(check_docs.JUDGING) or passed or not any("owner review 0040" in n for n in notes):
+        problems.append("check_docs.py: the owner review did not resolve only the rule-change diagnostic")
+    for extra_changes, docs, proposed_map, expected in (
+        ([], set(), head_map, "rule probe:"),
+        ([("M", "tools/check_docs.py")], {"README.md"}, head_map, f"tools/check_docs.py: this change {check_docs.JUDGING}"),
+        ([], {"README.md"}, {**head_map, "exempt": [{"paths": ["legacy/*"], "why": "new exception"}]}, "adds or alters [[exempt]]"),
+        ([], {"README.md"}, {**head_map, "known": [{"check": "probe", "problem": "new drift"}]}, "adds or alters [[known]]"),
+    ):
+        found, _ = check_docs.judge_change(changed + extra_changes, docs, [], base_map, proposed_map, **reviewed)
+        if not any(expected in problem for problem in found):
+            problems.append(f"check_docs.py: an owner review hid {expected!r}")
+
+
 def gap_documents_follow_the_code() -> None:
     """Code changed and the documents describing it did not. The checks live in tools/check_docs.py."""
     import check_docs
@@ -1122,7 +1165,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_every_tool_compiles, gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_thin_coverage_is_shown,
               gap_status_report_names_policy_on_pass, gap_project_intent_criteria_have_a_schema,
-              gap_documents_follow_the_code]
+              gap_owner_rule_review_is_exact, gap_documents_follow_the_code]
 
 
 class JudgeTests(unittest.TestCase):
