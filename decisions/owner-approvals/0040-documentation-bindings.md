@@ -1,7 +1,7 @@
 ---
 id: "PR 40"
 title: A prior documentation rule approval names the exact change
-status: proposed
+status: accepted
 direction: owner
 governs:
   - tools/check_docs.py
@@ -25,6 +25,11 @@ An owner approval already recorded in the checker on protected `main` may satisf
 The approved input is the exact PR 40 head `6a381dca88a1fc2eddc3e214f238597c919ab732`, with merge base `32e8ce3fd216a512fa07799179ccf39c0d6b3bf7`. The before and after map digests are `dac6a5335a4592a2449403c78eaedae297762e4dcb58aed1629a38535442ac3f` and `ef5b836c07acde1006f9d1aec03115f1b575913791e42cc426558b616525ceac` respectively. Argo is the project owner and records this decision at separation `self`. The three subagent reviews informed the decision at separation `helper`.
 
 The approval satisfies review of those map rules only. The same trusted job still enforces coverage, requires the affected documents, rejects new exemptions and known drift, judges protected checker changes, and validates the pull request description. The approval applies to an immutable pull request head. Working-tree judgments and author-controlled descriptions cannot supply approval. Ordinary rule changes still follow owner review.
+
+
+## Evidence
+
+On 22 November 2026, a local self check ran the job-name, whole-tree and change checks against the exact PR 40 head and its current description. The seven rule diagnostics became approval notes. The old baseline, a proposed record, a different head with the same tree, and a malformed description each still produced their expected failures. The repository checker also completed on synthetic merges with PR 40 and stacked PR 49. The hosted result on PR 40 still requires the approval to reach protected `main`.
 
 ## What would show this wrong
 

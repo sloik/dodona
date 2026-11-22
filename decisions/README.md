@@ -24,6 +24,10 @@ After the first release, a record is never edited to change its meaning. A chang
 
 Every record ends with **What would show this wrong**: an observable outcome that would falsify the decision. A decision without one is an opinion.
 
+## Owner approvals
+
+- [PR 40 documentation bindings](owner-approvals/0040-documentation-bindings.md)
+
 ## Index
 
 | Id | Decision | Status |
@@ -62,7 +66,3 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0032](0032-a-stand-in-is-verified-for-its-own-key-and-any-disagreement-withdraws-it.md) | A stand-in is verified for its own key, and any disagreement about that key withdraws it | proposed |
 | [0033](0033-a-kernel-hosts-providers.md) | A kernel hosts providers itself, and one status command reports on a project | proposed |
 | [0036](0036-pull-requests-open-ready-and-merge-after-checks-pass.md) | Reviewable pull requests open ready and merge automatically once their checks pass | proposed, owner direction |
-
-## Owner approvals
-
-- [PR 40 documentation bindings](owner-approvals/0040-documentation-bindings.md)

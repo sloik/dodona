@@ -75,8 +75,8 @@ JUDGING_FILES = ("tools/check_docs.py", ".github/workflows/docs.yml", ".github/C
 # checks.yml and tools/check_repo.py run the repository-wide checks in CI as the change has them, so a change can
 # switch them off there. They are not judging files: docs.yml also runs the base's checker over the whole
 # repository as the change leaves it (`whole`), which nothing in the change can switch off.
-# Everything under these is run by the judging job (the YAML parser's wheel), so it judges changes too.
-JUDGING_DIRS = (".github/vendor/",)
+# These directories supply the workflow's parser and the owner's approved rule reviews.
+JUDGING_DIRS = (".github/vendor/", "decisions/owner-approvals/")
 
 
 def as_merged(found: list[str], notes: list[str]) -> tuple[list[str], list[str]]:
