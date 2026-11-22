@@ -67,3 +67,4 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0033](0033-a-kernel-hosts-providers.md) | A kernel hosts providers itself, and one status command reports on a project | proposed |
 | [0034](0034-a-kernel-runs-a-project-and-reports-its-status.md) | A kernel runs a project's checks and reports its status, from what providers and a batch executor tell it | proposed |
 | [0036](0036-pull-requests-open-ready-and-merge-after-checks-pass.md) | Reviewable pull requests open ready and merge automatically once their checks pass | proposed, owner direction |
+| [0037](0037-static-analysis-runs-in-ci-for-each-language.md) | Static analysis runs in CI for each language and format the repository holds | proposed |

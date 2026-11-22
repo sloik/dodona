@@ -126,6 +126,13 @@ docs = ["docs/gap-checks.md"]
 why = "Every check is listed there with the gap behind it, and how the checks run."
 
 [[rule]]
+id = "static-checks"
+code = [".github/workflows/lint.yml", ".github/lint-tools.txt", ".github/actionlint.yaml", ".github/zizmor.yml",
+        "ruff.toml", "eslint.config.mjs", ".editorconfig"]
+docs = ["docs/static-checks.md"]
+why = "Which linter reads what, at which version and with which rules, and how to run them, is written there."
+
+[[rule]]
 id = "metrics"
 code = ["tools/metrics.py", ".github/workflows/metrics.yml", ".github/workflows/metrics-self-test.yml"]
 docs = ["docs/metrics.md"]

@@ -1,0 +1,27 @@
+# Static analysis of the repository's Python (tools, providers, the kit's helpers, the site binding).
+# Run by .github/workflows/lint.yml; decision 0037 says what is checked and why.
+# Lint only: `ruff format` is not enforced yet (decision 0037, "Left for later").
+
+# The oldest Python the tools are run with in CI.
+target-version = "py312"
+
+[lint]
+# Ruff's own default: syntax errors, pyflakes (undefined and unused names, imports that shadow)
+# and the pycodestyle rules that catch statements and comparisons that are likely mistakes.
+select = ["E4", "E7", "E9", "F"]
+# Style-only rules the code breaks on purpose or in many places; left for later (decision 0037).
+ignore = [
+    "E701", # several statements on one line (colon): tools/gen_unicode_tables.py is written compactly
+    "E702", # several statements on one line (semicolon): the same file
+    "E731", # a lambda assigned to a name: two small helpers
+    "E741", # the name `l`: used for a line in many comprehensions
+]
+
+[lint.per-file-ignores]
+# The name is set through globals() when the start request arrives; ruff cannot see that.
+"conformance/provider/misbehaving_checker.py" = ["F821"]
+# An unused import; this file is being changed elsewhere and is left as it is here.
+"tools/metrics.py" = ["F401"]
+# `problems_before` is set and never read; it may be a comparison that was never written, so it is
+# left for the owner rather than deleted (decision 0037).
+"tools/check_repo.py" = ["F841"]
