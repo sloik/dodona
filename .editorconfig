@@ -1,0 +1,22 @@
+# Editor settings that match what the repository checks already require (tools/check_repo.py: UTF-8 text,
+# line feeds). Decision 0037.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+
+[*.{py,rs}]
+indent_style = space
+indent_size = 4
+
+[*.{js,mjs,yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# Byte-exact data: hashed or compared as it is, so no editor may change it.
+[{conformance/**,spec/runs/**}]
+charset = unset
+end_of_line = unset
+indent_style = unset
+indent_size = unset

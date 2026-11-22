@@ -42,7 +42,6 @@ import json
 import os
 import pathlib
 import secrets
-import shutil
 import subprocess
 import sys
 import tempfile

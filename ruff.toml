@@ -1,0 +1,24 @@
+# Static analysis of the repository's Python (tools, providers, the kit's helpers, the site binding).
+# Run by .github/workflows/lint.yml; decision 0037 says what is checked and why.
+# Lint only: `ruff format` is not enforced yet (decision 0037, "Left for later").
+
+# The Python version ruff assumes: syntax newer than this is reported.
+target-version = "py312"
+
+[lint]
+# Syntax errors, pyflakes (undefined and unused names, imports that shadow) and the pycodestyle rules
+# that catch statements and comparisons that are likely mistakes. Narrower than ruff 0.17.6's own
+# default selection, which reports 191 findings here; that is left for later (decision 0037).
+select = ["E4", "E7", "E9", "F"]
+# Style-only rules the code breaks on purpose or in many places; left for later (decision 0037).
+ignore = [
+    "E701", # several statements on one line (colon): tools/gen_unicode_tables.py is written compactly
+    "E702", # several statements on one line (semicolon): the same file
+    "E731", # a lambda assigned to a name: two small helpers
+    "E741", # the name `l`: used for a line in many comprehensions
+]
+
+[lint.per-file-ignores]
+# One unused import (`import fnmatch`). tools/metrics.py is being changed by another pull request (#55) and is
+# left as it is here; once that has merged, this is to be replaced by `# noqa: F401` on that one line.
+"tools/metrics.py" = ["F401"]
