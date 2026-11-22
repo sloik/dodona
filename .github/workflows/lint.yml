@@ -80,3 +80,24 @@ jobs:
       # Clippy's default lints; only those that are errors by default fail the job (decision 0037).
       - name: The first kernel, with clippy
         run: cargo clippy --locked --all-targets --manifest-path kernel/Cargo.toml
+
+  # The one name main's ruleset requires (docs/static-checks.md): renaming a job or changing a matrix above
+  # never leaves a required check waiting. It runs whatever happened above, and passes only if every lint
+  # job succeeded; a job that failed, was skipped or was cancelled fails it.
+  lint-all:
+    name: lint
+    needs: [python-and-workflows, javascript, rust]
+    if: ${{ always() }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Require successful completion of every lint job
+        env:
+          PYTHON_AND_WORKFLOWS: ${{ needs.python-and-workflows.result }}
+          JAVASCRIPT: ${{ needs.javascript.result }}
+          RUST: ${{ needs.rust.result }}
+        run: |
+          echo "python-and-workflows: $PYTHON_AND_WORKFLOWS, javascript: $JAVASCRIPT, rust: $RUST"
+          test "$PYTHON_AND_WORKFLOWS" = success
+          test "$JAVASCRIPT" = success
+          test "$RUST" = success

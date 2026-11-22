@@ -34,6 +34,8 @@ A workflow of its own, [lint.yml](../.github/workflows/lint.yml), described in [
 
 The Python tools are installed from a list of exact versions and hashes ([.github/lint-tools.txt](../.github/lint-tools.txt)); actionlint is built at a tagged version through Go's checksum database; ESLint is run at an exact version with `npx`. Clippy runs on macOS, Linux and Windows, because the first kernel has code for one system only; the other tools read files and give the same answer on any system, so they run on Linux.
 
+A last job, `lint`, needs every other job of the workflow, runs whatever their outcome, and passes only if each of them succeeded: a job that failed, was skipped or was cancelled fails it. `lint` is the one name `main`'s ruleset is to require for this workflow. A required check is matched by its name, so requiring the jobs one by one would leave a required check waiting for ever once a job or a matrix entry is renamed; the jobs behind `lint` can change without touching the ruleset.
+
 A rule is left off only with its reason written next to it in the configuration, and listed below. The kernels name no tool: every configuration lives at the root of the repository or under `.github/`.
 
 ## Left for later
@@ -56,7 +58,8 @@ Two exceptions are not left for later but are part of the rules: ruff's F821 is 
 
 - A pull request that adds an undefined name, an unused import, a redeclared function or an unsafe workflow step fails a check before anyone reads it.
 - Moving a linter to a new version is a change of its own, which may bring new findings.
-- The jobs are not required by `main`'s ruleset until the owner adds them there.
+- Nothing here is required by `main`'s ruleset until the owner adds `lint` there; only then does a lint failure block a merge.
+- A new lint job must be added to the `needs` of `lint`, or its failure blocks nothing.
 
 ## Alternatives rejected
 

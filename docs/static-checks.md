@@ -9,6 +9,9 @@ Linters that read the code without running it, one for each language and format 
 | `lint (Python and workflows)` | zizmor 1.32.0 | [.github/zizmor.yml](../.github/zizmor.yml) | `.github/workflows/` |
 | `lint (JavaScript)` | ESLint 10.15.0 | [eslint.config.mjs](../eslint.config.mjs) | `kernel2/` |
 | `lint (Rust, macos)`, `(linux)`, `(windows)` | clippy of the runner's Rust | clippy's defaults: errors fail, warnings are shown | `kernel/` |
+| `lint` | none | every job above succeeded | the results of the jobs above |
+
+The last job, `lint`, needs every job above and passes only if each one succeeded; a job that failed, was skipped or was cancelled fails it. **`lint` is the single name `main`'s ruleset requires for this workflow**, so a job or a matrix entry can be renamed, added or removed without leaving a required check waiting for ever. A new lint job must be added to the `needs` of `lint`.
 
 ruff and zizmor are installed from [.github/lint-tools.txt](../.github/lint-tools.txt), which pins each version with the hash of every file published for it. actionlint is built at its tag with Go, whose checksum database verifies what it fetches. ESLint runs at its exact version through `npx`; what ESLint itself depends on is not locked. zizmor is given the job's read-only token, so that it can ask GitHub whether each pinned commit belongs to the action it names.
 
