@@ -8,7 +8,7 @@ Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with
 | [canonical.py](canonical.py) | Reference implementation of the [canonical encoding](../protocol/canonical-encoding.md) |
 | [metrics.py](metrics.py) | Counts how complete and how well checked dodona is, from its own files, and fails a change that takes a ratcheted item away ([metrics](../docs/metrics.md)) |
 | [check_docs.py](check_docs.py) | Checks that the documents still describe the code, across the repository and for one change ([gap checks](../docs/gap-checks.md)) |
-| [check_examples.py](check_examples.py) | Validates the schemas, the provider guide's examples and dodona's own policy with a JSON Schema validator |
+| [check_examples.py](check_examples.py) | Validates the schemas, provider guide examples, policy, project intent criteria and draft lock fixtures. It also checks that each draft lock entry pins each platform at most once |
 | [check_intents_provider.py](check_intents_provider.py) | Checks how the Markdown intents provider reports criteria and the obligations that check them |
 | [check_models.py](check_models.py) | Judges every model-check case listed in `spec/*/expected.json` |
 | [check_repo.py](check_repo.py) | The repository checks that need no model checker; must pass before a push ([gap checks](../docs/gap-checks.md)) |

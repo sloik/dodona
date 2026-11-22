@@ -19,4 +19,12 @@ Behind `draft`, most criteria are also uncovered in the kernel's eyes. Many are 
 
 The project commands obtain intents from the Markdown provider. The provider shares its reader with `tools/intents.py`, so the command-line check and the provider apply the same rules to criteria and their displayed table.
 
+The project intent criteria schema describes the decoded JSON in that one line, including criterion IDs written as strings of ASCII digits. The Markdown reader also checks plain text, number spelling, repeated keys, unique criterion IDs and agreement with the displayed table. The provider's `intent.index` result uses a separate wire schema. [Project intent criteria schema](../protocol/project-intent-criteria.schema.json), [Protocol messages](../protocol/messages.schema.json).
+
 Each intent has an issue where work on it is discussed: [0001](https://github.com/sloik/dodona/issues/3), [0002](https://github.com/sloik/dodona/issues/4), [0003](https://github.com/sloik/dodona/issues/5), [0004](https://github.com/sloik/dodona/issues/6), [0005](https://github.com/sloik/dodona/issues/7), [0006](https://github.com/sloik/dodona/issues/8). Current pieces of work carry the [`step` label](https://github.com/sloik/dodona/issues?q=is%3Aissue+label%3Astep).
+
+## Status report evidence for intent 0001
+
+In one hosted Linux replay, native Rust status and the pinned JavaScript report judge produced the same final report from the original completed ledger with 304 intact entries. All six intents were `draft` with shown level `none`. The project and all 121 obligations were `unknown`. The retained ZIP for artifact `14716281818` has SHA-256 `679000c44b2b1520c945b9cecc587fd634cd95427843322246541eaaeab11b0e`. [Status source](https://github.com/sloik/dodona/commit/3da9675066aa15fa8ac2ee11817d675d2be2007d) · [Replay proof](https://github.com/sloik/dodona/commit/e9ff9697ee6049e9533728dcdc8f492dc75c3216) · [Completed replay job](https://github.com/sloik/dodona/actions/runs/44925244772/job/136909783778) · [Replay archive](https://github.com/sloik/dodona/actions/runs/44925244772/artifacts/14716281818).
+
+The earlier main run used stage-0 Python assembly and the Rust `scenario` command. It counted 121 `passed` obligations on that run's original inputs. [Historical main run](https://github.com/sloik/dodona/actions/runs/44626497885) · [Historical archive](https://github.com/sloik/dodona/actions/runs/44626497885/artifacts/14582487546).
