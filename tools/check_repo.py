@@ -522,6 +522,7 @@ def gap_an_intent_reads_one_way_only() -> None:
                              ("a deferred criterion without its limit", lambda c: c[deferred].pop("limit_days")),
                              ("a limit of 0 days", lambda c: c[deferred].update(limit_days=0)),
                              ("a limit written as text", lambda c: c[deferred].update(limit_days="30")),
+                             ("a limit written with a fractional part", lambda c: c[deferred].update(limit_days=30.0)),
                              ("a limit that is true", lambda c: c[deferred].update(limit_days=True)),
                              ("a condition with markup", lambda c: c[deferred].update(condition="<b>seen</b>")),
                              ("a condition of spaces", lambda c: c[deferred].update(condition=" ")),
@@ -892,6 +893,63 @@ def gap_js_planted_defect_anchors_exist() -> None:
             problems.append(f"kernel2/defects.json: {defect['name']!r}: anchor absent from kernel2/{file}")
 
 
+def gap_rust_defect_shards_cover_the_inventory() -> None:
+    """Splitting the Rust job must still judge every listed defect exactly once."""
+    import kit_adequacy
+    select = getattr(kit_adequacy, "select_shard", None)
+    if select is None:
+        problems.append("kit_adequacy.py: the serial Rust defect inventory cannot be split across jobs")
+        return
+    inventory = list(range(19))
+    try:
+        selected = [select(inventory, index, 8) for index in range(8)]
+        if selected != [inventory[index::8] for index in range(8)]:
+            problems.append("kit_adequacy.py: the eight Rust shards must cover each defect once in manifest order")
+        for index, count in [(-1, 8), (8, 8), (0, 0), (0, len(inventory) + 1)]:
+            try:
+                select(inventory, index, count)
+            except ValueError:
+                continue
+            problems.append(f"kit_adequacy.py: accepted an invalid Rust shard {index} of {count}")
+    except (TypeError, ValueError, IndexError) as err:
+        problems.append(f"kit_adequacy.py: could not partition the Rust defects: {err}")
+
+
+def gap_ledger_judge_keeps_held_lock_result() -> None:
+    """A defective append may remove the judge's lock before the judge cleans up."""
+    import run_ledger_cases
+    for mode in ("intact", "removed", "changed"):
+        output = io.StringIO()
+
+        def answer(command, subcommand, request):
+            ledger = pathlib.Path(request["ledger"])
+            if subcommand != "ledger-append" or ledger.name != "held.ledger":
+                return {}
+            marker = ledger.with_suffix(".ledger.lock")
+            if mode == "removed":
+                marker.unlink()
+                ledger.write_bytes(ledger.read_bytes() + b"wrong append")
+                return {"appended": "wrong"}
+            if mode == "changed":
+                marker.write_bytes(b"replaced")
+            return {"refused": "locked"}
+
+        with contextlib.redirect_stdout(output), mock.patch.object(sys, "argv", ["judge", "--", "kernel"]), \
+                mock.patch.object(run_ledger_cases, "ask", side_effect=answer), \
+                mock.patch.object(subprocess, "Popen", return_value=mock.Mock(wait=lambda timeout: run_ledger_cases.WRITER_MISMATCH)):
+            try:
+                result = run_ledger_cases.main()
+            except OSError as err:
+                problems.append(f"ledger judge: held lock {mode} prevented a completed result: {type(err).__name__}")
+                continue
+        lines = output.getvalue().splitlines()
+        prefix = "match    " if mode == "intact" else "MISMATCH "
+        if result != 1 or not any(line.startswith(prefix + "a held lock refuses an append") for line in lines):
+            problems.append(f"ledger judge: did not record the expected held lock result when {mode}")
+        if not lines or json.loads(lines[-1]).get("all_matched") is not False:
+            problems.append(f"ledger judge: did not complete its final tally with the held lock {mode}")
+
+
 def gap_every_check_is_listed() -> None:
     """A gap check that nobody can find the reason for will be deleted by mistake."""
     listed = (ROOT / "docs" / "gap-checks.md").read_text(encoding="utf-8")
@@ -1068,6 +1126,17 @@ def gap_kit_judge_is_strict() -> None:
             problems.append(f"kit judge: wrong answer for kernel output {output!r}")
 
 
+def gap_status_report_names_policy_on_pass() -> None:
+    """The status schema described a policy identity for a pass without requiring one."""
+    schema = json.loads((ROOT / "protocol" / "status.schema.json").read_text(encoding="utf-8"))
+    condition = {
+        "if": {"properties": {"project": {"properties": {"status": {"const": "passed"}}}}},
+        "then": {"properties": {"policy": {"required": ["identity"]}}},
+    }
+    if condition not in schema.get("allOf", []):
+        problems.append("status.schema.json: a passed project must require policy.identity")
+
+
 def _fits(value, schema: dict, defs: dict, where: str) -> None:
     """A small structural check of data against the subset of JSON Schema the policy schema uses."""
     if "$ref" in schema:
@@ -1145,6 +1214,18 @@ def gap_provider_cases_match_the_provider() -> None:
         problems.append("conformance/provider/cases.json: a mode is listed twice")
 
 
+def gap_lock_platform_pins_are_unique() -> None:
+    """A draft lock entry may only pin one digest per exact platform."""
+    import check_examples
+    problems.extend(check_examples.check_lock_platform_fixtures())
+
+
+def gap_project_intent_criteria_have_a_schema() -> None:
+    """The shape of the criteria in a project file differs from the provider's wire format."""
+    if not (ROOT / "protocol/project-intent-criteria.schema.json").is_file():
+        problems.append("project intent criteria have no schema")
+
+
 def gap_documents_follow_the_code() -> None:
     """Code changed and the documents describing it did not. The checks live in tools/check_docs.py."""
     import check_docs
@@ -1157,10 +1238,12 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
               gap_workflows_are_safe, gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
-              gap_repository_paths_are_portable, gap_canonical_vectors_are_consistent,
+              gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
-              gap_provider_cases_match_the_provider, gap_js_planted_defect_anchors_exist, gap_every_check_is_listed,
+              gap_provider_cases_match_the_provider, gap_js_planted_defect_anchors_exist,
+              gap_rust_defect_shards_cover_the_inventory, gap_ledger_judge_keeps_held_lock_result,
+              gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
@@ -1168,7 +1251,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
               gap_status_keeps_literal_obligation_names,
-              gap_thin_coverage_is_shown, gap_documents_follow_the_code]
+              gap_thin_coverage_is_shown, gap_status_report_names_policy_on_pass,
+              gap_project_intent_criteria_have_a_schema, gap_documents_follow_the_code]
 
 
 class ToolPinTests(unittest.TestCase):

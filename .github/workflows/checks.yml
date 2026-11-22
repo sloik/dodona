@@ -149,31 +149,45 @@ jobs:
         if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
         run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js --status "${{ matrix.python }} tools/project_status.py --kernel ${{ matrix.rust_kernel }}" -- ${{ matrix.python }} tools/project_run.py --kernel ${{ matrix.rust_kernel }}
 
-  # A kit that no defective kernel fails proves nothing. Every listed defect is
-  # planted in each kernel in turn and the kit must reject it. Slow, so it has
-  # its own job.
-  planted-defects:
+  # Every shard checks the unchanged kernel and plants a disjoint part of the
+  # manifest. The matrix supplies the ordinal and total to keep the partition full.
+  planted-defects-rust-shards:
+    name: Rust planted defects (shard ${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - kernel: first
-            run: python3 tools/kit_adequacy.py
-          - kernel: second
-            run: node kernel2/plant.js
-    name: planted defects (${{ matrix.kernel }} kernel)
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     runs-on: ubuntu-26.04
-    # Every planted defect is built and judged on its own. With the host judges this took 86 and 109
-    # minutes on 2026-11-19; the limit leaves room for that to grow. If it does, split the list into
-    # shards rather than raise the limit again.
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The status judge recomputes each report with the other kernel's scenario command, so the second kernel's
-      # defects need the first kernel built (the first kernel's run uses Node, which the runner has).
-      - name: Build the first kernel, whose scenario command the second kernel's status judge uses
+      - name: Plant the Rust defects assigned to this shard
+        run: python3 -u tools/kit_adequacy.py --shard ${{ strategy.job-index }} ${{ strategy.job-total }}
+
+  planted-defects-rust:
+    name: planted defects (first kernel)
+    needs: planted-defects-rust-shards
+    if: ${{ always() }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Require successful completion of every Rust shard
+        env:
+          SHARDS_RESULT: ${{ needs.planted-defects-rust-shards.result }}
+        run: test "$SHARDS_RESULT" = success
+
+  planted-defects-js:
+    name: planted defects (second kernel)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The status judge recomputes each report with the first kernel's scenario command.
+      - name: Build the first kernel for the second kernel's status judge
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
-      - name: Plant every listed defect and check some judge rejects each
-        run: ${{ matrix.run }}
+      - name: Plant every listed JavaScript defect and check that a judge rejects each
+        run: node kernel2/plant.js
