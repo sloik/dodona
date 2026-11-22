@@ -61,7 +61,7 @@ A **run description** (see [messages.schema.json](messages.schema.json)) names: 
 | [project-intent-criteria.schema.json](project-intent-criteria.schema.json) | The decoded `criteria` value in a project intent file, including the ASCII digits in criterion IDs and the required fields for deferred gates |
 | [lock.schema.json](lock.schema.json) | The lock: providers and tools pinned to exact versions, one digest and entry point per platform, upstream source, requirement closure |
 | [policy.schema.json](policy.schema.json) | What must pass: required obligations and intents, minimum evidence, the gate floor, acceptable providers, executors and record origins, the separation floor per kind of act |
-| [status.schema.json](status.schema.json) | The result of the agent-facing `status` command, with its error object and error codes |
+| [status.schema.json](status.schema.json) | The result of the agent-facing `status` command, with its error object and error codes. A passed project report identifies the policy it was judged against |
 
 Two documents sit beside the schemas: the [configuration reference](../docs/configuration.md) for `dodona.toml`, and [writing a provider](../docs/writing-a-provider.md), a walkthrough with a worked session whose every JSON line validates against these schemas.
 
@@ -89,6 +89,8 @@ Validating a message against its schema is a first filter. The kernel also holds
 ## Tool trees
 
 A tool is pinned as a whole tree. How the digest of a tree is computed, and which trees have none, is in [tool-tree-digest.md](tool-tree-digest.md), with vectors. A check request may carry the listing of a tool tree, and a run may declare a directory as an output. The stage-0 host passes neither yet.
+
+A draft lock entry lists one pin for each exact platform it covers. The offline fixtures check the full platform object, including whether `libc` or `emulated_on` is present. [Draft lock schema](lock.schema.json).
 
 ## The ledger
 

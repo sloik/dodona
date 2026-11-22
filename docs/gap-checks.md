@@ -18,6 +18,7 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_path_vector_judge_is_strict` | The path-vector judge reduced a kernel's reported collisions to yes or no, so a truthy string or a pair naming unrelated paths passed a collision case. A collision case now needs exactly the vector's own pair, compared unordered, and a case without a collision needs an empty list. The judge is run in process against a mock kernel; the right pair in either order must still pass every vector |
 | `gap_repository_paths_are_portable` | dodona's own files must pass dodona's own path rules |
 | `gap_canonical_vectors_are_consistent` | A test vector whose hash is not the hash of its own text would mislead every implementer |
+| `gap_status_report_names_policy_on_pass` | The draft status schema accepted a synthetic passed project report without a policy identity. The repository checker requires the conditional, and `tools/check_examples.py` validates three controls with the pinned JSON Schema validator. A pass with its policy identity and a nothing-required report without a policy both validate. Removing only the identity from the passing report must fail at `policy.identity` |
 | `gap_every_modelled_case_has_a_scenario` | A defect planted in a formal model protects a kernel only if a scenario carries it into the kit. Every modelled case needs a scenario or a stated reason |
 | `gap_kit_judge_is_strict` | The judge of model runs once misread a result. The kit's judge must refuse an empty, short or wrong answer |
 | `gap_own_policy_fits_the_schema` | dodona's own policy file was first written with field names the policy schema did not have |
@@ -39,6 +40,7 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_project_intent_criteria_have_a_schema` | The provider's intent message has a different shape from the criteria in a project file. The repository requires a schema for the project criteria value, and the example checker validates the values in every checked-in intent. The example checker detects a schema that lets a deferred criterion omit its limit or a criterion ID contain letters |
 | `gap_runner_versions_agree` | An automatic update moved one CI job to a new Ubuntu version and left the others, so steps that run only on the named old version would have skipped without a word. All workflows use one Ubuntu version, and a step limited to a named system must name one that exists. An update that misses a line now fails on its own pull request |
 | `gap_reuse_is_decided_by_a_kernel_and_checked` | Every run started from an empty ledger, so the reuse the design promises was never used. Now it is, and a run that reuses must still fail when any check lacks a passing result for the inputs as they are now |
+| `gap_lock_platform_pins_are_unique` | The draft lock schema lets different pin rows name the same platform. An offline check exercises a conflicting pin and distinct platform rows, including different C libraries and the presence of emulation |
 | `gap_documents_follow_the_code` | Code changed and the documents describing it did not: usage lines missed flags, the kit's index missed five files, two decision headers lost their owner direction. Runs every check in `tools/check_docs.py` below, and its self-test, which plants a fault for each and requires it to be seen |
 
 ## Documents that follow the code
@@ -85,7 +87,7 @@ More checks run as their own tools in CI, because they need to build or install 
 
 | Tool | The gap behind it |
 |---|---|
-| `tools/check_examples.py` | The provider guide's examples were valid only because their author said so, and a schema change silently broke one. Also validates the decoded criteria values from the project intent files and tests a valid deferred criterion, a missing limit, and a criterion ID with letters |
+| `tools/check_examples.py` | Validates the provider guide examples, project intent criteria and offline lock fixtures. The controls exercise deferred limits, criterion IDs and platform pin uniqueness |
 | `tools/kit_adequacy.py` | A kit that no defective kernel fails proves nothing. Each planted defect must be rejected |
 | `tools/path_differential.py` | Two implementations of the path check written from one document could disagree unnoticed |
 | `tools/run_check_cases.py` | The rules a schema cannot express were prose. A checker that breaks each one in turn must be refused by the host, and nothing recorded as passed. It judges any host command from what the provider and the executor record: runs, run keys, hello's protocol, limits and echo, every request's capability, the start request, the reports passed back, compared type for type, and the closing shutdown. A host written to forge those records is beyond it |
