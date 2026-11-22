@@ -2,12 +2,13 @@
 # Run by .github/workflows/lint.yml; decision 0037 says what is checked and why.
 # Lint only: `ruff format` is not enforced yet (decision 0037, "Left for later").
 
-# The oldest Python the tools are run with in CI.
+# The Python version ruff assumes: syntax newer than this is reported.
 target-version = "py312"
 
 [lint]
-# Ruff's own default: syntax errors, pyflakes (undefined and unused names, imports that shadow)
-# and the pycodestyle rules that catch statements and comparisons that are likely mistakes.
+# Syntax errors, pyflakes (undefined and unused names, imports that shadow) and the pycodestyle rules
+# that catch statements and comparisons that are likely mistakes. Narrower than ruff 0.17.6's own
+# default selection, which reports 191 findings here; that is left for later (decision 0037).
 select = ["E4", "E7", "E9", "F"]
 # Style-only rules the code breaks on purpose or in many places; left for later (decision 0037).
 ignore = [

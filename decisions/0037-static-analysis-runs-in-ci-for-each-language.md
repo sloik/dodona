@@ -22,11 +22,11 @@ The repository holds Python (the stage-0 tools, the reference providers, the kit
 
 ## Decision
 
-A workflow of its own, [lint.yml](../.github/workflows/lint.yml), runs one widely used linter for each language and format, on every pull request and every push to `main`. Each tool is pinned to one version, and its rules live in a configuration file in the repository, never in the workflow:
+A workflow of its own, [lint.yml](../.github/workflows/lint.yml), described in [static checks](../docs/static-checks.md), runs one widely used linter for each language and format, on every pull request and every push to `main`. Each tool is pinned to one version, and its rules live in a configuration file in the repository, never in the workflow:
 
 | What | Tool | Rules |
 |---|---|---|
-| Python | ruff, lint only | [ruff.toml](../ruff.toml): ruff's default set (syntax errors, pyflakes, pycodestyle's likely-mistake rules) |
+| Python | ruff, lint only | [ruff.toml](../ruff.toml): syntax errors, pyflakes, and pycodestyle's likely-mistake rules (`E4`, `E7`, `E9`, `F`) |
 | JavaScript | ESLint | [eslint.config.mjs](../eslint.config.mjs): ESLint's recommended set, written out so no package is installed |
 | Rust | clippy | clippy's defaults; a lint that is an error by default fails the job, a warning does not |
 | Workflows | actionlint, with the runner's shellcheck; zizmor | [.github/actionlint.yaml](../.github/actionlint.yaml), [.github/zizmor.yml](../.github/zizmor.yml) |
@@ -41,6 +41,7 @@ A rule is left off only with its reason written next to it in the configuration,
 Each of these breaks on the code as it is now, and is left off rather than met by rewriting it:
 
 - `ruff format`: 55 Python files would be reformatted.
+- ruff 0.17.6's own default selection, which is wider than the rules above: 191 findings, among them B023 (a function that uses a loop variable, nine times), PLW1510 (`subprocess.run` without `check`, 41 times) and many style rules. B023 is worth reading first, as it can be a real mistake.
 - ruff E701, E702, E731 and E741: statements on one line, lambdas assigned to names, and `l` as a name; style, in many places.
 - ruff F401 in `tools/metrics.py`: one unused import, in a file being changed elsewhere.
 - ruff F841 in `tools/check_repo.py`: `problems_before` is set and never read in `gap_an_intent_reads_one_way_only`. It may be a comparison that was never written, so it is left for the owner.
@@ -49,7 +50,7 @@ Each of these breaks on the code as it is now, and is left off rather than met b
 - Markdown style: links and anchors are already checked by `tools/check_docs.py`.
 - TLA+: no checker of the specifications runs outside the model queue.
 
-Two exceptions are not left for later but are part of the rules: ruff's F821 is off for `conformance/provider/misbehaving_checker.py`, which sets the name through `globals()`; zizmor's `dangerous-triggers` is off for `docs.yml` and `metrics.yml`, whose `pull_request_target` is the point of the trusted gates and is guarded by `gap_workflows_are_safe` and the metrics workflow guard.
+Two exceptions are not left for later but are part of the rules: ruff's F821 is off for `conformance/provider/misbehaving_checker.py`, which sets the name through `globals()`; zizmor's `dangerous-triggers` is off for `docs.yml` and `metrics.yml`, whose `pull_request_target` is the point of the trusted gates and is guarded by `gap_workflows_are_safe` and the metrics workflow guard; and zizmor's informational `template-injection` is off for one line of `checks.yml`, which expands `strategy.job-index` and `strategy.job-total`, numbers GitHub sets from the matrix. Each is written, with its reason, in the tool's configuration file.
 
 ## Consequences
 

@@ -44,7 +44,7 @@ jobs:
       - name: Workflow security, with zizmor (.github/zizmor.yml)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: '"$RUNNER_TEMP/lint/bin/zizmor" --min-severity low .github/workflows'
+        run: '"$RUNNER_TEMP/lint/bin/zizmor" .github/workflows'
 
   javascript:
     name: lint (JavaScript)

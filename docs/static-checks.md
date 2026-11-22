@@ -21,7 +21,7 @@ From the root of the repository, with the same versions:
 ```
 python -m pip install --no-deps --require-hashes -r .github/lint-tools.txt
 ruff check .
-zizmor --min-severity low .github/workflows
+zizmor .github/workflows
 actionlint
 npx --yes eslint@10.15.0 kernel2
 cargo clippy --locked --all-targets --manifest-path kernel/Cargo.toml
