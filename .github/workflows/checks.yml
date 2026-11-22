@@ -178,8 +178,12 @@ jobs:
           SHARDS_RESULT: ${{ needs.planted-defects-rust-shards.result }}
         run: test "$SHARDS_RESULT" = success
 
-  planted-defects-js:
-    name: planted defects (second kernel)
+  planted-defects-js-shards:
+    name: JavaScript planted defects (shard ${{ matrix.shard }})
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     runs-on: ubuntu-26.04
     timeout-minutes: 180
     steps:
@@ -189,5 +193,17 @@ jobs:
       # The status judge recomputes each report with the first kernel's scenario command.
       - name: Build the first kernel for the second kernel's status judge
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
-      - name: Plant every listed JavaScript defect and check that a judge rejects each
-        run: node kernel2/plant.js
+      - name: Plant the JavaScript defects assigned to this shard
+        run: node kernel2/plant.js --shard ${{ strategy.job-index }} ${{ strategy.job-total }}
+
+  planted-defects-js:
+    name: planted defects (second kernel)
+    needs: planted-defects-js-shards
+    if: ${{ always() }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Require successful completion of every JavaScript shard
+        env:
+          SHARDS_RESULT: ${{ needs.planted-defects-js-shards.result }}
+        run: test "$SHARDS_RESULT" = success

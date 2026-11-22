@@ -4,9 +4,11 @@
 // the judges against it.
 //
 //     node kernel2/plant.js [FILE...]
+//     node kernel2/plant.js --shard INDEX COUNT
 //
 // With FILE names (such as project-status.js), only the defects planted in those files
-// are tried; the unchanged copy is still put to every judge first.
+// are tried; the unchanged copy is still put to every judge first. A shard uses
+// zero-based manifest positions and reports only whether its own subset was caught.
 //
 // Per defect it prints
 //   caught      a reporting judge rejected the defective copy with a complete report and,
@@ -247,6 +249,8 @@ function main({
   }
   const counts = { caught: 0, missed: 0, stale: 0, broken: 0, unfinished: 0, caught_provisionally: 0, caught_without_mismatch: 0 };
   let defects = [];
+  let shard = null;
+  let inventoryCount = 0;
   let finished = false;
   let baselineRejected = false;
   let cleanedUp = true;
@@ -256,11 +260,24 @@ function main({
     let listed;
     try {
       listed = readDefects(path.join(source, 'defects.json'));
+      inventoryCount = listed.length;
+      if (only.some((arg) => arg === '--shard' || arg.startsWith('--shard='))) {
+        const [index, count] = only.slice(1).map(Number);
+        if (only.length !== 3 || only[0] !== '--shard' || !only.slice(1).every((arg) => /^\d+$/.test(arg))
+            || !(0 <= index && index < count && count <= inventoryCount)) {
+          throw new Error('expected --shard INDEX COUNT with 0 <= INDEX < COUNT <= the number of listed defects');
+        }
+        shard = { index, count };
+      }
     } catch (err) {
       log(`UNFINISHED: the defect list could not be read: ${err && err.message ? err.message : err}; nothing was planted`);
       return summarise();
     }
-    defects = only.length === 0 ? listed : listed.filter((defect) => only.includes(defect.file));
+    if (shard) {
+      defects = listed.filter((_, position) => position % shard.count === shard.index);
+    } else {
+      defects = only.length === 0 ? listed : listed.filter((defect) => only.includes(defect.file));
+    }
     // Made inside the cleanup's reach, so a copy that fails part of the way is removed too.
     copy = fs.mkdtempSync(path.join(tmp, 'kernel2-plant-'));
     copyTree(source, copy);
@@ -302,7 +319,11 @@ function main({
 
   function summarise() {
     const all = finished && cleanedUp && !baselineRejected && counts.caught === defects.length && defects.length > 0;
-    log(JSON.stringify({ defects: defects.length, ...counts, all_caught: all, finished, cleaned_up: cleanedUp }));
+    const report = { defects: defects.length, ...counts, all_caught: only.length === 0 && all, finished, cleaned_up: cleanedUp };
+    if (shard) {
+      Object.assign(report, { shard_index: shard.index, shard_count: shard.count, inventory_count: inventoryCount, shard_caught: all });
+    }
+    log(JSON.stringify(report));
     if (all) return 0;
     if (!finished || !cleanedUp || counts.unfinished > 0 || counts.caught_provisionally > 0) return 2;
     return 1;

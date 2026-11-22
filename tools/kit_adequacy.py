@@ -182,11 +182,11 @@ def select_shard(defects: list, index: int, count: int) -> list:
     return defects[index::count]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--shard", nargs=2, type=int, metavar=("INDEX", "COUNT"),
                         help="judge one zero-based shard of the defect manifest")
-    args = parser.parse_args()
+    args = parser.parse_args([] if argv is None else argv)
     defects = json.loads((ROOT / "kernel" / "defects.json").read_text(encoding="utf-8"))["defects"]
     inventory_count = len(defects)
     if args.shard is not None:
@@ -242,4 +242,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

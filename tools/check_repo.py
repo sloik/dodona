@@ -1738,6 +1738,35 @@ class LedgerJudgeTests(unittest.TestCase):
         self.assertUnfinished(code, summary)
         self.assertIn("the file is byte for byte the reference file", summary["rejected"])
 
+    def test_a_writer_kernel_can_answer_locked_before_its_process_deadline(self):
+        def locked(command, subcommand, payload, timeout=60):
+            self.assertLess(payload["wait_ms"], timeout * 1000)
+            return {"refused": "locked"}
+
+        argv = ["run_ledger_cases.py", "--write", "fixture.ledger", "1", "1", "--", "kernel"]
+        with patch.object(run_ledger_cases.sys, "argv", argv), \
+                patch.object(run_ledger_cases, "ask", side_effect=locked), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(run_ledger_cases.writer(), run_ledger_cases.WRITER_MISMATCH)
+
+    def test_torn_cuts_do_not_reuse_a_path_that_a_mutant_can_lock(self):
+        paths = []
+
+        def simulate(command, subcommand, payload):
+            path = pathlib.Path(payload["ledger"])
+            if path.name.startswith("torn"):
+                if subcommand == "ledger-read":
+                    return {"torn": True, "entries": [{}, {}]}
+                paths.append(path)
+                return {"refused": "locked"}
+            return {}
+
+        with patch.object(run_ledger_cases, "ask", side_effect=simulate):
+            code, report = self.judge(self.kernel(), [FakeWriter(0), FakeWriter(0)])
+        self.assertEqual((code, report["checks"], report["unfinished"]), (1, 110, 0))
+        self.assertGreater(len(paths), 1)
+        self.assertEqual(len(paths), len(set(paths)))
+
     def test_two_writers_require_object_bodies(self):
         wrong = {"torn": False, "entries": [{"body": [w, n]} for w in range(2) for n in range(20)]}
         code, summary = self.judge(self.kernel(json.dumps(wrong).encode()), [FakeWriter(0), FakeWriter(0)])

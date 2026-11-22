@@ -143,7 +143,7 @@ def main() -> int:
             if how == "truncate-last-entry-at-every-byte":
                 wrong = []
                 for cut in range(1, len(lines[-1])):
-                    path = fresh("torn.ledger", good[:-cut])
+                    path = fresh(f"torn-{cut}.ledger", good[:-cut])
                     got = summary(read(path))
                     if got != want:
                         wrong.append((cut, got))
@@ -315,7 +315,7 @@ def writer() -> int:
         path, who, count = sys.argv[at + 1], int(sys.argv[at + 2]), int(sys.argv[at + 3])
         command = sys.argv[sys.argv.index("--", at) + 1:]
         for n in range(count):
-            answer = ask(command, "ledger-append", {"ledger": path, "kind": "evidence", "body": {"writer": who, "n": n}, "wait_ms": 60000})
+            answer = ask(command, "ledger-append", {"ledger": path, "kind": "evidence", "body": {"writer": who, "n": n}, "wait_ms": 5000})
             if not isinstance(answer, dict) or "appended" not in answer:
                 print(f"writer {who} gave up at entry {n}: the kernel answered {answer}")
                 return WRITER_MISMATCH

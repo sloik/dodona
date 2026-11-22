@@ -436,6 +436,36 @@ test('a batch credits rejections that repeat, restores each defect and removes o
   assert.deepEqual(run.left, ['kernel2-plant-other']);
 });
 
+test('JavaScript shards contain disjoint manifest positions and claim only subset success', (t) => {
+  const results = { run_kit: [kit([]), kit(['plan/a']), kit(['plan/a'])] };
+  const first = batch(t, results, { main: { only: ['--shard', '0', '2'] } });
+  const second = batch(t, { run_kit: [kit([]), kit(['plan/b']), kit(['plan/b'])] },
+    { main: { only: ['--shard', '1', '2'] } });
+  assert.deepEqual([first.code, second.code], [0, 0]);
+  assert.deepEqual(first.seen, ['a = 1; b = 2;', 'a = 0; b = 2;', 'a = 0; b = 2;']);
+  assert.deepEqual(second.seen, ['a = 1; b = 2;', 'a = 1; b = 0;', 'a = 1; b = 0;']);
+  for (const [index, run] of [first, second].entries()) {
+    assert.deepEqual([run.report.shard_index, run.report.shard_count, run.report.inventory_count,
+      run.report.caught, run.report.shard_caught, run.report.all_caught], [index, 2, 2, 1, true, false]);
+    assert.deepEqual(run.left, ['kernel2-plant-other']);
+  }
+});
+
+test('an invalid JavaScript shard stops before a copy or baseline is started', (t) => {
+  for (const only of [['--shard', '2', '2'], ['--shard', '0', '3'], ['--shard', '0', '1', 'rule.js']]) {
+    const run = batch(t, {}, { main: { only } });
+    assert.equal(run.code, 2);
+    assert.deepEqual([run.report.finished, run.report.all_caught, run.calls], [false, false, []]);
+  }
+});
+
+test('an unfinished replay prevents a JavaScript shard from succeeding', (t) => {
+  const run = batch(t, { run_kit: [kit([]), kit(['plan/a']), killed('SIGTERM')] },
+    { main: { only: ['--shard', '0', '2'] } });
+  assert.equal(run.code, 2);
+  assert.deepEqual([run.report.shard_caught, run.report.all_caught, run.report.unfinished], [false, false, 1]);
+});
+
 test('a defect whose replay rejects another case is unfinished, not caught', (t) => {
   const run = batch(t, { run_kit: [kit([]), kit(['plan/a']), kit(['plan/a']), kit(['plan/a']), kit(['plan/b'])] });
   assert.equal(run.code, 2);
