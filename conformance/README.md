@@ -116,6 +116,8 @@ The result has `"shown"`: the weakest of the three links, on the scale `none`, `
 
 A scenario gives a `root` and `children`, each with the gate of its one criterion, `hard` or `soft`, and a policy with `min_hard_gates`. There may be no children. Tree scenarios know only those two gates. Any gate that is a string other than exactly `hard` or `soft` (`Hard`, `Soft`, `deferred`, any other text), whether at the start, in an `edit` or in an `add`, counts as `hard` ([decision 0030](../decisions/0030-the-hard-gate-floor-is-counted-over-the-tree.md)): a mistake in writing a gate can only make delivery harder, as with a gate nobody can read in status scenarios. `deferred`, a gate status scenarios do know, is not one here, so it too counts as `hard`. A starting gate that is not a string makes the scenario invalid. A gate that is not a string is a value of the wrong type, and the step changes nothing. Adding a child that is already there, setting a gate to what it already counts as, or a step that names a child that is not there, changes nothing.
 
+The unreadable-gate mutation now targets an edit. The scenario for an unreadable starting gate still runs with the same expectations.
+
 | Step | Meaning |
 |---|---|
 | `{"confirm": {}}` | The owner confirms the tree as it stands |
@@ -279,6 +281,8 @@ Two more things are judged, each by its own tool.
 - An append to a corrupt ledger answers `{"refused": "corrupt"}` and leaves the file as it was, unless the request itself is bad (below).
 - A `ledger-append` with no string `kind`, with no `body`, or whose entry would nest deeper than 64 levels, answers `{"refused": "bad-request"}` and writes nothing: no entry, no file, no lock left behind. An entry of exactly 64 levels is appended, and an append after it works. The request is judged before the lock is taken and the ledger read, so a bad request to a locked or corrupt ledger is still `bad-request`, and so is a request nested too deep to be read at all.
 
+Each byte cut in the torn-ledger fixture uses its own ledger path. The two writers still share a ledger, and their lock wait ends before the process deadline so the judge can record a completed refusal.
+
 ## How a host is judged
 
 `tools/run_provider_cases.py -- <host command>` starts the host once per case and has it run the misbehaving provider in that mode. A case matches when the host reports the expected outcome and reason, returns within the deadline plus a grace period, and nothing the provider started is still running. The first case is a well-behaved provider that must be accepted: a host that refuses everything would otherwise pass.
@@ -416,5 +420,3 @@ A run with nothing to check starts no provider session for checks and no executo
 - Rules written above with no scenario or vector yet: a set in a core-key preimage whose order differs between UTF-8 bytes and UTF-16 code units (the members are identities, which are ASCII, so no valid preimage can show it); an unknown field inside `inputs` other than `platform`; a ledger entry or an append whose `kind` is the empty string; an append whose `body` is null; an evidence field of the wrong type; an act whose `started_by` or `make` has the wrong type.
 - The status scenarios added after the second review still use few shapes: no scenario has children that are themselves intents in the scenario, and only one has a floor above `helper`.
 - The levels above `helper` in the kit describe what a kernel must do when a harness vouches for an act. No harness that an agent cannot reach exists yet, so they are not reachable in practice today.
-
-Each byte cut in the torn-ledger fixture uses its own ledger path. The two writers still share a ledger, and their lock wait ends before the process deadline so the judge can record a completed refusal. The unreadable-gate mutation now targets an edit. The scenario for an unreadable starting gate still runs with the same expectations.
