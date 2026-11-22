@@ -20,7 +20,6 @@ import json
 import os
 import subprocess
 import sys
-import time
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "well-behaved"
 OUT = sys.stdout.buffer
@@ -49,7 +48,9 @@ def wait(rounds=6000):
             os._exit(0)
         time.sleep(0.1)
 '''
-exec(POLL)  # defines wait(), the same code the child left behind runs
+_POLLING: dict = {}
+exec(POLL, _POLLING)  # the same code the child left behind runs
+wait = _POLLING["wait"]
 
 
 def note_pid(pid: int) -> None:
