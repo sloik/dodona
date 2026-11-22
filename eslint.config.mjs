@@ -29,7 +29,7 @@ const node = Object.fromEntries([
 
 export default [
   {
-    files: ['kernel2/**/*.js'],
+    files: ['kernel2/**/*.{js,mjs,cjs}'],
     languageOptions: { ecmaVersion: 2024, sourceType: 'commonjs', globals: node },
     linterOptions: { reportUnusedDisableDirectives: 'error' },
     rules: {
@@ -99,8 +99,15 @@ export default [
     },
   },
   {
+    // An .mjs file is an ES module.
+    files: ['kernel2/**/*.mjs'],
+    languageOptions: { sourceType: 'module' },
+  },
+  {
     // status.js declares isObject twice, with the same body. Its exact bytes are an input of a recorded run
-    // (spec/runs/index.json, claim C37), so it is not changed here; decision 0037 lists it for later.
+    // (spec/runs/index.json, claim C37), so it is not changed here, not even by a disable comment on the line,
+    // and ESLint's configuration cannot name a line. The rule is therefore off for this one file until a change
+    // that records a new run removes the copy; decision 0037 lists it for later.
     files: ['kernel2/status.js'],
     rules: { 'no-redeclare': 'off' },
   },

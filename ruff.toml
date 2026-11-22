@@ -19,10 +19,6 @@ ignore = [
 ]
 
 [lint.per-file-ignores]
-# The name is set through globals() when the start request arrives; ruff cannot see that.
-"conformance/provider/misbehaving_checker.py" = ["F821"]
-# An unused import; this file is being changed elsewhere and is left as it is here.
+# One unused import (`import fnmatch`). tools/metrics.py is being changed by another pull request (#55) and is
+# left as it is here; once that has merged, this is to be replaced by `# noqa: F401` on that one line.
 "tools/metrics.py" = ["F401"]
-# `problems_before` is set and never read; it may be a comparison that was never written, so it is
-# left for the owner rather than deleted (decision 0037).
-"tools/check_repo.py" = ["F841"]
