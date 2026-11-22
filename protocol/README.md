@@ -25,10 +25,10 @@ A message that fails validation, a missing required field, or a mismatched `id` 
 
 | Capability | Request carries | Result carries |
 |---|---|---|
-| `intent.index` | Intent and amendment files | Intents: owner, criteria, gates, children, what each touches; amendments |
+| `intent.index` | Intent and amendment files, and the obligations every binding enumerated | Intents: the whole text, owner, worker, criteria with the obligations that check each, gates, children, what each touches; amendments |
 | `decision.index` | Decision files | Decision nodes: status, governed names, supersedes |
 | `definition.index` | Claimed files | Definitions: name, identity, dependencies, granularity, materialising files |
-| `obligation.enumerate` | A binding and its indexed definitions | Obligations: name, specified-by, targets, kind, expectation, planted-defect link, configuration |
+| `obligation.enumerate` | A binding and its indexed definitions | Obligations: name, specified-by, targets, kind, expectation, planted-defect link, configuration, the files a check may read |
 | `obligation.check` | One obligation with its inputs materialised | A run description, or a final verdict with evidence |
 | `artifact.build` | A build obligation with its inputs materialised | A run description, or final output identities |
 | `conformance.check` | A specification, an implementation or artifact, a mapping | A run description, or a final verdict with method and trusted base |

@@ -213,13 +213,19 @@ function projectStatus(policy, intents, reports, obligations) {
   return 'unknown';
 }
 
+// Sets a key as an own data property, so an obligation named `__proto__` is kept as data.
+function put(object, key, value) {
+  Object.defineProperty(object, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
 function report(state, ledger) {
   const obligations = {};
   const levels = {};
   for (const [name, details] of Object.entries(state.obligations)) {
     const records = countingRecords(name, details.preimage, ledger, state);
-    obligations[name] = obligationStatus(records);
-    levels[name] = obligationLevel(obligations[name].status, records);
+    const judged = obligationStatus(records);
+    put(obligations, name, judged);
+    put(levels, name, obligationLevel(judged.status, records));
   }
   const reports = {};
   const shown = {};

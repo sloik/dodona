@@ -23,9 +23,22 @@ import canonical  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
+class Deep(dict):
+    """A request whose body is nested `levels` deep: written out here, since a JSON writer may not reach that deep."""
+
+    def __init__(self, request: dict, levels: int):
+        super().__init__(request)
+        self.levels = levels
+
+    def text(self) -> str:
+        rest = json.dumps(dict(self))[1:]
+        return '{"body": ' + '{"x": ' * (self.levels - 1) + "{}" + "}" * (self.levels - 1) + (", " + rest if rest != "}" else "}")
+
+
 def ask(command: list[str], sub: str, payload: dict, timeout: int = 60):
     try:
-        done = subprocess.run(command + [sub], input=json.dumps(payload).encode("utf-8"), capture_output=True, timeout=timeout)
+        text = payload.text() if isinstance(payload, Deep) else json.dumps(payload)
+        done = subprocess.run(command + [sub], input=text.encode("utf-8"), capture_output=True, timeout=timeout)
         if done.returncode != 0:
             return {"exit": done.returncode, "said": done.stderr.decode("utf-8", "replace")[-300:]}
         return json.loads(done.stdout.decode("utf-8"))
@@ -144,26 +157,57 @@ def main() -> int:
         check("an append after an entry of an unlisted kind works", isinstance(answer, dict) and "appended" in answer
               and path.read_bytes() == other["then"]["file"].encode("utf-8"), str(answer))
 
+        # An entry as deep as a ledger allows: written, and followed like any other.
+        deepest = more["deepest"]
+        path = fresh("deepest.ledger", good)
+        answer = ask(command, "ledger-append", dict(deepest["append"], ledger=str(path), wait_ms=2000))
+        check("an entry nested 64 levels deep is appended", answer == {"appended": deepest["identity"]} and path.read_bytes() == deepest["file"].encode("utf-8"), str(answer)[:200])
+        answer = ask(command, "ledger-append", dict(deepest["then"]["append"], ledger=str(path), wait_ms=2000))
+        check("an append after an entry nested 64 levels deep works", isinstance(answer, dict) and "appended" in answer
+              and path.read_bytes() == deepest["then"]["file"].encode("utf-8"), str(answer)[:200])
+
         # Requests that are not requests: refused, and nothing written.
+        def req(case: dict, **more_fields):
+            asked = dict(case["request"], **more_fields)
+            return Deep(asked, case["body_levels"]) if "body_levels" in case else asked
+
         for case in more["bad_requests"]:
             absent = folder / "bad-request.ledger"
             if absent.exists():
                 absent.unlink()
-            answer = ask(command, "ledger-append", dict(case["request"], ledger=str(absent), wait_ms=500))
+            answer = ask(command, "ledger-append", req(case, ledger=str(absent), wait_ms=500))
             check(f"a request to append with {case['name']} is refused, new ledger", answer == {"refused": "bad-request"} and not absent.exists()
                   and not pathlib.Path(str(absent) + ".lock").exists(), f"answered {answer}; file {'written' if absent.exists() else 'not written'}")
             existing = fresh("bad-request-existing.ledger", good)
-            answer = ask(command, "ledger-append", dict(case["request"], ledger=str(existing), wait_ms=500))
+            answer = ask(command, "ledger-append", req(case, ledger=str(existing), wait_ms=500))
             check(f"a request to append with {case['name']} is refused, existing ledger", answer == {"refused": "bad-request"} and existing.read_bytes() == good
                   and not pathlib.Path(str(existing) + ".lock").exists(), f"answered {answer}; file {'unchanged' if existing.read_bytes() == good else 'changed'}")
+            # The request is judged before the lock is taken and the ledger read: bad-request before locked and corrupt.
+            damaged = next(d["file"].encode("utf-8") for d in more["damage"] if d["expect"].get("refused") == "corrupt")
+            spoilt = fresh("bad-request-corrupt.ledger", damaged)
+            answer = ask(command, "ledger-append", req(case, ledger=str(spoilt), wait_ms=500))
+            check(f"a request to append with {case['name']} is refused, corrupt ledger", answer == {"refused": "bad-request"} and spoilt.read_bytes() == damaged, f"answered {answer}")
+            held = fresh("bad-request-held.ledger", good)
+            pathlib.Path(str(held) + ".lock").write_text("held by the judge\n", encoding="ascii")
+            answer = ask(command, "ledger-append", req(case, ledger=str(held), wait_ms=300))
+            check(f"a request to append with {case['name']} is refused, held lock", answer == {"refused": "bad-request"} and held.read_bytes() == good, f"answered {answer}")
+            pathlib.Path(str(held) + ".lock").unlink()
 
         # A held lock.
         held = fresh("held.ledger", good)
         lock = pathlib.Path(str(held) + ".lock")
-        lock.write_text("held by the judge\n", encoding="ascii")
+        marker = b"held by the judge\n"
+        lock.write_bytes(marker)
         refused = ask(command, "ledger-append", {"ledger": str(held), "kind": "evidence", "body": {}, "wait_ms": 300})
-        check("a held lock refuses an append", refused == {"refused": "locked"} and held.read_bytes() == good, str(refused))
-        lock.unlink()
+        unchanged = held.read_bytes() == good
+        try:
+            observed_marker = lock.read_bytes()
+        except FileNotFoundError:
+            observed_marker = None
+        intact = observed_marker == marker
+        check("a held lock refuses an append", refused == {"refused": "locked"} and unchanged and intact,
+              f"answered {refused}; ledger unchanged: {unchanged}; marker intact: {intact}")
+        lock.unlink(missing_ok=observed_marker is None)
 
         # Two writers at once.
         shared = folder / "shared.ledger"

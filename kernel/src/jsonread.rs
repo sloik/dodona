@@ -29,6 +29,17 @@ enum Frame {
 
 /// The value of a JSON text, and how deeply it nests.
 pub fn parse(text: &str, strict: bool) -> Result<(Value, usize), &'static str> {
+    members(text, strict).map(|(v, deepest, _)| (v, deepest))
+}
+
+/// The value of a JSON text, how deeply it nests, and, when it is an object, how
+/// deeply the text nests under each of its members, counted from the object
+/// itself as the first level. A member whose value holds no list or object is
+/// not listed. Measured on the text, so it holds below `KEPT` too.
+pub fn members(
+    text: &str,
+    strict: bool,
+) -> Result<(Value, usize, Vec<(String, usize)>), &'static str> {
     let mut p = Parser {
         s: text,
         pos: 0,
@@ -36,6 +47,7 @@ pub fn parse(text: &str, strict: bool) -> Result<(Value, usize), &'static str> {
     };
     let mut stack: Vec<Frame> = Vec::new();
     let mut deepest = 0;
+    let mut under: Vec<(String, usize)> = Vec::new();
     loop {
         p.ws();
         let mut value = match p.peek() {
@@ -43,6 +55,12 @@ pub fn parse(text: &str, strict: bool) -> Result<(Value, usize), &'static str> {
                 p.pos += 1;
                 let kept = stack.len() < KEPT;
                 deepest = deepest.max(stack.len() + 1);
+                if let Some(Frame::Object { key, .. }) = stack.first() {
+                    match under.last_mut() {
+                        Some((k, d)) if *k == *key => *d = (*d).max(stack.len() + 1),
+                        _ => under.push((key.clone(), stack.len() + 1)),
+                    }
+                }
                 p.ws();
                 if open == b'[' {
                     if p.take(b']') {
@@ -84,7 +102,7 @@ pub fn parse(text: &str, strict: bool) -> Result<(Value, usize), &'static str> {
                     if p.pos != p.s.len() {
                         return Err("not-json");
                     }
-                    return Ok((value, deepest));
+                    return Ok((value, deepest, under));
                 }
                 Some(f) => f,
             };
@@ -396,5 +414,20 @@ mod tests {
             "}".repeat(65)
         );
         assert_eq!(parse(&text, true).unwrap_err(), "duplicate-key");
+    }
+    #[test]
+    fn depth_under_each_member() {
+        let (_, d, under) = members(r#"{"a":1,"b":[[]],"c":{"x":{}},"d":"s"}"#, true).unwrap();
+        assert_eq!(d, 3);
+        assert_eq!(under, vec![("b".to_owned(), 3), ("c".to_owned(), 3)]);
+        assert!(members("[[[]]]", true).unwrap().2.is_empty());
+        assert!(members("{}", true).unwrap().2.is_empty());
+        // Measured on the text, below the kept depth too, and with no recursion.
+        let deep = |n: usize| format!("{}{}", "[".repeat(n), "]".repeat(n));
+        let text = format!(r#"{{"body":{},"kind":"k","z":[]}}"#, deep(1_000_000));
+        let (v, d, under) = members(&text, true).unwrap();
+        assert_eq!(d, 1_000_001);
+        assert_eq!(under, vec![("body".to_owned(), 1_000_001), ("z".to_owned(), 2)]);
+        assert_eq!(v.text("kind"), Some("k"));
     }
 }

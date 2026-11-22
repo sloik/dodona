@@ -16,6 +16,7 @@ status 78 before reading anything.
 """
 import hashlib
 import json
+import re
 import pathlib
 import shutil
 import subprocess
@@ -46,6 +47,18 @@ def inside_the_executor() -> bool:
     return groups == [f"0::/system.slice/tla-q-{job}.service"]
 
 
+def stated_version(printed: bytes, exit_status: int) -> str | None:
+    """The version a Java runtime states on its own line, `openjdk version "21.0.13" ...` or `java version "..."`; None
+    unless it exited 0 and the version is a release (digits and dots only: `21.0.13-ea` is not one)."""
+    if exit_status != 0:
+        return None
+    for line in printed.decode("utf-8", "replace").splitlines():
+        found = re.fullmatch(r'(?:openjdk|java) version "([0-9]+(?:\.[0-9]+)*)"(?: .*)?', line.strip())
+        if found:
+            return found.group(1)
+    return None
+
+
 def main() -> int:
     if not inside_the_executor():
         print("refused: this driver runs only inside a job of the site's queue", file=sys.stderr)
@@ -62,6 +75,16 @@ def main() -> int:
         except OSError:
             measured[path] = None
     (out / "measured.json").write_text(json.dumps(measured, indent=1), encoding="utf-8")
+    # The version of each program pinned by a floor, as the program states it (`java -version` prints
+    # `version "21.0.13"` on its first line). Unreadable is null, which never meets a floor.
+    versions = {}
+    for path in manifest.get("versions", []):
+        try:
+            said = subprocess.run([path, "-version"], capture_output=True, timeout=60)
+            versions[path] = stated_version(said.stderr + said.stdout, said.returncode)
+        except (OSError, subprocess.TimeoutExpired):
+            versions[path] = None
+    (out / "versions.json").write_text(json.dumps(versions, indent=1), encoding="utf-8")
     for case in manifest["cases"]:
         target = out / case["name"]
         target.parent.mkdir(parents=True, exist_ok=True)

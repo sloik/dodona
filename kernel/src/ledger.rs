@@ -38,6 +38,12 @@ fn entry(line: &[u8], earlier: &[String]) -> Option<Value> {
     {
         return None;
     }
+    // A payload nested deeper than 64 levels, the entry itself the first, is
+    // corrupt. Measured without recursion, before the payload is read as a value.
+    let (_, depth) = crate::jsonread::parse(payload, true).ok()?;
+    if depth > crate::wire::MAX_DEPTH {
+        return None;
+    }
     let entry = json::parse(payload.as_bytes()).ok()?;
     let shaped = matches!(&entry, Value::Object(fields) if fields.len() == 3)
         && entry.text("kind").is_some_and(|k| !k.is_empty())
@@ -131,7 +137,31 @@ fn field<'a>(v: &'a Value, name: &str) -> Result<&'a str, String> {
         _ => Err(format!("`{name}` must be a string")),
     }
 }
-pub fn append(v: &Value) -> Result<Value, String> {
+/// Add one entry, as the request `input` asks. The request is read without
+/// recursion and its depth measured on the text, so that a body nested
+/// thousands deep is refused like any other too deep, not by running out of
+/// stack. A request no deeper than an entry may be is read as every other
+/// command's input is.
+pub fn append(input: &[u8]) -> Result<Value, String> {
+    let unreadable = |reason: &str| format!("the input is not acceptable JSON: {reason}");
+    let text = std::str::from_utf8(input).map_err(|_| unreadable("invalid-string"))?;
+    let (kept, deepest, under) = crate::jsonread::members(text, true).map_err(unreadable)?;
+    let v = if deepest > crate::wire::MAX_DEPTH {
+        // Read whole, but nothing deeper than 64 kept: no deep value is built.
+        kept
+    } else {
+        json::parse(input).map_err(unreadable)?
+    };
+    // How deep the entry would nest: the entry itself is the first level, and its
+    // body sits where the request's does.
+    let body_depth = under
+        .iter()
+        .filter(|(k, _)| k == "body")
+        .map(|(_, d)| *d)
+        .fold(1, usize::max);
+    append_read(&v, body_depth)
+}
+fn append_read(v: &Value, body_depth: usize) -> Result<Value, String> {
     // Everything the caller supplies is checked before the lock is taken.
     let path = field(v, "ledger")?;
     let wait = match v.opt("wait_ms") {
@@ -143,6 +173,12 @@ pub fn append(v: &Value) -> Result<Value, String> {
     let (Some(kind), Some(body)) = (kind, v.opt("body")) else {
         return Ok(refused("bad-request"));
     };
+    // An entry nested deeper than 64 levels, the entry itself the first, could
+    // never be read back: it is refused before anything is touched.
+    let depth = body_depth;
+    if depth > crate::wire::MAX_DEPTH {
+        return Ok(refused("bad-request"));
+    }
     let Some(_lock) = lock(path, wait)? else {
         return Ok(refused("locked"));
     };
@@ -301,13 +337,65 @@ mod tests {
             ("wait_ms", Value::Number(0)),
         ])
     }
+    /// An append asked as the command is asked: as text.
+    fn ask(v: &Value) -> Result<Value, String> {
+        append(json::encode(v).as_bytes())
+    }
+    /// A request whose body is an object nested `levels` deep, written as text,
+    /// since no value that deep is built here.
+    fn deep_request(path: &str, levels: usize) -> String {
+        format!(
+            r#"{{"body":{}{{}}{},"kind":"note","ledger":{},"wait_ms":0}}"#,
+            r#"{"x":"#.repeat(levels - 1),
+            "}".repeat(levels - 1),
+            json::encode(&json::string(path))
+        )
+    }
+    #[test]
+    fn deep_bodies() {
+        // A folder of its own: the other test removes its folder when it ends.
+        let dir = std::env::temp_dir().join(format!("dodona-kernel-deep-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("deep.ledger").to_str().unwrap().to_owned();
+        let _ = fs::remove_file(&path);
+        let lock_file = format!("{path}.lock");
+        // Deep enough to run out of stack if it were read by recursion.
+        for levels in [64, 5_000, 100_000] {
+            let answer = append(deep_request(&path, levels).as_bytes()).unwrap();
+            assert_eq!(json::encode(&answer), r#"{"refused":"bad-request"}"#);
+            assert!(!std::path::Path::new(&path).exists());
+            assert!(!std::path::Path::new(&lock_file).exists());
+        }
+        // Refused before the lock is looked at.
+        fs::write(&lock_file, "theirs").unwrap();
+        let answer = append(deep_request(&path, 5_000).as_bytes()).unwrap();
+        assert_eq!(json::encode(&answer), r#"{"refused":"bad-request"}"#);
+        fs::remove_file(&lock_file).unwrap();
+        // A body that nests the entry 64 deep is written and read back whole.
+        let answer = append(deep_request(&path, 63).as_bytes()).unwrap();
+        assert!(answer.opt("appended").is_some());
+        let back = read(&request(&path, "")).unwrap();
+        assert_eq!(back.get("entries").array().len(), 1);
+        // A request deep somewhere other than its body is judged by its body.
+        let other = format!(
+            r#"{{"body":{{}},"extra":{}{},"kind":"note","ledger":{},"wait_ms":0}}"#,
+            "[".repeat(5_000),
+            "]".repeat(5_000),
+            json::encode(&json::string(&path))
+        );
+        assert!(append(other.as_bytes()).unwrap().opt("appended").is_some());
+        // Input that is not acceptable JSON is still an error, not a refusal.
+        assert!(append(b"{\"body\":1,\"body\":2}").is_err());
+        assert!(append(b"\xff").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
     #[test]
     fn append_releases_the_lock_on_every_path() {
         let path = scratch("paths.ledger");
         let lock_file = format!("{path}.lock");
         let (_, want) = entries(&["a", "b"]);
         // Appended, to a file that does not exist and then to one that does.
-        assert!(append(&request(&path, "a"))
+        assert!(ask(&request(&path, "a"))
             .unwrap()
             .opt("appended")
             .is_some());
@@ -318,7 +406,7 @@ mod tests {
             format!("{}dodona1 99 torn", &want[..want.find('\n').unwrap() + 1]),
         )
         .unwrap();
-        assert!(append(&request(&path, "b"))
+        assert!(ask(&request(&path, "b"))
             .unwrap()
             .opt("appended")
             .is_some());
@@ -326,7 +414,7 @@ mod tests {
         assert!(!std::path::Path::new(&lock_file).exists());
         // Corrupt: refused, unchanged, lock released.
         fs::write(&path, "garbage\n").unwrap();
-        let answer = append(&request(&path, "c")).unwrap();
+        let answer = ask(&request(&path, "c")).unwrap();
         assert_eq!(json::encode(&answer), r#"{"refused":"corrupt"}"#);
         assert_eq!(fs::read_to_string(&path).unwrap(), "garbage\n");
         assert!(!std::path::Path::new(&lock_file).exists());
@@ -336,19 +424,19 @@ mod tests {
         );
         // Held by someone else: refused, and their lock is left alone.
         fs::write(&lock_file, "theirs").unwrap();
-        let answer = append(&request(&path, "c")).unwrap();
+        let answer = ask(&request(&path, "c")).unwrap();
         assert_eq!(json::encode(&answer), r#"{"refused":"locked"}"#);
         assert!(std::path::Path::new(&lock_file).exists());
         fs::remove_file(&lock_file).unwrap();
         // A ledger that cannot be read or written is an error, not `corrupt`, and leaves no lock.
         let dir = scratch("a-directory");
         fs::create_dir_all(&dir).unwrap();
-        assert!(append(&request(&dir, "c")).is_err());
+        assert!(ask(&request(&dir, "c")).is_err());
         assert!(!std::path::Path::new(&format!("{dir}.lock")).exists());
         assert!(read(&request(&dir, "")).is_err());
         // Bad requests are refused before any lock is taken.
         let bad = json::object(vec![("ledger", json::string(&path))]);
-        assert!(append(&bad).is_err());
+        assert!(ask(&bad).is_err());
         assert!(!std::path::Path::new(&lock_file).exists());
         // No kind that is a non-empty string, or no body: refused, nothing written, no lock.
         let fresh = scratch("fresh.ledger");
@@ -365,7 +453,7 @@ mod tests {
             ];
             request.extend(kind.map(|k| ("kind", k)));
             request.extend(body.map(|b| ("body", b)));
-            let answer = append(&json::object(request)).unwrap();
+            let answer = ask(&json::object(request)).unwrap();
             assert_eq!(json::encode(&answer), r#"{"refused":"bad-request"}"#);
             assert!(!std::path::Path::new(&fresh).exists());
             assert!(!std::path::Path::new(&format!("{fresh}.lock")).exists());
@@ -377,8 +465,8 @@ mod tests {
             ("body", Value::Null),
             ("wait_ms", Value::Number(0)),
         ]);
-        assert!(append(&odd).unwrap().opt("appended").is_some());
-        assert!(append(&request(&fresh, "after"))
+        assert!(ask(&odd).unwrap().opt("appended").is_some());
+        assert!(ask(&request(&fresh, "after"))
             .unwrap()
             .opt("appended")
             .is_some());

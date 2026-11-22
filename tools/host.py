@@ -8,9 +8,13 @@ a kernel writes the results to a ledger and reports status.
 It is in two halves, because the executor and the kernel may live on
 different machines:
 
-    python tools/host.py plan     --ledger FILE --dumps-from DIR --writer NAME --out PLAN --kernel CMD...
+    python tools/host.py plan     --ledger FILE --dumps-from DIR --writer NAME --out PLAN [--policy-ref REF] --kernel CMD...
     python tools/host.py collect  --site FILE --out DIR [--plan PLAN] [--dumps]
     python tools/host.py conclude --runs DIR --ledger FILE --writer NAME --kernel CMD...
+
+and, as the reference a kernel's `check` command is judged against (decision 0033):
+
+    python tools/host.py check    < INPUT.json
 
 `plan` reads the ledger kept from earlier runs and asks a kernel which checks
 still have a current result; only the others are sent.
@@ -33,12 +37,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
+
+# An integer of any length is read whole, so that a long one is not-an-integer, never refused as malformed.
+if hasattr(sys, "set_int_max_str_digits"):
+    sys.set_int_max_str_digits(0)
 import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -70,18 +80,21 @@ def file_ref(path: pathlib.Path, root: pathlib.Path) -> dict:
 class Session:
     """One provider process, with the rules about messages applied to it."""
 
-    def __init__(self, argv: list[str], cwd: pathlib.Path, transcript: list, deadline_s: float = 60):
+    def __init__(self, argv: list[str], cwd: pathlib.Path, transcript: list, deadline_s: float = 60, deadline_ms: int | None = None):
         import queue
         import threading
         self.tree = provider_host.Tree(argv) if cwd == pathlib.Path.cwd() else self._start(argv, cwd)
         self.lines: "queue.Queue" = queue.Queue()
+        # The deadline as given, in whole milliseconds, is what hello and every request carry; never rounded.
+        self.deadline_ms = deadline_ms if deadline_ms is not None else int(deadline_s * 1000)
+        deadline_s = self.deadline_ms / 1000
         self.transcript, self.deadline_s, self.next_id = transcript, deadline_s, 0
         log = {"bytes": 0, "kept": b"", "truncated": False}
         threading.Thread(target=provider_host.read_lines, args=(self.tree.proc.stdout, 1048576, self.lines), daemon=True).start()
         threading.Thread(target=provider_host.drain, args=(self.tree.proc.stderr, 65536, log), daemon=True).start()
         echo = "héllo ☃ \u0001\u001f end"
         try:
-            self.send({"type": "hello", "protocol": ["0.2"], "limits": {"max_line_bytes": 1048576, "deadline_ms": int(deadline_s * 1000)}, "echo": echo})
+            self.send({"type": "hello", "protocol": ["0.2"], "limits": {"max_line_bytes": 1048576, "deadline_ms": self.deadline_ms}, "echo": echo})
             answer = self.receive()
             if answer.get("type") != "manifest" or answer.get("echo") != echo:
                 raise Refused("bad-manifest")
@@ -145,7 +158,7 @@ class Session:
         """Send one request and return the body of its result."""
         self.next_id += 1
         ident = str(self.next_id)
-        self.send({"type": "request", "id": ident, "deadline_ms": int(self.deadline_s * 1000), "capability": capability, "body": body})
+        self.send({"type": "request", "id": ident, "deadline_ms": self.deadline_ms, "capability": capability, "body": body})
         answer = self.receive()
         if answer.get("id") != ident:
             raise Refused("wrong-id")
@@ -168,11 +181,15 @@ class Session:
 
 
 def depth(value) -> int:
-    if isinstance(value, dict):
-        return 1 + max((depth(v) for v in value.values()), default=0)
-    if isinstance(value, list):
-        return 1 + max((depth(v) for v in value), default=0)
-    return 0
+    """How deep objects and lists nest, without recursion, so no depth crashes the reader."""
+    deepest, todo = 0, [(value, 0)]
+    while todo:
+        here, level = todo.pop()
+        if isinstance(here, (dict, list)):
+            level += 1
+            deepest = max(deepest, level)
+            todo.extend((v, level) for v in (here.values() if isinstance(here, dict) else here))
+    return deepest
 
 
 def no_repeats(pairs):
@@ -196,13 +213,18 @@ def safe_integer(text):
 
 
 def half_pair(value) -> bool:
-    """Whether a string anywhere in the value holds half of a UTF-16 pair."""
-    if isinstance(value, str):
-        return any(0xD800 <= ord(c) <= 0xDFFF for c in value)
-    if isinstance(value, dict):
-        return any(half_pair(k) or half_pair(v) for k, v in value.items())
-    if isinstance(value, list):
-        return any(half_pair(v) for v in value)
+    """Whether a string anywhere in the value holds half of a UTF-16 pair. Without recursion."""
+    todo = [value]
+    while todo:
+        here = todo.pop()
+        if isinstance(here, str):
+            if any(0xD800 <= ord(c) <= 0xDFFF for c in here):
+                return True
+        elif isinstance(here, dict):
+            todo.extend(here.keys())
+            todo.extend(here.values())
+        elif isinstance(here, list):
+            todo.extend(here)
     return False
 
 
@@ -210,18 +232,21 @@ def not_json(text):
     raise ValueError("malformed")  # NaN and Infinity are not JSON, whatever Python's reader allows
 
 
-def strict_load(raw: bytes):
-    """Read one JSON text as the canonical encoding writes it, or raise Refused with the reason."""
+def strict_load(raw: bytes, limit: int | None = 64):
+    """Read one JSON text as the canonical encoding writes it, or raise Refused with the reason. Nesting deeper
+    than `limit` is `too-deep`; with no limit, only what the reader cannot hold is."""
     try:
         value = json.loads(raw.decode("utf-8"), object_pairs_hook=no_repeats, parse_float=no_fractions, parse_int=safe_integer,
                            parse_constant=not_json)
     except UnicodeDecodeError:
         raise Refused("encoding") from None
+    except RecursionError:
+        raise Refused("too-deep") from None  # nested beyond what the reader can hold, so far beyond 64
     except ValueError as err:
         raise Refused(str(err) if str(err) in ("duplicate-key", "not-an-integer") else "malformed") from None
     if half_pair(value):
         raise Refused("encoding")
-    if depth(value) > 64:
+    if limit is not None and depth(value) > limit:
         raise Refused("too-deep")
     return value
 
@@ -386,16 +411,18 @@ def check_final(final: dict, manifest: dict, capability: str, runs_done: int, ro
             raise Refused("strength-class-mismatch")  # a test is not a proof, whatever its rank
 
 
-def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], report_for, root: pathlib.Path = ROOT) -> dict:
-    """Take one obligation through start, runs and final. `report_for(run_number, description)` returns
-    the executor's report for a run, or None if there is none yet, in which case the description is returned."""
+def check_steps(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], platform: dict, root: pathlib.Path = ROOT):
+    """Take one obligation through start, runs and final, one run at a time: a generator that yields
+    `(number, description, run_key)` for each run it needs and is sent the executor's report for it, and returns
+    `{"final", "runs", "run_keys"}` (with `"unavailable": True` when the executor said so). Refused as the host
+    checks say. Several of these can be advanced side by side, so that their runs go to the executor together."""
     known = {f["path"]: f["identity"] for f in inputs}
     if not set(obligation.get("specified_by", []) + obligation.get("targets", [])) <= set(known):
         raise Refused("unknown-file")  # an obligation names a file the check was not given
     known_tools = {t["name"]: t["digest"] for t in tools}
     check_key = canonical.identity({"obligation": obligation, "inputs": inputs})
     keys: list[str] = []
-    body = session.ask("obligation.check", {"op": "start", "obligation": obligation, "inputs": inputs, "tools": tools, "platform": PLATFORM})
+    body = session.ask("obligation.check", {"op": "start", "obligation": obligation, "inputs": inputs, "tools": tools, "platform": platform})
     check_id, runs = session.last_request, 0
     while True:
         if ("next" in body) == ("final" in body):
@@ -407,38 +434,144 @@ def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: l
             raise Refused("too-many-runs")  # refused when the next run is asked for, before it starts
         if not description_has_its_shape(body["next"]):
             raise Refused("bad-description")
-        check_run_description(body["next"], session.manifest, known, known_tools, PLATFORM,
+        check_run_description(body["next"], session.manifest, known, known_tools, platform,
                               set(obligation.get("specified_by", []) + obligation.get("targets", [])))
         keys.append(run_key(check_key, runs + 1, body["next"]))
-        report = report_for(runs + 1, body["next"])
-        if report is None:
-            return {"pending": body["next"], "run_key": keys[-1]}
+        report = yield (runs + 1, body["next"], keys[-1])
         runs += 1
         if report.get("end") != "exited":
             # Only the executor's report makes a check unavailable, so the mark is kept outside the final,
             # where nothing a provider says can set it.
-            return {"final": {"verdict": "error", "reason": "run-" + str(report.get("end"))}, "runs": runs,
+            return {"final": {"verdict": "error", "reason": "run-" + str(report.get("end"))}, "runs": runs, "run_keys": keys,
                     "unavailable": report.get("end") == "unavailable"}
         # What the executor says ran must be what was asked for: another platform or another tool is an
         # error, never a result (protocol/messages.schema.json, run_report).
-        asked_tools = sorted((t.get("name"), t.get("digest")) for t in body["next"].get("tools", []))
+        # Compared as JSON text, so that names of any type sort without failing.
+        asked_tools = sorted(json.dumps([t.get("name"), t.get("digest")]) for t in body["next"].get("tools", []))
         ran = report.get("tools_ran")
-        ran_tools = (sorted((t.get("name"), t.get("digest")) for t in ran)
+        ran_tools = (sorted(json.dumps([t.get("name"), t.get("digest")]) for t in ran)
                      if isinstance(ran, list) and all(isinstance(t, dict) for t in ran) else None)
         if report.get("platform") != body["next"].get("platform") or ran_tools != asked_tools:
-            return {"final": {"verdict": "error", "reason": "run-report-mismatch"}, "runs": runs}
+            return {"final": {"verdict": "error", "reason": "run-report-mismatch"}, "runs": runs, "run_keys": keys}
         body = session.ask("obligation.check", {"op": "run.result", "check": check_id, "run": runs, "report": report})
+
+
+def drive_check(session: Session, obligation: dict, inputs: list[dict], tools: list[dict], report_for, root: pathlib.Path = ROOT) -> dict:
+    """Take one obligation through start, runs and final. `report_for(run_number, description)` returns
+    the executor's report for a run, or None if there is none yet, in which case the description is returned."""
+    steps = check_steps(session, obligation, inputs, tools, PLATFORM, root)
+    try:
+        number, description, key = next(steps)
+        while True:
+            report = report_for(number, description)
+            if report is None:
+                return {"pending": description, "run_key": key}
+            number, description, key = steps.send(report)
+    except StopIteration as done:
+        return done.value
 
 
 # What the provider said it could not make into a check, last time it was asked. A run is not
 # green while this is not empty: a case that cannot be checked is not a case that passed.
 REFUSED_BY_PROVIDER: list[str] = []
+DECLARED_INPUTS: dict = {}  # obligation name -> the paths its checks may read, as the provider listed them
+
+
+RANGE_END = r"[!-.0-9;-Z^-~]"  # printable ASCII but / : [ \\ ]
+PATTERN_SEGMENT = re.compile(rf"(?:[^\[\]\\*:]|\*|\[{RANGE_END}-{RANGE_END}\])+")
+
+
+def pattern_ok(pattern) -> bool:
+    """A match pattern as the project file may hold it: a relative path whose segments are not empty, `.` or
+    `..`, hold no backslash or colon, and use `[` only as a range `[a-b]` of two printable ASCII characters other than
+    `/`, `:`, `[`, `\\` and `]`, a no later than b."""
+    if not isinstance(pattern, str) or not pattern or pattern.startswith("/"):
+        return False
+    for seg in pattern.split("/"):
+        if seg in ("", ".", "..") or not PATTERN_SEGMENT.fullmatch(seg):
+            return False
+        for low, high in re.findall(r"\[(.)-(.)\]", seg):
+            if low > high:
+                return False
+    return True
+
+
+def segment_matches(pattern: str, name: str) -> bool:
+    """One path segment against one pattern segment: `*` is any run of characters, `[a-b]` one character from a
+    to b, anything else itself. There is no `?`, no `**`, and no escape. The pattern is one pattern_ok accepts."""
+    if not pattern:
+        return not name
+    if pattern[0] == "*":
+        return any(segment_matches(pattern[1:], name[i:]) for i in range(len(name) + 1))
+    if pattern[0] == "[":
+        low, high = pattern[1], pattern[3]
+        return bool(name) and low <= name[0] <= high and segment_matches(pattern[5:], name[1:])
+    return bool(name) and name[0] == pattern[0] and segment_matches(pattern[1:], name[1:])
+
+
+def is_junction(path) -> bool:
+    """A Windows junction, a link that is_symlink does not report."""
+    check = getattr(pathlib.Path(path), "is_junction", None)
+    return bool(check and check())
+
+
+class Unreadable(Exception):
+    """A folder or file under the root that cannot be read: a listing without it would look whole."""
+
+
+def regular_files(root: pathlib.Path) -> list[str]:
+    """Every regular file under root by relative path, reached without a link (a junction included) at any step, none
+    with a segment `.git`. Entries are told apart by what the folder listing says of them, not by following them; a
+    folder it walks that cannot be listed raises Unreadable. A file found this way that cannot be read is found
+    unreadable when it is read."""
+    found, todo = [], [pathlib.Path(root)]
+    while todo:
+        here = todo.pop()
+        try:
+            entries = list(os.scandir(here))
+        except OSError as err:
+            raise Unreadable(f"{here}: {err}") from None
+        for entry in entries:
+            if entry.name == ".git" or entry.is_symlink() or is_junction(entry.path):
+                continue
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    todo.append(pathlib.Path(entry.path))
+                elif entry.is_file(follow_symlinks=False):
+                    found.append(pathlib.Path(entry.path).relative_to(root).as_posix())
+            except OSError as err:
+                raise Unreadable(f"{entry.path}: {err}") from None
+    return found
+
+
+def claimed(root: pathlib.Path, patterns: list[str]) -> list[str]:
+    """The regular files under root, by relative path, that one of the patterns matches segment by segment."""
+    found = set()
+    for rel in regular_files(root):
+        parts = rel.split("/")
+        if any(len(p.split("/")) == len(parts) and all(segment_matches(a, b) for a, b in zip(p.split("/"), parts)) for p in patterns):
+            found.add(rel)
+    return sorted(found)
+
+
+def binding(name: str) -> dict:
+    """A binding of the project file, by name."""
+    project = tomllib.loads((ROOT / "dodona.toml").read_text(encoding="utf-8"))
+    return next(b for b in project["binding"] if b["name"] == name)
 
 
 def list_project(session: Session, root: pathlib.Path) -> tuple[list[dict], list[dict]]:
-    files = [file_ref(p, root) for p in sorted((root / "spec").glob("*/*")) if p.suffix in (".tla", ".cfg", ".json") and p.is_file()
-             and p.name not in ("dump-settings.json",)]
+    files = [file_ref(root / p, root) for p in claimed(root, binding("kernel-models")["match"])]
     body = session.ask("obligation.enumerate", {"binding": "kernel-models", "definitions": [], "files": files})
+    paths = [f["path"] for f in files]
+    DECLARED_INPUTS.clear()
+    for o in body["obligations"]:
+        # What a check of it may read is the provider's word, held apart from the obligation the check is sent.
+        declared = o.pop("inputs", None)
+        if not isinstance(declared, list) or not all(isinstance(p, str) for p in declared) \
+                or declared != sorted(set(declared)) or not set(declared) <= set(paths):
+            raise Refused("bad-inputs")
+        DECLARED_INPUTS[o.get("name")] = declared
     obligations = [dict(o, binding="kernel-models") for o in body["obligations"]]
     REFUSED_BY_PROVIDER[:] = sorted(r.get("name", "?") for r in body.get("rejected", []))
     names = [o["name"] for o in obligations]
@@ -447,12 +580,45 @@ def list_project(session: Session, root: pathlib.Path) -> tuple[list[dict], list
     return obligations, files
 
 
+def floor_digest(tool: dict) -> str:
+    """The digest a result's key holds for a tool accepted from a floor version on: the floor itself, so that a newer
+    build does not make results stale, and a change of floor does."""
+    return hashlib.sha256(f"{tool['name']}>={tool['floor']}".encode("utf-8")).hexdigest()
+
+
+def version_tuple(text) -> tuple | None:
+    found = re.fullmatch(r"([0-9]+(?:\.[0-9]+)*)", text or "")
+    return tuple(int(x) for x in found.group(1).split(".")) if found else None
+
+
 def lock_tools() -> tuple[list[dict], dict]:
     """The tools as this site's pins give them (not yet a lock: decision 0026). A tool that is not pinned yet has a digest of zeros,
-    which no measurement can equal, so nothing recorded in that state counts later."""
+    which no measurement can equal, so nothing recorded in that state counts later. A tool pinned by a floor version has the
+    floor's digest."""
     lock = json.loads((ROOT / ".github" / "site" / "pins.json").read_text(encoding="utf-8"))
     pinned = {t["name"]: t for t in lock["tools"]}
-    return [{"name": n, "version": pinned[n]["version"], "digest": "sha256:" + (pinned[n]["sha256"] or "0" * 64)} for n in sorted(pinned)], pinned
+    return [{"name": n, "version": pinned[n]["version"],
+             "digest": "sha256:" + (floor_digest(pinned[n]) if pinned[n].get("floor") else (pinned[n]["sha256"] or "0" * 64))}
+            for n in sorted(pinned)], pinned
+
+
+def tool_faults(pinned: dict, measured: dict, versions: dict) -> tuple[list, list]:
+    """The tools not measured, and those measured to be other than pinned: for a floor, a version that cannot be read or is
+    below the floor. Neither ever lets a run become a verdict."""
+    unmeasured = [n for n in sorted(pinned) if not measured.get(pinned[n]["file"])]
+    mismatched = []
+    for n in sorted(pinned):
+        tool = pinned[n]
+        if tool.get("floor"):
+            seen, floor = version_tuple(versions.get(tool["file"])), version_tuple(tool["floor"])
+            # The floor or any later version, a new major release included: an upgrade of the site's tool neither
+            # stops the checks nor makes their results stale (the key holds the floor); each result records the
+            # version it ran on, outside the key, so a difference a new version makes stays visible.
+            if seen is None or floor is None or seen < floor:
+                mismatched.append(n)
+        elif tool["sha256"] is not None and measured.get(tool["file"]) != tool["sha256"]:
+            mismatched.append(n)
+    return unmeasured, mismatched
 
 
 def preimage(obligation: dict, inputs: list[dict], tools: list[dict], manifest: dict) -> dict:
@@ -483,8 +649,9 @@ def provider_code() -> str:
 
 
 def inputs_of(obligation: dict, files: list[dict]) -> list[dict]:
-    folder = obligation["config"]["folder"] + "/"
-    return [f for f in files if f["path"].startswith(folder) and not f["path"].endswith(".json")]
+    """The files the provider said a check of this obligation may read."""
+    wanted = set(DECLARED_INPUTS[obligation["name"]])
+    return [f for f in files if f["path"] in wanted]
 
 
 def collect(args) -> int:
@@ -531,13 +698,13 @@ def collect(args) -> int:
     if not cases:
         # Everything has a current result. Nothing is sent, and nothing new will be recorded.
         print("nothing to run: every check has a current result")
-        job = {"reachable": True, "complete": True, "exit": None, "measured": {}, "fetched": None}
+        job = {"reachable": True, "complete": True, "exit": None, "measured": {}, "versions": {}, "fetched": None}
     else:
         job = send_job(site, bundle, cases)
     reachable, complete, measured = job["reachable"], job["complete"], job["measured"]
     if reachable and job["fetched"] is not None:
         shutil.copytree(job["fetched"], out / "outputs", dirs_exist_ok=True)
-    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "complete": complete, "queue_exit": job["exit"], "sent": len(cases), "plan": chosen, "pending": pending, "measured": measured,
+    (out / "runs.json").write_text(json.dumps({"reachable": reachable, "complete": complete, "queue_exit": job["exit"], "sent": len(cases), "plan": chosen, "pending": pending, "measured": measured, "versions": job["versions"],
                                                "executor": site.get("executor_name", "site")}, indent=1) + "\n", encoding="utf-8")
     (out / "transcript-collect.json").write_text(json.dumps(transcript, indent=1) + "\n", encoding="utf-8")
     print(json.dumps({"obligations": len(pending), "reachable": reachable, "complete": complete}))
@@ -555,7 +722,10 @@ def send_job(site: dict, bundle: pathlib.Path, cases: list[dict]) -> dict:
     where = site["tool_files"]
     dest = bundle.parent / "fetched"
     shutil.copy(ROOT / ".github" / "site" / "batch_driver.py", bundle / "batch_driver.py")
-    (bundle / "manifest.json").write_text(json.dumps({"out": "out", "cases": cases, "measure": sorted(set(where.values()))}, indent=1), encoding="utf-8")
+    _, pinned = lock_tools()
+    versions = sorted({where[tool["file"]] for tool in pinned.values() if tool.get("floor") and tool["file"] in where})
+    (bundle / "manifest.json").write_text(json.dumps({"out": "out", "cases": cases, "measure": sorted(set(where.values())), "versions": versions},
+                                                     indent=1), encoding="utf-8")
     values = {"source": str(bundle), "dest": str(dest), "timeout": str(site.get("batch_timeout_seconds", 3600))}
     print(f"sending {len(cases)} runs to the executor as one job", flush=True)
     try:
@@ -568,6 +738,7 @@ def send_job(site: dict, bundle: pathlib.Path, cases: list[dict]) -> dict:
     if not reachable:
         print("the executor returned nothing:", said)
     seen = json.loads((fetched / "measured.json").read_text(encoding="utf-8")) if (fetched / "measured.json").exists() else {}
+    seen_versions = json.loads((fetched / "versions.json").read_text(encoding="utf-8")) if (fetched / "versions.json").exists() else {}
     marker = fetched / "complete.json"
     marked = marker.exists() and json.loads(marker.read_text(encoding="utf-8")).get("cases") == [c["name"] for c in cases]
     complete = bool(reachable and code == 0 and marked)
@@ -575,15 +746,20 @@ def send_job(site: dict, bundle: pathlib.Path, cases: list[dict]) -> dict:
         print(f"the job did not end well (the executor's client exited with {code}; end marker {'present' if marked else 'missing'}); "
               "nothing from it will be taken as a result")
     return {"reachable": bool(reachable), "complete": complete, "exit": code, "fetched": fetched,
-            "measured": {name: seen.get(path) for name, path in where.items()}}
+            "measured": {name: seen.get(path) for name, path in where.items()},
+            "versions": {name: seen_versions.get(path) for name, path in where.items() if path in seen_versions}}
+
+
+def job_tool_faults(runs: dict) -> tuple[list, list]:
+    """The tools of a job not measured, and those measured to be other than pinned, from what the job recorded."""
+    _, pinned = lock_tools()
+    versions = runs.get("versions", {})
+    return tool_faults(pinned, runs.get("measured", {}), versions if isinstance(versions, dict) else {})
 
 
 def job_fault(runs: dict) -> str | None:
     """Why nothing from this job may be judged, measured against this site's pins; None if it may."""
-    _, pinned = lock_tools()
-    measured = runs.get("measured", {})
-    unmeasured = [n for n in sorted(pinned) if not measured.get(pinned[n]["file"])]
-    mismatched = [n for n in sorted(pinned) if pinned[n]["sha256"] is not None and measured.get(pinned[n]["file"]) != pinned[n]["sha256"]]
+    unmeasured, mismatched = job_tool_faults(runs)
     return proves_nothing(runs, unmeasured, mismatched)
 
 
@@ -659,10 +835,11 @@ def conclude(args) -> int:
     transcript: list = []
     tools, pinned = lock_tools()
     measured = runs["measured"]
-    unmeasured = [n for n in sorted(pinned) if not measured.get(pinned[n]["file"])]
-    ran = [{"name": n, "digest": "sha256:" + (measured.get(pinned[n]["file"]) or "0" * 64)} for n in sorted(pinned)]
-    unpinned = [n for n in sorted(pinned) if pinned[n]["sha256"] is None]
-    mismatched = [n for n in sorted(pinned) if pinned[n]["sha256"] is not None and measured.get(pinned[n]["file"]) != pinned[n]["sha256"]]
+    unmeasured, mismatched = job_tool_faults(runs)
+    # The key is made from what was measured to have run; for a floor tool, from its floor, once its version is checked.
+    ran = [{"name": n, "digest": "sha256:" + (floor_digest(pinned[n]) if pinned[n].get("floor") else (measured.get(pinned[n]["file"]) or "0" * 64))}
+           for n in sorted(pinned)]
+    unpinned = [n for n in sorted(pinned) if pinned[n]["sha256"] is None and not pinned[n].get("floor")]
     session = Session([sys.executable, str(ROOT / "providers" / "tlc" / "provider.py")], ROOT, transcript)
     counts = {"passed": 0, "failed": 0, "error": 0, "unavailable": 0, "unsupported": 0, "refused": 0, "reused": 0}
     try:
@@ -710,7 +887,10 @@ def conclude(args) -> int:
                 key = kernel(args.kernel, "key", made_with)["core_key"]
                 body = {"obligation": name, "preimage": made_with, "core_key": key, "platform": "linux/aarch64", "verdict": verdict,
                         "writer": args.writer, "level": LEVEL_OF_RANK.get(final["strength"]["rank"], "asserted"), "strength": final["strength"], "summary": final.get("summary", {}),
-                        "executor": runs["executor"], "unpinned_tools": unpinned}
+                        "executor": runs["executor"], "unpinned_tools": unpinned,
+                        # What the job found, outside the key: a tool pinned by a floor keeps its results across builds.
+                        "tools_measured": {n: {"digest": measured.get(pinned[n]["file"]), "version": runs.get("versions", {}).get(pinned[n]["file"])}
+                                           for n in sorted(pinned)}}
                 kernel(args.kernel, "ledger-append", {"ledger": str(args.ledger), "kind": "evidence", "body": body, "wait_ms": 5000})
             else:
                 kernel(args.kernel, "ledger-append", {"ledger": str(args.ledger), "kind": "outcome", "wait_ms": 5000,
@@ -786,7 +966,7 @@ def check(args) -> int:
         return 0
     session = None
     try:
-        session = Session(asked["provider"], root, [], deadline_s=asked.get("deadline_ms", 60000) / 1000)
+        session = Session(asked["provider"], root, [], deadline_ms=asked.get("deadline_ms", 60000))
         driven = drive_check(session, asked["obligation"], asked["inputs"], asked["tools"], report_for, root)
         verdict = "unavailable" if driven.get("unavailable") else driven["final"]["verdict"]
         answer = {"outcome": "verdict", "verdict": verdict}

@@ -69,7 +69,7 @@ The provider in this example is imaginary. It is called `example.verifier.widthc
 **4. Provider to kernel: one obligation.** Only you know what your tool can answer separately; here, one question per text file. `name` is a locator inside the binding that survives edits to the content. `config` holds everything that could change the answer: the kernel hashes it into the key. A real provider would also enumerate a planted defect, an obligation with `expect` set to `violated` and a `defect_of` naming this one, so the kernel can show the check is able to fail.
 
 ```json
-{"type":"result","id":"1","capability":"obligation.enumerate","body":{"obligations":[{"name":"width/docs/intro.txt","kind":"check","specified_by":["rules/width.cfg"],"targets":["docs/intro.txt"],"expect":"holds","config":{"max_columns":80}}]}}
+{"type":"result","id":"1","capability":"obligation.enumerate","body":{"obligations":[{"name":"width/docs/intro.txt","kind":"check","specified_by":["rules/width.cfg"],"targets":["docs/intro.txt"],"expect":"holds","config":{"max_columns":80},"inputs":["docs/intro.txt","rules/width.cfg"]}]}}
 ```
 
 **5. Kernel to provider: check.** The obligation comes back with its binding. The tool is already pinned and unpacked at `tools/widthcheck`, with the digest the lock records. `op` says this is the start of a check.
