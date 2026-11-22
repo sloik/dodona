@@ -684,8 +684,9 @@
       "name": "ledger: the lock is not taken",
       "model_case": "(round 3)",
       "file": "ledger-file.js",
-      "find": "return fs.openSync(lockPath, 'wx');",
-      "replace": "return fs.openSync(lockPath, 'a');"
+      "find": "  const waitMs = Number(request.wait_ms) || 0;\n  const lockPath = `${path}.lock`;\n  const lock = takeLock(lockPath, waitMs);\n  if (lock === null) return { refused: 'locked' };\n  try {\n    const read = ledger.readLedger(readBytes(path));\n    if (read.refused) return { refused: 'corrupt' };\n    const entry = ledger.encodeEntry({ previous: read.last, kind: request.kind, body: request.body });\n    if (read.torn) syncedWrite(path, 'r+', null, read.keep);\n    syncedWrite(path, 'a', entry.line);\n    return { appended: entry.identity };\n  } finally {\n    releaseLock(lock, lockPath);\n  }",
+      "replace": "  const read = ledger.readLedger(readBytes(path));\n  if (read.refused) return { refused: 'corrupt' };\n  const entry = ledger.encodeEntry({ previous: read.last, kind: request.kind, body: request.body });\n  if (read.torn) syncedWrite(path, 'r+', null, read.keep);\n  syncedWrite(path, 'a', entry.line);\n  return { appended: entry.identity };",
+      "witness": "run_ledger_cases: a held lock refuses an append"
     },
     {
       "name": "ledger: the lock is not released",
@@ -1090,8 +1091,8 @@
       "name": "an unreadable tree gate changes nothing",
       "model_case": "(tree gates kit)",
       "file": "tree.js",
-      "find": "return gate === 'soft' ? 'soft' : 'hard';",
-      "replace": "return gate === 'soft' || gate === 'hard' ? gate : null;"
+      "find": "const gate = gateCountsAs(step.edit.to);",
+      "replace": "const gate = step.edit.to === 'hard' || step.edit.to === 'soft' ? step.edit.to : null;"
     },
     {
       "name": "a tree's starting gates read as written",
@@ -1581,7 +1582,8 @@
       "model_case": "(session)",
       "file": "session.js",
       "find": "  const until = performance.now() + options.deadlineMs;\n",
-      "replace": "  const until = performance.now() + options.deadlineMs * 100;\n"
+      "replace": "  const until = performance.now() + options.deadlineMs * 3;\n",
+      "witness": "run_provider_cases: never-answers"
     },
     {
       "name": "reading: a carriage return before the line feed is accepted",
@@ -1818,8 +1820,9 @@
       "name": "status step 3: a provider the site does not have is not refused",
       "model_case": "(project status)",
       "file": "project-status.js",
-      "find": "    if (!Object.hasOwn(site.providers, binding.provider)) throw new Stop('no-provider', binding.provider);\n",
-      "replace": ""
+      "find": "  const bindings = readProject(raw);",
+      "replace": "  const bindings = readProject(raw).filter((binding) => Object.hasOwn(site.providers, binding.provider)\n    || !binding.capabilities.some((capability) => SERVED.includes(capability)));",
+      "witness": "run_status_cases: a provider the site does not have"
     },
     {
       "name": "status step 4: files in .git are claimed",
@@ -2043,7 +2046,8 @@
       "model_case": "(project status)",
       "file": "project-status.js",
       "find": "      if (seen.has(here)) throw new Stop('intent-cycle', name);",
-      "replace": "      if (seen.has(here)) break;"
+      "replace": "      if (seen.has(here)) return { intents: new Map(), parent: new Map(), unread };",
+      "witness": "run_status_cases: intents in a cycle"
     },
     {
       "name": "status step 8: the owner's ledger may be reached through a link",
@@ -2127,7 +2131,8 @@
       "model_case": "(project status)",
       "file": "project-status.js",
       "find": "...read.entries.map((entry) => ({ do: { append: { kind: entry.kind, body: entry.body } } })), NOTHING],",
-      "replace": "...read.entries.map((entry) => ({ do: { append: { kind: entry.kind, body: entry.body } } }))],"
+      "replace": "...read.entries.map((entry) => ({ do: { append: { kind: entry.kind, body: entry.body } } })), ...(read.entries.length ? [] : [NOTHING])],",
+      "witness": "run_status_cases: a passed result counts"
     },
     {
       "name": "status step 10: the platform joined with a dash",
@@ -2196,8 +2201,9 @@
       "name": "status step 1: a provider command holding a NUL is accepted",
       "model_case": "(project status)",
       "file": "project-status.js",
-      "find": " && command.every((word) => !word.includes('\\u0000')) && isStrings(own(provider, 'code'));",
-      "replace": " && isStrings(own(provider, 'code'));"
+      "find": " && command.every((word) => !word.includes('\\u0000'))",
+      "replace": " && command.every((word, index) => { command[index] = word.replaceAll('\\u0000', ''); return true; })",
+      "witness": "run_status_cases: a provider command holding a NUL"
     },
     {
       "name": "status step 6: the key holds every site tool, not only those the manifest names",

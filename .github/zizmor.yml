@@ -10,8 +10,11 @@ rules:
       - docs.yml:24:3
       - metrics.yml:45:3
   # strategy.job-index and strategy.job-total are numbers GitHub sets from the matrix; nothing from a
-  # pull request's author reaches them. Two informational findings, one for each.
+  # pull request's author reaches them. Four informational findings: one for each, in the Rust and the
+  # JavaScript planted-defect shards.
   template-injection:
     ignore:
-      - checks.yml:163:59
-      - checks.yml:163:85
+      - checks.yml:167:59
+      - checks.yml:167:85
+      - checks.yml:197:48
+      - checks.yml:197:74

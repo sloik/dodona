@@ -143,9 +143,9 @@ Bounds: one obligation, which can or cannot be checked, fixed from the start; at
 
 | # | Claim | Decision | Check | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 13 |
+| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 16 |
 
-Run 13 records the current comparison. Runs 9, 11 and 12 remain the records for the earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
+Run 16 records the current comparison. Runs 9 and 11 through 15 remain the records for earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
 
 ## Shown by the conformance kit, not by a model
 
@@ -164,6 +164,10 @@ These claims are not checked by a model. Each is exercised on every change by th
 The previous PR 40 Rust run reached its three-hour limit without a tally. The JavaScript run completed, but counted one ledger defect when the judge exited without a mismatch. The Rust inventory now runs in eight shards and requires all of them to complete successfully. The inventories remain 275 Rust and 319 JavaScript defects. [Cancelled Rust job](https://github.com/sloik/dodona/actions/runs/44937841949/job/136948287145) · [Earlier JavaScript job](https://github.com/sloik/dodona/actions/runs/44937841949/job/136948286911).
 
 On 2026-11-22, a local Rust shard containing one defect completed with one catch and reported only shard success. The held-lock JavaScript defect reproduced the old judge's cleanup failure. With the fixture repair, the same defect produced a named held-lock mismatch and a completed 110-case tally. Both unchanged kernels matched all 110 ledger and 253 project-status cases, and the reference matched all 103 project-run cases. The repository's new controls failed before their corresponding fixes and the full repository checker then completed successfully. These are self checks for PR 40. Full hosted mutation results and issue 41's named evidence remain pending.
+
+In the PR 49 follow-up, two local ledger controls reproduced the reused path and the writer deadline conflict. The JavaScript unreleased-lock defect completed with 39 named ledger mismatches. The lock-not-taken defect reached the named held-lock mismatch, then a concurrent writer exited without an answer. The stricter judge kept that run unfinished. The earlier tree-gate mutation produced a mismatch and a separate process failure. Targeting the edit produced exactly the intended mismatch in a completed 150-scenario run. Full named mutation coverage remains pending. [Prior Rust shard results](https://github.com/sloik/dodona/actions/runs/44938518645) · [Prior JavaScript job](https://github.com/sloik/dodona/actions/runs/44940416870/job/136956155202).
+
+At `09e94ff`, all 14 formerly unfinished mutations from the preceding hosted run (eight Rust and six JavaScript) completed two local judge replays each. Both replays for each mutation rejected the case named in its manifest and reported zero unfinished cases. The original mutations could crash, outlive the judge deadline, or produce a response the judge could not read. The revised mutations preserve the intended violation and return a response the judge can evaluate. Runner controls also reject a repeated mismatch from an unrelated case. These are self checks. A complete hosted inventory remains pending. [Prior hosted run](https://github.com/sloik/dodona/actions/runs/44994764410).
 
 ## Not yet modelled
 
@@ -722,3 +726,15 @@ On 2026-11-21, both kernels at `a5c9068` agreed with the model on all 71,744 evi
 ### Not a run: the first attempt at the rewritten models
 
 A job with every case of the seven rewritten models was stopped by the queue part of the way, when the planner model outgrew the space a job is allowed. Thirty cases of four models had finished by then and each showed what it was expected to. They are not recorded as a run and no claim rests on them: a job that did not complete proves nothing here, whatever it left behind. The planner model has since been bounded by depth.
+
+### Run 14 — both kernels with named conformance results
+
+On 2026-11-21, both kernels at `f34dd36` agreed with the model on all 71,744 evidence states and all 78,894 intent states per kernel. The comparison reused the completed state lists from Run 11. Its 108 input digests match the draft with typed conformance results. [Comparison job](https://github.com/sloik/dodona/actions/runs/44921672613/job/136898858728) · [Recorded outputs](runs/run-14/every-state/).
+
+### Run 15 — both kernels after revising the planted conformance fixtures
+
+On 2026-11-22, both kernels at `fac60b1` agreed on all 71,744 retained evidence states and 78,894 retained intent states per kernel. The comparison checked the SHA-256 of the original completed model artifact, both retained dumps and the input files. This comparison is self and generated no model states. [Completed source run](https://github.com/sloik/dodona/actions/runs/44626497885) · [Recorded comparison](runs/run-15/every-state/).
+
+### Run 16 — both kernels after adding exact validation witnesses
+
+On 2026-11-22, both kernels at `09e94ff` agreed on all 71,744 retained evidence states and 78,894 retained intent states per kernel. The comparison checked the archived model artifact and both retained dumps against their recorded SHA-256 digests. The model inputs and comparison tool match the producer commit. This comparison is self and generated no model states. [Completed source run](https://github.com/sloik/dodona/actions/runs/44626497885) · [Recorded comparison](runs/run-16/every-state/).

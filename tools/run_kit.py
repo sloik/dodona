@@ -12,8 +12,8 @@ and must print one JSON object:
 
 The shape of a result is described in conformance/README.md. Every field a
 scenario expects must be present and equal; fields it does not mention are
-ignored. Exit status is 0 only if every scenario matched. A kernel that
-crashes, times out or prints something else fails that scenario.
+ignored. Exit status is 0 if every scenario matched, 1 if the suite completed
+with mismatches, and 2 if a process did not complete or no scenarios ran.
 """
 from __future__ import annotations
 
@@ -66,26 +66,37 @@ def main() -> int:
         return 2
     command = sys.argv[sys.argv.index("--") + 1:]
     scenarios = sorted(ROOT.glob("conformance/kernel/*/*.json"))
-    failed = 0
+    rejected: list[str] = []
+    unfinished = 0
     for path in scenarios:
-        scenario = json.loads(path.read_text(encoding="utf-8"))
+        name = f"{path.parent.name}/{path.stem}"
         try:
+            scenario = json.loads(path.read_text(encoding="utf-8"))
             done = subprocess.run(command, input=json.dumps(question(scenario)), capture_output=True, text=True,
                                   encoding="utf-8", timeout=60)
-            diffs = judge(scenario, done.stdout) if done.returncode == 0 else [f"kernel exited with {done.returncode}"]
-        except (OSError, subprocess.TimeoutExpired) as err:
-            diffs = [f"kernel did not run to completion: {type(err).__name__}"]
-        name = f"{path.parent.name}/{path.stem}"
+        except (OSError, ValueError, subprocess.TimeoutExpired) as err:
+            unfinished += 1
+            print(f"UNFINISHED {name}: {type(err).__name__}: {err}")
+            continue
+        if done.returncode != 0:
+            unfinished += 1
+            print(f"UNFINISHED {name}: kernel exited with {done.returncode}")
+            continue
+        diffs = judge(scenario, done.stdout)
         if diffs:
-            failed += 1
+            rejected.append(name)
             print(f"MISMATCH {name}")
             for line in diffs:
                 print(f"    {line}")
         else:
             print(f"match    {name}")
-    print(json.dumps({"scenarios": len(scenarios), "matched": len(scenarios) - failed,
-                      "all_matched": failed == 0 and bool(scenarios)}))
-    return 0 if failed == 0 and scenarios else 1
+    matched = len(scenarios) - len(rejected) - unfinished
+    print(json.dumps({"scenarios": len(scenarios), "matched": matched,
+                      "all_matched": matched == len(scenarios) and bool(scenarios),
+                      "unfinished": unfinished, "rejected": rejected}))
+    if unfinished or not scenarios:
+        return 2
+    return 1 if rejected else 0
 
 
 if __name__ == "__main__":

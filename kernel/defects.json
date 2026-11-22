@@ -1013,8 +1013,9 @@
       "name": "host rule 2: the shape of a description not checked",
       "model_case": null,
       "file": "src/host.rs",
-      "find": "if !described(run) {",
-      "replace": "if run.opt(\"program\").is_none() {"
+      "find": "        && run.opt(\"cwd\").is_none_or(|c| matches!(c, Value::String(_)))\n",
+      "replace": "",
+      "witness": "host-check-judge: cwd-not-a-string (exited) [e0d508b882249808]"
     },
     {
       "name": "host rule 2: outputs that are not a list taken as none",
@@ -1153,8 +1154,9 @@
       "name": "host final: shape not checked",
       "model_case": null,
       "file": "src/host.rs",
-      "find": "if !shaped {",
-      "replace": "if false {"
+      "find": "            .is_none_or(|a| objects_with(Some(a), &[\"path\", \"identity\"]));",
+      "replace": "            .is_none_or(|a| matches!(a, Value::Array(_)));",
+      "witness": "host-check-judge: attachment-path-not-a-string (exited) [deec79b2df099c11]"
     },
     {
       "name": "host final: attachment path not checked",
@@ -1174,8 +1176,9 @@
       "name": "host final: an attachment that is not a regular file",
       "model_case": null,
       "file": "src/host.rs",
-      "find": "if !meta.file_type().is_file() || meta.len() > MAX_ATTACHMENT {",
-      "replace": "if meta.len() > MAX_ATTACHMENT {"
+      "find": "    if !meta.file_type().is_file() || meta.len() > MAX_ATTACHMENT {\n        return None;\n    }",
+      "replace": "    if !meta.file_type().is_file() {\n        return Some(Vec::new());\n    }\n    if meta.len() > MAX_ATTACHMENT {\n        return None;\n    }",
+      "witness": "host-check-judge: attachment-is-a-pipe (exited) [f7d2220a8fb08082]"
     },
     {
       "name": "host final: attachment not hashed again",
@@ -1678,8 +1681,9 @@
       "name": "status step 5: a manifest whose version is not a string is taken",
       "model_case": null,
       "file": "src/project_status.rs",
-      "find": "    let strings = [\"name\", \"version\", \"protocol\"]\n",
-      "replace": "    let strings = [\"name\", \"protocol\"]\n"
+      "find": "        let m = self.peer.read(Instant::now() + self.wait)?;\n        if !manifest_ok(&m) || host::manifest(&m).is_none() {",
+      "replace": "        let mut m = self.peer.read(Instant::now() + self.wait)?;\n        if let Some(manifest) = m.opt_mut(\"manifest\") {\n            if let Some(version @ Value::Number(_)) = manifest.opt_mut(\"version\") {\n                *version = json::string(\"0.0.0\");\n            }\n        }\n        if !manifest_ok(&m) || host::manifest(&m).is_none() {",
+      "witness": "status-judge: a manifest whose version is a number"
     },
     {
       "name": "status step 5: hello carries the deadline rounded to whole seconds",
@@ -1713,8 +1717,9 @@
       "name": "status step 5: an obligation given twice is taken",
       "model_case": null,
       "file": "src/project_status.rs",
-      "find": "            if out.found.iter().any(|(n, _)| n == name) {\n",
-      "replace": "            if out.listed.iter().any(|(b, n)| n == name && *b == binding.name && false) {\n"
+      "find": "                return stop(\"duplicate-obligation\", name.to_owned());\n",
+      "replace": "                continue;\n",
+      "witness": "status-judge: an obligation twice"
     },
     {
       "name": "status step 5: an obligation without inputs is taken",
@@ -1783,8 +1788,9 @@
       "name": "status step 7: an intent given twice is taken",
       "model_case": null,
       "file": "src/project_status.rs",
-      "find": "    if let Some(k) = (1..names.len()).find(|&k| names[..k].contains(&names[k])) {\n",
-      "replace": "    if let Some(k) = (1..names.len()).find(|&k| names[..k].contains(&names[k]) && k > 9) {\n"
+      "find": "        return stop(\"duplicate-intent\", names[k].to_owned());\n",
+      "replace": "        return Ok(Intents { judged: Vec::new(), unread });\n",
+      "witness": "status-judge: an intent twice"
     },
     {
       "name": "status step 7: a child with two parents is taken",
@@ -1798,14 +1804,16 @@
       "model_case": null,
       "file": "src/project_status.rs",
       "find": "                return stop(\"intent-cycle\", (*name).to_owned());\n",
-      "replace": "                break;\n"
+      "replace": "                return Ok(Intents { judged: Vec::new(), unread });\n",
+      "witness": "status-judge: intents in a cycle"
     },
     {
       "name": "status step 7: a criterion id given twice is taken",
       "model_case": null,
       "file": "src/project_status.rs",
-      "find": "        if (1..ids.len()).any(|k| ids[..k].contains(&ids[k])) {\n",
-      "replace": "        if (1..ids.len()).any(|k| ids[..k].contains(&ids[k]) && k > 9) {\n"
+      "find": "            return stop(\"duplicate-criterion\", i.get(\"name\").str().to_owned());\n",
+      "replace": "            return Ok(Intents { judged: Vec::new(), unread });\n",
+      "witness": "status-judge: a criterion id twice"
     },
     {
       "name": "status step 7: a worker that is null is taken",

@@ -24,6 +24,7 @@ import harness  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 KIT = ROOT / "conformance" / "harness"
+CONTROL = "the known cases tell the real checker from the one that agrees with everything"
 
 
 def main() -> int:
@@ -31,6 +32,77 @@ def main() -> int:
         print(__doc__)
         return 2
     command = sys.argv[sys.argv.index("--") + 1:]
+    try:
+        policy, cases = make_cases()
+    except Exception as err:  # the fixture, a checker or the signer could not make the records: nothing was judged
+        print(f"UNFINISHED the records could not be made: {type(err).__name__}: {err}")
+        print(json.dumps({"cases": 0, "matched": 0, "all_matched": False, "unfinished": 1, "rejected": []}))
+        return 2
+    rejected: list[str] = []
+    unfinished = 0
+    total = len(cases) + 1  # the seven kernel cases and the known-answer control, CONTROL
+    # The known-answer control is the eighth case, judged on the harness alone: the real checker refused the known-wrong
+    # work and agreed to the known-right, and the checker that agrees with everything did not refuse the known-wrong.
+    # The records are made in strict mode, so a checker that did not finish is never read as a refusal here. When the
+    # control does not hold, the harness or its fixture failed: it is unfinished, never a kernel mismatch.
+    real_known, nods_known = cases[0][1].get("known_bad", {}), cases[3][1].get("known_bad", {})
+    control = real_known.get("rejected_wrong") is True and real_known.get("accepted_right") is True \
+        and nods_known.get("rejected_wrong") is False
+    print(f"{'match   ' if control else 'UNFINISHED'} {CONTROL}: real checker {real_known.get('rejected_wrong')}, "
+          f"{real_known.get('accepted_right')}; agrees-with-everything rejected the known-wrong: {nods_known.get('rejected_wrong')}")
+    unfinished += not control
+    scenario = {"kind": "acts", "name": "from-the-harness", "policy": policy, "steps": [{"do": {"grade": record}} for _, record, _, _, _ in cases]}
+    results, why = grade(command, scenario)
+    if results is None:
+        for name, _, _, _, _ in cases:
+            print(f"UNFINISHED {name}: {why}")
+        print(json.dumps({"cases": total, "matched": int(control), "all_matched": False,
+                          "unfinished": unfinished + len(cases), "rejected": []}))
+        return 2
+    case_unfinished = 0
+    for number, (name, record, result, level, origin) in enumerate(cases):
+        got = results[number] if number < len(results) else None
+        got = got if isinstance(got, dict) else {}
+        if record.get("result") != result:  # the harness's own checker run did not give the fixture's grade: a judge failure
+            case_unfinished += 1
+            print(f"UNFINISHED {name}: the checker {record.get('result')} where the fixture says {result}")
+            continue
+        known = record.get("known_bad")
+        if known is not None and number != 3 and not (known.get("rejected_wrong") is True and known.get("accepted_right") is True):
+            # the real checker's own known-answer runs for this record did not hold (it may have crashed): a judge failure
+            case_unfinished += 1
+            print(f"UNFINISHED {name}: the real checker's known cases did not hold ({known.get('rejected_wrong')}, {known.get('accepted_right')})")
+            continue
+        ok = got.get("level") == level and got.get("source") == origin
+        if not ok:
+            rejected.append(name)
+        print(f"{'match   ' if ok else 'MISMATCH'} {name}: the checker {record['result']}; kernel says {got.get('level')}, {got.get('source')} (expected {level}, {origin})")
+    unfinished += case_unfinished
+    print(json.dumps({"cases": total, "matched": total - len(rejected) - unfinished,
+                      "all_matched": not rejected and not unfinished, "unfinished": unfinished, "rejected": rejected}))
+    if unfinished:
+        return 2
+    return 1 if rejected else 0
+
+
+def grade(command: list[str], scenario: dict) -> tuple[list | None, str]:
+    """The kernel's per-case answers from a run that completed with exit 0, or None and why it gave none.
+    Output that is not JSON, or has no list of results, is a completed answer in which every case is missing."""
+    try:
+        done = subprocess.run(command, input=json.dumps(scenario).encode("utf-8"), capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as err:
+        return None, f"{type(err).__name__}: {err}"
+    if done.returncode != 0:
+        return None, f"the kernel exited with {done.returncode}"
+    try:
+        results = json.loads(done.stdout.decode("utf-8"))["results"]
+    except (ValueError, KeyError, TypeError):
+        return [], ""
+    return results if isinstance(results, list) else [], ""
+
+
+def make_cases() -> tuple[dict, list]:
+    """The policy and the seven records the harness signs now, each with the checker's grade, level and source expected."""
     policy = json.loads((ROOT / "conformance" / "kernel" / "acts" / "attested_facts_earn_their_level.json").read_text(encoding="utf-8"))["policy"]
     with tempfile.TemporaryDirectory() as tmp:
         room = pathlib.Path(tmp)
@@ -46,7 +118,7 @@ def main() -> int:
                                       known_wrong=str(room / "wrong") if known else None, known_right=str(room / "right") if known else None,
                                       known_from="owner", checker_make="vendor-b/family-y" if makes else None,
                                       worker_make="vendor-a/family-x" if makes else None)
-            return harness.run(args, [sys.executable, str(KIT / checker)])
+            return harness.run(args, [sys.executable, str(KIT / checker)], strict=True)
 
         real = made("checker_reads.py")
         changed = copy.deepcopy(real)
@@ -59,24 +131,7 @@ def main() -> int:
                  ("what was given changed after signing", changed, "agreed", "helper", "declared"),
                  ("signed with a key policy does not list", made("checker_reads.py", key="other.key"), "agreed", "helper", "declared"),
                  ("the same record written by the worker, unsigned", by_worker, "agreed", "helper", "declared")]
-    scenario = {"kind": "acts", "name": "from-the-harness", "policy": policy, "steps": [{"do": {"grade": record}} for _, record, _, _, _ in cases]}
-    try:
-        done = subprocess.run(command, input=json.dumps(scenario).encode("utf-8"), capture_output=True, timeout=60)
-        results = json.loads(done.stdout.decode("utf-8"))["results"] if done.returncode == 0 else []
-    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError):
-        results = []
-    failed = 0
-    for number, (name, record, result, level, origin) in enumerate(cases):
-        got = results[number] if number < len(results) else {}
-        ok = record["result"] == result and got.get("level") == level and got.get("source") == origin
-        failed += not ok
-        print(f"{'match   ' if ok else 'MISMATCH'} {name}: the checker {record['result']}; kernel says {got.get('level')}, {got.get('source')} (expected {level}, {origin})")
-    wrong_seen = real["known_bad"]["rejected_wrong"] and real["known_bad"]["accepted_right"] and not cases[3][1]["known_bad"]["rejected_wrong"]
-    if not wrong_seen:
-        failed += 1
-        print("MISMATCH the known cases did not tell the real checker from the one that agrees with everything")
-    print(json.dumps({"cases": len(cases), "matched": len(cases) - min(failed, len(cases)), "all_matched": failed == 0}))
-    return 1 if failed else 0
+    return policy, cases
 
 
 if __name__ == "__main__":
