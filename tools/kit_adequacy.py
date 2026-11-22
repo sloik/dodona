@@ -2,7 +2,7 @@
 
 Stage-0 helper (decision 0023).
 
-    python tools/kit_adequacy.py
+    python tools/kit_adequacy.py [--shard INDEX COUNT]
 
 Copies kernel/ to a temporary directory, checks that the unchanged copy passes
 the kit, then plants each defect listed in kernel/defects.json, one at a time,
@@ -16,13 +16,16 @@ again; a rejection that does not repeat is UNFINISHED too (issue 41). A defect t
 formal model must be rejected by a scenario that says it covers that case;
 otherwise the scenario's label is wrong. Exit status is 0 only if the
 unchanged kernel passes and every planted defect is caught, by the right
-scenario where one is named.
+scenario where one is named. With --shard, INDEX is zero-based. Each shard
+checks the unchanged kernel and must catch every defect assigned to it.
+Only the unsharded invocation can report all_caught.
 
 This measures the kit against defects someone thought of. It says nothing
 about defects nobody thought of.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import pathlib
 import shutil
@@ -97,8 +100,24 @@ def run_judge(label: str, tool: str, extra: list[str], binary: pathlib.Path) -> 
     return "rejected"
 
 
+def select_shard(defects: list, index: int, count: int) -> list:
+    if not 0 <= index < count <= len(defects):
+        raise ValueError("expected 0 <= INDEX < COUNT <= the number of listed defects")
+    return defects[index::count]
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--shard", nargs=2, type=int, metavar=("INDEX", "COUNT"),
+                        help="judge one zero-based shard of the defect manifest")
+    args = parser.parse_args()
     defects = json.loads((ROOT / "kernel" / "defects.json").read_text(encoding="utf-8"))["defects"]
+    inventory_count = len(defects)
+    if args.shard is not None:
+        try:
+            defects = select_shard(defects, *args.shard)
+        except ValueError as err:
+            parser.error(str(err))
     covers: dict[str, set[str]] = {}
     for path in sorted(ROOT.glob("conformance/kernel/*/*.json")):
         for case in json.loads(path.read_text(encoding="utf-8")).get("covers", []):
@@ -133,8 +152,13 @@ def main() -> int:
             else:
                 caught += 1
                 print(f"caught   {defect['name']}: rejected by {len(failing)} scenario(s)")
-    print(json.dumps({"defects": len(defects), "caught": caught, "all_caught": caught == len(defects)}))
-    return 0 if caught == len(defects) else 1
+    complete = caught == len(defects)
+    summary = {"defects": len(defects), "caught": caught, "all_caught": args.shard is None and complete}
+    if args.shard is not None:
+        index, count = args.shard
+        summary.update(shard_index=index, shard_count=count, inventory_count=inventory_count, shard_caught=complete)
+    print(json.dumps(summary))
+    return 0 if complete else 1
 
 
 if __name__ == "__main__":

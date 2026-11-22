@@ -878,6 +878,63 @@ def gap_js_planted_defect_anchors_exist() -> None:
             problems.append(f"kernel2/defects.json: {defect['name']!r}: anchor absent from kernel2/{file}")
 
 
+def gap_rust_defect_shards_cover_the_inventory() -> None:
+    """Splitting the Rust job must still judge every listed defect exactly once."""
+    import kit_adequacy
+    select = getattr(kit_adequacy, "select_shard", None)
+    if select is None:
+        problems.append("kit_adequacy.py: the serial Rust defect inventory cannot be split across jobs")
+        return
+    inventory = list(range(19))
+    try:
+        selected = [select(inventory, index, 8) for index in range(8)]
+        if selected != [inventory[index::8] for index in range(8)]:
+            problems.append("kit_adequacy.py: the eight Rust shards must cover each defect once in manifest order")
+        for index, count in [(-1, 8), (8, 8), (0, 0), (0, len(inventory) + 1)]:
+            try:
+                select(inventory, index, count)
+            except ValueError:
+                continue
+            problems.append(f"kit_adequacy.py: accepted an invalid Rust shard {index} of {count}")
+    except (TypeError, ValueError, IndexError) as err:
+        problems.append(f"kit_adequacy.py: could not partition the Rust defects: {err}")
+
+
+def gap_ledger_judge_keeps_held_lock_result() -> None:
+    """A defective append may remove the judge's lock before the judge cleans up."""
+    import run_ledger_cases
+    for mode in ("intact", "removed", "changed"):
+        output = io.StringIO()
+
+        def answer(command, subcommand, request):
+            ledger = pathlib.Path(request["ledger"])
+            if subcommand != "ledger-append" or ledger.name != "held.ledger":
+                return {}
+            marker = ledger.with_suffix(".ledger.lock")
+            if mode == "removed":
+                marker.unlink()
+                ledger.write_bytes(ledger.read_bytes() + b"wrong append")
+                return {"appended": "wrong"}
+            if mode == "changed":
+                marker.write_bytes(b"replaced")
+            return {"refused": "locked"}
+
+        with contextlib.redirect_stdout(output), mock.patch.object(sys, "argv", ["judge", "--", "kernel"]), \
+                mock.patch.object(run_ledger_cases, "ask", side_effect=answer), \
+                mock.patch.object(subprocess, "Popen", return_value=mock.Mock(wait=lambda timeout: 1)):
+            try:
+                result = run_ledger_cases.main()
+            except OSError as err:
+                problems.append(f"ledger judge: held lock {mode} prevented a completed result: {type(err).__name__}")
+                continue
+        lines = output.getvalue().splitlines()
+        prefix = "match    " if mode == "intact" else "MISMATCH "
+        if result != 1 or not any(line.startswith(prefix + "a held lock refuses an append") for line in lines):
+            problems.append(f"ledger judge: did not record the expected held lock result when {mode}")
+        if not lines or json.loads(lines[-1]).get("all_matched") is not False:
+            problems.append(f"ledger judge: did not complete its final tally with the held lock {mode}")
+
+
 def gap_every_check_is_listed() -> None:
     """A gap check that nobody can find the reason for will be deleted by mistake."""
     listed = (ROOT / "docs" / "gap-checks.md").read_text(encoding="utf-8")
@@ -1159,7 +1216,9 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
-              gap_provider_cases_match_the_provider, gap_js_planted_defect_anchors_exist, gap_every_check_is_listed,
+              gap_provider_cases_match_the_provider, gap_js_planted_defect_anchors_exist,
+              gap_rust_defect_shards_cover_the_inventory, gap_ledger_judge_keeps_held_lock_result,
+              gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
