@@ -899,6 +899,10 @@ def lint_aggregate_problems(text: str) -> list[str]:
         return ["has no job lint-all"]
     body = "\n".join(blocks.pop("lint-all"))
     found = []
+    ignored_error = re.compile(r"""(?:^[ \t]*(?:-[ \t]+)?|[{,])[ \t]*(?:continue-on-error|'continue-on-error'|"continue-on-error")[ \t]*:""")
+    for number, line in enumerate(text.splitlines(), 1):
+        if ignored_error.search(line):
+            found.append(f"line {number}: continue-on-error is forbidden in the lint workflow")
     m = re.search(r"^    needs:\s*\[([^\]]*)\]", body, flags=re.M)
     needs = {n.strip() for n in m.group(1).split(",") if n.strip()} if m else set()
     for job in sorted(set(blocks) - needs):
@@ -920,7 +924,13 @@ def gap_lint_aggregate_needs_every_job() -> None:
     extra = "\n  planted:\n    name: lint (planted)\n    runs-on: ubuntu-26.04\n    steps:\n      - run: exit 1\n"
     for what, old, new in (("a job not in its needs", "\n  lint-all:\n", extra + "\n  lint-all:\n"),
                            ("if: always() removed", "    if: ${{ always() }}\n", ""),
-                           ("a needed job dropped", "needs: [python-and-workflows, javascript, rust]", "needs: [python-and-workflows, javascript]")):
+                           ("a needed job dropped", "needs: [python-and-workflows, javascript, rust]", "needs: [python-and-workflows, javascript]"),
+                           ("an ignored lint job failure", "  javascript:\n",
+                            "  javascript:\n    continue-on-error: true\n"),
+                           ("an ignored aggregate failure", "  lint-all:\n",
+                            "  lint-all:\n    'continue-on-error': true\n"),
+                           ("an ignored lint step failure", "      - name: Python, with ruff (ruff.toml)\n",
+                            '      - name: Python, with ruff (ruff.toml)\n        "continue-on-error": true\n')):
         if old not in text or not lint_aggregate_problems(text.replace(old, new, 1)):
             problems.append(f".github/workflows/lint.yml: the lint aggregate guard does not notice {what}")
 

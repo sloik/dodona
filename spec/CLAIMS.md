@@ -738,3 +738,7 @@ On 2026-11-22, both kernels at `fac60b1` agreed on all 71,744 retained evidence 
 ### Run 16 — both kernels after adding exact validation witnesses
 
 On 2026-11-22, both kernels at `09e94ff` agreed on all 71,744 retained evidence states and 78,894 retained intent states per kernel. The comparison checked the archived model artifact and both retained dumps against their recorded SHA-256 digests. The model inputs and comparison tool match the producer commit. This comparison is self and generated no model states. [Completed source run](https://github.com/sloik/dodona/actions/runs/44626497885) · [Recorded comparison](runs/run-16/every-state/).
+
+### Lint and shard controls
+
+On 2026-11-26, the old lint guard accepted the three planted settings that suppressed a failed dependency, the aggregate or a lint step. The tightened guard rejected all three. The JavaScript runner's eight-shard test matched all 19 named fixture defects to the serial fixture and failed when position 8 was deliberately omitted. All 54 runner tests passed after restoring the source. The JavaScript aggregate's exact command exited 0 with a success result and 1 with failure, cancellation or skip results. These are local self checks; the aggregate command probe supplied the result strings directly.
