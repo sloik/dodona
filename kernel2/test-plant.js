@@ -451,6 +451,26 @@ test('JavaScript shards contain disjoint manifest positions and claim only subse
   }
 });
 
+test('the eight hosted JavaScript shards match the full named inventory exactly once', (t) => {
+  const inventory = Array.from({ length: 19 }, (_, i) => ({
+    name: `defect ${i}`, file: 'rule.js', find: 'a = 1', replace: `a = ${i + 2}`,
+  }));
+  const manifest = JSON.stringify({ defects: inventory });
+  function judgeInventory(only) {
+    const reject = kit(['plan/a']);
+    const run = batch(t, { run_kit: [kit([]), ...inventory.flatMap(() => [reject, reject])] },
+      { manifest, main: { only } });
+    assert.equal(run.code, 0);
+    return run.verdicts.filter((line) => line.startsWith('caught (')).map((line) => line.split(') ')[1].trim());
+  }
+  const serial = judgeInventory([]);
+  assert.deepEqual(serial, inventory.map(({ name }) => name));
+  for (let index = 0; index < 8; index++) {
+    const selected = serial.filter((_, position) => position % 8 === index);
+    assert.deepEqual(judgeInventory(['--shard', String(index), '8']), selected);
+  }
+});
+
 test('an invalid JavaScript shard stops before a copy or baseline is started', (t) => {
   for (const only of [['--shard', '2', '2'], ['--shard', '0', '3'], ['--shard', '0', '1', 'rule.js']]) {
     const run = batch(t, {}, { main: { only } });
