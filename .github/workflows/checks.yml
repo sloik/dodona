@@ -8,13 +8,20 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      shard_control:
+        description: "Isolated issue 58 scheduler control"
+        type: choice
+        default: none
+        options: [none, skip, cancel, release]
 permissions:
   contents: read
 concurrency:
-  group: checks-${{ github.ref }}
+  group: checks-${{ inputs.shard_control && inputs.shard_control != 'none' && github.run_id || github.ref }}
   cancel-in-progress: true
 jobs:
   checks:
+    if: ${{ !inputs.shard_control || inputs.shard_control == 'none' }}
     # The name is the system alone, not the runner's version: main's ruleset requires these
     # checks by name, and a runner bump must not rename a required check.
     name: checks (${{ matrix.system }})
@@ -152,6 +159,7 @@ jobs:
   # Every shard checks the unchanged kernel and plants a disjoint part of the
   # manifest. The matrix supplies the ordinal and total to keep the partition full.
   planted-defects-rust-shards:
+    if: ${{ !inputs.shard_control || inputs.shard_control == 'none' }}
     name: Rust planted defects (shard ${{ matrix.shard }})
     strategy:
       fail-fast: false
@@ -169,7 +177,7 @@ jobs:
   planted-defects-rust:
     name: planted defects (first kernel)
     needs: planted-defects-rust-shards
-    if: ${{ always() }}
+    if: ${{ always() && (!inputs.shard_control || inputs.shard_control == 'none') }}
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
@@ -179,21 +187,34 @@ jobs:
         run: test "$SHARDS_RESULT" = success
 
   planted-defects-js-shards:
+    if: ${{ inputs.shard_control != 'skip' }}
     name: JavaScript planted defects (shard ${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: ${{ fromJSON(inputs.shard_control == 'cancel' && '[1,2]' || inputs.shard_control == 'release' && '[2]' || '[1,2,3,4,5,6,7,8]') }}
+    concurrency:
+      group: ${{ (inputs.shard_control == 'cancel' || inputs.shard_control == 'release') && matrix.shard == 2 && 'dodona-issue-58-held-shard' || format('dodona-issue-58-{0}-{1}', github.run_id, matrix.shard) }}
+      cancel-in-progress: true
     runs-on: ubuntu-26.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Hold one shard until released by the concurrency control
+        if: ${{ inputs.shard_control == 'cancel' && matrix.shard == 2 }}
+        run: sleep 480
+      - name: Successful companion or release job
+        if: ${{ inputs.shard_control == 'release' || (inputs.shard_control == 'cancel' && matrix.shard == 1) }}
+        run: 'true'
+      - if: ${{ !inputs.shard_control || inputs.shard_control == 'none' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # The status judge recomputes each report with the first kernel's scenario command.
       - name: Build the first kernel for the second kernel's status judge
+        if: ${{ !inputs.shard_control || inputs.shard_control == 'none' }}
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Plant the JavaScript defects assigned to this shard
+        if: ${{ !inputs.shard_control || inputs.shard_control == 'none' }}
         run: node kernel2/plant.js --shard ${{ strategy.job-index }} ${{ strategy.job-total }}
 
   planted-defects-js:
