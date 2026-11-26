@@ -86,12 +86,10 @@ function strongestOf(levels) {
 }
 
 // The evidence records that count for one obligation.
-function countingRecords(name, preimage, ledger, state) {
+function countingRecords(name, preimage, records, state) {
   const current = identityOf(preimage);
   const writers = [state.self.writer, ...state.policy.trusted_writers];
-  return ledger
-    .filter((entry) => isRecord(entry) && !isRejected(entry.body))
-    .map((entry) => entry.body)
+  return records
     .filter((body) => body.obligation === name
       && writers.includes(body.writer)
       && body.platform === state.self.platform
@@ -219,10 +217,12 @@ function put(object, key, value) {
 }
 
 function report(state, ledger) {
+  const checked = ledger.filter(isRecord).map(({ body }) => ({ body, rejected: isRejected(body) }));
+  const usable = checked.filter(({ rejected }) => !rejected).map(({ body }) => body);
   const obligations = {};
   const levels = {};
   for (const [name, details] of Object.entries(state.obligations)) {
-    const records = countingRecords(name, details.preimage, ledger, state);
+    const records = countingRecords(name, details.preimage, usable, state);
     const judged = obligationStatus(records);
     put(obligations, name, judged);
     put(levels, name, obligationLevel(judged.status, records));
@@ -236,7 +236,7 @@ function report(state, ledger) {
       status: judged.status, baseline: judged.baseline, gates: judged.gates, score: judged.score, shown: judged.shown, exceptions: judged.exceptions, separation: judged.separation,
     };
   }
-  const rejected = ledger.filter((entry) => isRecord(entry) && isRejected(entry.body)).length;
+  const rejected = checked.filter((record) => record.rejected).length;
   return {
     obligations,
     intents: shown,

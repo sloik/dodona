@@ -20,6 +20,7 @@
     "manifest.json"
   ],
   "batch_timeout_seconds": 3600,
+  "native_batch_wait_floor_ms": 7200000,
   "executor_name": "shared-queue",
   "tool_files": {
     "java/bin/java": "/usr/bin/java",

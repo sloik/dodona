@@ -13,7 +13,7 @@ on:
     branches: [main]
     # Records of runs and the claims table are not inputs to a run; changing them
     # must not start another one on the shared queue.
-    paths: ["spec/**", "!spec/runs/**", "!spec/CLAIMS.md", "!spec/README.md", "tools/check_models.py", "tools/check_states.py", "tools/host.py", "tools/status.py", "providers/**", "kernel/**", "kernel2/**", ".github/site/**", ".github/workflows/models.yml"]
+    paths: ["spec/**", "!spec/runs/**", "!spec/CLAIMS.md", "!spec/README.md", "dodona.toml", "policy.toml", "intents/**", "records/**", "tools/check_models.py", "tools/check_states.py", "tools/check_transcript.py", "tools/host.py", "tools/keep.py", "tools/policy_input.py", "providers/**", "kernel/**", "kernel2/**", ".github/site/**", ".github/workflows/models.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,8 +24,7 @@ concurrency:
   group: models-main
   cancel-in-progress: false
 jobs:
-  # Which checks still have a current result? The kernel answers, from the
-  # ledger the last successful run kept.
+  # Prepare the policy from the exact push and the inputs for both jobs.
   plan:
     if: github.repository == 'sloik/dodona' && github.ref == 'refs/heads/main' && vars.MODEL_RUNNER == 'ready'
     runs-on: ubuntu-26.04
@@ -50,17 +49,28 @@ jobs:
             echo "nothing kept: every check runs"
             rm -rf kept && mkdir -p kept
           fi
-      - name: Build the seed kernel
-        run: cargo build --release --locked --manifest-path kernel/Cargo.toml
-      - name: Ask the kernel which checks have a current result
+      - name: Build the static seed kernel for the project runner
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: rust-lld
         run: |
-          git fetch --quiet --depth 1 origin main
-          python3 tools/host.py plan --ledger kept/dodona.ledger --dumps-from kept/dumps --writer ci --out plan.json --kernel kernel/target/release/dodona-kernel
+          rustup target add aarch64-unknown-linux-musl
+          cargo build --release --locked --target aarch64-unknown-linux-musl --manifest-path kernel/Cargo.toml
+          tar -cf seed-kernel.tar -C kernel/target/aarch64-unknown-linux-musl/release dodona-kernel
+          sha256sum seed-kernel.tar > seed-kernel.sha256
+      - name: Prepare the protected policy and the state-dump plan
+        run: |
+          python3 -m venv .venv-examples
+          .venv-examples/bin/python -m pip install --quiet jsonschema==4.26.0
+          .venv-examples/bin/python .github/site/model_request.py prepare-policy "$GITHUB_SHA" > policy.json
+          python3 .github/site/model_request.py dump-plan kept/dumps > plan.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plan
           path: |
             plan.json
+            policy.json
+            seed-kernel.tar
+            seed-kernel.sha256
             kept
           if-no-files-found: error
 
@@ -79,19 +89,29 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: plan
-      # One job on the shared queue for what has no current result. The provider
-      # says what to run, the executor runs it, and what came back is saved as files.
-      - name: Have the provider describe the checks to run and the executor run them
+      - name: Have the native kernel run and record the model checks
+        run: |
+          mkdir -p out/seed
+          sha256sum -c seed-kernel.sha256
+          tar -xf seed-kernel.tar -C out/seed
+          if [ -f kept/dodona.ledger ]; then cp kept/dodona.ledger out/dodona.ledger; fi
+          python3 .github/site/model_request.py run "$GITHUB_SHA" policy.json > out/model-request.json
+          out/seed/dodona-kernel run < out/model-request.json > out/native-run.json
+      - name: Collect only the state dumps that need to be made
         run: python3 tools/host.py collect --site .github/site/executor.json --out out/runs --plan plan.json --dumps
-      - name: Judge every model case that ran
-        run: python3 tools/check_models.py --runs out/runs --report model-report.json
+      - name: Require a completed state-dump collection with pinned tools
+        run: python3 tools/check_models.py --runs out/runs > out/dump-report.txt
       - name: Keep the report, the raw outputs and the lists of states
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: model-run
           path: |
-            model-report.json
+            out/dodona.ledger
+            out/native-run.json
+            out/model-transcript.json
+            out/kernel-runs
+            out/dump-report.txt
             out/runs
           if-no-files-found: warn
 
@@ -115,6 +135,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: model-run
+          path: out
       - name: Build the seed kernel
         run: cargo build --release --locked --manifest-path kernel/Cargo.toml
       - name: Gather the lists of states, from this run or kept from the last
@@ -127,31 +148,24 @@ jobs:
         run: python3 tools/check_states.py --model kernel --dump keep/dumps/kernel/dump.states.dump --settings spec/kernel/dump-settings.json -- node kernel2/dodona-kernel2.js
       - name: Second kernel, intent delivery, every state
         run: python3 tools/check_states.py --model intent --dump keep/dumps/intent/dump.states.dump --settings spec/intent/dump-settings.json -- node kernel2/dodona-kernel2.js
-      # dodona used on dodona: the provider reads what the runs printed, the
-      # kernel adds each verdict to the kept ledger and works out the status of
-      # this project from it. A run that did not happen is recorded as unavailable.
-      - name: Record every new verdict in the kept ledger
+      - name: Independently read the native model ledger
         if: always()
         run: |
-          mkdir -p out
-          if [ -f kept/dodona.ledger ]; then cp kept/dodona.ledger out/dodona.ledger; fi
-          python3 tools/host.py conclude --runs out/runs --ledger out/dodona.ledger --writer ci --kernel kernel/target/release/dodona-kernel | tee out/conclude.json
-      - name: Status of this project, worked out by the kernel
-        if: always()
+          python3 .github/site/model_request.py status "$GITHUB_SHA" policy.json > out/status-request.json
+          node kernel2/dodona-kernel2.js status < out/status-request.json > out/native-status.json
+      - name: Judge every new model case and require current passing results
+        env:
+          MODEL_JOB_RESULT: ${{ needs.models.result }}
         run: |
-          git fetch --quiet --depth 1 origin main
-          python3 tools/status.py --ledger out/dodona.ledger --writer ci --kernel kernel/target/release/dodona-kernel | tee out/status.txt
-          python3 tools/status.py --ledger out/dodona.ledger --writer ci --json --kernel kernel/target/release/dodona-kernel > out/status.json
-          python3 tools/keep.py summary --plan plan.json --conclude out/conclude.json --status out/status.json --kept-from kept/from-run.txt >> "$GITHUB_STEP_SUMMARY"
-          { echo; echo '```'; cat out/status.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-      - name: Every model check has a passing result for the inputs as they are now
-        run: python3 tools/keep.py require-passed --status out/status.json --plan plan.json
+          test "$MODEL_JOB_RESULT" = success
+          python3 .github/site/model_results.py out/native-run.json out/native-status.json out/model-transcript.json --report out/model-report.json > out/model-summary.txt
+          cat out/model-summary.txt >> "$GITHUB_STEP_SUMMARY"
       - name: Validate every message of both provider sessions against the schemas
         if: always()
         run: |
           python3 -m venv .venv-examples
           .venv-examples/bin/python -m pip install --quiet jsonschema==4.26.0
-          .venv-examples/bin/python tools/check_transcript.py out/runs/transcript-collect.json out/runs/transcript-conclude.json
+          .venv-examples/bin/python tools/check_transcript.py out/model-transcript.json out/runs/transcript-collect.json
       - name: Keep the ledger and the lists of states for the next run
         run: python3 tools/keep.py finish --plan plan.json --ledger out/dodona.ledger --into keep
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -167,10 +181,11 @@ jobs:
           name: dodona-on-dodona
           path: |
             out/dodona.ledger
-            out/status.txt
-            out/status.json
-            out/conclude.json
+            out/native-run.json
+            out/native-status.json
+            out/model-report.json
+            out/model-summary.txt
+            out/model-transcript.json
             out/runs/transcript-collect.json
-            out/runs/transcript-conclude.json
             out/runs/runs.json
           if-no-files-found: warn

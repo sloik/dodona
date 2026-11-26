@@ -9,10 +9,12 @@ which the kernel reads as `unavailable` for every run of the batch. It judges no
 
 - Each run's inputs are copied into the job from the project, and only they. A file whose identity is not the one
   the run names is not sent: that run's report ends `cancelled`, which the kernel reads as an error.
-- What the job measured is compared with this site's pins. A tool as pinned (or, for a floor, at or above it) is
-  reported as the run asked for it; any other is reported with the digest measured (zeros when not measured), so the
-  kernel finds the tools that ran are not the ones asked for, and the check ends in error, never with a verdict.
+- A fixed pin is reported with the digest measured. A measured version at or above the site's floor is reported
+  with the site's floor key. Other version measurements keep the measured file digest. Missing measurements use
+  zeros. The kernel compares these keys with the ones requested and treats a mismatch as an error.
 - A job that did not end well, or whose end marker does not list every run, gives every run the end `cancelled`.
+- The run's wall limit goes to the case driver. A case that times out in a completed job is reported as
+  `timed-out` with diagnostic output and without an exit status.
 - What each run printed is kept under out/kernel-runs/, inside the project, where the provider reads it.
 """
 from __future__ import annotations
@@ -51,18 +53,16 @@ def argv_of(run: dict, where: dict) -> list[str] | None:
 
 
 def tools_ran(run: dict, pinned: dict, measured: dict, versions: dict) -> list[dict]:
-    """The tools the run asked for, each as the job found it: the digest asked when it meets the pin, else what was
-    measured, so that a tool other than the pinned one can never pass for it."""
+    """Report measured digests and verified site floor keys."""
     unmeasured, mismatched = host.tool_faults(pinned, measured, versions)
     ran = []
     for tool in run.get("tools", []):
         name = tool.get("name")
         pin = pinned.get(name)
-        if pin is not None and name not in unmeasured and name not in mismatched:
-            ran.append({"name": name, "digest": tool.get("digest")})
-        else:
-            seen = measured.get(pin["file"]) if pin else None
-            ran.append({"name": name, "digest": "sha256:" + (seen or "0" * 64)})
+        seen = measured.get(pin["file"]) if pin else None
+        if pin is not None and pin.get("floor") and name not in unmeasured and name not in mismatched:
+            seen = host.floor_digest(pin)
+        ran.append({"name": name, "digest": "sha256:" + (seen or "0" * 64)})
     return ran
 
 
@@ -92,7 +92,11 @@ def main() -> int:
         if not inputs_ok:
             ended[key] = "cancelled"
             continue
-        cases.append({"name": name, "cwd": (pathlib.PurePosixPath(name) / run.get("cwd", ".")).as_posix(), "argv": argv})
+        case = {"name": name, "cwd": (pathlib.PurePosixPath(name) / run.get("cwd", ".")).as_posix(), "argv": argv}
+        limits = run.get("limits")
+        if isinstance(limits, dict) and "wall_ms" in limits:
+            case["wall_ms"] = limits["wall_ms"]
+        cases.append(case)
     with contextlib.redirect_stdout(sys.stderr):  # standard output carries the answer and nothing else
         job = host.send_job(site, bundle, cases) if cases else None
     job = job or {"reachable": True, "complete": True, "fetched": None, "measured": {}, "versions": {}}
@@ -110,15 +114,18 @@ def main() -> int:
                   "isolation": "best-effort", "outputs": []}
         printed = job["fetched"] / f"{name}.txt" if job.get("fetched") else None
         status = job["fetched"] / f"{name}.exit" if job.get("fetched") else None
-        if key in ended or not job["complete"] or printed is None or not printed.exists() or not status.exists() \
-                or not status.read_text(encoding="ascii").strip().lstrip("-").isdigit():
-            report["end"] = ended.get(key, "cancelled")
-            captured = kept / f"{pathlib.PurePosixPath(name).name}.txt"
-            captured.write_bytes(b"")  # nothing the run printed is passed on as if it had ended well
+        captured = kept / f"{pathlib.PurePosixPath(name).name}.txt"
+        report["end"] = ended.get(key, "cancelled")
+        if key not in ended and job["complete"] and printed and printed.is_file() and status.is_file():
+            outcome = status.read_text(encoding="ascii").strip()
+            if outcome == "timed-out":
+                report["end"] = "timed-out"
+            elif outcome.removeprefix("-").isdigit():
+                report.update(end="exited", exit_status=int(outcome))
+        if report["end"] == "cancelled":
+            captured.write_bytes(b"")
         else:
-            captured = kept / f"{pathlib.PurePosixPath(name).name}.txt"
             shutil.copyfile(printed, captured)
-            report.update(end="exited", exit_status=int(status.read_text(encoding="ascii").strip()))
         report["captured_output"] = {"path": captured.relative_to(ROOT).as_posix(), "identity": identity(captured)}
         reports.append({"run_key": key, "report": report})
     sys.stdout.buffer.write(json.dumps({"ended": True, "reports": reports}).encode("utf-8") + b"\n")

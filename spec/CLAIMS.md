@@ -143,9 +143,9 @@ Bounds: one obligation, which can or cannot be checked, fixed from the start; at
 
 | # | Claim | Decision | Check | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 17 |
+| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 19 |
 
-Run 17 records the current comparison. Runs 9 and 11 through 16 remain the records for earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
+Run 19 records the current comparison. Runs 9 and 11 through 18 remain the records for earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
 
 ## Shown by the conformance kit, not by a model
 
@@ -750,6 +750,44 @@ On 2026-11-26, both staged native run kernels agreed on each of the 71,744 evide
 The same staged kernels each matched all 103 local project-run cases, without skips. Removing reuse of a current passing result from each kernel separately gave 44 named mismatches and zero unfinished cases per plant. These included `a current result is reused` and `everything current sends nothing`. The 70 JavaScript run-module tests passed. These are self checks. The production model workflow still uses the stage-0 host.
 
 The hosted Rust shard at `3e15459` caught 33 of 34 assigned defects. The numeric manifest version plant was stale after transcript recording inserted a line into its source anchor. The expanded repository anchor check reproduced that failure. After refreshing the plant, an isolated self shard caught one of one with no unfinished defects. Both replays named `status-judge: a manifest whose version is a number`. The repaired head still needs the full hosted gate. [Original shard](https://github.com/sloik/dodona/actions/runs/45814973890/job/139895949254).
+
+### Run 18 — status validation on a retained ledger
+
+On 2026-11-26, after the JavaScript status validation change, both kernels again agreed on all 71,744 evidence states and 78,894 intent states. The dumps from the successful source workflow match the Run 17 dump hashes. This self comparison used the retained dumps. [Source workflow](https://github.com/sloik/dodona/actions/runs/45819303936) · [Comparison record](runs/run-18/every-state/).
+
+The JavaScript status command timed out at 90 seconds on a 425-entry ledger before the change. After the change it finished in 14.58 seconds on the same machine and produced the same JSON report as Rust for all 121 obligations. A focused unit test caught the extra preimage reads on the original code. After the change, all 150 scenario, 253 project-status and 103 project-run cases matched. These were local self checks.
+
+The isolated wrong-key plant was caught on both judge replays. The named scenarios were `status/a_preimage_that_cannot_be_keyed_is_rejected` and `status/evidence_counts_only_for_the_inputs_it_states`. The shard finished with one catch and zero unfinished defects.
+
+In a self replay, both native run commands submitted 121 cases to a stand-in for the site's queue. The stand-in matched the command, working directory and input hashes for each case to the successful workflow's raw model artifact. Each kernel filed all 121 verdicts as passing and then reused all 121 without submitting another batch or changing the ledger. With the stand-in unavailable, each reported 121 unavailable runs, left all 121 current obligations unknown and preserved the ledger bytes. The schema judge accepted all 1,512 messages in the six transcripts. [Archived model outputs](https://github.com/sloik/dodona/actions/runs/45819303936/artifacts/15122115095).
+
+### Run 19 — optional batch wait floor
+
+On 2026-11-26 both kernels agreed on all 71,744 evidence states and 78,894 intent states after the batch wait change. This self comparison used the same retained dumps as Run 18. [Comparison record](runs/run-19/every-state/).
+
+The prior successful collection took 39 minutes and 24 seconds. The previous native wait for a batch with a 30-minute maximum individual limit was 31 minutes. The JavaScript control reproduced that shorter wait. Removing the new floor from the Rust scheduler reproduced it in the Rust control. The repository check also failed on the old reference. The revised implementations apply a longer floor and preserve the original wait when the floor is shorter. The controls keep the day limit when a run states no limit. [Prior collection](https://github.com/sloik/dodona/actions/runs/45819303936/job/139916265665).
+
+The Python reference and both kernels matched all 108 project-run cases, with zero skips and zero unfinished. The original implementations accepted five invalid floor requests. All three revised commands refused them before sending a provider request or starting an executor.
+
+### Individual case wall limit
+
+On 2026-11-26 a self qualification ran the site driver from `16a6074` with three cases in one batch. The one-millisecond control reported `timed-out` and could not be credited by the model judge. The next `assurance/design` case completed with exit 0 and no violation. The planted `assurance/mutant_always_nothing` case completed with exit 12 and named `WeakestLink`. The batch completed with native exit 0 and its end marker listed all three cases. Both tool measurements met the site's pins.
+
+The local site tests caught the original missing wall limit and the original loss of the timeout report. The driver test discarded a partial kept file and preserved the next case's output. The executor test kept the timeout and the next case's exit separate, and reported cancellation when the complete-batch marker was removed. The production workflow cutover still needs its full qualification.
+
+### Protected policy for native model requests
+
+On 2026-11-26 the site builder validated the policy at its exact checkout commit and prepared both native requests with that policy and the same ledger. The unit tests refused changes to the policy artifact and a different checkout. A working-copy substitution and a comparison that confused a boolean with a number each failed the tests when planted.
+
+Both kernels gave identical status reports on the 425-entry retained ledger. They listed the same 121 current model obligations, all unknown under the new runner key. This self check used retained evidence and started no model checker. [Source ledger](https://github.com/sloik/dodona/actions/runs/45819303936/artifacts/15121911961).
+
+### Native model result gate
+
+On 2026-11-26 the Rust run command filed 121 verdicts through a stand-in that matched every submitted case to the successful archived model run. The JavaScript status command read the resulting ledger independently. The site gate accepted all 121 cases after checking their descriptions, input identities, captured bytes, exits and expected outcomes. The second run reused all 121 with zero submissions and preserved the ledger bytes. The schema judge accepted all 504 transcript messages across the two runs. This self replay used archived model output. [Archived model output](https://github.com/sloik/dodona/actions/runs/45819303936/artifacts/15122115095).
+
+The eight site tests covered fresh and reused verdicts, exact inventory, ledger agreement, missing reports, timeouts, wrong inputs and raw output. Isolated plants removing the exact inventory, captured digest or expected outcome check each failed its named test.
+
+An unavailable-client control used the workflow candidate `4d72c85` and the ordinary queue client pointed at an absent socket. The client returned unavailable exit 75 with no job or native exit. The kernel reported 121 unavailable checks and zero passes, and the ledger bytes were unchanged. The independently read status had 121 unknown results, and the native result gate refused to keep the ledger. All 252 provider messages validated. This self check exercised the unavailable path for the exact candidate.
 
 ### Completed named defect inventory at `0c3a46f`
 

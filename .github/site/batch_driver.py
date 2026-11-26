@@ -8,11 +8,11 @@ for the whole list is kinder to a shared queue than one job per case.
     python3 batch_driver.py manifest.json
 
 The manifest lists cases, each with a working directory, an argument list and
-a name. For each case the driver writes <out>/<name>.txt with the checker's
-output and <out>/<name>.exit with its exit status. A case that cannot be
-started gets the exit status "did-not-start". The driver itself judges
-nothing. Run anywhere but inside a job of the queue, it refuses with exit
-status 78 before reading anything.
+a name. A supplied wall_ms bounds that case's process. The driver writes
+<out>/<name>.txt with the checker's output and <out>/<name>.exit with its exit
+status, "did-not-start" or "timed-out". A timeout leaves diagnostic output
+and discards any partial kept file. Run anywhere but inside a job of the
+queue, the driver refuses with exit status 78 before reading anything.
 """
 import hashlib
 import json
@@ -88,17 +88,21 @@ def main() -> int:
     for case in manifest["cases"]:
         target = out / case["name"]
         target.parent.mkdir(parents=True, exist_ok=True)
+        timeout = max(case["wall_ms"], 0) / 1000 if "wall_ms" in case else None
         try:
-            done = subprocess.run(case["argv"], cwd=case["cwd"], capture_output=True)
-            target.with_suffix(".txt").write_bytes(done.stdout + done.stderr)
-            target.with_suffix(".exit").write_text(str(done.returncode), encoding="ascii")
+            done = subprocess.run(case["argv"], cwd=case["cwd"], capture_output=True, timeout=timeout)
+            output, status = done.stdout + done.stderr, str(done.returncode)
+        except subprocess.TimeoutExpired as err:
+            output, status = (err.stdout or b"") + (err.stderr or b""), "timed-out"
         except OSError as err:
-            target.with_suffix(".txt").write_text(f"could not start: {err}\n", encoding="utf-8")
-            target.with_suffix(".exit").write_text("did-not-start", encoding="ascii")
+            output, status = f"could not start: {err}\n".encode("utf-8"), "did-not-start"
+        target.with_suffix(".txt").write_bytes(output)
+        target.with_suffix(".exit").write_text(status, encoding="ascii")
         for extra in case.get("keep", []):  # files the case produced that should come back
             source = pathlib.Path(case["cwd"]) / extra
             if source.exists():
-                (out / (case["name"] + "." + extra)).write_bytes(source.read_bytes())
+                if status != "timed-out":
+                    (out / (case["name"] + "." + extra)).write_bytes(source.read_bytes())
                 source.unlink()
         # The checker leaves its working files behind. Left to pile up over many
         # cases they would exhaust the space a job is allowed.

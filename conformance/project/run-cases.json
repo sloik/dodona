@@ -18811,6 +18811,168 @@
    "expect": {
     "refused": "bad-input"
    }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"sample\"\n\n[[binding]]\nname = \"intents\"\nprovider = \"t.intents\"\ncapabilities = [\"intent.index\"]\nmatch = [\"intents/*.md\"]\n",
+    "code/intents.py": "fixture code\n"
+   },
+   "providers": {
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [],
+    "min_hard_gates": 1,
+    "floors": {},
+    "not_applied": []
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "run_input_edit": [
+    [
+     [
+      "batch_wait_floor_ms"
+     ],
+     0
+    ]
+   ],
+   "name": "a batch wait floor that is zero",
+   "why": "The run request must refuse an invalid floor before it starts anything.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"sample\"\n"
+   },
+   "providers": {},
+   "policy": {
+    "required": [],
+    "min_hard_gates": 1,
+    "floors": {},
+    "not_applied": []
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "run_input_edit": [
+    [
+     [
+      "batch_wait_floor_ms"
+     ],
+     -1
+    ]
+   ],
+   "name": "a batch wait floor that is negative",
+   "why": "The run request must refuse an invalid floor before it starts anything.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"sample\"\n"
+   },
+   "providers": {},
+   "policy": {
+    "required": [],
+    "min_hard_gates": 1,
+    "floors": {},
+    "not_applied": []
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "run_input_edit": [
+    [
+     [
+      "batch_wait_floor_ms"
+     ],
+     86400001
+    ]
+   ],
+   "name": "a batch wait floor that is over a day",
+   "why": "The run request must refuse an invalid floor before it starts anything.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"sample\"\n"
+   },
+   "providers": {},
+   "policy": {
+    "required": [],
+    "min_hard_gates": 1,
+    "floors": {},
+    "not_applied": []
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "run_input_edit": [
+    [
+     [
+      "batch_wait_floor_ms"
+     ],
+     "3660000"
+    ]
+   ],
+   "name": "a batch wait floor that is a string",
+   "why": "The run request must refuse an invalid floor before it starts anything.",
+   "expect": {
+    "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "[project]\nname = \"sample\"\n"
+   },
+   "providers": {},
+   "policy": {
+    "required": [],
+    "min_hard_gates": 1,
+    "floors": {},
+    "not_applied": []
+   },
+   "ledgers": [],
+   "owner_ledger": null,
+   "run_input_edit": [
+    [
+     [
+      "batch_wait_floor_ms"
+     ],
+     true
+    ]
+   ],
+   "name": "a batch wait floor that is a boolean",
+   "why": "The run request must refuse an invalid floor before it starts anything.",
+   "expect": {
+    "refused": "bad-input"
+   }
   }
  ]
 }

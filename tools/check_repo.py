@@ -660,15 +660,28 @@ def gap_runner_versions_agree() -> None:
 def gap_reuse_is_decided_by_a_kernel_and_checked() -> None:
     """Every run used to start from nothing. Reuse must come from the kept ledger through a kernel, and a run must still fail when a check has no passing result."""
     workflow = (ROOT / ".github" / "workflows" / "models.yml").read_text(encoding="utf-8")
-    for needed, why in (("tools/host.py plan", "what runs must be decided by a kernel from the kept ledger"),
-                        ("--plan plan.json", "collect must send only what the plan says"),
-                        ("keep.py require-passed", "a run must fail unless every check has a passing result now"),
+    commands = run_blocks(workflow)
+    for needed, why in (("model_request.py prepare-policy", "the plan must validate the push policy"),
+                        ("model_request.py dump-plan", "the site must plan state dumps separately"),
+                        ("model_request.py run", "the native request must use the protected policy and kept ledger"),
+                        ("out/seed/dodona-kernel run", "what runs must be decided by a kernel from the kept ledger"),
+                        ("--plan plan.json --dumps", "collect must send only the state dumps the plan says"),
+                        ("model_request.py status", "status must read the ledger under the same protected policy"),
+                        ("node kernel2/dodona-kernel2.js status", "the other kernel must read the native ledger"),
+                        ("model_results.py", "keeping a ledger requires all current passes and the raw case proof"),
+                        ("check_transcript.py out/model-transcript.json out/runs/transcript-collect.json",
+                         "the native and dump provider transcripts must both validate"),
+                        ("tools/keep.py finish", "only the gated result is prepared for reuse"),
                         ("--status success", "only a successful run's ledger may be the starting point"),
                         ("--event push", "only a run a push started may be the starting point, never a pull request's"),
                         ('.head_repository.full_name', "the starting point must be a run of this repository, not a fork's"),
                         ("--branch main", "only a ledger kept on main may be the starting point")):
-        if needed not in workflow:
+        if needed not in commands:
             problems.append(f".github/workflows/models.yml: {why} ({needed!r} is missing)")
+    keep_receipt = workflow.find("name: dodona-kept")
+    if keep_receipt < 0 or any(workflow.find(gate) < 0 or workflow.find(gate) > keep_receipt for gate in
+                               ("model_results.py", "check_transcript.py out/model-transcript.json", "tools/keep.py finish")):
+        problems.append(".github/workflows/models.yml: the kept artifact must follow the native result and transcript gates")
     import keep
     with tempfile.TemporaryDirectory() as tmp:
         report = pathlib.Path(tmp) / "status.json"
@@ -1005,6 +1018,28 @@ def gap_status_keeps_literal_obligation_names() -> None:
         problems.append("conformance/project/cases.json: no status case for a passed obligation named __proto__")
 
 
+def gap_batch_wait_respects_site_and_run_limits() -> None:
+    """A batch may need a longer wait without changing a run's description."""
+    import project_run
+    tree = mock.Mock()
+    tree.proc.returncode = 0
+    tree.proc.communicate.return_value = (b'{"ended":true,"reports":[]}\n', b"")
+    for limits, floor, wanted in (({"wall_ms": 1_800_000}, 3_660_000, 3660),
+                                  ({"wall_ms": 1_800_000}, 1, 1860),
+                                  ({}, 3_660_000, 86_400)):
+        run = {"limits": limits}
+        batch = [{"number": 1, "run_key": "one", "run": run}]
+        with mock.patch.object(project_run.host.Session, "_start", return_value=tree):
+            try:
+                project_run.run_batch(ROOT, ["executor"], batch, floor_ms=floor)
+            except TypeError as err:
+                problems.append(f"project run cannot take a site batch wait floor: {err}")
+                return
+        (sent,), kwargs = tree.proc.communicate.call_args
+        if kwargs.get("timeout") != wanted or json.loads(sent)["runs"][0]["run"] != run:
+            problems.append("a batch wait floor changed a run or failed to preserve the required wait")
+
+
 def check_planted_defect_anchors(directory: str) -> None:
     kernel = ROOT / directory
     defects = json.loads((kernel / "defects.json").read_text(encoding="utf-8"))["defects"]
@@ -1029,6 +1064,47 @@ def gap_js_planted_defect_anchors_exist() -> None:
 def gap_rust_planted_defect_anchors_exist() -> None:
     """Every listed Rust defect needs source text its runner can replace."""
     check_planted_defect_anchors("kernel")
+
+
+def gap_js_status_exercises_retained_ledger_work() -> None:
+    """Keep the status work test in the unit suite used by every platform job."""
+    tests = (ROOT / "kernel2" / "test.js").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "checks.yml").read_text(encoding="utf-8")
+    if "test('status validates each ledger record once per report'" not in tests or \
+            "node --test kernel2/test.js" not in run_blocks(workflow).splitlines():
+        problems.append("keep the JavaScript status ledger work test in the platform unit suite")
+
+
+def gap_site_executor_reports_measured_tool_keys() -> None:
+    """Exercise tool reports with the site's fake queue."""
+    tests = ROOT / ".github" / "site" / "test_kernel_executor.py"
+    result = subprocess.run([sys.executable, str(tests), "KernelExecutor"], cwd=ROOT, capture_output=True, text=True)
+    if result.returncode:
+        problems.append("site executor conformance failed: " + result.stderr.strip())
+
+
+def gap_site_driver_applies_case_timeouts() -> None:
+    """An individual case's limit is independent of the queue batch's limit."""
+    tests = ROOT / ".github" / "site" / "test_kernel_executor.py"
+    result = subprocess.run([sys.executable, str(tests), "BatchDriver"], cwd=ROOT, capture_output=True, text=True)
+    if result.returncode:
+        problems.append("site driver conformance failed: " + result.stderr.strip())
+
+
+def gap_site_model_requests_use_protected_policy() -> None:
+    """A native request must use the validated policy from its protected checkout."""
+    tests = ROOT / ".github" / "site" / "test_model_request.py"
+    result = subprocess.run([sys.executable, str(tests)], cwd=ROOT, capture_output=True, text=True)
+    if result.returncode:
+        problems.append("site model request conformance failed: " + result.stderr.strip())
+
+
+def gap_native_model_results_need_raw_evidence() -> None:
+    """A native result is accepted only with the exact case inventory and judged outputs."""
+    tests = ROOT / ".github" / "site" / "test_model_results.py"
+    result = subprocess.run([sys.executable, str(tests)], cwd=ROOT, capture_output=True, text=True)
+    if result.returncode:
+        problems.append("site model result conformance failed: " + result.stderr.strip())
 
 
 def gap_rust_defect_shards_cover_the_inventory() -> None:
@@ -1405,8 +1481,11 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
-              gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist,
-              gap_rust_defect_shards_cover_the_inventory, gap_ledger_judge_keeps_held_lock_result,
+              gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist, gap_js_status_exercises_retained_ledger_work,
+              gap_rust_defect_shards_cover_the_inventory, gap_site_executor_reports_measured_tool_keys, gap_ledger_judge_keeps_held_lock_result,
+              gap_site_driver_applies_case_timeouts,
+              gap_site_model_requests_use_protected_policy,
+              gap_native_model_results_need_raw_evidence,
               gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
@@ -1414,7 +1493,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_tool_tree_refuses_an_incomplete_listing, gap_every_tool_compiles,
               gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
-              gap_status_keeps_literal_obligation_names,
+              gap_status_keeps_literal_obligation_names, gap_batch_wait_respects_site_and_run_limits,
               gap_thin_coverage_is_shown, gap_status_report_names_policy_on_pass,
               gap_project_intent_criteria_have_a_schema, gap_documents_follow_the_code]
 
