@@ -564,14 +564,16 @@ def list_project(session: Session, root: pathlib.Path) -> tuple[list[dict], list
     body = session.ask("obligation.enumerate", {"binding": "kernel-models", "definitions": [], "files": files})
     paths = [f["path"] for f in files]
     DECLARED_INPUTS.clear()
-    for o in body["obligations"]:
-        # What a check of it may read is the provider's word, held apart from the obligation the check is sent.
+    obligations = []
+    for wire_obligation in body["obligations"]:
+        # Keep the recorded provider message intact when making the host's internal obligation.
+        o = dict(wire_obligation, binding="kernel-models")
         declared = o.pop("inputs", None)
         if not isinstance(declared, list) or not all(isinstance(p, str) for p in declared) \
                 or declared != sorted(set(declared)) or not set(declared) <= set(paths):
             raise Refused("bad-inputs")
         DECLARED_INPUTS[o.get("name")] = declared
-    obligations = [dict(o, binding="kernel-models") for o in body["obligations"]]
+        obligations.append(o)
     REFUSED_BY_PROVIDER[:] = sorted(r.get("name", "?") for r in body.get("rejected", []))
     names = [o["name"] for o in obligations]
     if len(names) != len(set(names)):
