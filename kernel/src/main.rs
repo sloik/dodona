@@ -95,6 +95,13 @@ fn main() -> ExitCode {
             Ok(_) => Ok(project_status::answer(&input)),
             Err(_) => Ok(project_status::answer(b"")),
         }
+    } else if command == "run" {
+        // As `status`: one JSON object and the exit status 0, a refusal included.
+        let mut input = Vec::new();
+        match io::stdin().read_to_end(&mut input) {
+            Ok(_) => Ok(project_status::run_answer(&input)),
+            Err(_) => Ok(project_status::run_answer(b"")),
+        }
     } else {
         let mut input = Vec::new();
         match io::stdin().read_to_end(&mut input) {

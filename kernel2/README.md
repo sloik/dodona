@@ -16,6 +16,7 @@ Each command reads standard input and prints one JSON object, except `session`, 
     node kernel2/dodona-kernel2.js path-set     {"paths": [...]} to the colliding pairs
     node kernel2/dodona-kernel2.js states       single states, as tools/check_states.py sends them
     node kernel2/dodona-kernel2.js check        one check, from a provider to a verdict (conformance/README.md, "Host checks")
+    node kernel2/dodona-kernel2.js run          run a project's checks and record completed verdicts;
     node kernel2/dodona-kernel2.js status       a project's status (conformance/README.md, "How a project's status is judged");
                                                 it answers every input with one object and exits 0, a refusal included
     node kernel2/dodona-kernel2.js session --deadline-ms N --max-line N --max-log N -- <provider command>
@@ -39,6 +40,8 @@ From the repository root:
     python3 tools/run_status_cases.py --jobs 3 --kernel <the first kernel> -- node kernel2/dodona-kernel2.js status
     node kernel2/plant.js
     node --test kernel2/test-plant.js
+
+The `run` command uses the status command's project snapshot, keeps only checking provider sessions open and records completed verdicts in the selected ledger. The project-run judge compares its report with the subsequent `status` report and verifies that current results are reused. Focused tests for the scheduling and ledger paths run with `node --test kernel2/test-run.js`.
 
 `plant.js` copies the kernel, plants defects from `defects.json` one at a time, and judges each copy. Changes to a host or project status module go to the judge for that module first. A rejection counts when the judge reports a complete tally and the same named case rejects on replay. The scenario judge counts `scenarios`, the ledger judge counts `checks`, and the core-key, canonical and path judges count `vectors`. Host-check and status count `judged` with skips tallied separately. The remaining judges count `cases`. If only the unit tests reject a copy, the kit reports a miss. A copy that cannot load is broken. The runner restores each mutation and removes its own temporary copy. Hosted CI exercises this behavior with mocked subprocesses in `test-plant.js`.
 

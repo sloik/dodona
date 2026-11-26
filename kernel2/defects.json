@@ -1891,8 +1891,8 @@
       "name": "status step 5: no shutdown is sent at the end of a session",
       "model_case": "(project status)",
       "file": "project-status.js",
-      "find": "    wire.post({ type: 'shutdown' });\n    wire.close();\n    await Promise.race",
-      "replace": "    wire.close();\n    await Promise.race"
+      "find": "  wire.post({ type: 'shutdown' });\n  wire.close();\n  await Promise.race",
+      "replace": "  wire.close();\n  await Promise.race"
     },
     {
       "name": "status step 5: a provider whose command cannot be started is reported as closed",

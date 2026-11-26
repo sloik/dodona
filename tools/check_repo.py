@@ -1005,9 +1005,8 @@ def gap_status_keeps_literal_obligation_names() -> None:
         problems.append("conformance/project/cases.json: no status case for a passed obligation named __proto__")
 
 
-def gap_js_planted_defect_anchors_exist() -> None:
-    """A missing source anchor means the configured JavaScript defect is never planted."""
-    kernel = ROOT / "kernel2"
+def check_planted_defect_anchors(directory: str) -> None:
+    kernel = ROOT / directory
     defects = json.loads((kernel / "defects.json").read_text(encoding="utf-8"))["defects"]
     sources: dict[str, str | None] = {}
     for defect in defects:
@@ -1019,7 +1018,17 @@ def gap_js_planted_defect_anchors_exist() -> None:
                 sources[file] = None
         source = sources[file]
         if source is None or defect["find"] not in source:
-            problems.append(f"kernel2/defects.json: {defect['name']!r}: anchor absent from kernel2/{file}")
+            problems.append(f"{directory}/defects.json: {defect['name']!r}: anchor absent from {directory}/{file}")
+
+
+def gap_js_planted_defect_anchors_exist() -> None:
+    """Every listed JavaScript defect needs source text its runner can replace."""
+    check_planted_defect_anchors("kernel2")
+
+
+def gap_rust_planted_defect_anchors_exist() -> None:
+    """Every listed Rust defect needs source text its runner can replace."""
+    check_planted_defect_anchors("kernel")
 
 
 def gap_rust_defect_shards_cover_the_inventory() -> None:
@@ -1396,7 +1405,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
-              gap_js_planted_defect_anchors_exist,
+              gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist,
               gap_rust_defect_shards_cover_the_inventory, gap_ledger_judge_keeps_held_lock_result,
               gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,

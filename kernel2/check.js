@@ -240,4 +240,4 @@ async function runCheck(request) {
   }
 }
 
-module.exports = { runCheck, runKey, reportEnding, answerProblem, readReport, isRegularFile, executorWait };
+module.exports = { runCheck, runKey, reportEnding, answerProblem, readReport, isRegularFile, executorWait, fileIdentity, namedFiles };
