@@ -12,7 +12,8 @@ and reads one report from standard output. How the run ends is taken from DODONA
 - `fails`: exits with status 1 and prints nothing; `silent`: exits 0 and prints nothing;
 - `exits-1-with-report`: prints a complete exited report and then exits with status 1, so the status alone
   must end the check;
-- `leaves-a-child`: starts a process that sleeps, writes its id to DODONA_TEST_PIDFILE, then reports an exited
+- `leaves-a-child`: starts a process that waits up to ten minutes (the provider fixture's cooperative waiter, which
+  answers the judge's probe and stop files), writes its id to DODONA_TEST_PIDFILE, then reports an exited
   run and exits; the host must end every process of the executor's process group or job when it returns;
 - `slow`: as `exited`, but only after twelve seconds: longer than the host's own deadline plus the run's
   `wall_ms` in the case that uses it, so a host that waits less than `wall_ms` plus two seconds misses the
@@ -60,7 +61,10 @@ if True:
               "tools_ran": tools, "captured_output": {"path": "captured.txt", "identity": identity}}
 if END == "leaves-a-child":
     import subprocess
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"], stdin=subprocess.DEVNULL,
+    # The kit's one cooperative waiter (importing the provider only defines it), for up to 600 s as before, with the
+    # same closed streams, answering the judge's probe and stop files.
+    from misbehaving_provider import POLL
+    child = subprocess.Popen([sys.executable, "-c", POLL + "wait(6000)\n"], stdin=subprocess.DEVNULL,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     with open(os.environ["DODONA_TEST_PIDFILE"], "a", encoding="utf-8") as f:
         f.write(f"{child.pid}\n")

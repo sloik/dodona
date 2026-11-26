@@ -11,15 +11,46 @@ If DODONA_TEST_SEEN is set, every message the provider receives is appended to t
 If the environment variable DODONA_TEST_PIDFILE is set, the provider appends
 its own process id, and the id of any process it starts, to that file, one per
 line, so a judge can check that nothing is left running afterwards.
+While they wait, the provider and the process it leaves behind answer a judge's
+files: they acknowledge DODONA_TEST_PROBE and DODONA_TEST_STOP with
+DODONA_TEST_NONCE in DODONA_TEST_ACK, and exit on the stop file, so a judge can
+tell what is still running and clear it up without signalling a recorded id.
 """
 import json
 import os
 import subprocess
 import sys
-import time
 
 MODE = sys.argv[1] if len(sys.argv) > 1 else "well-behaved"
 OUT = sys.stdout.buffer
+# How every waiting process of the fixture waits, the provider and the child it leaves behind alike: up to ten
+# minutes, looking every tenth of a second for the judge's files. Once DODONA_TEST_PROBE exists it creates
+# alive-<pid> in DODONA_TEST_ACK, holding DODONA_TEST_NONCE; once DODONA_TEST_STOP exists it creates stopped-<pid>
+# the same way and exits. Files are created only if absent. The judge never has to signal a process by its id.
+POLL = r'''
+import os, time
+def _note(kind):
+    folder, nonce = os.environ.get("DODONA_TEST_ACK"), os.environ.get("DODONA_TEST_NONCE")
+    if folder and nonce:
+        try:
+            with open(os.path.join(folder, "%s-%d" % (kind, os.getpid())), "x", encoding="ascii") as handle:
+                handle.write(nonce)
+        except OSError:
+            pass
+def wait(rounds=6000):
+    probe, stop, told = os.environ.get("DODONA_TEST_PROBE"), os.environ.get("DODONA_TEST_STOP"), False
+    for _ in range(rounds):
+        if not told and probe and os.path.exists(probe):
+            _note("alive")
+            told = True
+        if stop and os.path.exists(stop):
+            _note("stopped")
+            os._exit(0)
+        time.sleep(0.1)
+'''
+_POLLING: dict = {}
+exec(POLL, _POLLING)  # the same code the child left behind runs
+wait = _POLLING["wait"]
 
 
 def note_pid(pid: int) -> None:
@@ -53,7 +84,7 @@ def manifest(echo):
 
 def sleeper() -> None:
     """Start a process that outlives this one and keeps the output pipe open."""
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
+    child = subprocess.Popen([sys.executable, "-c", POLL + "wait()\n"])
     note_pid(child.pid)
 
 
@@ -65,14 +96,14 @@ def main() -> None:
     if MODE == "garbage":
         OUT.write(b"this is not JSON\n")
         OUT.flush()
-        time.sleep(600)
+        wait()
     if MODE == "not-an-object":
         send([1, 2, 3])
-        time.sleep(600)
+        wait()
     if MODE == "exits-before-answering":
         return
     if MODE == "never-answers":
-        time.sleep(600)
+        wait()
     if MODE == "loose-but-valid-json":
         # Valid JSON that the strict reading of a check would refuse: a session reads it as JSON.
         text = json.dumps(manifest(hello.get("echo", "")))[:-1] + ', "extra": {"v": 1.5, "w": 1, "w": 2, "deep": ' + "[" * 70 + "]" * 70 + "}}"
@@ -93,15 +124,15 @@ def main() -> None:
     if MODE == "bad-encoding":
         OUT.write(b'{"type": "result", "id": "\xff\xfe"}\n')
         OUT.flush()
-        time.sleep(600)
+        wait()
     if MODE == "over-long-line":
         answer["body"]["padding"] = "x" * (4 * 1024 * 1024)
     if MODE == "half-a-line":
         OUT.write(b'{"type": "result", "id": ')
         OUT.flush()
-        time.sleep(600)
+        wait()
     if MODE == "late":
-        time.sleep(600)
+        wait()
     if MODE == "flood-on-standard-error":
         chunk = b"E" * 65536
         for _ in range(96):  # about 6 MiB
@@ -110,18 +141,18 @@ def main() -> None:
     if MODE in ("leaves-a-process-behind", "leaves-a-process-behind-and-hangs"):
         sleeper()
     if MODE == "leaves-a-process-behind-and-hangs":
-        time.sleep(600)
+        wait()
     if MODE == "two-answers":
         send(answer)
     if MODE == "nan-in-an-answer":
         OUT.write(('{"type": "result", "id": %s, "capability": %s, "body": {"x": NaN}}\n'
                    % (json.dumps(request.get("id")), json.dumps(request.get("capability")))).encode("utf-8"))
         OUT.flush()
-        time.sleep(600)
+        wait()
     send(answer)
     read()  # shutdown
     if MODE == "ignores-shutdown":
-        time.sleep(600)
+        wait()
 
 
 if __name__ == "__main__":

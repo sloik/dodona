@@ -19,7 +19,7 @@ A provider is a separate program ([decision 0003](../decisions/0003-providers-ar
 3. The kernel sends requests, each with an `id` and a deadline. The provider answers each with a result or an error carrying the same `id`. The kernel drives; the provider never initiates.
 4. The kernel sends `shutdown`, or closes the stream and terminates the provider's whole process tree.
 
-A message that fails validation, a missing required field, or a mismatched `id` ends the session; any check in flight in it gets verdict `error`. An answer that arrives after its deadline is logged and dropped.
+A message that fails validation, a missing required field, or a mismatched `id` ends the session; any check in flight in it gets verdict `error`. An answer that arrives after its deadline is logged and dropped. A recorded enumeration result retains each obligation's declared `inputs` as sent. The stage-0 host copies the obligation before separating those paths from its internal representation and supplying the matching file references to a check.
 
 ## Capabilities
 
