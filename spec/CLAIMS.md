@@ -757,6 +757,8 @@ On 2026-11-26, after the JavaScript status validation change, both kernels again
 
 The JavaScript status command timed out at 90 seconds on a 425-entry ledger before the change. After the change it finished in 14.58 seconds on the same machine and produced the same JSON report as Rust for all 121 obligations. A focused unit test caught the extra preimage reads on the original code. After the change, all 150 scenario, 253 project-status and 103 project-run cases matched. These were local self checks.
 
+The isolated wrong-key plant was caught on both judge replays. The named scenarios were `status/a_preimage_that_cannot_be_keyed_is_rejected` and `status/evidence_counts_only_for_the_inputs_it_states`. The shard finished with one catch and zero unfinished defects.
+
 In a self replay, both native run commands submitted 121 cases to a stand-in for the site's queue. The stand-in matched the command, working directory and input hashes for each case to the successful workflow's raw model artifact. Each kernel filed all 121 verdicts as passing and then reused all 121 without submitting another batch or changing the ledger. With the stand-in unavailable, each reported 121 unavailable runs, left all 121 current obligations unknown and preserved the ledger bytes. The schema judge accepted all 1,512 messages in the six transcripts. [Archived model outputs](https://github.com/sloik/dodona/actions/runs/45819303936/artifacts/15122115095).
 
 ### Completed named defect inventory at `0c3a46f`
