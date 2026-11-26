@@ -1,8 +1,5 @@
 'use strict';
-// The first parts of the `run` command (conformance/README.md, "How a project's run is
-// judged"; decision 0034): its additions to step 1, and the plan of step 10. The command
-// is not served yet, and dodona-kernel2.js offers no `run`; this module is reached only
-// through its tests (test-run.js).
+// The `run` command (conformance/README.md, "How a project's run is judged").
 //
 // The run command takes the status command's input with `ledger`, `executor` and,
 // where wanted, `transcript`. These are checked first, before the status command's own
@@ -23,8 +20,8 @@ const processes = require('./processes');
 const crypto = require('node:crypto');
 const ledgerFile = require('./ledger-file');
 
-// How long the executor is waited for (step 12): the longest `wall_ms` of the batch,
-// below 0 read as 0, and 60 seconds more; a day if a run states none; never more.
+// How long the executor is waited for (step 12): the longest `wall_ms` of the batch
+// plus a minute, at least the site floor and at most a day.
 const EXECUTOR_MARGIN_MS = 60000;
 const EXECUTOR_MOST_MS = 24 * 60 * 60 * 1000;
 const {
@@ -123,6 +120,12 @@ function checkRunInput(asked) {
   // A command none of whose words holds a NUL, which no program's arguments can carry.
   if (!Array.isArray(executor) || executor.length === 0 || !executor.every((word) => isString(word) && !word.includes('\u0000'))) {
     refuse('executor is not a non-empty list of strings without NUL');
+  }
+  if (Object.hasOwn(asked, 'batch_wait_floor_ms')) {
+    const floor = asked.batch_wait_floor_ms;
+    if (!Number.isSafeInteger(floor) || floor < 1 || floor > EXECUTOR_MOST_MS) {
+      refuse('batch_wait_floor_ms must be an integer from 1 to 86400000');
+    }
   }
   const given = Object.hasOwn(asked, 'transcript');
   const transcript = asked.transcript;
@@ -342,14 +345,14 @@ async function startCheck(sessions, planned, root) {
 
 // Step 12: batches.
 
-function batchWait(runs) {
+function batchWait(runs, floorMs = 0) {
   let longest = 0;
   for (const { run } of runs) {
     const wall = isObject(run.limits) ? run.limits.wall_ms : undefined;
     if (!Number.isSafeInteger(wall)) return EXECUTOR_MOST_MS;
     longest = Math.max(longest, wall, 0);
   }
-  return Math.min(longest + EXECUTOR_MARGIN_MS, EXECUTOR_MOST_MS);
+  return Math.min(Math.max(longest + EXECUTOR_MARGIN_MS, floorMs), EXECUTOR_MOST_MS);
 }
 
 // What the executor's answer to one batch gives each run of it, in the batch's order:
@@ -436,7 +439,7 @@ async function executeBatch(executor, root, batch, waitMs, { start = processes.s
 // next batch. Returns, in the order of the plan, each check's end: `{binding, name,
 // outcome}` with `outcome` a verdict or `refused`, and for a provider's final its
 // `strength` as given. A session that breaks refuses the whole run (a Stop is thrown).
-async function checkAll(sessions, plan, root, execute) {
+async function checkAll(sessions, plan, root, execute, floorMs = 0) {
   const open = [];
   for (const planned of plan.check) {
     const { check, step } = await startCheck(sessions, planned, root);
@@ -452,7 +455,7 @@ async function checkAll(sessions, plan, root, execute) {
     const waiting = open.filter((record) => record.end === null);
     if (waiting.length === 0) break;
     const runs = waiting.map((record) => ({ number: record.step.number, run_key: record.step.run_key, run: record.step.run }));
-    const given = batchReports(runs, await execute({ runs }, batchWait(runs)));
+    const given = batchReports(runs, await execute({ runs }, batchWait(runs, floorMs)));
     for (let at = 0; at < waiting.length; at += 1) {
       const record = waiting[at];
       const ending = given[at].verdict !== undefined ? { verdict: given[at].verdict } : reportEnding(given[at].report, record.step.run);
@@ -602,7 +605,7 @@ async function runProject(asked, { execute, plan: planStage = planRun, waitMs, i
   const { snapshot, plan, sessions } = await planStage(asked, record);
   let outcomes;
   try {
-    const ends = await checkAll(sessions, plan, asked.root, run);
+    const ends = await checkAll(sessions, plan, asked.root, run, asked.batch_wait_floor_ms);
     outcomes = recordVerdicts(asked, sessions, snapshot, ends, { waitMs, io, release });
   } catch (failure) {
     const refusal = await afterClosing(failure, sessions);

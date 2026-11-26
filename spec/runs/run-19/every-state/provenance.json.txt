@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-26",
+  "source": {
+    "repository": "sloik/dodona",
+    "run": "45819303936",
+    "commit": "5c047ed2edef362384163450b6cfa52aac57d43f",
+    "artifact_id": 15121911961,
+    "members": {
+      "dumps/kernel/dump.states.dump": "23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4",
+      "dumps/intent/dump.states.dump": "cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d"
+    },
+    "workflow": "success"
+  },
+  "staging": {
+    "base": "b23f2e69a9bb1069da5395192b2abc885ed8fb61",
+    "kernel_source_hashes": "input-files.sha256.txt"
+  },
+  "unchanged_since_source": [
+    "spec/kernel",
+    "spec/intent",
+    "tools/check_states.py"
+  ],
+  "separation": "self"
+}

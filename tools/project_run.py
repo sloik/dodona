@@ -52,6 +52,10 @@ def check_run_input(asked) -> None:
     executor = asked.get("executor")
     if not ps.command_ok(executor):
         raise Stop("bad-input", "executor must be a non-empty list of strings, none holding a NUL")
+    if "batch_wait_floor_ms" in asked:
+        floor = asked["batch_wait_floor_ms"]
+        if type(floor) is not int or not 1 <= floor <= 86_400_000:
+            raise Stop("bad-input", "batch_wait_floor_ms must be an integer from 1 to 86400000")
     if "transcript" in asked and (not ps.relpath_ok(asked["transcript"])
                                   or any(isinstance(x, str) and same_name(asked["transcript"], x)
                                          for x in [*listed, *[l + ".lock" for l in [*listed, owner] if isinstance(l, str)], owner, asked.get("project")])):
@@ -98,13 +102,16 @@ def counts_for(entries: list[dict], name: str, preimage: dict, writer: str, plat
     return False
 
 
-def run_batch(root: pathlib.Path, executor: list[str], batch: list[dict]):
+def run_batch(root: pathlib.Path, executor: list[str], batch: list[dict], *, floor_ms: int = 0):
     """The executor's answer to one batch: a dict of reports by run_key; 'unavailable'; 'timed-out'; or 'mismatch'."""
     payload = json.dumps({"runs": [{"number": r["number"], "run_key": r["run_key"], "run": r["run"]} for r in batch]},
                          ensure_ascii=False).encode("utf-8") + b"\n"
     walls = [r["run"].get("limits", {}).get("wall_ms") if isinstance(r["run"].get("limits"), dict) else None for r in batch]
-    # At least each run's wall_ms plus 60 seconds, at most 24 hours; a run stating no wall_ms is waited 24 hours.
-    wait = 86_400 if any(type(w) is not int for w in walls) else min(max(max(walls), 0) / 1000 + 60, 86_400)  # below 0 is read as 0
+    # The site floor can extend the wait promised by the longest run plus 60 seconds.
+    wait = 86_400
+    if all(type(w) is int for w in walls):
+        longest = max(0, *walls)
+        wait = min(max(longest + 60_000, floor_ms), 86_400_000) / 1000
     try:
         tree = host.Session._start(executor, root)  # in root, in a process group or job of its own
     except OSError:
@@ -233,7 +240,7 @@ def run_with_sessions(asked) -> dict:
     # Step 12: batches until no check waits for a run.
     while waiting:
         batch = [{"name": n, "number": waiting[n][0], "run": waiting[n][1], "run_key": waiting[n][2]} for n in plan if n in waiting]
-        answer = run_batch(root, asked["executor"], batch)
+        answer = run_batch(root, asked["executor"], batch, floor_ms=asked.get("batch_wait_floor_ms", 0))
         waiting = {}
         for r in batch:
             name = r["name"]

@@ -1062,6 +1062,13 @@ test('batches: the wait is the longest wall_ms, below 0 read as 0, and 60 second
   assert.equal(batchWait([runWith(1.5)]), 24 * 60 * 60 * 1000);
 });
 
+test('batches: a site floor can extend the batch wait', () => {
+  const run = { run: { limits: { wall_ms: 1_800_000 } } };
+  assert.equal(batchWait([run], 3_660_000), 3_660_000);
+  assert.equal(batchWait([run], 1), 1_860_000);
+  assert.equal(batchWait([{ run: {} }], 3_660_000), 86_400_000);
+});
+
 // Step 12's executor command, with a stand-in for the process: no command is started.
 // `act(child)` plays the executor once it has been started; `stall` holds its standard
 // input unread, `fail` breaks it.

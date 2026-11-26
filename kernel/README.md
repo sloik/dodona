@@ -55,6 +55,8 @@ It holds no status rules of its own. The scenario it judged is run through `stat
 
 What `run` ends is what it owns: each provider's and each batch's process group (Unix) or job (Windows), as `status` and `check` do. It promises nothing about a process that leaves its group or job, and the threads reading or writing a pipe such a process holds are left after a bounded wait. Opens are not made race-free against someone changing the project's files while it runs.
 
+The optional `batch_wait_floor_ms` extends the wait for the executor within the existing 24-hour cap. The kernel checks the floor before opening any provider and sends each run with its original limits.
+
 ## The ledger
 
 `ledger-append` refuses a request with no `kind` that is a non-empty string, or with no `body`, or whose entry would nest deeper than 64 levels, before it touches anything. Its request is read by `jsonread.rs`, as strictly as any other command's input, and the depth of the body measured on the text, so a body nested thousands deep is refused like one nested 65 deep, and costs no stack; only a request no deeper than 64 is read as other commands read theirs. A request that is deep only outside its body is judged by its body. Otherwise it takes the lock file, reads the ledger, cuts off a torn ending, writes the new line, syncs the file, and only then removes the lock. The lock is removed on every way out, including errors. A lock left by a kernel that crashed stays, as the format says. Syncing the directory after the file is first created is not done: the standard library has no portable way.

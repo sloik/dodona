@@ -2245,6 +2245,7 @@ mod run_input {
         pub(super) ledger: String,
         pub(super) executor: Vec<String>,
         pub(super) transcript: Option<String>,
+        pub(super) batch_wait_floor: Duration,
     }
 
     /// Full case folding, one character at a time, with no normalization.
@@ -2292,6 +2293,11 @@ mod run_input {
         let executor = match strings(v.opt("executor")) {
             Some(e) if !e.is_empty() && !e.iter().any(|a| a.contains('\0')) => e,
             _ => return bad("executor must be a non-empty list of strings, none holding a NUL"),
+        };
+        let batch_wait_floor = match v.opt("batch_wait_floor_ms") {
+            None => Duration::ZERO,
+            Some(Value::Number(n)) if (1..=MAX_DEADLINE_MS).contains(n) => Duration::from_millis(*n as u64),
+            _ => return bad("batch_wait_floor_ms must be an integer from 1 to 86400000"),
         };
         let transcript = match v.opt("transcript") {
             None => None,
@@ -2364,6 +2370,7 @@ mod run_input {
             ledger,
             executor,
             transcript,
+            batch_wait_floor,
         })
     }
 
@@ -2746,6 +2753,7 @@ mod run_input {
         checks: &[Checkable],
         executor: &mut dyn Executor,
         root: &Path,
+        batch_wait_floor: Duration,
     ) -> Result<Vec<Finished>, &'static str> {
         let mut ended: Vec<Option<(Ended, usize)>> = to_check.iter().map(|_| None).collect();
         let mut open: Vec<Open> = Vec::new();
@@ -2783,7 +2791,8 @@ mod run_input {
                 .iter()
                 .map(|o| host::executor_wait(&o.run))
                 .max()
-                .unwrap_or_default();
+                .unwrap_or_default()
+                .max(batch_wait_floor);
             let keys: Vec<String> = open.iter().map(|o| o.run_key.clone()).collect();
             let batch = executor.batch(&json::object(vec![("runs", runs)]), wait);
             let mut next = Vec::new();
@@ -3251,7 +3260,7 @@ mod run_input {
     ) -> Step<Vec<Finished>> {
         let input = &run.status;
         let root = input.root.as_path();
-        let mut finished = schedule(lanes, &plan.to_check, checks, executor, root)
+        let mut finished = schedule(lanes, &plan.to_check, checks, executor, root, run.batch_wait_floor)
             .or_else(|reason| stop(reason, "a session broke during the checks: nothing is recorded"))?;
         let bodies = evidence(&mut finished, checks, &input.platform, &input.writer, identity_of);
         if !bodies.is_empty() && !still_permitted(root, &run.ledger, &input.owner_ledger) {
@@ -4354,13 +4363,14 @@ mod run_input {
         struct FakeExecutor {
             /// Every batch it was given, in order.
             sent: Vec<Value>,
+            waits: Vec<Duration>,
             /// What it does with each batch in turn; once these run out, it
             /// answers every run with a report of a run that exited as described.
             scripted: Vec<Batch>,
         }
         impl FakeExecutor {
             fn new(scripted: Vec<Batch>) -> FakeExecutor {
-                FakeExecutor { sent: vec![], scripted }
+                FakeExecutor { sent: vec![], waits: vec![], scripted }
             }
         }
         fn report_for(run: &Value) -> Value {
@@ -4391,8 +4401,9 @@ mod run_input {
             ]))
         }
         impl Executor for FakeExecutor {
-            fn batch(&mut self, runs: &Value, _wait: Duration) -> Batch {
+            fn batch(&mut self, runs: &Value, wait: Duration) -> Batch {
                 self.sent.push(runs.clone());
+                self.waits.push(wait);
                 if self.scripted.is_empty() {
                     answered(runs, |_| true)
                 } else {
@@ -4433,6 +4444,36 @@ mod run_input {
         }
 
         #[test]
+        fn the_site_can_extend_the_batch_wait_without_changing_the_run() {
+            let no_limit = v(&good_run());
+            let Value::Object(mut fields) = no_limit.clone() else { panic!("the run fixture must be an object") };
+            fields.push(("limits".to_owned(), v(r#"{"wall_ms":1800000}"#)));
+            let limited = Value::Object(fields);
+            let long = Duration::from_secs(3660);
+            for (run, floor, expected) in [
+                (&limited, long, long),
+                (&limited, Duration::from_millis(1), Duration::from_secs(1860)),
+                (&no_limit, long, Duration::from_secs(86400)),
+            ] {
+                let offered = format!(r#"{{"next":{}}}"#, json::encode(run));
+                let mut channel = Scripted::after_enumerate(vec![reply("2", &offered), reply("3", PASS)]);
+                let mut lanes = [lane("a", &mut channel)];
+                let mut executor = FakeExecutor::new(vec![]);
+                schedule(
+                    &mut lanes,
+                    &[pair("a", "o1")],
+                    &[checkable("a", "o1")],
+                    &mut executor,
+                    Path::new("."),
+                    floor,
+                ).unwrap();
+                assert_eq!(executor.waits, [expected]);
+                let sent_run = executor.sent[0].get("runs").array()[0].get("run");
+                assert_eq!(json::encode(sent_run), json::encode(run));
+            }
+        }
+
+        #[test]
         fn two_bindings_share_batches_in_the_order_checks_were_started() {
             let mut a = Scripted::after_enumerate(vec![reply("2", &next()), reply("3", &next()), reply("4", FAIL)]);
             let mut b = Scripted::after_enumerate(vec![reply("2", &next()), reply("3", PASS)]);
@@ -4441,7 +4482,7 @@ mod run_input {
             let checks = [checkable("a", "o1"), checkable("b", "o2")];
             let done = {
                 let mut lanes = vec![lane("a", &mut a), lane("b", &mut b)];
-                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new(".")).unwrap()
+                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new("."), Duration::ZERO).unwrap()
             };
             // Batch 1 holds both first runs, a's before b's; batch 2 only a's second.
             assert_eq!(ex.sent.len(), 2);
@@ -4509,7 +4550,7 @@ mod run_input {
             let checks = [checkable("a", "o1"), checkable("b", "o2")];
             let done = {
                 let mut lanes = vec![lane("a", &mut a), lane("b", &mut b)];
-                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new(".")).unwrap()
+                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new("."), Duration::ZERO).unwrap()
             };
             assert_eq!(verdict(&done[0]), ("passed", Some("bounded")));
             assert_eq!((verdict(&done[1]), done[1].runs), (("error", None), 1));
@@ -4529,7 +4570,7 @@ mod run_input {
                 let mut off = lane("noffer", &mut not_offered);
                 off.offers_check = false;
                 let mut lanes = vec![off, lane("a", &mut a)];
-                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new(".")).unwrap()
+                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new("."), Duration::ZERO).unwrap()
             };
             assert_eq!(verdict(&done[0]), ("not-offered", None));
             assert_eq!(verdict(&done[1]), ("not-offered", None));
@@ -4548,7 +4589,7 @@ mod run_input {
             let checks = [checkable("a", "o1"), checkable("b", "o2")];
             let got = {
                 let mut lanes = vec![lane("a", &mut a), lane("b", &mut b)];
-                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new(".")).map(|_| ())
+                schedule(&mut lanes, &plan, &checks, &mut ex, Path::new("."), Duration::ZERO).map(|_| ())
             };
             assert_eq!(got, Err("wrong-id"));
             // Nothing more is sent once a session has broken: b never gets its report.
@@ -4562,7 +4603,7 @@ mod run_input {
             let mut ex = FakeExecutor::new(vec![]);
             let done = {
                 let mut lanes = vec![lane("a", &mut a)];
-                schedule(&mut lanes, &[pair("a", "o1")], &[checkable("a", "o1")], &mut ex, Path::new(".")).unwrap()
+                schedule(&mut lanes, &[pair("a", "o1")], &[checkable("a", "o1")], &mut ex, Path::new("."), Duration::ZERO).unwrap()
             };
             assert_eq!(ex.sent.len(), 8);
             assert_eq!((verdict(&done[0]), done[0].runs), (("too-many-runs", None), 8));

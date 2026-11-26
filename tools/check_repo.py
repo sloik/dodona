@@ -1005,6 +1005,28 @@ def gap_status_keeps_literal_obligation_names() -> None:
         problems.append("conformance/project/cases.json: no status case for a passed obligation named __proto__")
 
 
+def gap_batch_wait_respects_site_and_run_limits() -> None:
+    """A batch may need a longer wait without changing a run's description."""
+    import project_run
+    tree = mock.Mock()
+    tree.proc.returncode = 0
+    tree.proc.communicate.return_value = (b'{"ended":true,"reports":[]}\n', b"")
+    for limits, floor, wanted in (({"wall_ms": 1_800_000}, 3_660_000, 3660),
+                                  ({"wall_ms": 1_800_000}, 1, 1860),
+                                  ({}, 3_660_000, 86_400)):
+        run = {"limits": limits}
+        batch = [{"number": 1, "run_key": "one", "run": run}]
+        with mock.patch.object(project_run.host.Session, "_start", return_value=tree):
+            try:
+                project_run.run_batch(ROOT, ["executor"], batch, floor_ms=floor)
+            except TypeError as err:
+                problems.append(f"project run cannot take a site batch wait floor: {err}")
+                return
+        (sent,), kwargs = tree.proc.communicate.call_args
+        if kwargs.get("timeout") != wanted or json.loads(sent)["runs"][0]["run"] != run:
+            problems.append("a batch wait floor changed a run or failed to preserve the required wait")
+
+
 def check_planted_defect_anchors(directory: str) -> None:
     kernel = ROOT / directory
     defects = json.loads((kernel / "defects.json").read_text(encoding="utf-8"))["defects"]
@@ -1431,7 +1453,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_tool_tree_refuses_an_incomplete_listing, gap_every_tool_compiles,
               gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
-              gap_status_keeps_literal_obligation_names,
+              gap_status_keeps_literal_obligation_names, gap_batch_wait_respects_site_and_run_limits,
               gap_thin_coverage_is_shown, gap_status_report_names_policy_on_pass,
               gap_project_intent_criteria_have_a_schema, gap_documents_follow_the_code]
 
