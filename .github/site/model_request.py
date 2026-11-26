@@ -1,6 +1,7 @@
 """Bind the model workflow's native requests to its exact push checkout.
 
     python .github/site/model_request.py prepare-policy COMMIT
+    python .github/site/model_request.py dump-plan DUMPS_DIR
     python .github/site/model_request.py run COMMIT POLICY.json
     python .github/site/model_request.py status COMMIT POLICY.json
 """
@@ -62,6 +63,17 @@ def runner_identity() -> str:
     return canonical.identity(files)
 
 
+def dump_plan(kept: pathlib.Path) -> dict:
+    """Plan the state-dump work without planning any model obligation."""
+    keys = {path.parent.name: host.dump_key(path.parent) for path in sorted(ROOT.glob("spec/*/dump.cfg"))}
+    index = kept / "dumps.json"
+    previous = json.loads(index.read_text(encoding="utf-8")) if index.is_file() else {}
+    reuse = [name for name, key in keys.items()
+             if previous.get(name) == key and (kept / name / "dump.states.dump").is_file()]
+    return {"run": [], "reuse": [], "dumps_run": sorted(set(keys) - set(reuse)),
+            "dumps_reuse": sorted(reuse), "dump_keys": keys}
+
+
 def request(policy: dict, *, run: bool) -> dict:
     bound = {
         "root": str(ROOT),
@@ -95,6 +107,8 @@ def main() -> int:
     commands = parser.add_subparsers(dest="mode", required=True)
     prepare = commands.add_parser("prepare-policy")
     prepare.add_argument("commit")
+    dumps = commands.add_parser("dump-plan")
+    dumps.add_argument("kept", type=pathlib.Path)
     for name in ("run", "status"):
         mode = commands.add_parser(name)
         mode.add_argument("commit")
@@ -103,6 +117,8 @@ def main() -> int:
     try:
         if args.mode == "prepare-policy":
             result = policy_at(args.commit, validate=True)
+        elif args.mode == "dump-plan":
+            result = dump_plan(args.kept)
         else:
             result = request(policy_from_artifact(args.commit, args.artifact), run=args.mode == "run")
     except (OSError, ValueError, subprocess.CalledProcessError, host.Refused, policy_input.NotValid) as err:

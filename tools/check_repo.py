@@ -660,15 +660,28 @@ def gap_runner_versions_agree() -> None:
 def gap_reuse_is_decided_by_a_kernel_and_checked() -> None:
     """Every run used to start from nothing. Reuse must come from the kept ledger through a kernel, and a run must still fail when a check has no passing result."""
     workflow = (ROOT / ".github" / "workflows" / "models.yml").read_text(encoding="utf-8")
-    for needed, why in (("tools/host.py plan", "what runs must be decided by a kernel from the kept ledger"),
-                        ("--plan plan.json", "collect must send only what the plan says"),
-                        ("keep.py require-passed", "a run must fail unless every check has a passing result now"),
+    commands = run_blocks(workflow)
+    for needed, why in (("model_request.py prepare-policy", "the plan must validate the push policy"),
+                        ("model_request.py dump-plan", "the site must plan state dumps separately"),
+                        ("model_request.py run", "the native request must use the protected policy and kept ledger"),
+                        ("out/seed/dodona-kernel run", "what runs must be decided by a kernel from the kept ledger"),
+                        ("--plan plan.json --dumps", "collect must send only the state dumps the plan says"),
+                        ("model_request.py status", "status must read the ledger under the same protected policy"),
+                        ("node kernel2/dodona-kernel2.js status", "the other kernel must read the native ledger"),
+                        ("model_results.py", "keeping a ledger requires all current passes and the raw case proof"),
+                        ("check_transcript.py out/model-transcript.json out/runs/transcript-collect.json",
+                         "the native and dump provider transcripts must both validate"),
+                        ("tools/keep.py finish", "only the gated result is prepared for reuse"),
                         ("--status success", "only a successful run's ledger may be the starting point"),
                         ("--event push", "only a run a push started may be the starting point, never a pull request's"),
                         ('.head_repository.full_name', "the starting point must be a run of this repository, not a fork's"),
                         ("--branch main", "only a ledger kept on main may be the starting point")):
-        if needed not in workflow:
+        if needed not in commands:
             problems.append(f".github/workflows/models.yml: {why} ({needed!r} is missing)")
+    keep_receipt = workflow.find("name: dodona-kept")
+    if keep_receipt < 0 or any(workflow.find(gate) < 0 or workflow.find(gate) > keep_receipt for gate in
+                               ("model_results.py", "check_transcript.py out/model-transcript.json", "tools/keep.py finish")):
+        problems.append(".github/workflows/models.yml: the kept artifact must follow the native result and transcript gates")
     import keep
     with tempfile.TemporaryDirectory() as tmp:
         report = pathlib.Path(tmp) / "status.json"

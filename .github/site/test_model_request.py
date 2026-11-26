@@ -65,6 +65,24 @@ class ModelRequest(unittest.TestCase):
         self.assertEqual(run["batch_wait_floor_ms"], 3_660_000)
         self.assertEqual(set(status["site"]["providers"]), {"dodona.tla", "dodona.intent.markdown"})
 
+    def test_dump_plan_never_schedules_obligations_and_checks_the_kept_dump(self):
+        current = {}
+        for name in ("kernel", "intent"):
+            model = self.root / "spec" / name
+            model.mkdir(parents=True)
+            (model / "dump.cfg").write_text("fixture\n", encoding="utf-8")
+            current[name] = model_request.host.dump_key(model)
+        kept = self.root / "kept" / "dumps"
+        (kept / "kernel").mkdir(parents=True)
+        states = kept / "kernel" / "dump.states.dump"
+        states.write_bytes(b"state dump fixture")
+        (kept / "dumps.json").write_text(json.dumps({"kernel": current["kernel"], "intent": "old"}), encoding="utf-8")
+        plan = model_request.dump_plan(kept)
+        self.assertEqual(plan, {"run": [], "reuse": [], "dumps_run": ["intent"],
+                                "dumps_reuse": ["kernel"], "dump_keys": current})
+        states.unlink()
+        self.assertEqual(model_request.dump_plan(kept)["dumps_run"], ["intent", "kernel"])
+
 
 if __name__ == "__main__":
     unittest.main()

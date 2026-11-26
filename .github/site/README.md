@@ -19,3 +19,7 @@ The driver applies the provider's individual wall limit when supplied. It record
 The native workflow input reads `policy.toml` from the protected push commit. It can validate the policy and record the commit and digest with the reduced policy. Each request compares that artifact with its own checkout before it can start a provider. Both requests use the same writer, policy, tool pins and ledger. The site's two-hour minimum batch wait allows time for queue admission ahead of the one-hour queue job limit and preserves each case's own limit.
 
 The model result gate requires a current pass for every case listed in the protected models and agreement between the two native reports. It pairs each newly run case with its transcript and recomputes the key of its captured output. The ordinary model judge checks each exit and expected outcome. A run that reuses every result still needs the full current inventory and agreement.
+
+The dump plan contains only state-dump work. It reuses a dump when its existing key matches and the state file is still present. The model obligations are planned by native `run`.
+
+The protected workflow builds a static ARM64 seed and checks the archive digest before invoking it on the project runner. It keeps the native ledger, captured outputs and both provider transcripts with the run. The hosted comparison reads that ledger with the second kernel and validates those transcripts before publishing the next retained ledger.
