@@ -148,6 +148,14 @@ jobs:
       - name: Judge the reference run command with the run cases (decision 0034)
         if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
         run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js --status "${{ matrix.python }} tools/project_status.py --kernel ${{ matrix.rust_kernel }}" -- ${{ matrix.python }} tools/project_run.py --kernel ${{ matrix.rust_kernel }}
+      - name: Judge the first kernel's run command with the project cases
+        if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
+        run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js --status "${{ matrix.rust_kernel }} status" -- ${{ matrix.rust_kernel }} run
+      - name: Judge the second kernel's run command with the project cases
+        if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
+        run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel ${{ matrix.rust_kernel }} --status "node kernel2/dodona-kernel2.js status" -- node kernel2/dodona-kernel2.js run
+      - name: Check the second kernel's run module
+        run: node --test kernel2/test-run.js
 
   # Every shard checks the unchanged kernel and plants a disjoint part of the
   # manifest. The matrix supplies the ordinal and total to keep the partition full.

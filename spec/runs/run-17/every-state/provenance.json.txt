@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-26",
+  "source": {
+    "repository": "sloik/dodona",
+    "run": "45069190821",
+    "commit": "0c3a46f6d68563c23e825b8fbddb95da6307d2cc",
+    "artifact_id": 14773654715,
+    "members": {
+      "out/runs/outputs/kernel/dump.states.dump": "23a548fe34db4e473a2fa80c1c66100776dde903d18cf3151d20e21cfdaad4b4",
+      "out/runs/outputs/intent/dump.states.dump": "cf49fa62d922cf1f889cc116dba16bccd4a76768b3c9adc62efed7b55325bd9d"
+    },
+    "models_job": "success",
+    "workflow": "failure"
+  },
+  "staging": {
+    "base": "0c3a46f6d68563c23e825b8fbddb95da6307d2cc",
+    "native_candidate": "76ffbd507d8e92663eb8a1b196765b85a15791d4"
+  },
+  "unchanged_since_source": [
+    "spec/kernel",
+    "spec/intent",
+    "tools/check_states.py"
+  ],
+  "separation": "self"
+}

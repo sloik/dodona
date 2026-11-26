@@ -91,6 +91,94 @@ function append(request) {
   }
 }
 
+// Writes `bytes` at `at` and on, as many writes as it takes: a write that makes no
+// progress fails. Throws on any failure.
+function writeWhole(io, descriptor, bytes, at) {
+  let done = 0;
+  while (done < bytes.length) {
+    const wrote = io.writeSync(descriptor, bytes, done, bytes.length - done, at + done);
+    if (!Number.isSafeInteger(wrote) || wrote <= 0) throw new Error(`a write made no progress (${wrote})`);
+    done += wrote;
+  }
+}
+
+// Several entries, [{kind, body}], appended in order under one lock, as one write: the
+// folders on the way made, the lock taken (waited for up to `waitMs`), `check()` asked
+// again under the lock (a reason it gives refuses, before the ledger is read), an ending
+// cut short cut off, each entry chained to the one before it, every byte written at its
+// place and the file flushed to disk, the lock released. If cutting, writing or flushing
+// fails, the file is cut back to the whole entries it held and flushed again under the
+// same lock, so a refused append leaves none of its entries; `rolled_back` says whether
+// that was done. { appended: [identities] }, or { refused: 'locked', 'corrupt', 'unsafe'
+// or 'not-written', detail, rolled_back }. An entry that cannot be encoded throws before
+// anything is written. `io` is node:fs unless a test gives another.
+//
+// Where the cleanup ends: the lock is released last. If that fails, the answer is
+// { refused: 'not-unlocked', detail, held }, where `held` is what was done under the lock
+// (an append whose entries are written and flushed, or a refusal with its rolled_back),
+// as far as it was seen; nothing further is undone, and the lock file may remain.
+function appendAll(path, entries, waitMs, { check = () => null, io = fs, release = releaseLock } = {}) {
+  fs.mkdirSync(require('node:path').dirname(path), { recursive: true });
+  const lockPath = `${path}.lock`;
+  const held = takeLock(lockPath, waitMs);
+  if (held === null) return { refused: 'locked' };
+  let done;
+  try {
+    done = appendHeld(path, entries, check, io);
+  } catch (failure) {
+    try {
+      release(held, lockPath);
+    } catch (unlock) {
+      failure.message = `${failure.message}; and the lock not released: ${unlock.message}`;
+    }
+    throw failure;
+  }
+  try {
+    release(held, lockPath);
+  } catch (unlock) {
+    return { refused: 'not-unlocked', detail: unlock.message, held: done };
+  }
+  return done;
+}
+
+function appendHeld(path, entries, check, io) {
+  {
+    const unsafe = check();
+    if (unsafe !== null) return { refused: 'unsafe', detail: unsafe };
+    const before = ledger.readLedger(readBytes(path));
+    if (before.refused !== undefined) return { refused: 'corrupt' };
+    const lines = [];
+    const identities = [];
+    let previous = before.last;
+    for (const { kind, body } of entries) {
+      const entry = ledger.encodeEntry({ previous, kind, body });
+      lines.push(entry.line);
+      identities.push(entry.identity);
+      previous = entry.identity;
+    }
+    const whole = before.keep;
+    const descriptor = io.openSync(path, fs.constants.O_RDWR | fs.constants.O_CREAT);
+    try {
+      try {
+        if (before.torn === true) io.ftruncateSync(descriptor, whole);
+        writeWhole(io, descriptor, Buffer.concat(lines), whole);
+        io.fsyncSync(descriptor);
+        return { appended: identities };
+      } catch (failure) {
+        try {
+          io.ftruncateSync(descriptor, whole);
+          io.fsyncSync(descriptor);
+        } catch (undo) {
+          return { refused: 'not-written', detail: `${failure.message}; and not cut back: ${undo.message}`, rolled_back: false };
+        }
+        return { refused: 'not-written', detail: failure.message, rolled_back: true };
+      }
+    } finally {
+      io.closeSync(descriptor);
+    }
+  }
+}
+
 // { ledger } to { entries, torn } or { refused, at }.
 function read(request) {
   const result = ledger.readLedger(readBytes(request.ledger));
@@ -98,4 +186,4 @@ function read(request) {
   return { entries: result.entries, torn: result.torn };
 }
 
-module.exports = { append, read };
+module.exports = { append, appendAll, read };

@@ -1,6 +1,6 @@
 # Seed kernel
 
-A small first kernel, written from [the conformance kit](../conformance/README.md) and [the ledger format](../protocol/ledger.md). It is not a usable dodona: it hosts one provider session or one check at a time ([decision 0033](../decisions/0033-a-kernel-hosts-providers.md)), but plans no work and has no agent interface. Passing the kit is sampled evidence, not a proof.
+A small first kernel, written from [the conformance kit](../conformance/README.md) and [the ledger format](../protocol/ledger.md). It is not a usable dodona: it hosts one provider session or one check at a time ([decision 0033](../decisions/0033-a-kernel-hosts-providers.md)), and runs one project's checks through a site's executor (decision 0034), but has no agent interface. Passing the kit is sampled evidence, not a proof.
 
 It uses the standard library only. Unsafe operating-system calls in `proc.rs` end a process group on Unix or a job object on Windows. On Windows, `project_status.rs` queries the volume and file number of an open file.
 
@@ -20,6 +20,7 @@ The kernel reads one JSON value on standard input, takes the command as its one 
 | `session --deadline-ms N --max-line N --max-log N -- <provider>` | Holds one session with the provider command and reports `ok` or the reason it failed. Reads no input |
 | `check` | Takes one obligation through the provider command to a verdict, giving each run to the executor command, or refuses the check with the reason |
 | `status` | Reports the status of a whole project from its project file, its providers and its ledgers, or refuses it with the reason. Runs nothing |
+| `run` | Does what `status` does, checks every obligation with no current result through its provider and the executor command in batches, records the verdicts in the run's ledger, and reports as `status` does with `counts`; or refuses with the reason |
 
 A refusal the contract names is an answer, with exit status 0. Anything else the kernel cannot handle (an unknown command or kind, input of the wrong shape, a file it cannot read or write) prints nothing on standard output and ends with a status that is not 0.
 
@@ -48,6 +49,12 @@ The host's own input, the manifest, the numbered rules for a run and the rules f
 
 It holds no status rules of its own. The scenario it judged is run through `status::run`, the code of the `scenario` command, and the report is its last result. Sessions use the check's reading (`wire.rs`, `host::manifest`); ledgers are read by `ledger-read`'s code, so a ledger is exactly as strict here as there. A provider that cannot be confined to a process tree of its own is `provider-not-started`. A claimed file whose name is outside UTF-8 is `unreadable-file`. The kernel compares ledger identity by device and file number on Unix, by volume and file number on Windows, and by resolved path on other systems. On Windows the kernel compares full 128-bit file numbers with both handles open. If either handle cannot supply an identity, it compares resolved paths.
 
+## A project's run
+
+`run` follows conformance/README.md, "How a project's run is judged", in `project_status.rs` ([decision 0034](../decisions/0034-a-kernel-runs-a-project-and-reports-its-status.md)), with standard input, refusals, output and exit status as for `status`. Its own fields (`ledger`, `executor`, `transcript`) are checked first, on their spelling and then on the files, before anything is read or any process started. It reads the project with `status`'s code, keeping the session of each binding that lists `obligation.check` open for the whole run, and plans from `status`'s report: only `unknown` is checked. Each check runs on its binding's own session under the host check rules (`host.rs`), with request ids counted per session; a reason that says a session broke refuses the whole run, and nothing is recorded. The runs open checks ask for go to the executor as one batch, its first line read strictly once it has exited, its output has ended and its input was written whole, all under one deadline. Before recording, every input is read again; the verdicts that stand are appended in one append under the ledger's lock, after the ledger's path is checked again under that lock, and a failed write is cut back. The ledgers are then read again and judged, and the transcript, if asked for, is written as a new file of every message that crossed the wire, `shutdown` included once it was written.
+
+What `run` ends is what it owns: each provider's and each batch's process group (Unix) or job (Windows), as `status` and `check` do. It promises nothing about a process that leaves its group or job, and the threads reading or writing a pipe such a process holds are left after a bounded wait. Opens are not made race-free against someone changing the project's files while it runs.
+
 ## The ledger
 
 `ledger-append` refuses a request with no `kind` that is a non-empty string, or with no `body`, or whose entry would nest deeper than 64 levels, before it touches anything. Its request is read by `jsonread.rs`, as strictly as any other command's input, and the depth of the body measured on the text, so a body nested thousands deep is refused like one nested 65 deep, and costs no stack; only a request no deeper than 64 is read as other commands read theirs. A request that is deep only outside its body is judged by its body. Otherwise it takes the lock file, reads the ledger, cuts off a torn ending, writes the new line, syncs the file, and only then removes the lock. The lock is removed on every way out, including errors. A lock left by a kernel that crashed stays, as the format says. Syncing the directory after the file is first created is not done: the standard library has no portable way.
@@ -67,6 +74,7 @@ python3 tools/run_ledger_cases.py -- kernel/target/release/dodona-kernel
 python3 tools/run_provider_cases.py -- kernel/target/release/dodona-kernel session
 python3 tools/run_check_cases.py -- kernel/target/release/dodona-kernel check
 python3 tools/run_status_cases.py --kernel node kernel2/dodona-kernel2.js -- kernel/target/release/dodona-kernel status
+python3 tools/run_run_cases.py --jobs 2 --kernel node kernel2/dodona-kernel2.js --status "kernel/target/release/dodona-kernel status" -- kernel/target/release/dodona-kernel run
 python3 tools/kit_adequacy.py
 ```
 

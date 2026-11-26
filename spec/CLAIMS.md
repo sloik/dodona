@@ -143,9 +143,15 @@ Bounds: one obligation, which can or cannot be checked, fixed from the start; at
 
 | # | Claim | Decision | Check | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 16 |
+| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 17 |
 
-Run 16 records the current comparison. Runs 9 and 11 through 15 remain the records for earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
+Run 17 records the current comparison. Runs 9 and 11 through 16 remain the records for earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
+
+### Run 17 — native run candidates on retained states
+
+On 2026-11-26, both staged native run kernels agreed on each of the 71,744 evidence states and 78,894 intent states. The retained dumps from the completed model job match the original Run 16 dump hashes byte for byte. The source workflow's subsequent transcript validation failed. This self comparison produced no new model states. [Source workflow](https://github.com/sloik/dodona/actions/runs/45069190821) · [Comparison record](runs/run-17/every-state/).
+
+The same staged kernels each matched all 103 local project-run cases, without skips. Removing reuse of a current passing result from each kernel separately gave 44 named mismatches and zero unfinished cases per plant. These included `a current result is reused` and `everything current sends nothing`. The 70 JavaScript run-module tests passed. These are self checks. The production model workflow still uses the stage-0 host.
 
 ## Shown by the conformance kit, not by a model
 

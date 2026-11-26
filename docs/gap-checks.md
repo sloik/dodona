@@ -50,6 +50,8 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_ledger_judge_keeps_held_lock_result` | A kernel that writes through a held ledger lock can remove the fixture marker. The judge must report the held-lock mismatch through cleanup. A locked refusal must preserve both the ledger and its marker. The ledger judge tests also cover distinct paths for independent torn-file probes and enough time for a kernel to return `locked` before its process deadline |
 | `gap_documents_follow_the_code` | Code changed and the documents describing it did not: usage lines missed flags, the kit's index missed five files, two decision headers lost their owner direction. Runs every check in `tools/check_docs.py` below, and its self-test, which plants a fault for each and requires it to be seen |
 
+The platform checks exercise both native `run` commands against the project cases. A planted defect in each kernel repeated checks with current passing results. The judge rejected both plants, including the cases that name reuse and an executor that must receive nothing.
+
 ## Documents that follow the code
 
 The usual way a document here goes wrong is quiet: code or data changes and the text that describes it does not. `tools/check_docs.py` holds these checks, so `tools/check_repo.py` does not grow further; `gap_documents_follow_the_code` runs them on every platform. Each compares what the code or data says with what the documents say, in both directions where both can be read, and names the file and what to update. When they were first run, the checks of usage lines, the tool list, the decision index and the kit's index found real drift, fixed in the same change; the others found none, and are there so that the next change cannot bring any.

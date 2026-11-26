@@ -393,21 +393,57 @@ async function converse(wire, binding, deadline, capability, body) {
   return { manifest, body: answer.message.body };
 }
 
-async function ask(root, site, binding, capability, body) {
+// shutdown at the end of every session, a moment to exit, and every process ended.
+async function endSession(wire, child) {
+  wire.post({ type: 'shutdown' });
+  wire.close();
+  await Promise.race([child.exited, processes.pause(1000)]);
+  await processes.endTree(child);
+}
+
+// One session, one request. The session ends here, after its answer or on any rule
+// broken, unless `keep` is given and the answer was read: then `keep` is handed the
+// open session, whose next request takes id 2, and whoever holds it ends it (the run
+// command, for the checks of a binding that lists obligation.check).
+// With `record` (the run command's transcript), every message this wire writes to the
+// provider, while its input is still open to take it, and every message read from it
+// that decodes, is handed to `record(to, message)` as it happens: 'provider' or 'kernel'.
+function recordOn(wire, record) {
+  const writable = () => !wire.closed && wire.child.stdin.writable && !wire.child.stdin.destroyed;
+  const copy = (message) => JSON.parse(JSON.stringify(message));
+  const send = wire.send.bind(wire);
+  const post = wire.post.bind(wire);
+  const next = wire.next.bind(wire);
+  wire.send = (message, until) => {
+    if (writable()) record('provider', copy(message));
+    return send(message, until);
+  };
+  wire.post = (message) => {
+    if (writable()) record('provider', copy(message));
+    return post(message);
+  };
+  wire.next = async (until) => {
+    const got = await next(until);
+    if (got.message !== undefined) record('kernel', copy(got.message));
+    return got;
+  };
+}
+
+async function ask(root, site, binding, capability, body, keep = null, record = null) {
   const child = processes.start(site.providers[binding.provider].command, root);
   if (child.pid === undefined) {
     await child.exited;
     throw new Stop('provider-not-started', binding.provider);
   }
   const wire = new Wire(child, { maxLine: MAX_LINE_BYTES, maxLog: MAX_LOG_BYTES, strict: true });
+  if (record !== null) recordOn(wire, record);
+  let answer = null;
   try {
-    return await converse(wire, binding, site.deadline_ms, capability, body);
+    answer = await converse(wire, binding, site.deadline_ms, capability, body);
+    return answer;
   } finally {
-    // shutdown at the end of every session, a moment to exit, and every process ended.
-    wire.post({ type: 'shutdown' });
-    wire.close();
-    await Promise.race([child.exited, processes.pause(1000)]);
-    await processes.endTree(child);
+    if (keep === null || answer === null) await endSession(wire, child);
+    else keep({ binding, wire, child, manifest: answer.manifest, next_id: 2 });
   }
 }
 
@@ -423,14 +459,23 @@ function obligationHasShape(item) {
     && isObject(own(item, 'config')) && Object.hasOwn(item, 'inputs') && (!Object.hasOwn(item, 'defect_of') || isString(item.defect_of));
 }
 
-async function obligationsOf(root, site, digests, bindings, claims) {
+// `kept`, given only by the run command, is a list each session of a binding that lists
+// obligation.check is added to as soon as its answer is read, so that whoever holds the
+// list can end it on any later refusal as well as at the end of the run.
+async function obligationsOf(root, site, digests, bindings, claims, kept = null, record = null) {
   const found = new Map();
   const listed = [];
   let unchecked = [];
   for (const binding of bindings.filter((b) => b.capabilities.includes('obligation.enumerate')).sort(byName)) {
     const files = claims.get(binding.name);
     const identities = new Map(files.map((file) => [file.path, file.identity]));
-    const { manifest, body } = await ask(root, site, binding, 'obligation.enumerate', { binding: binding.name, definitions: [], files });
+    const request = { binding: binding.name, definitions: [], files };
+    let session = null;
+    const keep = kept !== null && binding.capabilities.includes('obligation.check') ? (held) => {
+      session = held;
+      kept.push(held);
+    } : null;
+    const { manifest, body } = await ask(root, site, binding, 'obligation.enumerate', request, keep, record);
     const items = own(body, 'obligations');
     const rejected = Object.hasOwn(body, 'rejected') ? body.rejected : [];
     if (!Array.isArray(items) || !Array.isArray(rejected) || !rejected.every((entry) => isString(own(entry, 'name')))
@@ -466,6 +511,23 @@ async function obligationsOf(root, site, digests, bindings, claims) {
       });
       listed.push({ binding: binding.name, name: item.name });
     }
+    if (session !== null) {
+      // What the checks on this session start from (step 11): the request as sent, the
+      // obligations as enumerated, the provider as measured, the site's platform as given.
+      // A check's inputs are F, its own obligation's `inputs` taken from request.files,
+      // never every file the binding claims.
+      const named = site.tools.filter((tool) => uses.has(tool.name));
+      Object.assign(session, {
+        request,
+        obligations: items,
+        provider: { name: manifest.name, version, protocol: manifest.protocol },
+        code: digests.get(binding.provider),
+        tools: named.map((tool) => ({ name: tool.name, version: tool.version, digest: tool.digest })),
+        platform: site.platform,
+        deadline_ms: site.deadline_ms,
+        offers_check: manifest.capabilities.some((entry) => entry.capability === 'obligation.check'),
+      });
+    }
     unchecked = unchecked.concat(rejected.map((entry) => entry.name));
   }
   listed.sort((a, b) => compareUnits(a.binding, b.binding) || compareUnits(a.name, b.name));
@@ -488,10 +550,10 @@ function intentHasShape(it) {
       && criterion.links.every((link) => isString(own(link, 'binding')) && isString(own(link, 'obligation'))));
 }
 
-async function intentsOf(root, site, bindings, listed, claims) {
+async function intentsOf(root, site, bindings, listed, claims, record = null) {
   const answers = [];
   for (const binding of bindings.filter((b) => b.capabilities.includes('intent.index')).sort(byName)) {
-    const { body } = await ask(root, site, binding, 'intent.index', { binding: binding.name, files: claims.get(binding.name), obligations: listed });
+    const { body } = await ask(root, site, binding, 'intent.index', { binding: binding.name, files: claims.get(binding.name), obligations: listed }, null, record);
     const items = own(body, 'intents');
     const rejected = Object.hasOwn(body, 'rejected') ? body.rejected : [];
     if (!Array.isArray(items) || !Array.isArray(rejected) || !rejected.every((entry) => isString(own(entry, 'path')) && entry.path !== '')
@@ -701,8 +763,11 @@ function objectOf(map) {
   return out;
 }
 
-async function judge(asked) {
-  const digests = checkInput(asked); // step 1
+// Steps 2 to 10, after step 1 has given the code digests: what was read, asked and
+// judged, from which the status command makes its output and the run command its plan.
+// `kept` as in obligationsOf: the status command gives none, and every session ends
+// after its answer.
+async function snapshotOf(asked, digests, kept = null, record = null) {
   const root = asked.root;
   const site = asked.site;
   // Step 2.
@@ -743,8 +808,8 @@ async function judge(asked) {
     }
   }
   // Steps 5 to 7.
-  const obligations = await obligationsOf(root, site, digests, bindings, claims);
-  const { intents, parent, unread } = await intentsOf(root, site, bindings, obligations.listed, claims);
+  const obligations = await obligationsOf(root, site, digests, bindings, claims, kept, record);
+  const { intents, parent, unread } = await intentsOf(root, site, bindings, obligations.listed, claims, record);
   // Step 8.
   const read = entriesOf(root, asked.owner_ledger, asked.ledgers);
   // Step 9.
@@ -767,6 +832,11 @@ async function judge(asked) {
     steps: [...read.entries.map((entry) => ({ do: { append: { kind: entry.kind, body: entry.body } } })), NOTHING],
   };
   const report = ownReport(judged);
+  return { judged, report, policy, obligations, intents, parent, unread, read, notServed };
+}
+
+// The output, from a snapshot: doubts, coverage (step 11) and the status as stated.
+function reportOf(asked, { judged, report, policy, obligations, intents, parent, unread, read, notServed }) {
   const doubts = [];
   if (asked.policy.not_applied.length > 0) doubts.push(DOUBTS.policy);
   if (policy.required.some((name) => intents.has(name) && intents.get(name).children.length > 0)) doubts.push(DOUBTS.children);
@@ -789,6 +859,21 @@ async function judge(asked) {
   };
 }
 
+// The run command's step 14: the ledgers read again as at step 8, and what is judged and
+// its report made again from them; nothing else asked again, no provider started.
+function rereadOf(asked, snapshot) {
+  const read = entriesOf(asked.root, asked.owner_ledger, asked.ledgers);
+  const steps = read.entries.map((one) => ({ do: { append: { kind: one.kind, body: one.body } } }));
+  steps.push(NOTHING);
+  const judged = { ...snapshot.judged, steps };
+  return { ...snapshot, judged, report: ownReport(judged), read };
+}
+
+async function judge(asked) {
+  const digests = checkInput(asked); // step 1
+  return reportOf(asked, await snapshotOf(asked, digests));
+}
+
 // The command: bytes of standard input to the one object it prints.
 async function projectStatus(bytes) {
   try {
@@ -799,4 +884,10 @@ async function projectStatus(bytes) {
   }
 }
 
-module.exports = { projectStatus, readInput, isRelative, isPattern, segmentMatches, readProject, coverageOf, Stop };
+module.exports = {
+  projectStatus, readInput, isRelative, isPattern, segmentMatches, readProject, coverageOf, Stop,
+  // Reused by the run command's checks of its own input (project-run.js).
+  checkInput, isDirectory, fileId, stepsOf,
+  // Reused by its plan: the same steps 2 to 10 and the same output.
+  snapshotOf, reportOf, endSession, rereadOf,
+};

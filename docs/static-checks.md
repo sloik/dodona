@@ -35,3 +35,5 @@ A rule is turned off only for the exact place it excuses, with its reason beside
 The ESLint configuration reads `.js`, `.mjs` and `.cjs` files under `kernel2/`.
 
 `tools/check_repo.py` checks this workflow too: `gap_lint_aggregate_needs_every_job` requires `lint` to need every other job, with `if: always()`, and `gap_workflows_are_safe` requires every checkout in every workflow to set `persist-credentials: false` and refuses a `workflow_run` trigger ([gap checks](gap-checks.md)).
+
+The zizmor positions in the repository workflow follow the shard invocations when platform check steps move them.

@@ -149,6 +149,11 @@ pub struct Peer {
     rx: Receiver<Event>,
     closed: bool,
     strict: bool,
+    /// Whether a `shutdown` message was written whole by `shutdown`.
+    said_shutdown: bool,
+    /// Whether `shutdown` gives the provider its whole grace even after it
+    /// writes something more (see `wait_out_grace`).
+    patient: bool,
 }
 /// Standard input of the provider, written by a thread of its own, so that a
 /// provider that stops reading cannot hold the host past a deadline.
@@ -187,7 +192,21 @@ impl Peer {
             rx: lines(stdout, max_line),
             closed: false,
             strict,
+            said_shutdown: false,
+            patient: false,
         }
+    }
+    /// From now on `shutdown` waits out the provider's grace even when it writes
+    /// something more after `shutdown` was sent (a late answer to an earlier
+    /// request, say), so that it can still read `shutdown` and exit on its own
+    /// as a provider is given a moment to do. What it wrote is read and dropped,
+    /// never taken as an answer, and `shutdown` still says `unexpected`.
+    pub fn wait_out_grace(&mut self) {
+        self.patient = true;
+    }
+    /// Whether `shutdown` has written its message whole to the provider.
+    pub fn said_shutdown(&self) -> bool {
+        self.said_shutdown
     }
     /// Send one message, written whole no later than `until`. A provider that
     /// cannot be written to has gone away.
@@ -240,15 +259,20 @@ impl Peer {
     /// provider to end, end everything it started, and read what it wrote to the
     /// end. Anything more than nothing is `unexpected`.
     pub fn shutdown(&mut self, until: Instant) -> Result<(), &'static str> {
-        let _ = self.send(
-            &json::object(vec![("type", json::string("shutdown"))]),
-            until,
-        );
+        let said = self
+            .send(
+                &json::object(vec![("type", json::string("shutdown"))]),
+                until,
+            )
+            .is_ok();
+        self.said_shutdown |= said;
         // The provider has a second to exit, less if the deadline is nearer; one
         // still running then is ended with everything it started, its answer standing.
         let grace = (Instant::now() + SHUTDOWN_GRACE).min(until);
+        let mut late = false;
         while !self.tree.exited() && Instant::now() < grace {
             match self.event((Instant::now() + Duration::from_millis(10)).min(grace)) {
+                Some(Event::Line(_)) | Some(Event::TooLong) if self.patient => late = true,
                 Some(Event::Line(_)) | Some(Event::TooLong) => return Err("unexpected"),
                 Some(Event::Closed) => std::thread::sleep(Duration::from_millis(10)),
                 None => {}
@@ -259,6 +283,7 @@ impl Peer {
         let wait = Instant::now() + Duration::from_secs(2);
         match self.event(wait) {
             Some(Event::Line(_)) | Some(Event::TooLong) => Err("unexpected"),
+            _ if late => Err("unexpected"),
             _ => Ok(()),
         }
     }
@@ -266,6 +291,76 @@ impl Peer {
     pub fn end(&mut self) {
         self.writer = None;
         self.tree.end();
+    }
+}
+
+#[cfg(test)]
+mod late_tests {
+    use super::*;
+    use std::io::{BufRead, Write as _};
+    use std::process::{Command, Stdio};
+
+    const MARK: &str = "DODONA_WIRE_LATE_MARK";
+
+    /// The provider the test below starts: it writes a late line, waits a
+    /// little, and only then reads its input; if that is `shutdown`, it leaves
+    /// a file where `MARK` says and exits on its own.
+    #[test]
+    #[ignore = "the provider a shutdown test starts; not a test of its own"]
+    fn late_provider() {
+        let Some(mark) = std::env::var_os(MARK) else {
+            return;
+        };
+        std::thread::sleep(Duration::from_millis(50));
+        let mut out = std::io::stdout().lock();
+        let _ = out.write_all(b"{\"type\":\"result\",\"id\":\"late\"}\n");
+        let _ = out.flush();
+        drop(out);
+        std::thread::sleep(Duration::from_millis(200));
+        let mut line = String::new();
+        let _ = std::io::stdin().lock().read_line(&mut line);
+        if line.contains("shutdown") {
+            let _ = std::fs::write(mark, b"read shutdown");
+        }
+    }
+
+    fn start(mark: &std::path::Path) -> Peer {
+        let exe = std::env::current_exe().unwrap();
+        let tree = Tree::spawn(
+            Command::new(exe)
+                .args(["--ignored", "--exact", "wire::late_tests::late_provider", "--quiet", "--test-threads=1"])
+                .env(MARK, mark)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null()),
+        )
+        .unwrap();
+        Peer::new(tree, 1 << 20, true)
+    }
+
+    #[test]
+    fn a_late_line_after_shutdown_does_not_cut_the_grace_short() {
+        let dir = std::env::temp_dir().join(format!("dodona-wire-late-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Waiting out the grace: the provider reads `shutdown` and exits on its
+        // own; what it wrote late is still `unexpected`, and read as nothing else.
+        let patient = dir.join("patient");
+        let mut p = start(&patient);
+        p.wait_out_grace();
+        assert_eq!(p.shutdown(Instant::now() + SHUTDOWN_GRACE), Err("unexpected"));
+        assert!(p.said_shutdown());
+        p.end();
+        assert!(patient.exists());
+        // Control, as every other caller has it: the first late line ends the
+        // wait, the provider is ended before it reads `shutdown`, and leaves no file.
+        let impatient = dir.join("impatient");
+        let mut q = start(&impatient);
+        assert_eq!(q.shutdown(Instant::now() + SHUTDOWN_GRACE), Err("unexpected"));
+        q.end();
+        std::thread::sleep(Duration::from_millis(500));
+        assert!(!impatient.exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
