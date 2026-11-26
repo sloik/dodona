@@ -169,6 +169,10 @@ In the PR 49 follow-up, two local ledger controls reproduced the reused path and
 
 At `09e94ff`, all 14 formerly unfinished mutations from the preceding hosted run (eight Rust and six JavaScript) completed two local judge replays each. Both replays for each mutation rejected the case named in its manifest and reported zero unfinished cases. The original mutations could crash, outlive the judge deadline, or produce a response the judge could not read. The revised mutations preserve the intended violation and return a response the judge can evaluate. Runner controls also reject a repeated mismatch from an unrelated case. These are self checks. A complete hosted inventory remains pending. [Prior hosted run](https://github.com/sloik/dodona/actions/runs/44994764410).
 
+### Lint and shard controls
+
+On 2026-11-26, the old lint guard accepted the three planted settings that suppressed a failed dependency, the aggregate or a lint step. The tightened guard rejected all three. The JavaScript runner's eight-shard test matched all 19 named fixture defects to the serial fixture and failed when position 8 was deliberately omitted. All 54 runner tests passed after restoring the source. The JavaScript aggregate's exact command exited 0 with a success result and 1 with failure, cancellation or skip results. These are local self checks; the aggregate command probe supplied the result strings directly.
+
 ## Not yet modelled
 
 | # | Claim | Decision | Intended check | Planted defect that must fail |
