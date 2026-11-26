@@ -769,6 +769,12 @@ The prior successful collection took 39 minutes and 24 seconds. The previous nat
 
 The Python reference and both kernels matched all 108 project-run cases, with zero skips and zero unfinished. The original implementations accepted five invalid floor requests. All three revised commands refused them before sending a provider request or starting an executor.
 
+### Individual case wall limit
+
+On 2026-11-26 a self qualification ran the site driver from `16a6074` with three cases in one batch. The one-millisecond control reported `timed-out` and could not be credited by the model judge. The next `assurance/design` case completed with exit 0 and no violation. The planted `assurance/mutant_always_nothing` case completed with exit 12 and named `WeakestLink`. The batch completed with native exit 0 and its end marker listed all three cases. Both tool measurements met the site's pins.
+
+The local site tests caught the original missing wall limit and the original loss of the timeout report. The driver test discarded a partial kept file and preserved the next case's output. The executor test kept the timeout and the next case's exit separate, and reported cancellation when the complete-batch marker was removed. The production workflow cutover still needs its full qualification.
+
 ### Completed named defect inventory at `0c3a46f`
 
 Both required aggregates and all 16 shards completed successfully on 2026-11-22. A self reconciliation compared the named rejections in every shard log to its exact manifest slice at that commit. Every name appeared once in the assigned shard, and each shard's reported catch count matched its slice, with zero unfinished defects. Rust caught 275 of 275 and JavaScript caught 319 of 319. The JavaScript receipts also report successful cleanup. The JavaScript shard jobs took about 36 to 45 minutes each. Serial whole-inventory runs, crash cleanup and the aggregate's failure, cancellation and skip controls remain open. [Repository run](https://github.com/sloik/dodona/actions/runs/45069190690) · [Issue 41](https://github.com/sloik/dodona/issues/41) · [Issue 58](https://github.com/sloik/dodona/issues/58).
