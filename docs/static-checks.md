@@ -11,7 +11,7 @@ Linters that read the code without running it, one for each language and format 
 | `lint (Rust, macos)`, `(linux)`, `(windows)` | clippy of the runner's Rust | clippy's defaults: errors fail, warnings are shown | `kernel/` |
 | `lint` | none | every job above succeeded | the results of the jobs above |
 
-The last job, `lint`, needs every job above and passes only if each one succeeded; a job that failed, was skipped or was cancelled fails it. **`lint` is the single name `main`'s ruleset requires for this workflow**, so a job or a matrix entry can be renamed, added or removed without leaving a required check waiting for ever. A new lint job must be added to the `needs` of `lint`. The lint workflow rejects `continue-on-error` on jobs and steps so a failure reaches the aggregate and the ruleset.
+The last job, `lint`, needs every job above and passes only if each one succeeded; a job that failed, was skipped or was cancelled fails it. **`lint` is the single name `main`'s ruleset requires for this workflow**, so a job or a matrix entry can be renamed, added or removed without leaving a required check waiting for ever. A new lint job must be added to the `needs` of `lint`, with its own result variable and success test in the aggregate Bash step. The lint workflow rejects `continue-on-error` on jobs and steps so a failure reaches the aggregate and the ruleset.
 
 ruff and zizmor are installed from [.github/lint-tools.txt](../.github/lint-tools.txt), which pins each version with the hash of every file published for it. actionlint is built at its tag with Go, whose checksum database verifies what it fetches. ESLint runs at its exact version through `npx`; what ESLint itself depends on is not locked. zizmor is given the job's read-only token, so that it can ask GitHub whether each pinned commit belongs to the action it names.
 
@@ -34,6 +34,6 @@ A rule is turned off only for the exact place it excuses, with its reason beside
 
 The ESLint configuration reads `.js`, `.mjs` and `.cjs` files under `kernel2/`.
 
-`tools/check_repo.py` checks this workflow too: `gap_lint_aggregate_needs_every_job` requires `lint` to need every other job, with `if: always()`, and `gap_workflows_are_safe` requires every checkout in every workflow to set `persist-credentials: false` and refuses a `workflow_run` trigger ([gap checks](gap-checks.md)).
+`tools/check_repo.py` checks this workflow too: `gap_lint_aggregate_needs_every_job` requires `lint` to need every other job, run with `if: always()` and test every needed job’s result in its Bash step, and `gap_workflows_are_safe` requires every checkout in every workflow to set `persist-credentials: false` and refuses a `workflow_run` trigger ([gap checks](gap-checks.md)).
 
 The zizmor positions in the repository workflow follow the shard invocations when platform check steps move them.
