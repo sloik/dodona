@@ -9,9 +9,9 @@ which the kernel reads as `unavailable` for every run of the batch. It judges no
 
 - Each run's inputs are copied into the job from the project, and only they. A file whose identity is not the one
   the run names is not sent: that run's report ends `cancelled`, which the kernel reads as an error.
-- What the job measured is compared with this site's pins. A tool as pinned (or, for a floor, at or above it) is
-  reported as the run asked for it; any other is reported with the digest measured (zeros when not measured), so the
-  kernel finds the tools that ran are not the ones asked for, and the check ends in error, never with a verdict.
+- A fixed pin is reported with the digest measured. A measured version at or above the site's floor is reported
+  with the site's floor key. Other version measurements keep the measured file digest. Missing measurements use
+  zeros. The kernel compares these keys with the ones requested and treats a mismatch as an error.
 - A job that did not end well, or whose end marker does not list every run, gives every run the end `cancelled`.
 - What each run printed is kept under out/kernel-runs/, inside the project, where the provider reads it.
 """
