@@ -832,39 +832,184 @@ def gap_owner_rule_review_is_exact() -> None:
             problems.append(f"check_docs.py: an owner review hid {expected!r}")
 
 
+def action_ref_problem(use, local_refs: set[str]) -> str | None:
+    if not isinstance(use, str) or not use.strip():
+        return "action reference must be text"
+    use = use.strip()
+    if use.startswith(("./", ".\\")):
+        if use not in local_refs:
+            return f"local action or workflow {use!r} is outside the audited inventory"
+    elif not re.search(r"@[0-9a-f]{40}$", use):
+        return f"action {use!r} is not pinned to a commit"
+    return None
+
+
+def action_step_problems(steps, local_refs: set[str], owner: str) -> list[str]:
+    if not isinstance(steps, list):
+        return [f"{owner}: steps is not a list"]
+    found = []
+    for number, step in enumerate(steps, 1):
+        location = f"{owner} step {number}"
+        if not isinstance(step, dict):
+            found.append(f"{location}: not a mapping")
+            continue
+        if "uses" not in step:
+            continue
+        use = step["uses"]
+        pin_problem = action_ref_problem(use, local_refs)
+        if pin_problem:
+            found.append(f"{location}: {pin_problem}")
+        if not isinstance(use, str) or use.strip().partition("@")[0].casefold() != "actions/checkout":
+            continue
+        inputs = step.get("with")
+        if not isinstance(inputs, dict):
+            inputs = {}
+        values = [value for key, value in inputs.items()
+                  if isinstance(key, str) and key.casefold() == "persist-credentials"]
+        credential = values[0] if len(values) == 1 else None
+        if credential is not False and (not isinstance(credential, str) or credential.strip().casefold() != "false"):
+            found.append(f"{location}: a checkout that does not set persist-credentials: false in its with mapping")
+    return found
+
+
+def workflow_action_problems(data, text: str, local_workflows: set[str], local_actions: set[str]) -> list[str]:
+    jobs = workflow_jobs(data)
+    triggers = data.get("on", {})
+    if isinstance(triggers, str):
+        triggers = [triggers]
+    if not isinstance(triggers, (dict, list)) or not all(isinstance(event, str) for event in triggers):
+        raise ValueError("workflow events are not named")
+    events = {event.casefold() for event in triggers}
+    found = []
+    if "workflow_run" in events:
+        found.append("is started by workflow_run, which runs with the base's token on another run's outcome")
+    if "self-hosted" in text:
+        trigger = text.split("jobs:", 1)[0]
+        if "pull_request" in trigger or events & {"pull_request", "pull_request_target"}:
+            found.append("runs on a self-hosted runner and is triggered by pull requests")
+        if "github.ref == 'refs/heads/main'" not in text or "github.repository == 'sloik/dodona'" not in text:
+            found.append("self-hosted job is not restricted to this repository's main branch")
+    if "permissions" not in data:
+        found.append("no explicit permissions")
+    found.extend(pull_request_target_problems(text, "pull_request_target" in events))
+    for job_id, job in jobs.items():
+        if "uses" in job:
+            pin_problem = action_ref_problem(job["uses"], local_workflows)
+            if pin_problem:
+                found.append(f"job {job_id}: {pin_problem}")
+        found.extend(action_step_problems(job.get("steps", []), local_actions, f"job {job_id}"))
+    return found
+
+
+def github_action_problems(root: pathlib.Path) -> list[str]:
+    import check_docs
+    try:
+        reader = pinned_workflow_reader()
+    except (OSError, ValueError, zipfile.BadZipFile, check_docs.CannotRun) as err:
+        return [f"workflow YAML reader: {err}"]
+    workflows = {path for path in root.glob(".github/workflows/*") if path.suffix in (".yml", ".yaml") and path.is_file()}
+    actions = {path for path in root.glob(".github/actions/**/action.*")
+               if path.name in ("action.yml", "action.yaml") and path.is_file()}
+    workflow_refs = {"./" + path.relative_to(root).as_posix() for path in workflows}
+    action_refs = {"./" + path.parent.relative_to(root).as_posix() for path in actions}
+    found = []
+    for path in sorted(workflows | actions):
+        name = path.relative_to(root).as_posix()
+        try:
+            if path.is_symlink():
+                raise ValueError("workflow or action manifest is a symlink")
+            text = path.read_text(encoding="utf-8")
+            data = reader().load(text)
+            if path in workflows:
+                errors = workflow_action_problems(data, text, workflow_refs, action_refs)
+            else:
+                runs = data.get("runs") if isinstance(data, dict) else None
+                if not isinstance(runs, dict) or not isinstance(runs.get("using"), str):
+                    raise ValueError("action manifest needs a named runs.using")
+                errors = (action_step_problems(runs.get("steps"), action_refs, "composite")
+                          if runs["using"].casefold() == "composite" else [])
+        except Exception as err:  # noqa: BLE001 - unreadable action YAML cannot pass the guard
+            found.append(f"{name}: cannot read Actions YAML ({err})")
+        else:
+            found.extend(f"{name}: {error}" for error in errors)
+    return found
+
+
+def github_action_controls() -> list[str]:
+    """Check both file discovery and the input seen by the action."""
+    checkout = "actions/checkout@" + "a" * 40
+
+    def workflow(steps, event="push"):
+        return ("permissions: {contents: read}\n"
+                f"on: {event}\n"
+                "jobs:\n  fixture:\n    runs-on: ubuntu-26.04\n" + steps)
+
+    def composite(steps):
+        return "name: Fixture\ndescription: A local checker fixture\nruns:\n  using: composite\n" + steps
+
+    actions = ".github/actions/"
+    workflows = ".github/workflows/"
+    bad = {
+        workflows + "plain.yml": workflow(f"    steps:\n      - uses: {checkout}\n"),
+        workflows + "target.yml": workflow(
+            f"    steps: [{{uses: {checkout}, with: {{persist-credentials: true}}}}]\n", "pull_request_target"),
+        workflows + "expression.yml": workflow(
+            f"    steps: [{{uses: {checkout}, with: {{persist-credentials: '${{{{ inputs.persist }}}}'}}}}]\n"),
+        workflows + "quoted.yml": workflow(f'    steps:\n      - uses: "{checkout}"\n'),
+        workflows + "folded.yml": workflow(f"    steps:\n      - uses: >-\n          {checkout}\n"),
+        workflows + "case.yml": workflow(f"    steps:\n      - uses: {checkout.replace('actions/checkout', 'Actions/Checkout')}\n"),
+        workflows + "flow.yml": workflow(f"    steps: [{{uses: {checkout}}}]\n"),
+        workflows + "env.yml": workflow(f"    steps:\n      - uses: {checkout}\n        env:\n          persist-credentials: false\n"),
+        workflows + "misplaced.yml": workflow(f'    steps:\n      - uses: {checkout}\n        with: {{note: "persist-credentials: false"}}\n'),
+        workflows + "extension.yaml": workflow(f"    steps:\n      - uses: {checkout}\n"),
+        workflows + "ambiguous.yaml": workflow(f"    steps: [{{uses: {checkout}, with: {{persist-credentials: false, Persist-Credentials: true}}}}]\n"),
+        actions + "nested/missing/action.yml": composite(f"  steps: [{{uses: {checkout}}}]\n"),
+        actions + "nested/missing-yaml/action.yaml": composite(f"  steps: [{{uses: {checkout}}}]\n"),
+    }
+    other = {
+        workflows + "outside.yaml": (workflow("    steps: [{uses: ./outside}]\n"), "outside the audited inventory"),
+        workflows + "windows-local.yaml": (
+            workflow(f"    steps: [{{uses: '.{chr(92)}outside@{'a' * 40}'}}]\n"), "outside the audited inventory"),
+        workflows + "unreadable.yaml": ("jobs: [", "cannot read Actions YAML"),
+        actions + "unpinned/action.yaml": (
+            composite("  steps: [{uses: actions/checkout@main, with: {persist-credentials: false}}]\n"), "not pinned to a commit"),
+        workflows + "event.yaml": (workflow("    steps: [{run: echo example}]\n",
+                                            '{"workflow\\u005frun": {workflows: [Other], types: [completed]}}'), "started by workflow_run"),
+    }
+    good = {
+        workflows + "safe.yml": workflow(
+            f'    steps: [{{uses: "{checkout}", with: {{persist-credentials: "false"}}}}]\n', "pull_request_target"),
+        workflows + "local.yaml": workflow("    steps: [{uses: ./.github/actions/nested/good}]\n"),
+        actions + "nested/good/action.yaml": composite(
+            f"  steps:\n    - uses: >-\n        {checkout}\n      with: {{persist-credentials: false}}\n"),
+        workflows + "shell-text.yml": workflow("    steps:\n      - run: |\n          echo 'uses: actions/checkout@main'\n"),
+    }
+    with tempfile.TemporaryDirectory(prefix="dodona-action-controls-") as directory:
+        root = pathlib.Path(directory)
+        for file, text in {**bad, **good, **{path: text for path, (text, _) in other.items()}}.items():
+            path = root / file
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        found = github_action_problems(root)
+    missing = [f"the action guard missed {file}" for file in bad
+               if not any(error.startswith(file + ":") and "does not set persist-credentials: false" in error for error in found)]
+    missing.extend(f"the action guard missed {file}" for file, (_, why) in other.items()
+                   if not any(error.startswith(file + ":") and why in error for error in found))
+    missing.extend(f"the action guard refused valid {file}" for file in good
+                   if any(error.startswith(file + ":") for error in found))
+    return missing
+
+
 def gap_workflows_are_safe() -> None:
-    """Self-hosted runners must never run code from a pull request; actions are pinned."""
-    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
-        text = path.read_text(encoding="utf-8")
-        for use in re.findall(r"uses: (\S+)", text):
-            if not re.search(r"@[0-9a-f]{40}$", use):
-                problems.append(f"{path.name}: action {use} is not pinned to a commit")
-        if "self-hosted" in text:
-            trigger = text.split("jobs:")[0]
-            if "pull_request" in trigger:
-                problems.append(f"{path.name}: runs on a self-hosted runner and is triggered by pull requests")
-            if "github.ref == 'refs/heads/main'" not in text or "github.repository == 'sloik/dodona'" not in text:
-                problems.append(f"{path.name}: self-hosted job is not restricted to this repository's main branch")
-        if "permissions:" not in text:
-            problems.append(f"{path.name}: no explicit permissions")
-        problems.extend(f"{path.name}: {p}" for p in pull_request_target_problems(text))
-        problems.extend(f"{path.name}: {p}" for p in checkout_and_trigger_problems(text))
-    # Every checkout drops its credentials, and no workflow is started by another's run: each is planted.
-    for name, old, new in (("checks.yml", "persist-credentials: false", "persist-credentials: true"),
-                           ("lint.yml", "        with:\n          persist-credentials: false\n", ""),
-                           ("docs.yml", "on:\n", "on:\n  workflow_run:\n    workflows: [Repository checks]\n"),
-                           ("metrics.yml", "on:\n", "on:\n  workflow_run:\n    workflows: [Repository checks]\n")):
-        planted = ROOT / ".github" / "workflows" / name
-        text = planted.read_text(encoding="utf-8") if planted.exists() else ""
-        if old not in text or not checkout_and_trigger_problems(text.replace(old, new, 1)):
-            problems.append(f".github/workflows/{name}: the checkout and trigger guard does not notice {new.strip() or 'a checkout without persist-credentials'!r}")
+    """Check protected workflow execution, pinned actions and checkout credentials."""
+    problems.extend(github_action_problems(ROOT))
+    problems.extend(github_action_controls())
     # The guard must be seen to fail: each unsafe edit of the workflow that uses pull_request_target is planted.
     docs = ROOT / ".github" / "workflows" / "docs.yml"
     text = docs.read_text(encoding="utf-8") if docs.exists() else ""
     for old, new in (("python3 -I tools/check_docs.py diff", "python3 tools/check_docs.py diff"),
                      ("fetch-depth: 0", "fetch-depth: 0\n          ref: ${{ github.event.pull_request.head.sha }}"),
                      ("contents: read", "contents: write"),
-                     ("persist-credentials: false", "persist-credentials: true"),
                      ("refs/pull/$PR_NUMBER/head:", "refs/pull/$PR_NUMBER/merge:"),
                      ("PR_HEAD: ${{ github.event.pull_request.head.sha }}", "PR_HEAD: ${{ github.event.pull_request.merge_commit_sha }}"),
                      ('git checkout --quiet --detach "$BASE"', 'git checkout --quiet --detach "$HEAD"'),
@@ -874,29 +1019,6 @@ def gap_workflows_are_safe() -> None:
                      ("run: |\n", 'run: |\n          echo "${{ github.head_ref }}"\n')):
         if "pull_request_target" in text and (old not in text or not pull_request_target_problems(text.replace(old, new, 1))):
             problems.append(f".github/workflows/docs.yml: the pull_request_target guard does not notice {new.strip()!r}")
-
-
-def checkout_and_trigger_problems(text: str) -> list[str]:
-    """A checkout that keeps its credentials leaves the token on disk for every later step, and a workflow
-    started by workflow_run runs with the base's token on the outcome of a run that may be a fork's."""
-    found = []
-    lines = text.split("\n")
-    for i, line in enumerate(lines):
-        m = re.match(r"(\s*)-\s", line)
-        if not m:
-            continue
-        indent, step = len(m.group(1)), [line]
-        for later in lines[i + 1:]:
-            if later.strip() and not later.lstrip().startswith("#") and len(later) - len(later.lstrip()) <= indent:
-                break
-            step.append(later)
-        body = "\n".join(s for s in step if not s.lstrip().startswith("#"))
-        if re.search(r"uses:\s*actions/checkout@", body) and not re.search(r"persist-credentials:\s*false\b", body):
-            found.append(f"line {i + 1}: a checkout that does not set persist-credentials: false")
-    trigger = text.split("\njobs:")[0]
-    if re.search(r"\bworkflow_run\b", "\n".join(t for t in trigger.split("\n") if not t.lstrip().startswith("#"))):
-        found.append("is started by workflow_run, which runs with the base's token on another run's outcome")
-    return found
 
 
 def pinned_workflow_reader():
@@ -1187,18 +1309,16 @@ def gap_lint_aggregate_needs_every_job() -> None:
             problems.append(".github/workflows: the pinned YAML reader did not load with an ambient ruamel package")
 
 
-def pull_request_target_problems(text: str) -> list[str]:
+def pull_request_target_problems(text: str, enabled: bool = False) -> list[str]:
     """pull_request_target runs with the base's workflow and a token; it is safe only while nothing
     from the pull request is checked out or run, and the token can do no more than read."""
-    if "pull_request_target" not in text:
+    if not enabled and "pull_request_target" not in text:
         return []
     found = []
     if re.search(r"ref:\s*\$\{\{[^}]*(pull_request\.head|head_ref)", text):
         found.append("checks out the pull request's head under pull_request_target")
     if re.search(r"^\s+\w[\w-]*:\s*write\b", text, flags=re.M) or "secrets." in text:
         found.append("gives the token write access, or uses a secret, under pull_request_target")
-    if "persist-credentials: false" not in text:
-        found.append("keeps credentials in the checkout under pull_request_target")
     if any(re.search(r"\bpython3?(?! -I)\s", line) for line in text.split("\n") if not line.lstrip().startswith("#")):
         found.append("runs Python without -I under pull_request_target, so a file in the working directory could be imported")
     if re.search(r"refs/pull/[^\s'\"]*/merge|merge_commit_sha", text):

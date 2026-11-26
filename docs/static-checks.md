@@ -36,6 +36,6 @@ A rule is turned off only for the exact place it excuses, with its reason beside
 
 The ESLint configuration reads `.js`, `.mjs` and `.cjs` files under `kernel2/`.
 
-`tools/check_repo.py` checks this workflow too: `gap_lint_aggregate_needs_every_job` requires `lint` to need every other job, run with `if: always()` and test every needed job’s result in its Bash step, and `gap_workflows_are_safe` requires every checkout in every workflow to set `persist-credentials: false` and refuses a `workflow_run` trigger ([gap checks](gap-checks.md)).
+`tools/check_repo.py` checks this workflow too: `gap_lint_aggregate_needs_every_job` requires `lint` to need every other job, run with `if: always()` and test every needed job’s result in its Bash step, and `gap_workflows_are_safe` requires each checkout step to set a literal false `persist-credentials` input in its `with` mapping. It reads both workflow extensions and nested `action.yml` or `action.yaml` composite manifests in the local actions subdirectory of [`.github`](../.github). External action references require commit pins, and local references must identify a parsed file in that inventory. The check refuses the `workflow_run` trigger. [Gap checks](gap-checks.md) · [GitHub action metadata](https://docs.github.com/en/actions/reference/workflows-and-actions/metadata-syntax).
 
 The zizmor positions in the repository workflow follow the shard invocations when platform check steps move them.
