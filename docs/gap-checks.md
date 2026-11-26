@@ -49,6 +49,7 @@ These checks need no model checker. They run on every pull request on macOS, Lin
 | `gap_js_planted_defect_anchors_exist` | A missing source anchor leaves a listed JavaScript defect unplanted |
 | `gap_rust_planted_defect_anchors_exist` | Native transcript recording moved the Rust numeric manifest version anchor. This check rejected the original stale manifest |
 | `gap_rust_defect_shards_cover_the_inventory` | The serial Rust defect job timed out before reporting its inventory. The partition must visit each manifest entry exactly once and refuse invalid or empty shards |
+| `gap_site_executor_reports_measured_tool_keys` | An executor whose measured tools met the site pins could echo the caller's different digests. The fake-queue conformance suite checks the site measurements against the reported keys |
 | `gap_ledger_judge_keeps_held_lock_result` | A kernel that writes through a held ledger lock can remove the fixture marker. The judge must report the held-lock mismatch through cleanup. A locked refusal must preserve both the ledger and its marker. The ledger judge tests also cover distinct paths for independent torn-file probes and enough time for a kernel to return `locked` before its process deadline |
 | `gap_documents_follow_the_code` | Code changed and the documents describing it did not: usage lines missed flags, the kit's index missed five files, two decision headers lost their owner direction. Runs every check in `tools/check_docs.py` below, and its self-test, which plants a fault for each and requires it to be seen |
 

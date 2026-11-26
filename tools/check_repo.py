@@ -1031,6 +1031,14 @@ def gap_rust_planted_defect_anchors_exist() -> None:
     check_planted_defect_anchors("kernel")
 
 
+def gap_site_executor_reports_measured_tool_keys() -> None:
+    """Exercise tool reports with the site's fake queue."""
+    tests = ROOT / ".github" / "site" / "test_kernel_executor.py"
+    result = subprocess.run([sys.executable, str(tests)], cwd=ROOT, capture_output=True, text=True)
+    if result.returncode:
+        problems.append("site executor conformance failed: " + result.stderr.strip())
+
+
 def gap_rust_defect_shards_cover_the_inventory() -> None:
     """Splitting the Rust job must still judge every listed defect exactly once."""
     import kit_adequacy
@@ -1406,7 +1414,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
               gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist,
-              gap_rust_defect_shards_cover_the_inventory, gap_ledger_judge_keeps_held_lock_result,
+              gap_rust_defect_shards_cover_the_inventory, gap_site_executor_reports_measured_tool_keys, gap_ledger_judge_keeps_held_lock_result,
               gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,

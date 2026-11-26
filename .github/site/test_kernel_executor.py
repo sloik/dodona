@@ -87,6 +87,12 @@ class KernelExecutor(unittest.TestCase):
         self.assertIn("/site/tla2tools.jar", printed)  # the tool file mapped to this site's file
         self.assertEqual(got["2"]["end"], "cancelled")  # an input that is not the file named is never sent
 
+    def test_measured_tools_do_not_echo_requested_digests(self):
+        run = self.batch["runs"][0]["run"]
+        run["tools"] = [dict(tool, digest="sha256:" + "f" * 64) for tool in self.asked]
+        report = self.answer("ok")["1"]
+        self.assertEqual(report["tools_ran"], self.asked)
+
     def test_a_queue_that_cannot_be_reached(self):
         self.assertIsNone(self.answer("down"))
 

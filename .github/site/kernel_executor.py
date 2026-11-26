@@ -51,18 +51,16 @@ def argv_of(run: dict, where: dict) -> list[str] | None:
 
 
 def tools_ran(run: dict, pinned: dict, measured: dict, versions: dict) -> list[dict]:
-    """The tools the run asked for, each as the job found it: the digest asked when it meets the pin, else what was
-    measured, so that a tool other than the pinned one can never pass for it."""
+    """Report measured digests and verified site floor keys."""
     unmeasured, mismatched = host.tool_faults(pinned, measured, versions)
     ran = []
     for tool in run.get("tools", []):
         name = tool.get("name")
         pin = pinned.get(name)
-        if pin is not None and name not in unmeasured and name not in mismatched:
-            ran.append({"name": name, "digest": tool.get("digest")})
-        else:
-            seen = measured.get(pin["file"]) if pin else None
-            ran.append({"name": name, "digest": "sha256:" + (seen or "0" * 64)})
+        seen = measured.get(pin["file"]) if pin else None
+        if pin is not None and pin.get("floor") and name not in unmeasured and name not in mismatched:
+            seen = host.floor_digest(pin)
+        ran.append({"name": name, "digest": "sha256:" + (seen or "0" * 64)})
     return ran
 
 
