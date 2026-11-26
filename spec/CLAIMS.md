@@ -787,6 +787,8 @@ On 2026-11-26 the Rust run command filed 121 verdicts through a stand-in that ma
 
 The eight site tests covered fresh and reused verdicts, exact inventory, ledger agreement, missing reports, timeouts, wrong inputs and raw output. Isolated plants removing the exact inventory, captured digest or expected outcome check each failed its named test.
 
+An unavailable-client control used the workflow candidate `4d72c85` and the ordinary queue client pointed at an absent socket. The client returned unavailable exit 75 with no job or native exit. The kernel reported 121 unavailable checks and zero passes, and the ledger bytes were unchanged. The independently read status had 121 unknown results, and the native result gate refused to keep the ledger. All 252 provider messages validated. This self check exercised the unavailable path for the exact candidate.
+
 ### Completed named defect inventory at `0c3a46f`
 
 Both required aggregates and all 16 shards completed successfully on 2026-11-22. A self reconciliation compared the named rejections in every shard log to its exact manifest slice at that commit. Every name appeared once in the assigned shard, and each shard's reported catch count matched its slice, with zero unfinished defects. Rust caught 275 of 275 and JavaScript caught 319 of 319. The JavaScript receipts also report successful cleanup. The JavaScript shard jobs took about 36 to 45 minutes each. Serial whole-inventory runs, crash cleanup and the aggregate's failure, cancellation and skip controls remain open. [Repository run](https://github.com/sloik/dodona/actions/runs/45069190690) · [Issue 41](https://github.com/sloik/dodona/issues/41) · [Issue 58](https://github.com/sloik/dodona/issues/58).
