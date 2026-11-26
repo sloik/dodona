@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import errno
+from functools import cache
 import io
 import hashlib
 import json
@@ -22,6 +23,7 @@ import sys
 import tomllib
 import types
 import unittest
+import zipfile
 from unittest import mock
 from unittest.mock import patch
 
@@ -897,80 +899,199 @@ def checkout_and_trigger_problems(text: str) -> list[str]:
     return found
 
 
-def lint_result_step_problems(body: str, needs: set[str]) -> list[str]:
-    """Check the one Bash step that turns every needed job's result into the required verdict."""
-    visible = "\n".join(line.rstrip() for line in body.splitlines() if line.strip() and not line.lstrip().startswith("#"))
-    steps = re.findall(r"^    steps:\n((?: {6,}\S[^\n]*(?:\n|$))*)", visible, flags=re.M)
+def pinned_workflow_reader():
+    """Verify the pure YAML wheel before unpacking it outside the checkout."""
+    pins = [line.strip() for line in (ROOT / ".github/yaml-reader.txt").read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")]
+    pin = re.fullmatch(r"(\.github/vendor/[A-Za-z0-9_.-]+\.whl)\s+--hash=sha256:([0-9a-f]{64})", pins[0]) if len(pins) == 1 else None
+    if pin is None:
+        raise ValueError("expected one pinned workflow YAML wheel")
+    wheel = ROOT / pin[1]
+    if wheel.is_symlink():
+        raise ValueError("workflow YAML wheel must be a regular file")
+    data = wheel.read_bytes()
+    if hashlib.sha256(data).hexdigest() != pin[2]:
+        raise ValueError("workflow YAML wheel does not match its SHA-256 pin")
+    _, reader = load_workflow_wheel(data)
+    return reader
+
+
+@cache
+def load_workflow_wheel(data: bytes):
+    import check_docs
+    unpacked = tempfile.TemporaryDirectory(prefix="dodona-yaml-reader-")
+    root = pathlib.Path(unpacked.name)
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as wheel:
+            wheel.extractall(root)
+        # A regular parent package keeps ambient ruamel installations from shadowing this wheel.
+        (root / "ruamel" / "__init__.py").touch()
+        sys.path.insert(0, str(root))
+        try:
+            check_docs._yaml_reader()
+        finally:
+            sys.path.remove(str(root))
+        if root not in pathlib.Path(sys.modules["ruamel.yaml"].__file__).parents:
+            raise ValueError("workflow YAML parser was loaded from outside the pinned wheel")
+    except BaseException:
+        unpacked.cleanup()
+        raise
+    # Hold the temporary directory for the same lifetime as the cached parser factory.
+    return unpacked, check_docs._yaml_reader
+
+def workflow_jobs(data) -> dict[str, dict]:
+    if not isinstance(data, dict) or not isinstance(data.get("jobs"), dict):
+        raise ValueError("jobs is not a mapping")
+    jobs = data["jobs"]
+    for job_id, job in jobs.items():
+        if not isinstance(job_id, str) or not isinstance(job, dict):
+            raise ValueError(f"job {job_id!r} is not a named mapping")
+        if "name" in job and not isinstance(job["name"], str):
+            raise ValueError(f"job {job_id!r} has a name that is not text")
+    return jobs
+
+
+def could_claim_lint(name: str) -> bool:
+    """Preserve literal text and treat each Actions expression as an unknown string."""
+    # An Actions string uses single quotes and escapes them by doubling them.
+    expression = r"\$\{\{(?:[^'}]|\}(?!\})|'(?:[^']|'')*+')*+\}\}"
+    parts = re.split(expression, name.strip().casefold())
+    if any("${{" in part for part in parts):
+        return True  # An unreadable expression cannot clear the name.
+    return re.fullmatch(".*".join(map(re.escape, parts)), "lint") is not None
+
+def lint_result_step_problems(steps, needs: set[str]) -> list[str]:
+    """Check the Bash step that turns every needed job's result into the required verdict."""
     missing_step = ["lint-all must have one unconditional Bash step with result bindings and a run block"]
-    if len(steps) != 1:
+    if not isinstance(steps, list) or len(steps) != 1 or not isinstance(steps[0], dict):
         return missing_step
-    name, *fields = re.split(r"\n {8}(?=\S)", steps[0].rstrip("\n"))
-    values = dict(field.split(":", 1) for field in fields if ":" in field)
-    if not re.fullmatch(r"      - name: [^\n]+", name) or len(fields) != 3 or values.keys() != {"shell", "env", "run"}:
-        return missing_step
-    environment = re.fullmatch(r"(?:\n {10}\S[^\n]*)+", values["env"])
-    script = re.fullmatch(r" \|(?P<commands>(?:\n {10}\S[^\n]*)+)", values["run"])
-    if values["shell"] != " bash" or environment is None or script is None:
+    step = steps[0]
+    environment, script = step.get("env"), step.get("run")
+    if (step.keys() - {"name", "shell", "env", "run"} or step.get("shell") != "bash"
+            or not isinstance(environment, dict) or not isinstance(script, str)):
         return missing_step
 
-    variables, sources = [], []
-    for line in environment[0].strip("\n").splitlines():
-        binding = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*):\s+\$\{\{\s*needs\.([A-Za-z0-9_-]+)\.result\s*\}\}", line.strip())
-        if binding is None:
+    bindings = {}
+    for variable, binding in environment.items():
+        if not isinstance(variable, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", variable):
+            return ["lint-all step environment has an invalid variable name"]
+        source = re.fullmatch(r"\s*\$\{\{\s*needs\.([A-Za-z0-9_-]+)\.result\s*\}\}\s*", binding) if isinstance(binding, str) else None
+        if source is None:
             return ["lint-all step environment must bind variables directly to needed job results"]
-        variable, source = binding.groups()
-        variables.append(variable)
-        sources.append(source)
-    if set(sources) != needs or len(sources) != len(needs) or len(set(variables)) != len(needs):
+        bindings[variable] = source[1]
+    if set(bindings.values()) != needs or len(bindings) != len(needs):
         return ["lint-all must bind one distinct variable to each needed job's result"]
 
-    commands = script["commands"].strip().splitlines()
-    if re.fullmatch(r'echo "[A-Za-z0-9_$.,: -]*"', commands[0]):
+    if "${{" in script:
+        return ["lint-all must put workflow expressions in its result bindings, outside the Bash script"]
+    # Bash splits commands at LF, while str.splitlines also splits Unicode separators.
+    lines = (line.strip(" \t") for line in script.split("\n"))
+    commands = [line for line in lines if line and not line.startswith("#")]
+    if commands and re.fullmatch(r'echo "[A-Za-z0-9_$.,: -]*"', commands[0]):
         commands = commands[1:]
-    tests = {f'test "${variable}" = success' for variable in variables}
-    if len(commands) != len(tests) or {command.strip() for command in commands} != tests:
+    tests = {f'test "${variable}" = success' for variable in bindings}
+    if len(commands) != len(tests) or set(commands) != tests:
         return ["lint-all must test each bound result for success with no other commands"]
     return []
 
 
-def lint_aggregate_problems(text: str) -> list[str]:
-    """The ruleset requires the one job `lint`; a lint job it does not need fails without blocking anything."""
-    jobs = text.split("\njobs:\n", 1)[1] if "\njobs:\n" in text else ""
-    blocks, current = {}, None
-    for line in jobs.split("\n"):
-        m = re.match(r"  ([A-Za-z0-9_-]+):\s*$", line)
-        if m:
-            current = m.group(1)
-            blocks[current] = []
-        elif current is not None:
-            blocks[current].append(line)
-    if "lint-all" not in blocks:
+def lint_aggregate_problems(jobs: dict[str, dict]) -> list[str]:
+    """The ruleset requires `lint`; every lint job must contribute its result."""
+    if "lint-all" not in jobs:
         return ["has no job lint-all"]
-    body = "\n".join(blocks.pop("lint-all"))
+    aggregate = jobs["lint-all"]
     found = []
-    ignored_error = re.compile(r"""(?:^[ \t]*(?:-[ \t]+)?|[{,])[ \t]*(?:continue-on-error|'continue-on-error'|"continue-on-error")[ \t]*:""")
-    for number, line in enumerate(text.splitlines(), 1):
-        if ignored_error.search(line):
-            found.append(f"line {number}: continue-on-error is forbidden in the lint workflow")
-    m = re.search(r"^    needs:\s*\[([^\]]*)\]", body, flags=re.M)
-    needs = {n.strip() for n in m.group(1).split(",") if n.strip()} if m else set()
-    for job in sorted(set(blocks) - needs):
-        found.append(f"lint-all does not need the job {job}, so its failure blocks nothing")
-    for job in sorted(needs - set(blocks)):
-        found.append(f"lint-all needs {job}, which is not a job")
-    if not re.search(r"^    if:\s*(\$\{\{\s*always\(\)\s*\}\}|always\(\))\s*$", body, flags=re.M):
-        found.append("lint-all does not run with if: always(), so a failed job above skips it, and a skipped check can pass")
-    if not re.search(r"^    name:\s*lint\s*$", body, flags=re.M):
-        found.append("lint-all is not named lint, the name the ruleset requires")
-    found.extend(lint_result_step_problems(body, needs))
+    for job_id, job in jobs.items():
+        steps = job.get("steps", [])
+        if "continue-on-error" in job or (isinstance(steps, list)
+                and any(isinstance(step, dict) and "continue-on-error" in step for step in steps)):
+            found.append(f"{job_id}: continue-on-error is forbidden on lint jobs and steps")
+
+    listed = aggregate.get("needs", [])
+    if isinstance(listed, str):
+        listed = [listed]
+    if not isinstance(listed, list) or not all(isinstance(job_id, str) for job_id in listed):
+        return found + ["lint-all needs must name jobs"]
+    needs = set(listed)
+    if not needs:
+        found.append("lint-all must need at least one lint job")
+    if len(needs) != len(listed):
+        found.append("lint-all names a needed job more than once")
+    others = jobs.keys() - {"lint-all"}
+    for job_id in sorted(others - needs):
+        found.append(f"lint-all does not need the job {job_id}, so its failure blocks nothing")
+    for job_id in sorted(needs - others):
+        found.append(f"lint-all needs {job_id}, which is not another job")
+    condition = aggregate.get("if")
+    if not isinstance(condition, str) or not re.fullmatch(r"(\$\{\{\s*always\(\)\s*\}\}|always\(\))", condition.strip()):
+        found.append("lint-all must run with if: always() so a failed job cannot skip it")
+    strategy = aggregate.get("strategy", {})
+    if aggregate.get("name") != "lint" or "uses" in aggregate or not isinstance(strategy, dict) or "matrix" in strategy:
+        found.append("lint-all must produce one check named lint")
+    found.extend(lint_result_step_problems(aggregate.get("steps"), needs))
+    return found
+
+
+def lint_aggregate_and_name_problems(workflows: dict[str, str]) -> list[str]:
+    import check_docs
+    try:
+        reader = pinned_workflow_reader()
+    except (OSError, ValueError, zipfile.BadZipFile, check_docs.CannotRun) as err:
+        return [f"workflow YAML reader: {err}"]
+    found = []
+    if "lint.yml" not in workflows:
+        found.append("lint.yml: missing required lint workflow")
+    for path, text in sorted(workflows.items()):
+        try:
+            jobs = workflow_jobs(reader().load(text))
+        except Exception as err:  # noqa: BLE001 - any unreadable workflow leaves the required name unjudged
+            found.append(f"{path}: cannot read jobs as YAML ({err})")
+            continue
+        if path == "lint.yml":
+            found.extend(f"{path}: {error}" for error in lint_aggregate_problems(jobs))
+        for job_id, job in jobs.items():
+            name = job.get("name", "").strip() or job_id
+            if (path, job_id) != ("lint.yml", "lint-all") and could_claim_lint(name):
+                found.append(f"{path}: job {job_id} ({name!r}) could claim the required lint name")
     return found
 
 
 def gap_lint_aggregate_needs_every_job() -> None:
     """A lint job left out of the needs of `lint`, the one the ruleset requires, could fail and block nothing."""
-    path = ROOT / ".github" / "workflows" / "lint.yml"
-    text = path.read_text(encoding="utf-8") if path.exists() else ""
-    problems.extend(f".github/workflows/lint.yml: {p}" for p in lint_aggregate_problems(text))
+    workflows = {path.name: path.read_text(encoding="utf-8") for path in repo_files(".github/workflows/*")
+                 if path.suffix in (".yml", ".yaml")}
+    problems.extend(f".github/workflows/{error}" for error in lint_aggregate_and_name_problems(workflows))
+    text = '''jobs:
+  python-and-workflows:
+    steps:
+      - name: An ordinary lint step
+        run: echo example
+  javascript:
+    name: lint (JavaScript)
+    steps: [{run: echo example}]
+  rust:
+    steps: [{run: echo example}]
+  lint-all:
+    name: lint
+    needs: [python-and-workflows, javascript, rust]
+    if: ${{ always() }}
+    steps:
+      - name: Require successful completion of every lint job
+        shell: bash
+        env:
+          PYTHON_AND_WORKFLOWS: ${{ needs.python-and-workflows.result }}
+          JAVASCRIPT: ${{ needs.javascript.result }}
+          RUST: ${{ needs.rust.result }}
+        run: |
+          echo "$PYTHON_AND_WORKFLOWS $JAVASCRIPT $RUST"
+          test "$PYTHON_AND_WORKFLOWS" = success
+          test "$JAVASCRIPT" = success
+          test "$RUST" = success
+'''
+    fixture_problems = lint_aggregate_and_name_problems({"lint.yml": text})
+    if fixture_problems:
+        problems.append(f".github/workflows: the valid lint control failed: {fixture_problems}")
+        return
     extra = "\n  planted:\n    name: lint (planted)\n    runs-on: ubuntu-26.04\n    steps:\n      - run: exit 1\n"
     for what, old, new in (("a job not in its needs", "\n  lint-all:\n", extra + "\n  lint-all:\n"),
                            ("if: always() removed", "    if: ${{ always() }}\n", ""),
@@ -979,8 +1100,8 @@ def gap_lint_aggregate_needs_every_job() -> None:
                             "  javascript:\n    continue-on-error: true\n"),
                            ("an ignored aggregate failure", "  lint-all:\n",
                             "  lint-all:\n    'continue-on-error': true\n"),
-                           ("an ignored lint step failure", "      - name: Python, with ruff (ruff.toml)\n",
-                            '      - name: Python, with ruff (ruff.toml)\n        "continue-on-error": true\n'),
+                           ("an ignored lint step failure", "      - name: An ordinary lint step\n",
+                            '      - name: An ordinary lint step\n        "continue-on-error": true\n'),
                            ("a removed success test", '          test "$RUST" = success\n', ""),
                            ("a softened success test", '          test "$RUST" = success\n',
                             '          test "$RUST" = success || true\n'),
@@ -990,8 +1111,80 @@ def gap_lint_aggregate_needs_every_job() -> None:
                            ("a skipped aggregate step", "      - name: Require successful completion of every lint job\n",
                             "      - name: Require successful completion of every lint job\n        if: false\n"),
                            ("a custom aggregate shell", "        shell: bash\n", "        shell: sh {0}\n")):
-        if old not in text or not lint_aggregate_problems(text.replace(old, new, 1)):
+        if old not in text or not lint_aggregate_and_name_problems({"lint.yml": text.replace(old, new, 1)}):
             problems.append(f".github/workflows/lint.yml: the lint aggregate guard does not notice {what}")
+
+
+    insertion = "  javascript:\n"
+    omitted = (
+        "  planted: # still a job\n    runs-on: ubuntu-26.04\n    steps: [{run: exit 1}]\n",
+        "  'planted':\n    runs-on: ubuntu-26.04\n    steps: [{run: exit 1}]\n",
+        "  planted: &held\n    runs-on: ubuntu-26.04\n    steps: [{run: exit 1}]\n",
+        "  planted: {runs-on: ubuntu-26.04, steps: [{run: exit 1}]}\n",
+    )
+    for form, job in zip(("commented", "quoted", "anchored", "flow"), omitted, strict=True):
+        planted = text.replace(insertion, job + insertion, 1)
+        if insertion not in text or not any("lint-all does not need the job planted" in error
+                for error in lint_aggregate_and_name_problems({"lint.yml": planted})):
+            problems.append(f".github/workflows/lint.yml: the lint aggregate guard missed an omitted {form} job")
+
+    name_plants = (
+        ("same workflow", {"lint.yml": text.replace("name: lint (JavaScript)", "name: lint", 1)}, "lint.yml"),
+        (".yml workflow", {"another.yml": "jobs: {other: {name: lint}}"}, "another.yml"),
+        (".yaml workflow", {"another.yaml": 'jobs: {other: {name: "lint"}}'}, "another.yaml"),
+        ("fallback job ID", {"another.yaml": "jobs: {lint: {runs-on: ubuntu-26.04}}"}, "another.yaml"),
+        ("computed name", {"another.yml": "jobs: {other: {name: '${{ matrix.name }}'}}"}, "another.yml"),
+        ("computed name with a quoted brace", {"another.yaml": json.dumps({
+            "jobs": {"other": {"name": "li${{ vars.VALUE || '}}' }}nt"}}})}, "another.yaml"),
+    )
+    for form, extra_workflows, path in name_plants:
+        found = lint_aggregate_and_name_problems({"lint.yml": text, **extra_workflows})
+        if not any(error.startswith(path + ":") and "could claim the required lint name" in error for error in found):
+            problems.append(f".github/workflows: the lint guard missed a duplicate name in the {form}")
+
+    distinct = {"jobs": {"other": {"name": "${{ vars.PREFIX }} build ${{ vars.SUFFIX }}"}}}
+    if lint_aggregate_and_name_problems({"lint.yml": text, "another.yml": json.dumps(distinct)}):
+        problems.append(".github/workflows: a computed name with distinct literal text was refused")
+
+    only_aggregate = {"jobs": {"lint-all": {
+        "name": "lint", "if": "always()", "steps": [{"shell": "bash", "env": {}, "run": 'echo "example"'}],
+    }}}
+    if not lint_aggregate_and_name_problems({"lint.yml": json.dumps(only_aggregate)}):
+        problems.append(".github/workflows: the lint guard accepted an aggregate with no lint jobs")
+
+    for ending in ("javascript: # a comment", "'javascript':", "javascript: &hold"):
+        variant = text.replace("javascript:", ending, 1)
+        if lint_aggregate_and_name_problems({"lint.yml": variant}):
+            problems.append(f".github/workflows: a valid lint job restyled as {ending!r} was refused")
+
+    # JSON flow style gives the same YAML values, including the newlines in the script.
+    fixture = pinned_workflow_reader()().load(text)
+    if lint_aggregate_and_name_problems({"lint.yml": json.dumps(fixture)}):
+        problems.append(".github/workflows: the valid flow-style lint control was refused")
+    step = fixture["jobs"]["lint-all"]["steps"][0]
+    script = step["run"]
+    step["run"] = script.rstrip("\n").replace("\n", "\u2028")
+    if not any("test each bound result" in error for error in
+               lint_aggregate_and_name_problems({"lint.yml": json.dumps(fixture)})):
+        problems.append(".github/workflows: the lint guard accepted separators Bash does not treat as newlines")
+    step["run"] = "# ${{ inputs.note }}\n" + script
+    if not any("workflow expressions" in error for error in
+               lint_aggregate_and_name_problems({"lint.yml": json.dumps(fixture)})):
+        problems.append(".github/workflows: the lint guard accepted a workflow expression in a shell comment")
+
+
+    # A regular ambient package can hide a namespace supplied by a ZIP archive.
+    with tempfile.TemporaryDirectory(prefix="dodona-ambient-yaml-") as directory:
+        ambient = pathlib.Path(directory) / "ruamel"
+        ambient.mkdir()
+        (ambient / "__init__.py").touch()
+        probe = ("import sys\n"
+                 "sys.path[:0] = sys.argv[1:3]\n"
+                 "import check_repo\n"
+                 "assert check_repo.pinned_workflow_reader()().load('jobs: {}') == {'jobs': {}}\n")
+        ran = subprocess.run([sys.executable, "-I", "-c", probe, str(ROOT / "tools"), directory], capture_output=True)
+        if ran.returncode:
+            problems.append(".github/workflows: the pinned YAML reader did not load with an ambient ruamel package")
 
 
 def pull_request_target_problems(text: str) -> list[str]:
