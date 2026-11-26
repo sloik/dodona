@@ -92,6 +92,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Require successful completion of every lint job
+        shell: bash
         env:
           PYTHON_AND_WORKFLOWS: ${{ needs.python-and-workflows.result }}
           JAVASCRIPT: ${{ needs.javascript.result }}

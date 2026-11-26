@@ -897,6 +897,42 @@ def checkout_and_trigger_problems(text: str) -> list[str]:
     return found
 
 
+def lint_result_step_problems(body: str, needs: set[str]) -> list[str]:
+    """Check the one Bash step that turns every needed job's result into the required verdict."""
+    visible = "\n".join(line.rstrip() for line in body.splitlines() if line.strip() and not line.lstrip().startswith("#"))
+    steps = re.findall(r"^    steps:\n((?: {6,}\S[^\n]*(?:\n|$))*)", visible, flags=re.M)
+    missing_step = ["lint-all must have one unconditional Bash step with result bindings and a run block"]
+    if len(steps) != 1:
+        return missing_step
+    name, *fields = re.split(r"\n {8}(?=\S)", steps[0].rstrip("\n"))
+    values = dict(field.split(":", 1) for field in fields if ":" in field)
+    if not re.fullmatch(r"      - name: [^\n]+", name) or len(fields) != 3 or values.keys() != {"shell", "env", "run"}:
+        return missing_step
+    environment = re.fullmatch(r"(?:\n {10}\S[^\n]*)+", values["env"])
+    script = re.fullmatch(r" \|(?P<commands>(?:\n {10}\S[^\n]*)+)", values["run"])
+    if values["shell"] != " bash" or environment is None or script is None:
+        return missing_step
+
+    variables, sources = [], []
+    for line in environment[0].strip("\n").splitlines():
+        binding = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*):\s+\$\{\{\s*needs\.([A-Za-z0-9_-]+)\.result\s*\}\}", line.strip())
+        if binding is None:
+            return ["lint-all step environment must bind variables directly to needed job results"]
+        variable, source = binding.groups()
+        variables.append(variable)
+        sources.append(source)
+    if set(sources) != needs or len(sources) != len(needs) or len(set(variables)) != len(needs):
+        return ["lint-all must bind one distinct variable to each needed job's result"]
+
+    commands = script["commands"].strip().splitlines()
+    if re.fullmatch(r'echo "[A-Za-z0-9_$.,: -]*"', commands[0]):
+        commands = commands[1:]
+    tests = {f'test "${variable}" = success' for variable in variables}
+    if len(commands) != len(tests) or {command.strip() for command in commands} != tests:
+        return ["lint-all must test each bound result for success with no other commands"]
+    return []
+
+
 def lint_aggregate_problems(text: str) -> list[str]:
     """The ruleset requires the one job `lint`; a lint job it does not need fails without blocking anything."""
     jobs = text.split("\njobs:\n", 1)[1] if "\njobs:\n" in text else ""
@@ -926,6 +962,7 @@ def lint_aggregate_problems(text: str) -> list[str]:
         found.append("lint-all does not run with if: always(), so a failed job above skips it, and a skipped check can pass")
     if not re.search(r"^    name:\s*lint\s*$", body, flags=re.M):
         found.append("lint-all is not named lint, the name the ruleset requires")
+    found.extend(lint_result_step_problems(body, needs))
     return found
 
 
@@ -943,7 +980,16 @@ def gap_lint_aggregate_needs_every_job() -> None:
                            ("an ignored aggregate failure", "  lint-all:\n",
                             "  lint-all:\n    'continue-on-error': true\n"),
                            ("an ignored lint step failure", "      - name: Python, with ruff (ruff.toml)\n",
-                            '      - name: Python, with ruff (ruff.toml)\n        "continue-on-error": true\n')):
+                            '      - name: Python, with ruff (ruff.toml)\n        "continue-on-error": true\n'),
+                           ("a removed success test", '          test "$RUST" = success\n', ""),
+                           ("a softened success test", '          test "$RUST" = success\n',
+                            '          test "$RUST" = success || true\n'),
+                           ("a test bound to the wrong job", "needs.rust.result", "needs.javascript.result"),
+                           ("an aggregate script that disables exit on error", '          test "$PYTHON_AND_WORKFLOWS" = success\n',
+                            '          set +e\n          test "$PYTHON_AND_WORKFLOWS" = success\n'),
+                           ("a skipped aggregate step", "      - name: Require successful completion of every lint job\n",
+                            "      - name: Require successful completion of every lint job\n        if: false\n"),
+                           ("a custom aggregate shell", "        shell: bash\n", "        shell: sh {0}\n")):
         if old not in text or not lint_aggregate_problems(text.replace(old, new, 1)):
             problems.append(f".github/workflows/lint.yml: the lint aggregate guard does not notice {what}")
 
