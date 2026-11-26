@@ -33,7 +33,7 @@ jobs:
         run: '"$RUNNER_TEMP/lint/bin/ruff" check --no-cache --output-format=full .'
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.4'
           cache: false
       # Built from source at a tagged version; Go's checksum database verifies every module it fetches.
       - name: Install actionlint
