@@ -345,6 +345,33 @@ test('status: the level shown is the weakest criterion, an exception counts only
   assert.deepEqual(results[2].intents.i.exceptions, { counted: 0, below_floor: 0 });
 });
 
+test('status validates each ledger record once per report', () => {
+  const provider = { name: 'p', version: '1', protocol: '0.2' };
+  const preimage = { obligation: 'sha256:a', kind: 'check', inputs: {}, provider };
+  let reads = 0;
+  const accepted = {
+    obligation: 'a', platform: 'p1', verdict: 'passed', writer: 'k', core_key: identity.identityOf(preimage),
+    preimage: { ...preimage, get provider() { reads += 1; return provider; } },
+  };
+  const wrongKey = { ...accepted, preimage: { ...preimage, obligation: 'sha256:other' }, verdict: 'failed' };
+  const entries = [accepted, wrongKey].map((body) => ({ kind: 'evidence', body }));
+  const details = { preimage };
+  const state = { obligations: { a: details }, intents: {}, policy: { required: [], trusted_writers: [] },
+    self: { writer: 'k', platform: 'p1' } };
+
+  const single = status.report(state, entries);
+  const readsForOneObligation = reads;
+  reads = 0;
+  const many = status.report({ ...state, obligations: { a: details, b: details, c: details } }, entries);
+  assert.ok(readsForOneObligation > 0 && readsForOneObligation <= 2); // hash and check the encoding
+  assert.equal(reads, readsForOneObligation);
+  assert.equal(single.rejected, 1);
+  assert.equal(many.rejected, 1);
+  assert.deepEqual(many.obligations, {
+    a: { status: 'passed' }, b: { status: 'unknown', reason: 'never-run' }, c: { status: 'unknown', reason: 'never-run' },
+  });
+});
+
 test('the safety net does not fire on any scenario of the kit', () => {
   const fs = require('node:fs');
   const path = require('node:path');

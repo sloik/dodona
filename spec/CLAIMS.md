@@ -143,9 +143,9 @@ Bounds: one obligation, which can or cannot be checked, fixed from the start; at
 
 | # | Claim | Decision | Check | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 17 |
+| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 18 |
 
-Run 17 records the current comparison. Runs 9 and 11 through 16 remain the records for earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
+Run 18 records the current comparison. Runs 9 and 11 through 17 remain the records for earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
 
 ## Shown by the conformance kit, not by a model
 
@@ -750,6 +750,14 @@ On 2026-11-26, both staged native run kernels agreed on each of the 71,744 evide
 The same staged kernels each matched all 103 local project-run cases, without skips. Removing reuse of a current passing result from each kernel separately gave 44 named mismatches and zero unfinished cases per plant. These included `a current result is reused` and `everything current sends nothing`. The 70 JavaScript run-module tests passed. These are self checks. The production model workflow still uses the stage-0 host.
 
 The hosted Rust shard at `3e15459` caught 33 of 34 assigned defects. The numeric manifest version plant was stale after transcript recording inserted a line into its source anchor. The expanded repository anchor check reproduced that failure. After refreshing the plant, an isolated self shard caught one of one with no unfinished defects. Both replays named `status-judge: a manifest whose version is a number`. The repaired head still needs the full hosted gate. [Original shard](https://github.com/sloik/dodona/actions/runs/45814973890/job/139895949254).
+
+### Run 18 — status validation on a retained ledger
+
+On 2026-11-26, after the JavaScript status validation change, both kernels again agreed on all 71,744 evidence states and 78,894 intent states. The dumps from the successful source workflow match the Run 17 dump hashes. This self comparison used the retained dumps. [Source workflow](https://github.com/sloik/dodona/actions/runs/45819303936) · [Comparison record](runs/run-18/every-state/).
+
+The JavaScript status command timed out at 90 seconds on a 425-entry ledger before the change. After the change it finished in 14.58 seconds on the same machine and produced the same JSON report as Rust for all 121 obligations. A focused unit test caught the extra preimage reads on the original code. After the change, all 150 scenario, 253 project-status and 103 project-run cases matched. These were local self checks.
+
+In a self replay, both native run commands submitted 121 cases to a stand-in for the site's queue. The stand-in matched the command, working directory and input hashes for each case to the successful workflow's raw model artifact. Each kernel filed all 121 verdicts as passing and then reused all 121 without submitting another batch or changing the ledger. With the stand-in unavailable, each reported 121 unavailable runs, left all 121 current obligations unknown and preserved the ledger bytes. The schema judge accepted all 1,512 messages in the six transcripts. [Archived model outputs](https://github.com/sloik/dodona/actions/runs/45819303936/artifacts/15122115095).
 
 ### Completed named defect inventory at `0c3a46f`
 

@@ -1031,6 +1031,15 @@ def gap_rust_planted_defect_anchors_exist() -> None:
     check_planted_defect_anchors("kernel")
 
 
+def gap_js_status_exercises_retained_ledger_work() -> None:
+    """Keep the status work test in the unit suite used by every platform job."""
+    tests = (ROOT / "kernel2" / "test.js").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "checks.yml").read_text(encoding="utf-8")
+    if "test('status validates each ledger record once per report'" not in tests or \
+            "node --test kernel2/test.js" not in run_blocks(workflow).splitlines():
+        problems.append("keep the JavaScript status ledger work test in the platform unit suite")
+
+
 def gap_site_executor_reports_measured_tool_keys() -> None:
     """Exercise tool reports with the site's fake queue."""
     tests = ROOT / ".github" / "site" / "test_kernel_executor.py"
@@ -1413,7 +1422,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
-              gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist,
+              gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist, gap_js_status_exercises_retained_ledger_work,
               gap_rust_defect_shards_cover_the_inventory, gap_site_executor_reports_measured_tool_keys, gap_ledger_judge_keeps_held_lock_result,
               gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,

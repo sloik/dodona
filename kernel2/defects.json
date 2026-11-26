@@ -488,8 +488,8 @@
       "name": "status: a record whose key does not match its preimage counts",
       "model_case": "(round 2 kit)",
       "file": "status.js",
-      "find": "isRecord(entry) && !isRejected(entry.body))\n    .map",
-      "replace": "isRecord(entry))\n    .map"
+      "find": "checked.filter(({ rejected }) => !rejected).map",
+      "replace": "checked.map"
     },
     {
       "name": "status: any writer's records count",
