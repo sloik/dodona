@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import errno
+from functools import cache
 import io
 import hashlib
 import json
@@ -22,6 +23,7 @@ import sys
 import tomllib
 import types
 import unittest
+import zipfile
 from unittest import mock
 from unittest.mock import patch
 
@@ -898,25 +900,44 @@ def checkout_and_trigger_problems(text: str) -> list[str]:
 
 
 def pinned_workflow_reader():
-    """Use the repository's pure YAML wheel directly, without an install or a package index."""
-    import check_docs
+    """Verify the pure YAML wheel before unpacking it outside the checkout."""
     pins = [line.strip() for line in (ROOT / ".github/yaml-reader.txt").read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.lstrip().startswith("#")]
     pin = re.fullmatch(r"(\.github/vendor/[A-Za-z0-9_.-]+\.whl)\s+--hash=sha256:([0-9a-f]{64})", pins[0]) if len(pins) == 1 else None
     if pin is None:
         raise ValueError("expected one pinned workflow YAML wheel")
     wheel = ROOT / pin[1]
-    if wheel.is_symlink() or hashlib.sha256(wheel.read_bytes()).hexdigest() != pin[2]:
+    if wheel.is_symlink():
+        raise ValueError("workflow YAML wheel must be a regular file")
+    data = wheel.read_bytes()
+    if hashlib.sha256(data).hexdigest() != pin[2]:
         raise ValueError("workflow YAML wheel does not match its SHA-256 pin")
-    sys.path.insert(0, str(wheel))
-    try:
-        check_docs._yaml_reader()
-        if wheel not in pathlib.Path(sys.modules["ruamel.yaml"].__file__).parents:
-            raise ValueError("workflow YAML parser was loaded from outside the pinned wheel")
-    finally:
-        sys.path.remove(str(wheel))
-    return check_docs._yaml_reader
+    _, reader = load_workflow_wheel(data)
+    return reader
 
+
+@cache
+def load_workflow_wheel(data: bytes):
+    import check_docs
+    unpacked = tempfile.TemporaryDirectory(prefix="dodona-yaml-reader-")
+    root = pathlib.Path(unpacked.name)
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as wheel:
+            wheel.extractall(root)
+        # A regular parent package keeps ambient ruamel installations from shadowing this wheel.
+        (root / "ruamel" / "__init__.py").touch()
+        sys.path.insert(0, str(root))
+        try:
+            check_docs._yaml_reader()
+        finally:
+            sys.path.remove(str(root))
+        if root not in pathlib.Path(sys.modules["ruamel.yaml"].__file__).parents:
+            raise ValueError("workflow YAML parser was loaded from outside the pinned wheel")
+    except BaseException:
+        unpacked.cleanup()
+        raise
+    # Hold the temporary directory for the same lifetime as the cached parser factory.
+    return unpacked, check_docs._yaml_reader
 
 def workflow_jobs(data) -> dict[str, dict]:
     if not isinstance(data, dict) or not isinstance(data.get("jobs"), dict):
@@ -1015,7 +1036,7 @@ def lint_aggregate_and_name_problems(workflows: dict[str, str]) -> list[str]:
     import check_docs
     try:
         reader = pinned_workflow_reader()
-    except (OSError, ValueError, check_docs.CannotRun) as err:
+    except (OSError, ValueError, zipfile.BadZipFile, check_docs.CannotRun) as err:
         return [f"workflow YAML reader: {err}"]
     found = []
     if "lint.yml" not in workflows:
@@ -1150,6 +1171,20 @@ def gap_lint_aggregate_needs_every_job() -> None:
     if not any("workflow expressions" in error for error in
                lint_aggregate_and_name_problems({"lint.yml": json.dumps(fixture)})):
         problems.append(".github/workflows: the lint guard accepted a workflow expression in a shell comment")
+
+
+    # A regular ambient package can hide a namespace supplied by a ZIP archive.
+    with tempfile.TemporaryDirectory(prefix="dodona-ambient-yaml-") as directory:
+        ambient = pathlib.Path(directory) / "ruamel"
+        ambient.mkdir()
+        (ambient / "__init__.py").touch()
+        probe = ("import sys\n"
+                 "sys.path[:0] = sys.argv[1:3]\n"
+                 "import check_repo\n"
+                 "assert check_repo.pinned_workflow_reader()().load('jobs: {}') == {'jobs': {}}\n")
+        ran = subprocess.run([sys.executable, "-I", "-c", probe, str(ROOT / "tools"), directory], capture_output=True)
+        if ran.returncode:
+            problems.append(".github/workflows: the pinned YAML reader did not load with an ambient ruamel package")
 
 
 def pull_request_target_problems(text: str) -> list[str]:
