@@ -1078,6 +1078,14 @@ def gap_site_driver_applies_case_timeouts() -> None:
         problems.append("site driver conformance failed: " + result.stderr.strip())
 
 
+def gap_site_model_requests_use_protected_policy() -> None:
+    """A native request must use the validated policy from its protected checkout."""
+    tests = ROOT / ".github" / "site" / "test_model_request.py"
+    result = subprocess.run([sys.executable, str(tests)], cwd=ROOT, capture_output=True, text=True)
+    if result.returncode:
+        problems.append("site model request conformance failed: " + result.stderr.strip())
+
+
 def gap_rust_defect_shards_cover_the_inventory() -> None:
     """Splitting the Rust job must still judge every listed defect exactly once."""
     import kit_adequacy
@@ -1455,6 +1463,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist, gap_js_status_exercises_retained_ledger_work,
               gap_rust_defect_shards_cover_the_inventory, gap_site_executor_reports_measured_tool_keys, gap_ledger_judge_keeps_held_lock_result,
               gap_site_driver_applies_case_timeouts,
+              gap_site_model_requests_use_protected_policy,
               gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,

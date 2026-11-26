@@ -775,6 +775,12 @@ On 2026-11-26 a self qualification ran the site driver from `16a6074` with three
 
 The local site tests caught the original missing wall limit and the original loss of the timeout report. The driver test discarded a partial kept file and preserved the next case's output. The executor test kept the timeout and the next case's exit separate, and reported cancellation when the complete-batch marker was removed. The production workflow cutover still needs its full qualification.
 
+### Protected policy for native model requests
+
+On 2026-11-26 the site builder validated the policy at its exact checkout commit and prepared both native requests with that policy and the same ledger. The unit tests refused changes to the policy artifact and a different checkout. A working-copy substitution and a comparison that confused a boolean with a number each failed the tests when planted.
+
+Both kernels gave identical status reports on the 425-entry retained ledger. They listed the same 121 current model obligations, all unknown under the new runner key. This self check used retained evidence and started no model checker. [Source ledger](https://github.com/sloik/dodona/actions/runs/45819303936/artifacts/15121911961).
+
 ### Completed named defect inventory at `0c3a46f`
 
 Both required aggregates and all 16 shards completed successfully on 2026-11-22. A self reconciliation compared the named rejections in every shard log to its exact manifest slice at that commit. Every name appeared once in the assigned shard, and each shard's reported catch count matched its slice, with zero unfinished defects. Rust caught 275 of 275 and JavaScript caught 319 of 319. The JavaScript receipts also report successful cleanup. The JavaScript shard jobs took about 36 to 45 minutes each. Serial whole-inventory runs, crash cleanup and the aggregate's failure, cancellation and skip controls remain open. [Repository run](https://github.com/sloik/dodona/actions/runs/45069190690) · [Issue 41](https://github.com/sloik/dodona/issues/41) · [Issue 58](https://github.com/sloik/dodona/issues/58).
