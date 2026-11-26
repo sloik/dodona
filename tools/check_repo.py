@@ -872,7 +872,7 @@ def action_step_problems(steps, local_refs: set[str], owner: str) -> list[str]:
     return found
 
 
-def workflow_action_problems(data, text: str, local_workflows: set[str], local_actions: set[str]) -> list[str]:
+def workflow_action_problems(data, text: str, local_workflows: set[str], local_actions: set[str]) -> tuple[dict[str, dict], list[str]]:
     jobs = workflow_jobs(data)
     triggers = data.get("on", {})
     if isinstance(triggers, str):
@@ -898,10 +898,88 @@ def workflow_action_problems(data, text: str, local_workflows: set[str], local_a
             if pin_problem:
                 found.append(f"job {job_id}: {pin_problem}")
         found.extend(action_step_problems(job.get("steps", []), local_actions, f"job {job_id}"))
-    return found
+    return jobs, found
 
 
-def github_action_problems(root: pathlib.Path) -> list[str]:
+def job_can_report_check(job_id: str, job: dict, context: str) -> bool:
+    name = job.get("name", "").strip() or job_id
+    if could_claim_check(name, context):
+        return True
+    # GitHub can append matrix values to a job name. The values may be computed.
+    strategy = job.get("strategy", {})
+    base, separator, values = context.rpartition(" (")
+    return (isinstance(strategy, dict) and "matrix" in strategy and bool(separator)
+            and values.endswith(")") and could_claim_check(name, base))
+
+
+def required_check_problems(
+    workflows: dict[str, dict[str, dict]], composites: dict[str, list[tuple[str, object]]],
+    required_checks: frozenset[str],
+) -> list[str]:
+    """Follow the local workflow and composite graph from each required check."""
+    found, jobs, actions = [], set(), set()
+    for context in sorted(required_checks):
+        roots = {(file, job_id) for file, contents in workflows.items() for job_id, job in contents.items()
+                 if job_can_report_check(job_id, job, context)}
+        if not roots:
+            found.append(f"required check {context!r}: no matching workflow job")
+        jobs.update(roots)
+
+    def check_steps(steps, owner):
+        if not isinstance(steps, list):
+            return  # The Actions YAML check reports malformed steps.
+        for number, step in enumerate(steps, 1):
+            if not isinstance(step, dict):
+                continue
+            if "continue-on-error" in step:
+                found.append(f"{owner} step {number}: continue-on-error is forbidden behind a required check")
+            use = step.get("uses")
+            if isinstance(use, str) and use.strip() in composites:
+                actions.add(use.strip())
+
+    seen_jobs = set()
+    while jobs:
+        location = jobs.pop()
+        if location in seen_jobs:
+            continue
+        seen_jobs.add(location)
+        file, job_id = location
+        job = workflows[file][job_id]
+        owner = f"{file}: job {job_id}"
+        if "continue-on-error" in job:
+            found.append(f"{owner}: continue-on-error is forbidden behind a required check")
+        check_steps(job.get("steps", []), owner)
+        needs = job.get("needs", [])
+        if isinstance(needs, str):
+            needs = [needs]
+        if not isinstance(needs, list) or not all(isinstance(need, str) for need in needs):
+            found.append(f"{owner}: needs must name jobs behind a required check")
+        else:
+            for dependency in needs:
+                if dependency in workflows[file]:
+                    jobs.add((file, dependency))
+                else:
+                    found.append(f"{owner}: unknown needed job {dependency!r}")
+        if "uses" in job:
+            use = job["uses"]
+            local = use.strip()[2:] if isinstance(use, str) and use.strip().startswith("./") else None
+            if local in workflows:
+                jobs.update((local, nested_id) for nested_id in workflows[local])
+            else:
+                found.append(f"{owner}: cannot audit the required reusable workflow {use!r}")
+
+    seen_actions = set()
+    while actions:
+        call = actions.pop()
+        if call in seen_actions:
+            continue
+        seen_actions.add(call)
+        for file, steps in composites[call]:
+            check_steps(steps, f"{file}: composite")
+    return sorted(found)
+
+
+def github_action_problems(root: pathlib.Path, required_checks: frozenset[str] = frozenset()) -> list[str]:
     import check_docs
     try:
         reader = pinned_workflow_reader()
@@ -912,6 +990,8 @@ def github_action_problems(root: pathlib.Path) -> list[str]:
                if path.name in ("action.yml", "action.yaml") and path.is_file()}
     workflow_refs = {"./" + path.relative_to(root).as_posix() for path in workflows}
     action_refs = {"./" + path.parent.relative_to(root).as_posix() for path in actions}
+    workflow_jobs_by_file = {}
+    composites = {}
     found = []
     for path in sorted(workflows | actions):
         name = path.relative_to(root).as_posix()
@@ -921,17 +1001,23 @@ def github_action_problems(root: pathlib.Path) -> list[str]:
             text = path.read_text(encoding="utf-8")
             data = reader().load(text)
             if path in workflows:
-                errors = workflow_action_problems(data, text, workflow_refs, action_refs)
+                jobs, errors = workflow_action_problems(data, text, workflow_refs, action_refs)
+                workflow_jobs_by_file[name] = jobs
             else:
                 runs = data.get("runs") if isinstance(data, dict) else None
                 if not isinstance(runs, dict) or not isinstance(runs.get("using"), str):
                     raise ValueError("action manifest needs a named runs.using")
-                errors = (action_step_problems(runs.get("steps"), action_refs, "composite")
-                          if runs["using"].casefold() == "composite" else [])
+                errors = []
+                if runs["using"].casefold() == "composite":
+                    steps = runs.get("steps")
+                    errors = action_step_problems(steps, action_refs, "composite")
+                    ref = "./" + path.parent.relative_to(root).as_posix()
+                    composites.setdefault(ref, []).append((name, steps))
         except Exception as err:  # noqa: BLE001 - unreadable action YAML cannot pass the guard
             found.append(f"{name}: cannot read Actions YAML ({err})")
         else:
             found.extend(f"{name}: {error}" for error in errors)
+    found.extend(required_check_problems(workflow_jobs_by_file, composites, required_checks))
     return found
 
 
@@ -1000,10 +1086,98 @@ def github_action_controls() -> list[str]:
     return missing
 
 
+# Effective main-ruleset contexts. Keep this offline snapshot in sync with the ruleset.
+REQUIRED_CHECK_NAMES = frozenset({
+    "checks (linux)", "checks (macos)", "checks (windows)",
+    "planted defects (first kernel)", "planted defects (second kernel)", "lint",
+})
+
+
+def required_job_controls() -> list[str]:
+    workflows = ".github/workflows/"
+    actions = ".github/actions/"
+    files = {
+        workflows + "required.yaml": """permissions: {contents: read}
+on: pull_request
+jobs:
+  gate:
+    name: checks (${{ matrix.system }})
+    strategy: {matrix: {system: [linux]}}
+    runs-on: ubuntu-26.04
+    needs: [bridge, missing-job]
+    continue-on-error: true
+    steps: [{run: echo gate}]
+  bridge:
+    runs-on: ubuntu-26.04
+    needs: [leaf, local-call, remote-call]
+    steps: [{uses: ./.github/actions/outer}]
+  leaf:
+    runs-on: ubuntu-26.04
+    steps: [{run: exit 1, "continue-on-\\u0065rror": '${{ github.event_name == "push" }}'}]
+  local-call:
+    uses: ./.github/workflows/local.yaml
+  remote-call:
+    uses: other/project/.github/workflows/remote.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  optional:
+    runs-on: ubuntu-26.04
+    continue-on-error: true
+    steps: [{uses: ./.github/actions/optional}]
+  fallback:
+    strategy: {matrix: {version: [modern]}}
+    runs-on: ubuntu-26.04
+    continue-on-error: true
+    steps: [{run: echo check}]
+""",
+        workflows + "local.yaml": """permissions: {contents: read}
+on: workflow_call
+jobs:
+  nested:
+    runs-on: ubuntu-26.04
+    steps: [{run: exit 1, continue-on-error: true}]
+""",
+        actions + "outer/action.yml": """runs:
+  using: composite
+  steps: [{uses: ./.github/actions/inner}]
+""",
+        actions + "inner/action.yaml": """runs:
+  using: composite
+  steps: [{run: exit 1, shell: bash, continue-on-error: true}]
+""",
+        actions + "optional/action.yml": """runs:
+  using: composite
+  steps: [{run: exit 1, shell: bash, continue-on-error: true}]
+""",
+    }
+    with tempfile.TemporaryDirectory(prefix="dodona-required-controls-") as directory:
+        root = pathlib.Path(directory)
+        for name, source in files.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(source, encoding="utf-8")
+        found = github_action_problems(root, frozenset({"checks (linux)", "fallback (modern)", "absent check"}))
+
+    expected = (
+        ("required.yaml: job gate", "continue-on-error"),
+        ("required.yaml: job leaf step 1", "continue-on-error"),
+        ("required.yaml: job fallback", "continue-on-error"),
+        ("local.yaml: job nested step 1", "continue-on-error"),
+        ("inner/action.yaml: composite step 1", "continue-on-error"),
+        ("required.yaml: job remote-call", "cannot audit the required reusable workflow"),
+        ("required.yaml: job gate", "unknown needed job"),
+        ("required check 'absent check'", "no matching workflow job"),
+    )
+    missing = [f"the required-check guard missed {location} ({reason})" for location, reason in expected
+               if not any(location in error and reason in error for error in found)]
+    if any("job optional" in error or "optional/action.yml" in error for error in found):
+        missing.append("the required-check guard treated an unrelated job or action as required")
+    return missing
+
+
 def gap_workflows_are_safe() -> None:
     """Check protected workflow execution, pinned actions and checkout credentials."""
-    problems.extend(github_action_problems(ROOT))
+    problems.extend(github_action_problems(ROOT, REQUIRED_CHECK_NAMES))
     problems.extend(github_action_controls())
+    problems.extend(required_job_controls())
     # The guard must be seen to fail: each unsafe edit of the workflow that uses pull_request_target is planted.
     docs = ROOT / ".github" / "workflows" / "docs.yml"
     text = docs.read_text(encoding="utf-8") if docs.exists() else ""
@@ -1073,14 +1247,14 @@ def workflow_jobs(data) -> dict[str, dict]:
     return jobs
 
 
-def could_claim_lint(name: str) -> bool:
+def could_claim_check(name: str, expected: str) -> bool:
     """Preserve literal text and treat each Actions expression as an unknown string."""
     # An Actions string uses single quotes and escapes them by doubling them.
     expression = r"\$\{\{(?:[^'}]|\}(?!\})|'(?:[^']|'')*+')*+\}\}"
     parts = re.split(expression, name.strip().casefold())
     if any("${{" in part for part in parts):
         return True  # An unreadable expression cannot clear the name.
-    return re.fullmatch(".*".join(map(re.escape, parts)), "lint") is not None
+    return re.fullmatch(".*".join(map(re.escape, parts)), expected.casefold()) is not None
 
 def lint_result_step_problems(steps, needs: set[str]) -> list[str]:
     """Check the Bash step that turns every needed job's result into the required verdict."""
@@ -1173,7 +1347,7 @@ def lint_aggregate_and_name_problems(workflows: dict[str, str]) -> list[str]:
             found.extend(f"{path}: {error}" for error in lint_aggregate_problems(jobs))
         for job_id, job in jobs.items():
             name = job.get("name", "").strip() or job_id
-            if (path, job_id) != ("lint.yml", "lint-all") and could_claim_lint(name):
+            if (path, job_id) != ("lint.yml", "lint-all") and could_claim_check(name, "lint"):
                 found.append(f"{path}: job {job_id} ({name!r}) could claim the required lint name")
     return found
 
