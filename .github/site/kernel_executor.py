@@ -13,6 +13,8 @@ which the kernel reads as `unavailable` for every run of the batch. It judges no
   with the site's floor key. Other version measurements keep the measured file digest. Missing measurements use
   zeros. The kernel compares these keys with the ones requested and treats a mismatch as an error.
 - A job that did not end well, or whose end marker does not list every run, gives every run the end `cancelled`.
+- The run's wall limit goes to the case driver. A case that times out in a completed job is reported as
+  `timed-out` with diagnostic output and without an exit status.
 - What each run printed is kept under out/kernel-runs/, inside the project, where the provider reads it.
 """
 from __future__ import annotations
@@ -90,7 +92,11 @@ def main() -> int:
         if not inputs_ok:
             ended[key] = "cancelled"
             continue
-        cases.append({"name": name, "cwd": (pathlib.PurePosixPath(name) / run.get("cwd", ".")).as_posix(), "argv": argv})
+        case = {"name": name, "cwd": (pathlib.PurePosixPath(name) / run.get("cwd", ".")).as_posix(), "argv": argv}
+        limits = run.get("limits")
+        if isinstance(limits, dict) and "wall_ms" in limits:
+            case["wall_ms"] = limits["wall_ms"]
+        cases.append(case)
     with contextlib.redirect_stdout(sys.stderr):  # standard output carries the answer and nothing else
         job = host.send_job(site, bundle, cases) if cases else None
     job = job or {"reachable": True, "complete": True, "fetched": None, "measured": {}, "versions": {}}
@@ -108,15 +114,18 @@ def main() -> int:
                   "isolation": "best-effort", "outputs": []}
         printed = job["fetched"] / f"{name}.txt" if job.get("fetched") else None
         status = job["fetched"] / f"{name}.exit" if job.get("fetched") else None
-        if key in ended or not job["complete"] or printed is None or not printed.exists() or not status.exists() \
-                or not status.read_text(encoding="ascii").strip().lstrip("-").isdigit():
-            report["end"] = ended.get(key, "cancelled")
-            captured = kept / f"{pathlib.PurePosixPath(name).name}.txt"
-            captured.write_bytes(b"")  # nothing the run printed is passed on as if it had ended well
+        captured = kept / f"{pathlib.PurePosixPath(name).name}.txt"
+        report["end"] = ended.get(key, "cancelled")
+        if key not in ended and job["complete"] and printed and printed.is_file() and status.is_file():
+            outcome = status.read_text(encoding="ascii").strip()
+            if outcome == "timed-out":
+                report["end"] = "timed-out"
+            elif outcome.removeprefix("-").isdigit():
+                report.update(end="exited", exit_status=int(outcome))
+        if report["end"] == "cancelled":
+            captured.write_bytes(b"")
         else:
-            captured = kept / f"{pathlib.PurePosixPath(name).name}.txt"
             shutil.copyfile(printed, captured)
-            report.update(end="exited", exit_status=int(status.read_text(encoding="ascii").strip()))
         report["captured_output"] = {"path": captured.relative_to(ROOT).as_posix(), "identity": identity(captured)}
         reports.append({"run_key": key, "report": report})
     sys.stdout.buffer.write(json.dumps({"ended": True, "reports": reports}).encode("utf-8") + b"\n")

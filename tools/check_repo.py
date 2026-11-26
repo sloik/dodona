@@ -1065,9 +1065,17 @@ def gap_js_status_exercises_retained_ledger_work() -> None:
 def gap_site_executor_reports_measured_tool_keys() -> None:
     """Exercise tool reports with the site's fake queue."""
     tests = ROOT / ".github" / "site" / "test_kernel_executor.py"
-    result = subprocess.run([sys.executable, str(tests)], cwd=ROOT, capture_output=True, text=True)
+    result = subprocess.run([sys.executable, str(tests), "KernelExecutor"], cwd=ROOT, capture_output=True, text=True)
     if result.returncode:
         problems.append("site executor conformance failed: " + result.stderr.strip())
+
+
+def gap_site_driver_applies_case_timeouts() -> None:
+    """An individual case's limit is independent of the queue batch's limit."""
+    tests = ROOT / ".github" / "site" / "test_kernel_executor.py"
+    result = subprocess.run([sys.executable, str(tests), "BatchDriver"], cwd=ROOT, capture_output=True, text=True)
+    if result.returncode:
+        problems.append("site driver conformance failed: " + result.stderr.strip())
 
 
 def gap_rust_defect_shards_cover_the_inventory() -> None:
@@ -1446,6 +1454,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
               gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist, gap_js_status_exercises_retained_ledger_work,
               gap_rust_defect_shards_cover_the_inventory, gap_site_executor_reports_measured_tool_keys, gap_ledger_judge_keeps_held_lock_result,
+              gap_site_driver_applies_case_timeouts,
               gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,

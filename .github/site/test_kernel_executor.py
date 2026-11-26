@@ -16,9 +16,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "tools"))
+import batch_driver  # noqa: E402
 import host  # noqa: E402
 
 FAKE_QUEUE = '''
@@ -34,13 +36,14 @@ if mode == "other-jar":
     pins["/site/tla2tools.jar"] = "b" * 64
 (out / "measured.json").write_text(json.dumps({p: pins.get(p) for p in m["measure"]}))
 (out / "versions.json").write_text(json.dumps({p: ("21.0.9" if mode == "old-java" else "21.0.15") for p in m["versions"]}))
-for c in m["cases"]:
+for i, c in enumerate(m["cases"]):
     if not (src / c["cwd"] / "a.tla").exists():
         sys.exit(3)  # the run's input was not sent
+    timed_out = mode.startswith("timed-out") and i == 0 and c.get("wall_ms") == 1000
     (out / c["name"]).parent.mkdir(parents=True, exist_ok=True)
     (out / (c["name"] + ".txt")).write_text(" ".join(c["argv"]) + "\\n")
-    (out / (c["name"] + ".exit")).write_text("0")
-if mode != "no-marker":
+    (out / (c["name"] + ".exit")).write_text("timed-out" if timed_out else "0")
+if mode not in {"no-marker", "timed-out-no-marker"}:
     (out / "complete.json").write_text(json.dumps({"cases": [c["name"] for c in m["cases"]]}))
 '''
 
@@ -107,6 +110,51 @@ class KernelExecutor(unittest.TestCase):
     def test_a_job_without_its_end_marker(self):
         got = self.answer("no-marker")
         self.assertEqual({r["end"] for r in got.values()}, {"cancelled"})
+
+    def test_case_timeout_preserves_the_other_run(self):
+        run = self.batch["runs"][0]["run"]
+        self.batch["runs"].append({"number": 1, "run_key": "sha256:" + "3" * 64, "run": run})
+        got = self.answer("timed-out")
+        self.assertEqual(got["1"]["end"], "timed-out")
+        self.assertNotIn("exit_status", got["1"])
+        self.assertEqual((got["3"]["end"], got["3"]["exit_status"]), ("exited", 0))
+        incomplete = self.answer("timed-out-no-marker")
+        self.assertEqual({report["end"] for report in incomplete.values()}, {"cancelled"})
+
+
+class BatchDriver(unittest.TestCase):
+    def test_timeout_does_not_publish_partial_artifacts_or_stop_the_batch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            where = pathlib.Path(directory)
+            out = where / "out"
+            manifest = where / "manifest.json"
+            cases = []
+            for name in ("first", "next"):
+                work = where / name
+                work.mkdir()
+                cases.append({"name": f"cases/{name}", "cwd": str(work), "argv": [name], "keep": ["states.dump"]})
+            cases[0]["wall_ms"] = 1250
+            manifest.write_text(json.dumps({"out": str(out), "cases": cases}), encoding="utf-8")
+
+            def run(argv, *, cwd, capture_output, timeout=None):
+                self.assertTrue(capture_output)
+                pathlib.Path(cwd, "states.dump").write_text(argv[0], encoding="utf-8")
+                if argv == ["first"] and timeout is not None:
+                    raise subprocess.TimeoutExpired(argv, timeout, output=b"success before timeout", stderr=b"\n")
+                return subprocess.CompletedProcess(argv, 0, stdout=b"finished", stderr=b"")
+
+            with mock.patch.object(batch_driver, "inside_the_executor", return_value=True), \
+                    mock.patch.object(batch_driver.sys, "argv", ["batch_driver.py", str(manifest)]), \
+                    mock.patch.object(batch_driver.subprocess, "run", side_effect=run) as spawned:
+                self.assertEqual(batch_driver.main(), 0)
+            self.assertEqual(spawned.call_args_list[0].kwargs.get("timeout"), 1.25)
+            self.assertIsNone(spawned.call_args_list[1].kwargs.get("timeout"))
+            self.assertEqual((out / "cases/first.exit").read_text(encoding="ascii"), "timed-out")
+            self.assertEqual((out / "cases/first.txt").read_bytes(), b"success before timeout\n")
+            self.assertFalse((out / "cases/first.states.dump").exists())
+            self.assertEqual((out / "cases/next.exit").read_text(encoding="ascii"), "0")
+            self.assertEqual((out / "cases/next.states.dump").read_text(encoding="utf-8"), "next")
+            self.assertEqual(json.loads((out / "complete.json").read_text()), {"cases": ["cases/first", "cases/next"]})
 
 
 if __name__ == "__main__":

@@ -11,3 +11,5 @@ Where dodona's own model checks run, for this repository only ([decision 0023](.
 | [test_kernel_executor.py](test_kernel_executor.py) | Exercises the batch executor against a fake queue. The fixture hashes the exact input bytes it writes on each platform |
 
 Executor reports use the measured digest for a fixed pin and the site's floor key when the measured version meets that floor. The fake-queue tests check that a mismatched request cannot change either reported key.
+
+The driver applies the provider's individual wall limit when supplied. It records a timeout before continuing to the next case. The executor reports it only after the queue has confirmed completion of the batch. Partial kept artifacts are discarded and the case output remains available for diagnosis.
