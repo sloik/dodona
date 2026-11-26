@@ -1333,6 +1333,30 @@ def gap_provider_cases_match_the_provider() -> None:
         problems.append("conformance/provider/cases.json: a mode is listed twice")
 
 
+def gap_enumeration_transcript_keeps_inputs() -> None:
+    """Normalizing an obligation must not change the recorded provider result."""
+    import host
+    transcript = []
+    provider = ROOT / "providers" / "tlc" / "provider.py"
+    session = host.Session([sys.executable, str(provider)], ROOT, transcript)
+    try:
+        with mock.patch.object(host, "DECLARED_INPUTS", {}), mock.patch.object(host, "REFUSED_BY_PROVIDER", []):
+            obligations, files = host.list_project(session, ROOT)
+            declared = {o["name"]: [f["path"] for f in host.inputs_of(o, files)] for o in obligations}
+    finally:
+        session.close()
+    replies = [entry["message"]["body"]["obligations"] for entry in transcript
+               if entry["message"]["type"] == "result" and entry["message"]["capability"] == "obligation.enumerate"]
+    if len(replies) != 1 or not declared or any(not paths for paths in declared.values()):
+        problems.append("host: no nonempty enumeration result to check")
+        return
+    recorded = {o["name"]: o.get("inputs") for o in replies[0]}
+    if recorded != declared:
+        problems.append("host: the enumeration transcript lost or changed declared inputs")
+    if any("inputs" in o for o in obligations):
+        problems.append("host: declared inputs leaked into the internal obligation")
+
+
 def gap_lock_platform_pins_are_unique() -> None:
     """A draft lock entry may only pin one digest per exact platform."""
     import check_examples
@@ -1361,7 +1385,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
-              gap_provider_cases_match_the_provider, gap_js_planted_defect_anchors_exist,
+              gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
+              gap_js_planted_defect_anchors_exist,
               gap_rust_defect_shards_cover_the_inventory, gap_ledger_judge_keeps_held_lock_result,
               gap_every_check_is_listed,
               gap_kit_shown_claims_are_exercised, gap_kit_judge_hides_the_answers, gap_generated_kit_files_are_current,
