@@ -147,12 +147,6 @@ Bounds: one obligation, which can or cannot be checked, fixed from the start; at
 
 Run 17 records the current comparison. Runs 9 and 11 through 16 remain the records for earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
 
-### Run 17 — native run candidates on retained states
-
-On 2026-11-26, both staged native run kernels agreed on each of the 71,744 evidence states and 78,894 intent states. The retained dumps from the completed model job match the original Run 16 dump hashes byte for byte. The source workflow's subsequent transcript validation failed. This self comparison produced no new model states. [Source workflow](https://github.com/sloik/dodona/actions/runs/45069190821) · [Comparison record](runs/run-17/every-state/).
-
-The same staged kernels each matched all 103 local project-run cases, without skips. Removing reuse of a current passing result from each kernel separately gave 44 named mismatches and zero unfinished cases per plant. These included `a current result is reused` and `everything current sends nothing`. The 70 JavaScript run-module tests passed. These are self checks. The production model workflow still uses the stage-0 host.
-
 ## Shown by the conformance kit, not by a model
 
 These claims are not checked by a model. Each is exercised on every change by the tools named, on the kernels that exist. That is evidence at the level `sampled`: it shows the cases that were tried. None of these counts as checked.
@@ -744,6 +738,12 @@ On 2026-11-22, both kernels at `fac60b1` agreed on all 71,744 retained evidence 
 ### Run 16 — both kernels after adding exact validation witnesses
 
 On 2026-11-22, both kernels at `09e94ff` agreed on all 71,744 retained evidence states and 78,894 retained intent states per kernel. The comparison checked the archived model artifact and both retained dumps against their recorded SHA-256 digests. The model inputs and comparison tool match the producer commit. This comparison is self and generated no model states. [Completed source run](https://github.com/sloik/dodona/actions/runs/44626497885) · [Recorded comparison](runs/run-16/every-state/).
+
+### Run 17 — native run candidates on retained states
+
+On 2026-11-26, both staged native run kernels agreed on each of the 71,744 evidence states and 78,894 intent states. The retained dumps from the completed model job match the original Run 16 dump hashes byte for byte. The source workflow's subsequent transcript validation failed. This self comparison produced no new model states. [Source workflow](https://github.com/sloik/dodona/actions/runs/45069190821) · [Comparison record](runs/run-17/every-state/).
+
+The same staged kernels each matched all 103 local project-run cases, without skips. Removing reuse of a current passing result from each kernel separately gave 44 named mismatches and zero unfinished cases per plant. These included `a current result is reused` and `everything current sends nothing`. The 70 JavaScript run-module tests passed. These are self checks. The production model workflow still uses the stage-0 host.
 
 ### Completed named defect inventory at `0c3a46f`
 
