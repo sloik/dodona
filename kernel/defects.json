@@ -166,28 +166,28 @@
       "name": "remove keeps confirmation",
       "model_case": "tree/mutant_remove_keeps_confirmation",
       "file": "src/tree.rs",
-      "find": "if r.text(\"child\").and_then(|c| children.remove(c)).is_some() {\n                    confirmed = false;",
-      "replace": "if r.text(\"child\").and_then(|c| children.remove(c)).is_some() {\n                    let _ = confirmed;"
+      "find": "if r.text(\"child\")\n                    .is_some_and(|child| remove_branch(&mut children, child))\n                {\n                    confirmed = false;",
+      "replace": "if r.text(\"child\")\n                    .is_some_and(|child| remove_branch(&mut children, child))\n                {\n                    let _ = confirmed;"
     },
     {
       "name": "add keeps confirmation",
       "model_case": "tree/mutant_add_keeps_confirmation",
       "file": "src/tree.rs",
-      "find": "children.insert(child.into(), (gate.into(), \"unknown\".into()));\n                        confirmed = false;",
-      "replace": "children.insert(child.into(), (gate.into(), \"unknown\".into()));\n                        let _ = confirmed;"
+      "find": "children.insert(\n                            child.into(),\n                            Child {\n                                parent: parent.into(),\n                                criterion: Criterion::new(gate),\n                            },\n                        );\n                        confirmed = false;",
+      "replace": "children.insert(\n                            child.into(),\n                            Child {\n                                parent: parent.into(),\n                                criterion: Criterion::new(gate),\n                            },\n                        );\n                        let _ = confirmed;"
     },
     {
       "name": "delivered ignores children",
       "model_case": "tree/mutant_delivered_ignores_child",
       "file": "src/tree.rs",
-      "find": "|| children.values().any(|(g, s)| g == \"hard\" && s != \"passed\")",
+      "find": "|| children\n            .values()\n            .any(|child| child.criterion.gate == \"hard\" && child.criterion.check != \"passed\")",
       "replace": "|| false"
     },
     {
       "name": "soft child is delivered",
       "model_case": "tree/mutant_soft_child_is_delivered",
       "file": "src/tree.rs",
-      "find": "let child_unguarded = children.values().any(|(g, _)| g != \"hard\");",
+      "find": "let child_unguarded = children.keys().any(|name| hard[name.as_str()] == 0);",
       "replace": "let child_unguarded = false;"
     },
     {
@@ -313,22 +313,22 @@
       "name": "tree checks always pass",
       "model_case": null,
       "file": "src/tree.rs",
-      "find": "node.1 = status.into();",
-      "replace": "node.1 = \"passed\".into();"
+      "find": "node.check = status.into();",
+      "replace": "node.check = \"passed\".into();"
     },
     {
       "name": "tree floor root only",
       "model_case": "tree/mutant_floor_counts_root_only",
       "file": "src/tree.rs",
-      "find": ".chain(children.values())",
-      "replace": ".chain(std::iter::empty())"
+      "find": "let tree_hard = hard[\"root\"];",
+      "replace": "let tree_hard = i64::from(root.gate == \"hard\");"
     },
     {
       "name": "tree ignores floor",
       "model_case": "tree/mutant_ignores_floor",
       "file": "src/tree.rs",
-      "find": "} else if tree_hard < min || child_unguarded {",
-      "replace": "} else if false {"
+      "find": "if tree_hard < min || child_unguarded {",
+      "replace": "if false {"
     },
     {
       "name": "close latest open",
@@ -950,8 +950,8 @@
       "name": "tree floor applied to each child",
       "model_case": "tree/mutant_floor_applied_to_each_child",
       "file": "src/tree.rs",
-      "find": "let child_unguarded = children.values().any(|(g, _)| g != \"hard\");",
-      "replace": "let child_unguarded = children.values().any(|(g, _)| ((g == \"hard\") as i64) < min);"
+      "find": "let child_unguarded = children.keys().any(|name| hard[name.as_str()] == 0);",
+      "replace": "let child_unguarded = children.keys().any(|name| hard[name.as_str()] < min);"
     },
     {
       "name": "refusal limit ignored",
@@ -1933,6 +1933,20 @@
       "file": "src/ledger.rs",
       "find": "    if depth > crate::wire::MAX_DEPTH {\n        return Ok(refused(\"bad-request\"));\n",
       "replace": "    if depth > usize::MAX - 1 {\n        return Ok(refused(\"bad-request\"));\n"
+    },
+    {
+      "name": "tree counts direct children alone",
+      "model_case": "tree-depth/mutant_direct_child_count",
+      "file": "src/tree.rs",
+      "find": "let tree_hard = hard[\"root\"];",
+      "replace": "let tree_hard = i64::from(root.gate == \"hard\") + children.values().filter(|child| child.parent == \"root\" && child.criterion.gate == \"hard\").count() as i64;"
+    },
+    {
+      "name": "editing a grandchild keeps the tree confirmed",
+      "model_case": "tree-depth/mutant_grandchild_edit_keeps_confirmation",
+      "file": "src/tree.rs",
+      "find": "node.gate = to;\n                        confirmed = false;",
+      "replace": "node.gate = to;\n                        if e.text(\"node\").is_some_and(|name| name == \"root\" || children[name].parent == \"root\") {\n                            confirmed = false;\n                        }"
     }
   ]
 }

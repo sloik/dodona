@@ -9,6 +9,7 @@ On 17 November 2026, the evidence model's [Run 2](https://github.com/sloik/dodon
 | [planner/Planner.tla](planner/Planner.tla) | What is rerun after a change: indirect dependencies, build tools, and file-level identity as a fallback |
 | [assurance/Assurance.tla](assurance/Assurance.tla) | The shown level as the weakest link, and when a check counts as shown able to fail |
 | [tree/IntentTree.tla](tree/IntentTree.tla) | A parent intent and its children |
+| [tree-depth/GrandchildTree.tla](tree-depth/GrandchildTree.tla) | A grandchild contributes a hard gate to its ancestors’ subtrees |
 | [attempts/Attempts.tla](attempts/Attempts.tla) | Trying a judgement again until it agrees |
 | [platforms/Platforms.tla](platforms/Platforms.tla) | Results on more than one platform, and when one may stand in for another |
 | [decisions/Decisions.tla](decisions/Decisions.tla) | A decision flagged when what it governs changes |

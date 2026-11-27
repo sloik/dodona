@@ -12,6 +12,7 @@
     "planner/design_file": "As above.",
     "assurance/design": "As above.",
     "tree/design": "As above.",
+    "tree-depth/design": "A search of the whole bounded state space. The grandchild scenario samples it.",
     "attempts/design": "As above.",
     "platforms/design_stand_in_allowed": "As above.",
     "platforms/design_stand_in_forbidden": "As above.",

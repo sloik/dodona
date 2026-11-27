@@ -1,0 +1,26 @@
+{
+  "kind": "tree",
+  "name": "removing_a_branch_forgets_its_descendants",
+  "claim": "C34",
+  "covers": [],
+  "why": "An invalid parent cannot change the shape. Removing a branch loses its gate count and its checks. Re-adding its former nodes starts their checks again.",
+  "policy": {"min_hard_gates": 2},
+  "root": {"gate": "hard"},
+  "children": {
+    "middle": {"gate": "soft"},
+    "grand": {"gate": "hard", "parent": "middle"}
+  },
+  "steps": [
+    {"do": {"check": {"node": "root", "status": "passed"}}, "expect": {"status": "draft"}},
+    {"do": {"check": {"node": "grand", "status": "passed"}}, "expect": {"status": "draft"}},
+    {"do": {"confirm": {}}, "expect": {"status": "delivered"}},
+    {"do": {"add": {"child": "bad", "gate": "hard", "parent": "gone"}}, "expect": {"status": "delivered"}},
+    {"do": {"add": {"child": "bad", "gate": "hard", "parent": null}}, "expect": {"status": "delivered"}},
+    {"do": {"remove": {"child": "middle"}}, "expect": {"status": "draft"}},
+    {"do": {"confirm": {}}, "expect": {"status": "unguarded"}},
+    {"do": {"add": {"child": "middle", "gate": "soft"}}, "expect": {"status": "draft"}},
+    {"do": {"add": {"child": "grand", "gate": "hard", "parent": "middle"}}, "expect": {"status": "draft"}},
+    {"do": {"confirm": {}}, "expect": {"status": "open"}},
+    {"do": {"check": {"node": "grand", "status": "passed"}}, "expect": {"status": "delivered"}}
+  ]
+}

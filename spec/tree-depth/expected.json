@@ -1,0 +1,53 @@
+{
+  "model": "GrandchildTree.tla",
+  "tool": {
+    "name": "tla2tools",
+    "version": "1.7.4",
+    "requires": [
+      "a Java runtime"
+    ],
+    "digest": "not yet pinned; no lock exists"
+  },
+  "arguments": [
+    "-workers",
+    "1",
+    "-config",
+    "<config>",
+    "GrandchildTree.tla"
+  ],
+  "exit_codes": {
+    "0": "completed, no violation",
+    "12": "safety violation found",
+    "other": "did not complete; counts as neither outcome"
+  },
+  "bounds": "a fixed root, child and grandchild, one hard or soft criterion each; a floor of two; at most three gate edits or confirmations",
+  "cases": [
+    {
+      "config": "design.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "Recursive subtree counts and the propagated count give the same delivery decision."
+    },
+    {
+      "config": "mutant_direct_child_count.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect. The root counts its direct children and misses the grandchild.",
+      "of": "DeliveryMatches"
+    },
+    {
+      "config": "mutant_grandchild_edit_keeps_confirmation.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect. Editing the grandchild's gate leaves the earlier confirmation in effect.",
+      "of": "ConfirmationMatches"
+    },
+    {
+      "config": "reach_delivered_soft_middle.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A hard root and grandchild with a soft middle intent can reach delivery.",
+      "of": "NeverDeliveredSoftMiddle"
+    }
+  ]
+}
