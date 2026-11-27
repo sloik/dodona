@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from typing import NamedTuple
 
 ROOT = pathlib.Path.cwd()
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "tools"))
@@ -42,27 +43,44 @@ def identity(path: pathlib.Path) -> str | None:
         return None
 
 
-def measure(program: str) -> tuple[str | None, str | None]:
-    """The digest of a program's file and the version it states (`node --version` prints `v24.11.0`)."""
+class Runtime(NamedTuple):
+    executable: str
+    digest: str
+    version: str
+    platform: dict[str, str]
+
+
+def measure(program: str) -> Runtime | None:
     found = shutil.which(program)
     if found is None:
-        return None, None
-    digest = hashlib.sha256(pathlib.Path(found).resolve().read_bytes()).hexdigest()
+        return None
+    executable = pathlib.Path(found).resolve()
+    probe = ("JSON.stringify({version: process.versions.node, os: process.platform, arch: process.arch,"
+             "glibc: process.report?.getReport().header.glibcVersionRuntime})")
     try:
-        said = subprocess.run([found, "--version"], capture_output=True, timeout=60)
-    except (OSError, subprocess.TimeoutExpired):
-        return digest, None
-    match = re.fullmatch(rb"v?([0-9]+(?:\.[0-9]+)*)\s*", said.stdout)
-    return digest, match.group(1).decode("ascii") if said.returncode == 0 and match else None
+        digest = hashlib.sha256(executable.read_bytes()).hexdigest()
+        result = subprocess.run([str(executable), "-p", probe], capture_output=True, timeout=60, check=True)
+        fields = json.loads(result.stdout)
+        os_name = {"darwin": "macos", "linux": "linux", "win32": "windows"}[fields["os"]]
+        arch = {"arm64": "aarch64", "x64": "x86_64"}[fields["arch"]]
+        version = fields["version"]
+        if re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", version) is None:
+            return None
+    except (OSError, subprocess.SubprocessError, KeyError, TypeError, ValueError):
+        return None
+    platform = {"os": os_name, "arch": arch}
+    if os_name == "linux" and isinstance(fields.get("glibc"), str):
+        platform["libc"] = "gnu"
+    return Runtime(str(executable), digest, version, platform)
 
 
 def main() -> int:
     site = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
     batch = json.loads(sys.stdin.buffer.read().decode("utf-8"))
     pinned = {pin["name"]: pin for pin in site["pins"]}
-    here = {name: measure(program) for name, program in site["programs"].items()}  # tool name -> (digest, version)
-    measured = {pinned[n]["file"]: d for n, (d, _) in here.items() if n in pinned}
-    versions = {pinned[n]["file"]: v for n, (_, v) in here.items() if n in pinned}
+    here = {name: runtime for name, program in site["programs"].items() if (runtime := measure(program))}
+    measured = {pinned[name]["file"]: runtime.digest for name, runtime in here.items() if name in pinned}
+    versions = {pinned[name]["file"]: runtime.version for name, runtime in here.items() if name in pinned}
     unmeasured, mismatched = host.tool_faults({n: pinned[n] for n in here if n in pinned}, measured, versions)
     floor_keys = {name: "sha256:" + host.floor_digest(pin) for name, pin in pinned.items()}
     kept = ROOT / KEPT
@@ -72,20 +90,26 @@ def main() -> int:
         run, key = item["run"], item["run_key"]
         name = f"r{item['number']}-{key.removeprefix('sha256:')[:16]}"
         tool = (run.get("program") or {}).get("tool")
+        runtime = here.get(tool)
+        request_platform = run.get("platform")
+        matches = (runtime is not None and isinstance(request_platform, dict) and {"os", "arch"} <= request_platform.keys()
+                   and all(field in runtime.platform and runtime.platform[field] == value
+                           for field, value in request_platform.items()))
+        reported_platform = request_platform if matches or runtime is None else runtime.platform
         ran = []
         for asked in run.get("tools", []):
             tool_name = asked.get("name")
-            if tool_name not in here or not here[tool_name][0]:
+            if tool_name not in here:
                 continue
-            digest = "sha256:" + here[tool_name][0]
+            digest = "sha256:" + here[tool_name].digest
             if tool_name in floor_keys and tool_name not in unmeasured and tool_name not in mismatched:
                 digest = floor_keys[tool_name]
             ran.append({"name": tool_name, "digest": digest})
-        report = {"handle": name, "platform": run.get("platform"), "tools_ran": ran, "isolation": "best-effort", "outputs": []}
+        report = {"handle": name, "platform": reported_platform, "tools_ran": ran, "isolation": "best-effort", "outputs": []}
         captured = kept / f"{name}.txt"
         captured.write_bytes(b"")
-        if tool not in here or here[tool][0] is None:
-            report["end"] = "unavailable"  # not a tool this site runs here
+        if not matches:
+            report["end"] = "unavailable"
         elif ran != run.get("tools", []):
             report["end"] = "cancelled"
         else:
@@ -104,7 +128,7 @@ def main() -> int:
                     report["end"] = "cancelled"
                 else:
                     wall = (run.get("limits") or {}).get("wall_ms")
-                    argv = [shutil.which(site["programs"][tool])] + list(run.get("args", []))
+                    argv = [runtime.executable, *run.get("args", [])]
                     try:
                         done = subprocess.run(argv, cwd=work / run.get("cwd", "."), capture_output=True,
                                               timeout=wall / 1000 if isinstance(wall, int) and wall > 0 else None,

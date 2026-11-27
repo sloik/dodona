@@ -16,7 +16,7 @@ Where dodona's own model checks run, for this repository only ([decision 0023](.
 | [test_local_executor.py](test_local_executor.py) | Checks the local executor's inputs, pin and missing-tool behavior |
 | [test_node_project.py](test_node_project.py) | Exercises a pass, failure and skip through both kernels, including ledger reuse |
 
-The local executor measures the Node version under the configured floor. It uses the configured floor's key only when the running version satisfies that floor. The qualification fixture uses this local executor. Its repository matrix installs Node 24.22.3 with a pinned setup action after the other checks.
+The local executor measures the runtime's Node version, operating system and architecture. It also measures glibc when available on Linux. A request for a different platform is unavailable. It uses the configured floor's key only when the running version satisfies that floor. The qualification fixture uses this local executor. Its repository matrix installs Node 24.22.3 with a pinned setup action after the other checks.
 
 Executor reports use the measured digest for a fixed pin and the site's floor key when the measured version meets that floor. The fake-queue tests check that a mismatched request cannot change either reported key.
 
