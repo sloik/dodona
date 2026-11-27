@@ -67,7 +67,7 @@ fn answer(command: &str, input: &[u8]) -> Result<Value, String> {
             "plan" => plan::run(&v),
             "platforms" => platforms::run(&v),
             "attempts" => attempts::run(&v),
-            "tree" => tree::run(&v),
+            "tree" => tree::run(&v)?,
             "assurance" => assurance::run(&v),
             "decisions" => decisions::run(&v),
             "evidence" => evidence::run(&v),

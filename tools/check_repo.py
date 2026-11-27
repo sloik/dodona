@@ -2005,6 +2005,20 @@ def gap_every_modelled_case_has_a_scenario() -> None:
         problems.append(f"model case {case} is both covered by a scenario and listed as not covered")
 
 
+def gap_tree_depth_plants_are_registered() -> None:
+    """A model can catch the lost grandchild while a kernel's own plants never try it."""
+    model = json.loads((ROOT / "spec/tree-depth/expected.json").read_text(encoding="utf-8"))
+    plants = {f"tree-depth/{case['config'].removesuffix('.cfg')}" for case in model["cases"]
+              if case["config"].startswith("mutant_")}
+    if not plants:
+        problems.append("the deep tree model lists no planted defect")
+    for path in ("kernel/defects.json", "kernel2/defects.json"):
+        manifest = json.loads((ROOT / path).read_text(encoding="utf-8"))
+        registered = {defect.get("model_case") for defect in manifest["defects"]}
+        for name in sorted(plants - registered):
+            problems.append(f"{path}: no kernel plant for {name}")
+
+
 def gap_planner_keeps_artifact_and_depth_cases() -> None:
     """Keep the independent artifact plant and both reachability controls in the model inventory."""
     folder = ROOT / "spec/planner"
@@ -2189,7 +2203,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_eslint_uses_locked_install, gap_clippy_is_pinned_and_strict, gap_owner_rule_review_is_exact,
               gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
-              gap_every_modelled_case_has_a_scenario, gap_planner_keeps_artifact_and_depth_cases, gap_kit_judge_is_strict,
+              gap_every_modelled_case_has_a_scenario, gap_tree_depth_plants_are_registered,
+              gap_planner_keeps_artifact_and_depth_cases, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
               gap_js_plant_cli_uses_supervisor, gap_rust_plant_cli_uses_supervisor,
@@ -2971,7 +2986,9 @@ class InputJudgeTests(unittest.TestCase):
     def exited(code):
         return subprocess.CompletedProcess(["kernel", "scenario"], code, b"", b"")
 
-    def judge(self, answers):
+    def judge(self, answers, *, tree_answers=(0, 2, 2, 2, 2, 2, 2)):
+        if answers:
+            answers = [*answers, *tree_answers]
         answers = [self.exited(a) if isinstance(a, int) else a for a in answers]
         argv = ["run_input_cases.py", "--", "kernel"]
         with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_input_cases.sys, "argv", argv), \
@@ -2984,15 +3001,20 @@ class InputJudgeTests(unittest.TestCase):
             with self.subTest(codes=codes):
                 code, summary, _ = self.judge(codes)
                 self.assertEqual((code, summary["unfinished"], summary["rejected"], summary["all_matched"]), (0, 0, [], True))
-                self.assertEqual((summary["cases"], summary["matched"]), (6, 6))
+                self.assertEqual((summary["cases"], summary["matched"]), (13, 13))
 
     def test_an_accepted_fault_is_a_named_mismatch(self):
         code, summary, _ = self.judge([0, 0, 2, 2, 2, 2])
         self.assertEqual((code, summary["unfinished"], summary["all_matched"]), (1, 0, False))
         self.assertEqual(summary["rejected"], [self.repeated_key])
-        self.assertEqual((summary["cases"], summary["matched"]), (6, 5))
+        self.assertEqual((summary["cases"], summary["matched"]), (13, 12))
         code, summary, _ = self.judge([1, 2, 2, 2, 2, 2])
         self.assertEqual((code, summary["unfinished"], summary["rejected"]), (1, 0, [self.control]))
+
+    def test_an_accepted_tree_cycle_is_a_named_mismatch(self):
+        code, summary, _ = self.judge([0, 2, 2, 2, 2, 2], tree_answers=(0, 2, 2, 2, 0, 2, 2))
+        self.assertEqual((code, summary["unfinished"], summary["matched"]), (1, 0, 12))
+        self.assertEqual(summary["rejected"], ["a cycle in a tree is refused"])
 
     def test_a_kernel_ended_by_the_operating_system_is_unfinished_not_a_refusal(self):
         # -15: a POSIX signal. 0xC0000005, 0xC00000FD, 0xC0000409: an access violation, a stack overflow and a fail-fast
@@ -3034,13 +3056,15 @@ class InputJudgeTests(unittest.TestCase):
 
     def test_the_same_inputs_are_sent(self):
         _, _, calls = self.judge([0, 1, 2, 1, 2, 2])
-        self.assertEqual([call.args[0] for call in calls], [["kernel", "scenario"]] * 6)
+        self.assertEqual([call.args[0] for call in calls], [["kernel", "scenario"]] * 13)
         sent = [call.kwargs["input"] for call in calls]
         json.loads(sent[0].decode("utf-8"))
         self.assertTrue(sent[1].startswith(b'{"kind": "nothing", '))
         self.assertTrue(sent[5].endswith(b', "x": "\xff"}'))
         with self.assertRaises(UnicodeDecodeError):
             sent[5].decode("utf-8")
+        self.assertEqual(json.loads(sent[6])["children"]["grand"]["parent"], "middle")
+        self.assertEqual(json.loads(sent[10])["children"]["middle"]["parent"], "grand")
 
 
 class KeyVectorJudgeTests(unittest.TestCase):

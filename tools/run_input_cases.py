@@ -44,6 +44,29 @@ def faults(text: str) -> list[tuple[str, str]]:
             ("a byte that is not UTF-8", text[:-1] + ', "x": "\udcff"}')]
 
 
+def tree_cases() -> list[tuple[str, bytes, bool]]:
+    """One valid nested tree and one invalid starting field or relation at a time."""
+    tree = {"kind": "tree", "root": {"gate": "hard"}, "policy": {"min_hard_gates": 2},
+            "steps": [{"do": {"confirm": {}}}]}
+    nodes = {"middle": {"gate": "soft"}, "grand": {"gate": "hard", "parent": "middle"}}
+
+    def input_with(children, root=tree["root"]):
+        return json.dumps({**tree, "root": root, "children": children}).encode("utf-8")
+
+    def grandchild_of(parent):
+        return {**nodes, "grand": {"gate": "hard", "parent": parent}}
+
+    return [
+        ("a tree with a grandchild is answered", input_with(nodes), True),
+        ("a tree parent of the wrong type is refused", input_with(grandchild_of(None)), False),
+        ("a tree parent that is absent is refused", input_with(grandchild_of("gone")), False),
+        ("a tree node that refers to itself is refused", input_with(grandchild_of("grand")), False),
+        ("a cycle in a tree is refused", input_with({**nodes, "middle": {"gate": "soft", "parent": "grand"}}), False),
+        ("a second node named root is refused", input_with({**nodes, "root": {"gate": "hard"}}), False),
+        ("a tree with a non-string starting gate is refused", input_with(nodes, {"gate": 1}), False),
+    ]
+
+
 def ended_by_the_system(code: int) -> bool:
     """A status the kernel did not return itself: a POSIX signal, or a Windows exception (NTSTATUS error range)."""
     return code < 0 or 0xC0000000 <= code <= 0xCFFFFFFF
@@ -79,6 +102,7 @@ def main() -> int:
         assert '"min_hard_gates": 1' in text
         cases.append(("the input without a fault is answered", text.encode("utf-8"), True))
         cases += [(f"{name} is refused", faulty.encode("utf-8", errors="surrogateescape"), False) for name, faulty in faults(text)]
+        cases.extend(tree_cases())
     except Exception as err:  # the judge could not build its cases: nothing was judged, which is not a pass or a mismatch
         unfinished = 1
         print(f"UNFINISHED the cases could not be made: {type(err).__name__}: {err}")

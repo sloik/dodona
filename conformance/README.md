@@ -120,15 +120,17 @@ A scenario gives a `root` and `children`, each with the gate of its one criterio
 
 The unreadable-gate mutation now targets an edit. The scenario for an unreadable starting gate still runs with the same expectations.
 
+Each entry of `children` may have a string `parent`. Omitting it means `root`. Every parent chain must end at `root`. A missing parent target, a non-string parent, a cycle or an entry named `root` makes the scenario invalid. [Decision 0039](../decisions/0039-tree-scenarios-name-a-parent.md).
+
 | Step | Meaning |
 |---|---|
 | `{"confirm": {}}` | The owner confirms the tree as it stands |
 | `{"check": {"node": N, "status": S}}` | The check behind N's criterion now has status S, one of `unknown`, `passed`, `failed` or `conflict`. N is `root` or a child |
 | `{"edit": {"node": N, "to": G}}` | N's gate is changed directly |
-| `{"remove": {"child": K}}` | Child K is removed |
-| `{"add": {"child": K, "gate": G}}` | Child K is added, its check unknown |
+| `{"remove": {"child": K}}` | Child K and every descendant of K are removed |
+| `{"add": {"child": K, "gate": G, "parent": P}}` | Add child K under P with an unknown check. P defaults to `root`. A missing parent target or invalid name or parent leaves the tree unchanged |
 
-The result has `"status"`, the first of these that applies: `draft` if the owner has not confirmed, or anything was edited, added or removed since; `unguarded` if the tree counts fewer hard gates than `min_hard_gates`, or fewer than one, counting the root and every child; or if any child has no hard gate (decision 0030). A child is not held to the policy's number on its own: moving a criterion into a child loses nothing (decision 0017). `open` if any hard gate's check is not `passed`; otherwise `delivered`.
+The result has `"status"`. It is `draft` before confirmation and after an edit, addition or removal. A confirmed tree is `unguarded` when its whole count falls below `min_hard_gates` or one, whichever is greater, or when any child has no hard gate in its own subtree (decision 0030). The full policy floor applies at the root (decision 0017). A guarded, confirmed tree is `open` when any hard gate at any depth has a check whose status differs from `passed`. It is `delivered` when every hard check passes.
 
 ### Attempts scenarios
 
@@ -248,6 +250,8 @@ The result has `obligations` and `intents`, each an object with one entry per na
 **Acts.** An act record is graded as in acts scenarios, a malformed one as `self`, with one more rule: if its `worker.id` is not the intent's `worker`, its level is `self`. An act entry whose body is not an object takes part in no rule. An intent is *confirmed* when the ledger holds an act of kind `confirm-baseline` whose `lineage.intent` is the intent, whose `result` is `agreed`, whose `target` is the intent's baseline as things stand, whose `actor.id` is the intent's owner, and whose level is at or above `floors["confirm-baseline"]`.
 
 **Intent status** is the first of these that applies: `draft` if not confirmed; `uncovered` if a criterion has no obligation; `unguarded` if there are fewer hard gates than `min_hard_gates`; `open` if some hard criterion has an obligation that is not `passed`; `delivered` if some deferred criterion has one that is not `passed`; otherwise `fulfilled`.
+
+An empty intent is valid. It can be confirmed and then reports `unguarded` with zero hard gates.
 
 Each intent also reports:
 

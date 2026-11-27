@@ -25,6 +25,7 @@
     "planner/reach_eight_steps": "This covers the model search bound. A kit scenario is one trace.",
     "assurance/design": "As above.",
     "tree/design": "As above.",
+    "tree-depth/design": "A search of the whole bounded state space. The grandchild scenario samples it.",
     "attempts/design": "As above.",
     "platforms/design_stand_in_allowed": "As above.",
     "platforms/design_stand_in_forbidden": "As above.",
