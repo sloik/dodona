@@ -24,6 +24,7 @@ Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with
 | [keep.py](keep.py) | Moves what one model run keeps for the next, and reports about reuse |
 | [kernel_differential.py](kernel_differential.py) | Compares two kernels on inputs the conformance kit does not contain |
 | [kit_adequacy.py](kit_adequacy.py) | Plants each listed defect in the first kernel and requires the kit to reject it |
+| [recover_plant_batches.py](recover_plant_batches.py) | Recovers owned workspaces left by stopped mutation batches |
 | [ledger.py](ledger.py) | Reads and writes the reference ledger format |
 | [path_differential.py](path_differential.py) | Compares a kernel's path check with the reference on random paths |
 | [pathcheck.py](pathcheck.py) | Reference implementation of the [path check](../protocol/path-check.md) |

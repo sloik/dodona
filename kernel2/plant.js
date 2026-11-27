@@ -31,7 +31,7 @@
 //
 // The CLI supervisor creates the run's temporary directory. The worker's copy is under that
 // directory. A surviving supervisor removes it even if the worker crashes. It publishes the
-// worker's summary after cleanup. Killing the supervisor outright can still leave its directory.
+// worker's summary after cleanup. After a hard stop, tools/recover_plant_batches.py reclaims owned work.
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -354,13 +354,22 @@ function readDefects(file) {
 
 const REMOVE_ATTEMPTS = 3;
 const WORKER_ARGUMENT = '--dodona-plant-worker';
+const BATCH_MARKER = 'batch-owner.json';
 
 function removeTree(directory) {
   fs.rmSync(directory, { recursive: true, force: true });
 }
 
-function startBatchWorker(owned, only) {
-  return fork(__filename, [WORKER_ARGUMENT, owned, ...only], {
+function recordBatchOwner(owned, worker = null) {
+  const marker = path.join(owned, BATCH_MARKER);
+  const pending = path.join(owned, 'batch-owner.next');
+  const record = { schema: 1, batch: path.basename(owned), supervisor: process.pid, worker };
+  fs.writeFileSync(pending, JSON.stringify(record), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  fs.renameSync(pending, marker);
+}
+
+function startBatchWorker(work, only) {
+  return fork(__filename, [WORKER_ARGUMENT, work, ...only], {
     stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
   });
 }
@@ -374,6 +383,24 @@ function workerResult(worker) {
     worker.once('error', (failure) => { error = failure; });
     worker.once('close', (status, signal) => resolve({ status, signal, error, receipt, received }));
   });
+}
+
+async function runOwnedBatch(owned, only, startWorker) {
+  const work = path.join(owned, 'work');
+  const worker = startWorker(work, only);
+  const result = workerResult(worker);
+  if (!Number.isInteger(worker.pid)) return result;
+  try {
+    recordBatchOwner(owned, worker.pid);
+    fs.mkdirSync(work, { mode: 0o700 });
+    worker.send('start', (error) => {
+      if (error) worker.kill();
+    });
+  } catch (error) {
+    worker.kill();
+    return { ...await result, error };
+  }
+  return result;
 }
 
 function receiptMatchesExit(receipt, status, only) {
@@ -407,7 +434,8 @@ async function supervise({
   let result;
   try {
     owned = fs.mkdtempSync(path.join(tmp, 'dodona-plant-batch-'));
-    result = await workerResult(startWorker(owned, only));
+    recordBatchOwner(owned);
+    result = await runOwnedBatch(owned, only, startWorker);
   } catch (error) {
     result = { error };
   }
@@ -461,7 +489,11 @@ module.exports = { JUDGES, REMOVE_ATTEMPTS, UNIT_TESTS, auxiliaryVerdict, judgeC
 if (require.main === module) {
   const [mode, tmp, ...only] = process.argv.slice(2);
   if (mode === WORKER_ARGUMENT && typeof process.send === 'function') {
-    runBatchWorker(tmp, only);
+    process.exitCode = 2;
+    process.once('message', (command) => {
+      if (command === 'start') runBatchWorker(tmp, only);
+      else if (process.connected) process.disconnect();
+    });
   } else {
     supervise().then((status) => { process.exitCode = status; });
   }
