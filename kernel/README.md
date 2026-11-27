@@ -63,6 +63,8 @@ The optional `batch_wait_floor_ms` extends the wait for the executor within the 
 
 ## Build and judge
 
+The [Rust lint job](../docs/static-checks.md) uses Rust 1.100.0 and treats Clippy warnings as errors. [Run 21](../spec/runs/run-21/every-state/) records the comparison of both kernels against retained model states after the Rust lint fixes.
+
 From the repository root (on Windows the executable ends in `.exe`):
 
 ```text

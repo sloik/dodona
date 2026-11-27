@@ -297,7 +297,7 @@ impl Peer {
 #[cfg(test)]
 mod late_tests {
     use super::*;
-    use std::io::{BufRead, Write as _};
+    use std::io::BufRead;
     use std::process::{Command, Stdio};
 
     const MARK: &str = "DODONA_WIRE_LATE_MARK";
@@ -435,6 +435,6 @@ mod tests {
         let v = json::object(vec![("echo", json::string(ECHO))]);
         let back = json::parse(json::encode(&v).as_bytes()).unwrap();
         assert_eq!(back.text("echo"), Some(ECHO));
-        assert!(ECHO.chars().any(|c| c < ' ') && ECHO.chars().any(|c| !c.is_ascii()));
+        assert!(ECHO.chars().any(|c| c < ' ') && !ECHO.is_ascii());
     }
 }

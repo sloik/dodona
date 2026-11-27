@@ -397,8 +397,8 @@
       "name": "refresh record on edit",
       "model_case": "decisions/mutant_refresh_on_edit",
       "file": "src/decisions.rs",
-      "find": "if a.opt(\"review\").is_some() {",
-      "replace": "if a.opt(\"review\").is_some() || a.opt(\"edit\").is_some() {"
+      "find": "if a.opt(\"review\").is_some() &&",
+      "replace": "if (a.opt(\"review\").is_some() || a.opt(\"edit\").is_some()) &&"
     },
     {
       "name": "soft gate blocks",

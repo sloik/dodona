@@ -8,7 +8,7 @@ fn decompose(c: u32, out: &mut Vec<u32>) {
         let s = c - 0xAC00;
         out.push(0x1100 + s / 588);
         out.push(0x1161 + (s % 588) / 28);
-        if s % 28 != 0 {
+        if !s.is_multiple_of(28) {
             out.push(0x11A7 + s % 28);
         }
     } else if let Ok(i) = DECOMP.binary_search_by_key(&c, |x| x.0) {
@@ -37,7 +37,7 @@ fn composition(a: u32, b: u32) -> Option<u32> {
     if (0x1100..0x1113).contains(&a) && (0x1161..0x1176).contains(&b) {
         return Some(0xAC00 + (a - 0x1100) * 588 + (b - 0x1161) * 28);
     }
-    if (0xAC00..0xD7A4).contains(&a) && (a - 0xAC00) % 28 == 0 && (0x11A8..0x11C3).contains(&b) {
+    if (0xAC00..0xD7A4).contains(&a) && (a - 0xAC00).is_multiple_of(28) && (0x11A8..0x11C3).contains(&b) {
         return Some(a + b - 0x11A7);
     }
     COMPOSE

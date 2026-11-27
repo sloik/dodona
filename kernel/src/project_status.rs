@@ -1919,9 +1919,9 @@ fn snapshot(input: &Input, keep: bool) -> Step<Snapshot> {
     // Steps 5 and 6.
     let mut obligations = obligations(input, &bindings, &claims, keep)?;
     // Step 7.
-    let intents = intents(&input, &bindings, &claims, &obligations.listed)?;
+    let intents = intents(input, &bindings, &claims, &obligations.listed)?;
     // Step 8.
-    let read = ledgers(&input)?;
+    let read = ledgers(input)?;
     // Step 9.
     let policy = json::object(vec![
         ("min_hard_gates", Value::Number(input.min_hard_gates.max(1))),
@@ -2318,7 +2318,7 @@ mod run_input {
             spelt.extend(ledgers.iter().map(String::as_str));
             spelt.extend(v.text("project"));
         }
-        if let Some(p) = spelt.into_iter().find(|p| aliased(*p)) {
+        if let Some(p) = spelt.into_iter().find(|p| aliased(p)) {
             return stop(
                 "bad-input",
                 format!("{p:?}: a segment ends in a dot or a space, which a disk may take for another name"),
@@ -2490,7 +2490,6 @@ mod run_input {
     /// One check under way: what the host rules judge it against, and its runs.
     pub(super) struct Check {
         pub(super) binding: String,
-        pub(super) name: String,
         given: host::Given,
         /// The obligation and inputs as the check was started: a run key is made from them.
         obligation: Value,
@@ -2550,7 +2549,6 @@ mod run_input {
         let id = ch.send_check(body.clone())?;
         Ok(Check {
             binding: c.binding.clone(),
-            name: c.name.clone(),
             given: c.given(declared, ceiling),
             obligation: body.get("obligation").clone(),
             inputs: body.get("inputs").clone(),
@@ -3905,7 +3903,9 @@ mod run_input {
         fn writer(w: impl IoWrite + Send + 'static) -> Option<Box<dyn IoWrite + Send>> {
             Some(Box::new(w))
         }
-        fn kept() -> (Option<Box<dyn IoWrite + Send>>, Arc<Mutex<Vec<u8>>>) {
+        type KeptInput = (Option<Box<dyn IoWrite + Send>>, Arc<Mutex<Vec<u8>>>);
+
+        fn kept() -> KeptInput {
             let bytes = Arc::new(Mutex::new(Vec::new()));
             (writer(Kept(bytes.clone())), bytes)
         }
@@ -4695,7 +4695,7 @@ mod run_input {
             assert_eq!((n("passed"), n("failed"), n("refused")), (1, 1, 0));
             assert_eq!(n("reused") + n("checked"), n("obligations"));
             let ended = ["passed", "failed", "error", "unavailable", "unsupported", "refused"];
-            assert_eq!(ended.iter().map(|k| n(*k)).sum::<i64>(), n("checked"));
+            assert_eq!(ended.iter().map(|k| n(k)).sum::<i64>(), n("checked"));
             let _ = fs::remove_dir_all(&root);
         }
 

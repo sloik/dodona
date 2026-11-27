@@ -38,10 +38,8 @@ pub fn run(input: &Value) -> Vec<Value> {
                     _ => (),
                 }
             }
-            if a.opt("review").is_some() {
-                if governed.iter().all(|n| names.contains_key(n)) {
-                    recorded = names.clone();
-                }
+            if a.opt("review").is_some() && governed.iter().all(|n| names.contains_key(n)) {
+                recorded = names.clone();
             }
             json::object(vec![(
                 "flagged",

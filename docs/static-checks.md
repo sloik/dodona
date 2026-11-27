@@ -8,7 +8,7 @@ Linters that read the code without running it, one for each language and format 
 | `lint (Python and workflows)` | actionlint 1.7.12, built with Go 1.27.4 and run with the runner image's shellcheck | [.github/actionlint.yaml](../.github/actionlint.yaml) | `.github/workflows/` |
 | `lint (Python and workflows)` | zizmor 1.32.0 | [.github/zizmor.yml](../.github/zizmor.yml) | `.github/workflows/` |
 | `lint (JavaScript)` | ESLint 10.15.0 | [eslint.config.mjs](../eslint.config.mjs) | `kernel2/` |
-| `lint (Rust, macos)`, `(linux)`, `(windows)` | clippy of the runner's Rust | clippy's defaults: errors fail, warnings are shown | `kernel/` |
+| `lint (Rust, macos)`, `(linux)`, `(windows)` | Clippy from Rust 1.100.0 | default lints with warnings treated as errors | `kernel/` |
 | `lint` | none | every job above succeeded | the results of the jobs above |
 
 The last job, `lint`, needs every job above and passes only if each one succeeded; a job that failed, was skipped or was cancelled fails it. **`lint` is the single name `main`'s ruleset requires for this workflow**, so a job or a matrix entry can be renamed, added or removed without leaving a required check waiting for ever. A new lint job must be added to the `needs` of `lint`, with its own result variable and success test in the aggregate Bash step. The lint workflow rejects `continue-on-error` on jobs and steps so a failure reaches the aggregate and the ruleset.
@@ -29,7 +29,8 @@ ruff check .
 zizmor .github/workflows
 actionlint
 npx --yes eslint@10.15.0 kernel2
-cargo clippy --locked --all-targets --manifest-path kernel/Cargo.toml
+rustup toolchain install 1.100.0 --profile minimal --component clippy --no-self-update
+cargo +1.100.0 clippy --locked --all-targets --manifest-path kernel/Cargo.toml -- -D warnings
 ```
 
 A rule is turned off only for the exact place it excuses, with its reason beside it: a `# noqa` comment on the line for ruff, a line and column in `.github/zizmor.yml` for zizmor. Ruff's file-wide F401 waiver in `tools/metrics.py` is scheduled to move to the `fnmatch` import after owner review of the judging file. ESLint checks no-redeclare throughout the second kernel. A zizmor exception named by position stops matching once lines above it move, and the job then fails until the position is updated. Every rule left off is listed under "Left for later" in decision 0037 until it is turned on.

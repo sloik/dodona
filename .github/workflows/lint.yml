@@ -77,9 +77,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Clippy's default lints; only those that are errors by default fail the job (decision 0037).
-      - name: The first kernel, with clippy
-        run: cargo clippy --locked --all-targets --manifest-path kernel/Cargo.toml
+      - name: Install Rust 1.100.0 with Clippy
+        run: rustup toolchain install 1.100.0 --profile minimal --component clippy --no-self-update
+      - name: The first kernel, with Clippy and fatal warnings
+        run: cargo +1.100.0 clippy --locked --all-targets --manifest-path kernel/Cargo.toml -- -D warnings
 
   # The one name main's ruleset requires (docs/static-checks.md): renaming a job or changing a matrix above
   # never leaves a required check waiting. It runs whatever happened above, and passes only if every lint
