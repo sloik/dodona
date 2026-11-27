@@ -164,3 +164,9 @@ why = "Written by tools/confirm.py at the owner's first confirmation; records/RE
 [[absent]]
 path = "tools/widthcheck"
 why = "A path inside the example project of the provider guide, not in this repository."
+
+[[rule]]
+id = "checkout-retry-example"
+code = ["examples/checkout-retry/**"]
+docs = ["examples/checkout-retry/README.md", "providers/README.md"]
+why = "The example's guide describes its bounded model, runtime checks and recorded evidence."

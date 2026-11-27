@@ -1,0 +1,237 @@
+{
+  "runtime": "v24.22.3",
+  "platform": "darwin",
+  "arch": "arm64",
+  "input_sha256": "98483206489ac3343f1fd6745f78b14c4a72d99a71fc788ae09310b2111eef95",
+  "input": {
+    "order": "checkout-pilot-order",
+    "events": [
+      "timeout-first",
+      "retry",
+      "reply-2",
+      "reply-1"
+    ],
+    "cases": [
+      {
+        "name": "acknowledged debit",
+        "acknowledgeDebit": true
+      },
+      {
+        "name": "debit with no paid acknowledgement",
+        "acknowledgeDebit": false
+      }
+    ]
+  },
+  "reference": {
+    "commit": "81fd63089556cfde952d0548f500bc858181e69e",
+    "sha256": "9c1a142f316611df0b853f8c7d2a9b055cde025b6efa05d0745b976210b87c5e"
+  },
+  "candidate": {
+    "commit": "a54475190825284601061cb8bb927491a5928528",
+    "sha256": "d5cf35573d24cd17d27ca407b3210bbaa0c9db92d00d44d7b98d36d408f972cb"
+  },
+  "compared": [
+    "attempts",
+    "reply order",
+    "debits",
+    "checkout status",
+    "safety",
+    "paid settlement"
+  ],
+  "cases": [
+    {
+      "name": "acknowledged debit",
+      "acknowledgeDebit": true,
+      "agreement": false,
+      "reference": {
+        "trace": [
+          {
+            "event": "submit-1",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 1,
+            "delivered": []
+          },
+          {
+            "event": "timeout-first",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 1,
+            "delivered": []
+          },
+          {
+            "event": "retry",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 2,
+            "delivered": []
+          },
+          {
+            "event": "reply-2",
+            "debits": 1,
+            "status": "settled",
+            "attempts": 2,
+            "delivered": [
+              2
+            ]
+          },
+          {
+            "event": "reply-1",
+            "debits": 1,
+            "status": "settled",
+            "attempts": 2,
+            "delivered": [
+              2,
+              1
+            ]
+          }
+        ],
+        "safety": true,
+        "paidSettlement": true
+      },
+      "candidate": {
+        "trace": [
+          {
+            "event": "submit-1",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 1,
+            "delivered": []
+          },
+          {
+            "event": "timeout-first",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 1,
+            "delivered": []
+          },
+          {
+            "event": "retry",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 2,
+            "delivered": []
+          },
+          {
+            "event": "reply-2",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 2,
+            "delivered": [
+              2
+            ]
+          },
+          {
+            "event": "reply-1",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 2,
+            "delivered": [
+              2,
+              1
+            ]
+          }
+        ],
+        "safety": true,
+        "paidSettlement": false
+      }
+    },
+    {
+      "name": "debit with no paid acknowledgement",
+      "acknowledgeDebit": false,
+      "agreement": true,
+      "reference": {
+        "trace": [
+          {
+            "event": "submit-1",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 1,
+            "delivered": []
+          },
+          {
+            "event": "timeout-first",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 1,
+            "delivered": []
+          },
+          {
+            "event": "retry",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 2,
+            "delivered": []
+          },
+          {
+            "event": "reply-2",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 2,
+            "delivered": [
+              2
+            ]
+          },
+          {
+            "event": "reply-1",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 2,
+            "delivered": [
+              2,
+              1
+            ]
+          }
+        ],
+        "safety": true,
+        "paidSettlement": false
+      },
+      "candidate": {
+        "trace": [
+          {
+            "event": "submit-1",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 1,
+            "delivered": []
+          },
+          {
+            "event": "timeout-first",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 1,
+            "delivered": []
+          },
+          {
+            "event": "retry",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 2,
+            "delivered": []
+          },
+          {
+            "event": "reply-2",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 2,
+            "delivered": [
+              2
+            ]
+          },
+          {
+            "event": "reply-1",
+            "debits": 1,
+            "status": "pending",
+            "attempts": 2,
+            "delivered": [
+              2,
+              1
+            ]
+          }
+        ],
+        "safety": true,
+        "paidSettlement": false
+      }
+    }
+  ]
+}

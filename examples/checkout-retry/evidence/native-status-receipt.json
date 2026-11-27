@@ -1,0 +1,89 @@
+{
+  "fixture": "81fd63089556cfde952d0548f500bc858181e69e",
+  "node_provider": "d750891df16665f2d0ba40455ad16ee294975383",
+  "separation": "self",
+  "platform": {
+    "os": "linux",
+    "arch": "aarch64",
+    "libc": "gnu"
+  },
+  "node_image": "docker.io/library/node@sha256:49f7adaf9f1574bc45c20ea317139b39a59d7e758d0e93745e112fd85cb42623",
+  "baseline": "passed",
+  "baseline_intent": "fulfilled",
+  "code_drift": "unknown",
+  "after_code_rerun": "failed",
+  "model_keys": {
+    "checkout/disable_debit_safety": [
+      [
+        "sha256:dc99973eb45434b1d26efc1c78ce452baf82cb5f465781ced6f94adb494ba68b",
+        "passed"
+      ]
+    ],
+    "checkout/mutant_no_idempotency": [
+      [
+        "sha256:9886300b329b676970325cec283d64ab2cc54aebdc38fe0d322eb5e09b034854",
+        "passed"
+      ]
+    ],
+    "checkout/reach_paid_after_retry": [
+      [
+        "sha256:61c0ee364674ad2536703f18e89db5555f79954e6b9ddd4ea2d662c356c217ba",
+        "passed"
+      ]
+    ],
+    "checkout/disable_settlement_safety": [
+      [
+        "sha256:1d3b6b1aea9b88c561ef50ab41e218dbde46ece0fb63b807660f118e8a16471b",
+        "passed"
+      ]
+    ],
+    "checkout/design": [
+      [
+        "sha256:209fbfd4d57cb1728fb2a3206188a80c5f79b858f5dfc734282d01226db056e6",
+        "passed"
+      ]
+    ],
+    "checkout/mutant_never_settles": [
+      [
+        "sha256:7976394394d9be9206126c07bc755ff908bee9cf3615d61898b708519c584ec9",
+        "passed"
+      ]
+    ]
+  },
+  "first_node": {
+    "checked": 8,
+    "error": 0,
+    "failed": 0,
+    "not_checkable": 0,
+    "obligations": 8,
+    "passed": 2,
+    "refused": 0,
+    "reused": 0,
+    "unavailable": 6,
+    "unsupported": 0
+  },
+  "model": {
+    "checked": 6,
+    "error": 0,
+    "failed": 0,
+    "not_checkable": 0,
+    "obligations": 8,
+    "passed": 6,
+    "refused": 0,
+    "reused": 2,
+    "unavailable": 0,
+    "unsupported": 0
+  },
+  "after_code_drift": {
+    "checked": 2,
+    "error": 0,
+    "failed": 1,
+    "not_checkable": 0,
+    "obligations": 8,
+    "passed": 1,
+    "refused": 0,
+    "reused": 6,
+    "unavailable": 0,
+    "unsupported": 0
+  }
+}

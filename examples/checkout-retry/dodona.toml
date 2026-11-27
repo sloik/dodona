@@ -1,0 +1,26 @@
+[project]
+name = "checkout-retry"
+config = "0.2"
+
+[[binding]]
+name = "checkout-model"
+provider = "dodona.tla"
+capabilities = ["obligation.enumerate", "obligation.check"]
+match = ["spec/checkout/*.tla", "spec/checkout/*.cfg", "spec/checkout/expected.json"]
+
+[[binding]]
+name = "checkout-tests"
+provider = "dodona.node-test"
+capabilities = ["obligation.enumerate", "obligation.check"]
+match = ["checkout.cjs", "tests/*.cjs", "tests/*.test.js"]
+
+[[binding]]
+name = "checkout-intent"
+provider = "dodona.intent.markdown"
+capabilities = ["intent.index"]
+match = ["intents/*.md"]
+
+[[binding]]
+name = "executor"
+provider = "@site"
+capabilities = ["run.submit"]
