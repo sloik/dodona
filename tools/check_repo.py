@@ -1650,6 +1650,16 @@ def check_planted_defect_anchors(directory: str) -> None:
             problems.append(f"{directory}/defects.json: {defect['name']!r}: anchor absent from {directory}/{file}")
 
 
+
+def gap_js_plant_cli_uses_supervisor() -> None:
+    """The normal CLI needs the supervisor exercised by the crash controls."""
+    plant = (ROOT / "kernel2/plant.js").read_text(encoding="utf-8")
+    entry = plant.partition("if (require.main === module)")[2]
+    checks = (ROOT / ".github/workflows/checks.yml").read_text(encoding="utf-8")
+    if "supervise().then(" not in entry or "node --test kernel2/test-plant.js" not in checks:
+        problems.append("the JavaScript planted-defect CLI must use its tested crash supervisor")
+
+
 def gap_js_planted_defect_anchors_exist() -> None:
     """Every listed JavaScript defect needs source text its runner can replace."""
     check_planted_defect_anchors("kernel2")
@@ -2076,7 +2086,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
-              gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist, gap_js_status_exercises_retained_ledger_work,
+              gap_js_plant_cli_uses_supervisor, gap_js_planted_defect_anchors_exist,
+              gap_rust_planted_defect_anchors_exist, gap_js_status_exercises_retained_ledger_work,
               gap_rust_defect_shards_cover_the_inventory, gap_site_executor_reports_measured_tool_keys, gap_ledger_judge_keeps_held_lock_result,
               gap_site_driver_applies_case_timeouts,
               gap_site_model_requests_use_protected_policy,

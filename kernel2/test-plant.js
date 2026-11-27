@@ -1,7 +1,7 @@
 'use strict';
 // Tests of plant.js, the planted-defect runner (issue 41): it credits only a rejection that repeats, never a
-// judge that did not finish, and it removes only its own copy. Every process the runner would start is answered
-// by a fake, so no judge, kernel or unit test really runs.
+// judge that did not finish, and it removes only its own copy. The judge calls are faked.
+// The supervisor controls start real test workers that only write inside their temporary directory.
 //
 //     node --test kernel2/test-plant.js
 
@@ -10,6 +10,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { fork } = require('node:child_process');
 const plant = require('./plant.js');
 
 const done = (status, stdout = '', stderr = '') => ({ status, signal: null, stdout, stderr });
@@ -641,4 +642,97 @@ test('an unchanged copy that cannot be judged is unfinished, and one that is rej
   const rejected = batch(t, { run_kit: [kit(['plan/a'])] });
   assert.deepEqual([rejected.code, rejected.report.caught, rejected.report.finished], [1, 0, true]);
   assert.deepEqual(rejected.left, ['kernel2-plant-other']);
+});
+
+const passingBatch = {
+  defects: 1, caught: 1, finished: true, cleaned_up: true, all_caught: false,
+  shard_index: 0, shard_count: 1, inventory_count: 1, shard_caught: true,
+};
+
+async function supervisedBatch(t, childSource, options = {}) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dodona-supervisor-test-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const marker = path.join(tmp, 'unrelated');
+  fs.writeFileSync(marker, 'preserve this');
+  const worker = path.join(tmp, 'worker.cjs');
+  fs.writeFileSync(worker, `
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const owned = process.argv[2];
+    const copy = path.join(owned, 'copy');
+    fs.mkdirSync(copy);
+    fs.writeFileSync(path.join(copy, 'planted'), 'partial batch');
+    ${childSource}
+  `);
+  const output = [];
+  const status = await plant.supervise({
+    tmp, only: ['--shard', '0', '1'],
+    startWorker: (owned, only) => {
+      assert.deepEqual(only, ['--shard', '0', '1']);
+      return fork(worker, [owned], { execArgv: [], stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
+    },
+    log: (line) => output.push(line),
+    pause: () => {},
+    ...options,
+  });
+  assert.equal(fs.readFileSync(marker, 'utf8'), 'preserve this');
+  return { output, status, remaining: fs.readdirSync(tmp).sort() };
+}
+
+test('the supervisor removes a crashed worker copy and publishes no success', async (t) => {
+  const result = await supervisedBatch(t, 'process.exit(71);');
+  assert.equal(result.status, 2);
+  assert.deepEqual(result.remaining, ['unrelated', 'worker.cjs']);
+  assert.deepEqual(result.output.map((line) => line.split(':')[0]), ['UNFINISHED']);
+});
+
+test('the supervisor publishes the completed receipt after its copy is removed', async (t) => {
+  const result = await supervisedBatch(t, `
+    process.send({ status: 0, summary: ${JSON.stringify(passingBatch)} }, () => process.disconnect());
+  `);
+  assert.equal(result.status, 0);
+  assert.deepEqual(result.remaining, ['unrelated', 'worker.cjs']);
+  assert.deepEqual(result.output.map(JSON.parse), [passingBatch]);
+});
+
+test('the supervisor withholds a receipt whose exit contradicts it', async (t) => {
+  const result = await supervisedBatch(t, `
+    process.exitCode = 1;
+    process.send({ status: 0, summary: ${JSON.stringify(passingBatch)} }, () => process.disconnect());
+  `);
+  assert.equal(result.status, 2);
+  assert.deepEqual(result.remaining, ['unrelated', 'worker.cjs']);
+  assert.deepEqual(result.output.map((line) => line.split(':')[0]), ['UNFINISHED']);
+});
+
+test('the supervisor refuses a success receipt from a different shard', async (t) => {
+  const wrong = { ...passingBatch, shard_index: 1 };
+  const result = await supervisedBatch(t, `
+    process.send({ status: 0, summary: ${JSON.stringify(wrong)} }, () => process.disconnect());
+  `);
+  assert.equal(result.status, 2);
+  assert.deepEqual(result.remaining, ['unrelated', 'worker.cjs']);
+  assert.deepEqual(result.output.map((line) => line.split(':')[0]), ['UNFINISHED']);
+});
+
+test('the supervisor preserves a completed miss and its exit status', async (t) => {
+  const missing = { ...passingBatch, caught: 0, shard_caught: false };
+  const result = await supervisedBatch(t, `
+    process.exitCode = 1;
+    process.send({ status: 1, summary: ${JSON.stringify(missing)} }, () => process.disconnect());
+  `);
+  assert.equal(result.status, 1);
+  assert.deepEqual(result.remaining, ['unrelated', 'worker.cjs']);
+  assert.deepEqual(result.output.map(JSON.parse), [missing]);
+});
+
+test('the supervisor withholds a successful receipt when cleanup fails', async (t) => {
+  let attempts = 0;
+  const result = await supervisedBatch(t, `
+    process.send({ status: 0, summary: ${JSON.stringify(passingBatch)} }, () => process.disconnect());
+  `, { remove: () => { attempts += 1; throw new Error('injected cleanup failure'); } });
+  assert.equal(result.status, 2);
+  assert.equal(attempts, plant.REMOVE_ATTEMPTS);
+  assert.equal(result.remaining.length, 3);
+  assert.deepEqual(result.output.map((line) => line.split(':')[0]), ['UNFINISHED']);
 });
