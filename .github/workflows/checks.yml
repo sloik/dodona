@@ -156,6 +156,16 @@ jobs:
         run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel ${{ matrix.rust_kernel }} --status "node kernel2/dodona-kernel2.js status" -- node kernel2/dodona-kernel2.js run
       - name: Check the second kernel's run module
         run: node --test kernel2/test-run.js
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.3'
+          package-manager-cache: false
+      - name: Qualify the Node test provider
+        run: ${{ matrix.python }} providers/node-test/test_provider.py
+      - name: Test the local Node executor
+        run: ${{ matrix.python }} .github/site/test_local_executor.py
+      - name: Judge a Node project's run and ledger with both kernels
+        run: ${{ matrix.python }} .github/site/test_node_project.py --kernel ${{ matrix.rust_kernel }}
 
   # Every shard checks the unchanged kernel and plants a disjoint part of the
   # manifest. The matrix supplies the ordinal and total to keep the partition full.

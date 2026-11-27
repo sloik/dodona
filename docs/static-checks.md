@@ -7,7 +7,7 @@ Linters that read the code without running it, one for each language and format 
 | `lint (Python and workflows)` | ruff 0.17.6 | [ruff.toml](../ruff.toml) | every Python file |
 | `lint (Python and workflows)` | actionlint 1.7.12, built with Go 1.27.4 and run with the runner image's shellcheck | [.github/actionlint.yaml](../.github/actionlint.yaml) | `.github/workflows/` |
 | `lint (Python and workflows)` | zizmor 1.32.0 | [.github/zizmor.yml](../.github/zizmor.yml) | `.github/workflows/` |
-| `lint (JavaScript)` | ESLint 10.15.0 | [eslint.config.mjs](../eslint.config.mjs) | `kernel2/` |
+| `lint (JavaScript)` | ESLint 10.16.0 | [eslint.config.mjs](../eslint.config.mjs) | `kernel2/` |
 | `lint (Rust, macos)`, `(linux)`, `(windows)` | Clippy from Rust 1.100.0 | default lints with warnings treated as errors | `kernel/` |
 | `lint` | none | every job above succeeded | the results of the jobs above |
 
@@ -42,4 +42,4 @@ The ESLint configuration reads `.js`, `.mjs` and `.cjs` files under `kernel2/`.
 
 The repository checker keeps a snapshot of the six names required by the `main` ruleset. It follows candidate jobs, their `needs` chains, repository-local reusable workflows and reachable composite actions. In those paths, jobs and steps must omit `continue-on-error`. An unmatched required name, unresolved dependency or unauditable reusable call fails the check. Keep the offline snapshot in step with the effective ruleset when its required names change. [GitHub workflow failure handling](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax). [Gap checks](gap-checks.md) · [GitHub action metadata](https://docs.github.com/en/actions/reference/workflows-and-actions/metadata-syntax).
 
-The zizmor positions in the repository workflow follow the shard invocations when platform check steps move them.
+The repository workflow names the original four shard argument positions in the zizmor configuration. The Node qualification installs its pinned runtime after the regular repository checks. The zizmor exclusions still refer to the four shard matrix arguments at their new positions.

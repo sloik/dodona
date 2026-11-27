@@ -27,6 +27,12 @@ docs = ["spec/README.md", "spec/CLAIMS.md"]
 why = "How the models are run, judged and reused, and what the results count for, is told in the models' README and the claims."
 
 [[rule]]
+id = "node-test-provider"
+code = ["providers/node-test/*.py"]
+docs = ["providers/README.md", "decisions/0035-a-test-runner-provider.md"]
+why = "The test provider's input order, verdict and limits are described with the adapter and its proposed decision."
+
+[[rule]]
 id = "site"
 code = [".github/site/*.py", ".github/site/*.json"]
 docs = [".github/site/README.md"]
@@ -69,7 +75,7 @@ code = ["tools/run_kit.py", "tools/run_vectors.py", "tools/run_path_vectors.py",
         "tools/run_ledger_cases.py", "tools/run_input_cases.py", "tools/run_provider_cases.py",
         "tools/run_check_cases.py", "tools/run_status_cases.py", "tools/run_run_cases.py",
         "tools/kernel_differential.py", "tools/path_differential.py",
-        "tools/kit_adequacy.py"]
+        "tools/kit_adequacy.py", "tools/recover_plant_batches.py"]
 docs = ["conformance/README.md", "docs/gap-checks.md"]
 why = "How a kernel or host is judged is written in the kit's README, and the judges that run as their own tools are listed with the gap behind each."
 
