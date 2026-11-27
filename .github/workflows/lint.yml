@@ -54,9 +54,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # One exact ESLint version; the second kernel itself has no dependencies and gains none.
+      - name: Install the locked ESLint dependency tree
+        run: npm ci --prefix .github/eslint --ignore-scripts --no-audit --no-fund
       - name: The second kernel, with ESLint (eslint.config.mjs)
-        run: npx --yes eslint@10.15.0 kernel2
+        run: node .github/eslint/node_modules/eslint/bin/eslint.js kernel2
 
   rust:
     # The kernel has code for one system only (cfg(unix), cfg(windows)), so it is linted on each.

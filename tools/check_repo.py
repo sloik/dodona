@@ -48,7 +48,7 @@ import run_vectors  # noqa: E402
 
 problems: list[str] = []
 
-SKIPPED_PARTS = {".git", "__pycache__", "target"}
+SKIPPED_PARTS = {".git", "__pycache__", "target", "node_modules"}
 
 
 def repo_files(pattern: str = "**/*"):
@@ -447,7 +447,7 @@ def gap_thin_coverage_is_shown() -> None:
 def gap_every_tool_compiles() -> None:
     """A syntax error in the status command reached the branch because nothing ran that file."""
     for path in sorted(list((ROOT / "tools").glob("*.py")) + list((ROOT / "providers").rglob("*.py"))
-                       + list((ROOT / "conformance").rglob("*.py")) + list((ROOT / ".github").rglob("*.py"))):
+                       + list((ROOT / "conformance").rglob("*.py")) + repo_files(".github/**/*.py")):
         try:
             compile(path.read_text(encoding="utf-8"), str(path), "exec")  # checks syntax, writes nothing
         except SyntaxError as err:
@@ -1405,6 +1405,39 @@ def gap_eslint_no_redeclare_stays_enabled() -> None:
 
 
 
+def gap_eslint_uses_locked_install() -> None:
+    """The hosted JavaScript lint must install and use the locked ESLint tree."""
+    try:
+        reader = pinned_workflow_reader()
+        workflow = (ROOT / ".github/workflows/lint.yml").read_text(encoding="utf-8")
+        steps = workflow_jobs(reader().load(workflow))["javascript"]["steps"]
+        run_steps = [step for step in steps if "run" in step]
+    except Exception as err:  # noqa: BLE001 - an unreadable lint job leaves its install unjudged
+        problems.append(f"cannot read the JavaScript lint job: {err}")
+    else:
+        commands = [
+            "npm ci --prefix .github/eslint --ignore-scripts --no-audit --no-fund",
+            "node .github/eslint/node_modules/eslint/bin/eslint.js kernel2",
+        ]
+        if [step["run"] for step in run_steps] != commands or any("if" in step for step in run_steps):
+            problems.append("JavaScript lint must install and use ESLint from the committed dependency lock")
+
+    tooling = ROOT / ".github/eslint"
+    try:
+        manifest = json.loads((tooling / "package.json").read_text(encoding="utf-8"))
+        lock = json.loads((tooling / "package-lock.json").read_text(encoding="utf-8"))
+        version = manifest["devDependencies"]["eslint"]
+        packages = lock["packages"]
+        locked_version = packages["node_modules/eslint"]["version"]
+        locked_dependencies = packages[""]["devDependencies"]
+        integrity = all(item.get("integrity") for name, item in packages.items() if name)
+    except (OSError, KeyError, AttributeError, TypeError, ValueError) as err:
+        problems.append(f"cannot read the ESLint dependency lock: {err}")
+        return
+    exact = isinstance(version, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version)
+    if not exact or locked_version != version or locked_dependencies != manifest["devDependencies"] or not integrity:
+        problems.append("ESLint needs a matching exact version and integrity hashes in its dependency lock")
+
 def clippy_lint_steps_problem(steps) -> str | None:
     run_steps = [step for step in steps if isinstance(step, dict) and isinstance(step.get("run"), str)]
     expected = "Rust lint must install a pinned Clippy and run it with warnings as errors"
@@ -2027,14 +2060,14 @@ def gap_evidence_strength_follows_kind() -> None:
 
 
 def gap_no_generated_files_are_tracked() -> None:
-    """Compiled caches were once committed by mistake."""
+    """Compiled caches and installed dependency trees are generated files."""
     import shutil
     import subprocess
     if not shutil.which("git") or not (ROOT / ".git").exists():
         return
     listed = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
     for path in listed:
-        if "__pycache__" in path or path.endswith(".pyc") or path.startswith("kernel/target/"):
+        if "__pycache__" in path or path.endswith(".pyc") or path.startswith("kernel/target/") or "node_modules" in path.split("/"):
             problems.append(f"{path}: a generated file is under version control")
 
 
@@ -2103,7 +2136,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
               gap_workflows_are_safe, gap_lint_aggregate_needs_every_job, gap_ruff_f401_stays_enabled,
               gap_eslint_no_redeclare_stays_enabled,
-              gap_clippy_is_pinned_and_strict, gap_owner_rule_review_is_exact,
+              gap_eslint_uses_locked_install, gap_clippy_is_pinned_and_strict, gap_owner_rule_review_is_exact,
               gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
