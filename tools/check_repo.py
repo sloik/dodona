@@ -509,7 +509,10 @@ def gap_checkout_evidence_is_available() -> None:
     required = {evidence / name for name in ("fresh-model-ledger.txt", "fresh-sample-ledger.txt",
                                             "fresh-samples-before-drift.txt", "fresh-model-witnesses.txt",
                                             "fresh-replay.json", "fresh-drift.patch", "replay-input.json",
-                                            "linked-reachability-status.json", "fresh-native-reports.json")}
+                                            "fresh-native-reports.json", "linked-reachability-status.json",
+                                            "linked-status-request.json", "linked-owner-ledger.txt",
+                                            "linked-baseline-ledger.txt", "linked-missing-witness-ledger.txt",
+                                            "linked-rerun-ledger.txt")}
     source = fixture / "fresh-trial"
     required.update(source / name for name in ("dodona.toml", "policy.toml", "intents/0001-checkout.md",
                                                "checkout/checkout.js", "checkout/progress.test.js",

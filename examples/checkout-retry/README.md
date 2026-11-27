@@ -46,6 +46,12 @@ The table records the original run. The six model keys stayed identical across t
 
 The published intent gives the paid path its own hard criterion. The model provider treats the expected `NeverSettledAfterRetry` violation as a counterexample to the disabled-charging configuration, which checks that same invariant. The trace from the enabled configuration establishes reachability. Both native kernels read the archived ledgers against the published intent and agreed on all five reports. Removing only the paid-path receipt left its result unknown, the project unknown and the intent open. No model search was needed for this ledger-only control. [Linked reachability status](evidence/linked-reachability-status.json).
 
+### Audit the paid-path control
+
+Copy this example to a scratch folder. Copy the provider files listed in the status request from the pinned Dodona revision, preserving their relative paths. Build the Rust reader and use the JavaScript reader from that revision. Run each reader's `status` command from the example root and send the request JSON on standard input. Use the site's Python command in the three provider commands if it differs from `python3`. The declared platform and pins identify the stored results. This check reads the ledger and enumerates the fixture without starting Node tests or model searches. [Pinned Dodona source](https://github.com/sloik/dodona/tree/57cbe64b824dfd63f5a0979a857a2337804e80f1) · [Status request](evidence/linked-status-request.json).
+
+The request names the baseline check ledger and synthetic confirmation ledger. For the missing-witness phase, replace the sole `ledgers` entry with `evidence/linked-missing-witness-ledger.txt`. For the draft phase, use the baseline check ledger with an absent confirmation ledger. To read the code-drift phases, set `SETTLE_PAID_RETRY` to `false`. The baseline ledger then shows both runtime results as unknown. Switch to the archived rerun ledger to read the recorded settlement failure. [Baseline ledger](evidence/linked-baseline-ledger.txt) · [Confirmation ledger](evidence/linked-owner-ledger.txt) · [Missing-witness ledger](evidence/linked-missing-witness-ledger.txt) · [Rerun ledger](evidence/linked-rerun-ledger.txt).
+
 ## Try the example
 
 Use a separate checkout containing the files in this directory. The two runtime tests run with Node 24.22.3 and require no packages or network. Run them from the example root.
