@@ -38,6 +38,8 @@ A last job, `lint`, needs every other job of the workflow, runs whatever their o
 
 A rule is left off only with its reason written next to it in the configuration, and listed below. The kernels name no tool: every configuration lives at the root of the repository or under `.github/`.
 
+The Ruff F401 waiver applies to the retained `fnmatch` import in `tools/metrics.py`.
+
 ESLint reports no-redeclare errors throughout the second kernel. The duplicate `isObject` implementation was removed with a new recorded comparison for C37.
 
 ## Left for later
@@ -47,7 +49,6 @@ Each of these breaks on the code as it is now, and is left off rather than met b
 - `ruff format`: 55 Python files would be reformatted.
 - ruff 0.17.6's own default selection, which is wider than the rules above: 191 findings, among them B023 (a function that uses a loop variable, nine times), PLW1510 (`subprocess.run` without `check`, 41 times) and many style rules. B023 is worth reading first, as it can be a real mistake.
 - ruff E701, E702, E731 and E741: statements on one line, lambdas assigned to names, and `l` as a name; style, in many places.
-- ruff F401 in `tools/metrics.py`: one unused import, `import fnmatch`, in a file another pull request (#55) is changing. It is off for that file until then, and is to become `# noqa: F401` on that one line once #55 has merged.
 - ruff F841 on one line of `tools/check_repo.py`: `problems_before` is set and never read in `gap_an_intent_reads_one_way_only`. It is dead code, not a defect: a review showed the check still fails as it should. It is marked `# noqa: F841` on that line and kept, because `tools/check_repo.py` is a judged file.
 - ESLint's own dependencies are not locked: ESLint runs at an exact version through `npx`, with no lock file.
 - `cargo fmt --check`: a formatting pass would need to preserve the exact textual anchors of planted defects in the first kernel.

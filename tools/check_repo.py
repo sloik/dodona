@@ -1352,6 +1352,38 @@ def lint_aggregate_and_name_problems(workflows: dict[str, str]) -> list[str]:
     return found
 
 
+
+def ruff_f401_problem(config: str) -> str | None:
+    lint = tomllib.loads(config).get("lint", {})
+
+    def covers_f401(rules):
+        return any(rule == "ALL" or "F401".startswith(rule) for rule in rules)
+
+    selected = lint.get("select", ["F"]) + lint.get("extend-select", [])
+    ignored = lint.get("ignore", []) + lint.get("extend-ignore", [])
+    for setting in ("per-file-ignores", "extend-per-file-ignores"):
+        for rules in lint.get(setting, {}).values():
+            ignored.extend(rules)
+    if not covers_f401(selected) or covers_f401(ignored):
+        return "ruff F401 must stay enabled outside a source-line waiver"
+    return None
+
+
+def gap_ruff_f401_stays_enabled() -> None:
+    """Keep unused-import coverage after retiring the metrics file waiver."""
+    problem = ruff_f401_problem((ROOT / "ruff.toml").read_text(encoding="utf-8"))
+    if problem:
+        problems.append(problem)
+    enabled = '[lint]\nselect = ["F"]\n'
+    plants = (
+        enabled.replace('"F"', '"E4"'),
+        enabled + 'ignore = ["F4"]\n',
+        enabled + '[lint.per-file-ignores]\n"tools/metrics.py" = ["F401"]\n',
+    )
+    if ruff_f401_problem(enabled) or not all(map(ruff_f401_problem, plants)):
+        problems.append("the Ruff guard did not distinguish enabled F401 from its planted faults")
+
+
 def eslint_scope_problem(config: str) -> str | None:
     redeclare = r"""['"]no-redeclare['"]\s*\]?\s*:\s*\[?\s*([^,}\]\r\n]+)"""
     declarations = re.findall(redeclare, config)
@@ -2069,7 +2101,8 @@ def gap_documents_follow_the_code() -> None:
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
-              gap_workflows_are_safe, gap_lint_aggregate_needs_every_job, gap_eslint_no_redeclare_stays_enabled,
+              gap_workflows_are_safe, gap_lint_aggregate_needs_every_job, gap_ruff_f401_stays_enabled,
+              gap_eslint_no_redeclare_stays_enabled,
               gap_clippy_is_pinned_and_strict, gap_owner_rule_review_is_exact,
               gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
