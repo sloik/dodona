@@ -29,15 +29,14 @@
 // Then a JSON summary. Exit status 0 only if every defect was caught; 2 if anything did not
 // finish, the defect list could not be read, or the copy could not be made or removed; 1 otherwise.
 //
-// The copy is removed when the run ends, and only this run's copy, with a bounded number of
-// attempts; a copy still there after the last leaves the run unfinished. A run killed outright
-// (SIGKILL, or a signal Node does not catch) can leave its copy behind; the summary then is never
-// printed, so nothing claims it was removed.
+// The CLI supervisor creates the run's temporary directory. The worker's copy is under that
+// directory. A surviving supervisor removes it even if the worker crashes. It publishes the
+// worker's summary after cleanup. Killing the supervisor outright can still leave its directory.
 
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { fork, spawnSync } = require('node:child_process');
 const strictJson = require('./strict-json');
 
 const root = path.resolve(__dirname, '..');
@@ -243,8 +242,9 @@ function main({
   only = process.argv.slice(2),
   otherKernel = OTHER_KERNEL,
   log = console.log,
+  emitSummary = (summary) => log(JSON.stringify(summary)),
   copyTree = (from, to) => fs.cpSync(from, to, { recursive: true }),
-  remove = (dir) => fs.rmSync(dir, { recursive: true, force: true }),
+  remove = removeTree,
   pause = sleep,
 } = {}) {
   if (!fs.existsSync(otherKernel)) {
@@ -327,7 +327,7 @@ function main({
     if (shard) {
       Object.assign(report, { shard_index: shard.index, shard_count: shard.count, inventory_count: inventoryCount, shard_caught: all });
     }
-    log(JSON.stringify(report));
+    emitSummary(report);
     if (all) return 0;
     if (!finished || !cleanedUp || counts.unfinished > 0 || counts.caught_provisionally > 0) return 2;
     return 1;
@@ -353,6 +353,84 @@ function readDefects(file) {
 }
 
 const REMOVE_ATTEMPTS = 3;
+const WORKER_ARGUMENT = '--dodona-plant-worker';
+
+function removeTree(directory) {
+  fs.rmSync(directory, { recursive: true, force: true });
+}
+
+function startBatchWorker(owned, only) {
+  return fork(__filename, [WORKER_ARGUMENT, owned, ...only], {
+    stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+  });
+}
+
+function workerResult(worker) {
+  return new Promise((resolve) => {
+    let receipt;
+    let received = 0;
+    let error;
+    worker.on('message', (message) => { receipt = message; received += 1; });
+    worker.once('error', (failure) => { error = failure; });
+    worker.once('close', (status, signal) => resolve({ status, signal, error, receipt, received }));
+  });
+}
+
+function receiptMatchesExit(receipt, status, only) {
+  if (!receipt || receipt.status !== status || ![0, 1, 2].includes(status)) return false;
+  const summary = receipt.summary;
+  if (summary === null) return status === 2;
+  if (!summary || !Number.isInteger(summary.defects) || !Number.isInteger(summary.caught)
+      || ![summary.finished, summary.cleaned_up, summary.all_caught].every((value) => typeof value === 'boolean')) {
+    return false;
+  }
+  if (status === 0) {
+    const isShard = only[0] === '--shard';
+    const expectedSummary = isShard
+      ? summary.shard_caught === true && summary.shard_index === Number(only[1]) && summary.shard_count === Number(only[2])
+      : summary.all_caught === (only.length === 0);
+    return expectedSummary && summary.finished && summary.cleaned_up
+      && summary.defects > 0 && summary.caught === summary.defects;
+  }
+  return !summary.all_caught && summary.shard_caught !== true;
+}
+
+async function supervise({
+  only = process.argv.slice(2),
+  tmp = os.tmpdir(),
+  startWorker = startBatchWorker,
+  log = console.log,
+  remove = removeTree,
+  pause = sleep,
+} = {}) {
+  let owned;
+  let result;
+  try {
+    owned = fs.mkdtempSync(path.join(tmp, 'dodona-plant-batch-'));
+    result = await workerResult(startWorker(owned, only));
+  } catch (error) {
+    result = { error };
+  }
+  if (owned && !removeCopy(owned, remove, log, pause)) return 2;
+  if (result.error || result.signal || result.received !== 1
+      || !receiptMatchesExit(result.receipt, result.status, only)) {
+    const cause = result.error?.message || result.signal || `exit ${result.status}`;
+    log(`UNFINISHED: the planted-defect worker produced no valid completion receipt (${cause})`);
+    return 2;
+  }
+  if (result.receipt.summary !== null) log(JSON.stringify(result.receipt.summary));
+  return result.status;
+}
+
+function runBatchWorker(tmp, only) {
+  let summary = null;
+  const status = main({ tmp, only, emitSummary: (report) => { summary = report; } });
+  process.exitCode = status;
+  process.send({ status, summary }, (error) => {
+    if (error) process.exitCode = 2;
+    if (process.connected) process.disconnect();
+  });
+}
 
 // Removes this run's own copy, the exact directory it made and nothing else, trying a bounded number of times
 // (a file a virus scanner or indexer holds open on Windows is let go soon after). True only once the directory
@@ -373,11 +451,18 @@ function removeCopy(copy, remove, log, pause) {
   return false;
 }
 
-// Waits without a busy loop; the runner is synchronous throughout.
+// The worker and the supervisor both use this bounded removal retry.
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-module.exports = { JUDGES, REMOVE_ATTEMPTS, UNIT_TESTS, auxiliaryVerdict, judgeCopy, loads, main, readDefects, scenarioVerdict };
+module.exports = { JUDGES, REMOVE_ATTEMPTS, UNIT_TESTS, auxiliaryVerdict, judgeCopy, loads, main, readDefects, scenarioVerdict, supervise };
 
-if (require.main === module) process.exitCode = main();
+if (require.main === module) {
+  const [mode, tmp, ...only] = process.argv.slice(2);
+  if (mode === WORKER_ARGUMENT && typeof process.send === 'function') {
+    runBatchWorker(tmp, only);
+  } else {
+    supervise().then((status) => { process.exitCode = status; });
+  }
+}

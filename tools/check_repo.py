@@ -1715,6 +1715,25 @@ def check_planted_defect_anchors(directory: str) -> None:
             problems.append(f"{directory}/defects.json: {defect['name']!r}: anchor absent from {directory}/{file}")
 
 
+
+def gap_js_plant_cli_uses_supervisor() -> None:
+    """The normal CLI needs the supervisor exercised by the crash controls."""
+    plant = (ROOT / "kernel2/plant.js").read_text(encoding="utf-8")
+    entry = plant.partition("if (require.main === module)")[2]
+    checks = (ROOT / ".github/workflows/checks.yml").read_text(encoding="utf-8")
+    if "supervise().then(" not in entry or "node --test kernel2/test-plant.js" not in checks:
+        problems.append("the JavaScript planted-defect CLI must use its tested crash supervisor")
+
+
+
+def gap_rust_plant_cli_uses_supervisor() -> None:
+    """The Rust mutation CLI needs the supervisor exercised by its crash controls."""
+    plant = (ROOT / "tools/kit_adequacy.py").read_text(encoding="utf-8")
+    entry = plant.partition('if __name__ == "__main__":')[2]
+    if "sys.exit(supervise(sys.argv[1:]))" not in entry:
+        problems.append("the Rust planted-defect CLI must use its tested crash supervisor")
+
+
 def gap_js_planted_defect_anchors_exist() -> None:
     """Every listed JavaScript defect needs source text its runner can replace."""
     check_planted_defect_anchors("kernel2")
@@ -2173,7 +2192,9 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_every_modelled_case_has_a_scenario, gap_planner_keeps_artifact_and_depth_cases, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
-              gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist, gap_js_status_exercises_retained_ledger_work,
+              gap_js_plant_cli_uses_supervisor, gap_rust_plant_cli_uses_supervisor,
+              gap_js_planted_defect_anchors_exist,
+              gap_rust_planted_defect_anchors_exist, gap_js_status_exercises_retained_ledger_work,
               gap_rust_defect_shards_cover_the_inventory, gap_site_executor_reports_measured_tool_keys, gap_ledger_judge_keeps_held_lock_result,
               gap_site_driver_applies_case_timeouts,
               gap_site_model_requests_use_protected_policy,
@@ -2248,6 +2269,88 @@ class ToolPinTests(unittest.TestCase):
         import host
         self.assertEqual(host.floor_digest(self.pinned["java"]), host.floor_digest(dict(self.pinned["java"], sha256="x")))
         self.assertNotEqual(host.floor_digest(self.pinned["java"]), host.floor_digest(dict(self.pinned["java"], floor="21.0.14")))
+
+
+
+def kit_worker_control(argv, owned, sender):
+    """A real started worker writes only into its parent-owned directory."""
+    copied = pathlib.Path(owned) / "kernel"
+    copied.mkdir()
+    (copied / "planted").write_text("partial copy", encoding="utf-8")
+    if argv == ["crash"]:
+        os._exit(71)
+    summary = {"defects": 1, "caught": 1, "unfinished": 0, "all_caught": True}
+    sender.send((0, summary, False))
+    if argv == ["duplicate"]:
+        sender.send((0, summary, False))
+    sender.close()
+    if argv == ["contradictory"]:
+        raise SystemExit(1)
+
+
+class KitSupervisorTests(unittest.TestCase):
+    def supervise(self, mode, **options):
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()) as output:
+            tmp = pathlib.Path(directory)
+            neighbor = tmp / "unrelated"
+            neighbor.write_text("preserve", encoding="utf-8")
+            status = kit_adequacy.supervise([mode], tmp=tmp, worker=kit_worker_control, **options)
+            self.assertEqual(neighbor.read_text(encoding="utf-8"), "preserve")
+            return status, output.getvalue().splitlines(), sorted(path.name for path in tmp.iterdir())
+
+    def test_crashed_worker_copy_is_removed_without_publishing_success(self):
+        status, lines, remaining = self.supervise("crash")
+        self.assertEqual(status, 2)
+        self.assertEqual(remaining, ["unrelated"])
+        self.assertEqual([line.split(":")[0] for line in lines], ["UNFINISHED"])
+
+    def test_completed_worker_summary_is_preserved_after_cleanup(self):
+        status, lines, remaining = self.supervise("success")
+        self.assertEqual(status, 0, lines)
+        self.assertEqual(remaining, ["unrelated"])
+        self.assertEqual([json.loads(line) for line in lines],
+                         [{"defects": 1, "caught": 1, "unfinished": 0, "all_caught": True}])
+
+    def test_contradictory_exit_withholds_worker_success(self):
+        status, lines, remaining = self.supervise("contradictory")
+        self.assertEqual(status, 2)
+        self.assertEqual(remaining, ["unrelated"])
+        self.assertEqual([line.split(":")[0] for line in lines], ["UNFINISHED"])
+
+    def test_duplicate_receipts_withhold_success(self):
+        status, lines, remaining = self.supervise("duplicate")
+        self.assertEqual(status, 2, lines)
+        self.assertEqual(remaining, ["unrelated"])
+        self.assertEqual([line.split(":")[0] for line in lines], ["UNFINISHED"])
+
+    def test_reader_accepts_eof_when_peeking_after_the_receipt_would_fail(self):
+        receipt = (0, {"defects": 1, "caught": 1, "unfinished": 0, "all_caught": True}, False)
+
+        class ClosedPipe:
+            received = False
+
+            def poll(self):
+                # Windows named pipes can raise while peeking after the writer closes.
+                if self.received:
+                    raise BrokenPipeError("peeking at the closed pipe")
+                return True
+
+            def recv(self):
+                if self.received:
+                    raise EOFError
+                self.received = True
+                return receipt
+
+        self.assertEqual(kit_adequacy.receive_batch_receipt(ClosedPipe()), receipt)
+
+    def test_cleanup_failure_withholds_worker_success(self):
+        def fail_cleanup(_):
+            raise PermissionError("injected cleanup failure")
+
+        status, lines, remaining = self.supervise("success", cleanup=fail_cleanup)
+        self.assertEqual(status, 2)
+        self.assertEqual(len(remaining), 2)
+        self.assertEqual([line.split(":")[0] for line in lines], ["UNFINISHED"])
 
 
 class KitAdequacyTests(unittest.TestCase):
@@ -4429,6 +4532,7 @@ def main() -> int:
         check()
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(JudgeTests)
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ToolPinTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitSupervisorTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitAdequacyTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(LedgerJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(InputJudgeTests))
