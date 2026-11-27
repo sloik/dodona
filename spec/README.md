@@ -6,7 +6,7 @@ On 17 November 2026, the evidence model's [Run 2](https://github.com/sloik/dodon
 |---|---|
 | [kernel/EvidenceReuse.tla](kernel/EvidenceReuse.tla) | When a recorded result may be reused, under edits, tool changes, lost runs, results arriving after an edit, and a provider that can be wrong |
 | [intent/IntentGates.tla](intent/IntentGates.tla) | When an intent may be reported delivered or fulfilled, and that a gate changes only through an owner's recorded amendment, with self-granted ones always marked and blocked where an independent approver is required |
-| [planner/Planner.tla](planner/Planner.tla) | What is rerun after a change: indirect dependencies, build tools, and file-level identity as a fallback |
+| [planner/Planner.tla](planner/Planner.tla) | What is rerun after a change and which artifact a test consumes |
 | [assurance/Assurance.tla](assurance/Assurance.tla) | The shown level as the weakest link, and when a check counts as shown able to fail |
 | [tree/IntentTree.tla](tree/IntentTree.tla) | A parent intent and its children |
 | [tree-depth/GrandchildTree.tla](tree-depth/GrandchildTree.tla) | A grandchild contributes a hard gate to its ancestors’ subtrees |

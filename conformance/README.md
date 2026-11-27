@@ -91,6 +91,8 @@ The result after each step has `"status"`, and after an `amend` step also `"amen
 
 ### Plan scenarios
 
+These scenarios judge the planner's decisions to rerun work. The planner model also records the artifact identity used by a test. The kit accounts for the physical handoff cases and the search bound in [the coverage index](kernel/index.json). [Planner claims](../spec/CLAIMS.md#modelled-in-plannerplannertla).
+
 A scenario gives `definitions`, each with what it `depends_on` and the `file` it is in; a `granularity`, `definition` or `file`; `obligations`; and the starting content of each definition and each tool. An obligation either has `targets` (definitions) and perhaps a `tool`, or is `artifact_of` another obligation, meaning it works on what that obligation produces, with a `tool` of its own.
 
 | Step | Meaning |
