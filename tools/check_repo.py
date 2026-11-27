@@ -1986,6 +1986,37 @@ def gap_every_modelled_case_has_a_scenario() -> None:
         problems.append(f"model case {case} is both covered by a scenario and listed as not covered")
 
 
+def gap_planner_keeps_artifact_and_depth_cases() -> None:
+    """Keep the independent artifact plant and both reachability controls in the model inventory."""
+    folder = ROOT / "spec/planner"
+    model = json.loads((folder / "expected.json").read_text(encoding="utf-8"))
+    cases = {case["config"]: (case["expect"], case["expect_exit"], case.get("of")) for case in model["cases"]}
+    for config, property_name in (
+        ("mutant_lookup_wrong_key.cfg", "TestUsesCurrentArtifact"),
+        ("reach_test_with_competing_artifact.cfg", "NeverTestedCurrentWithCompetingArtifact"),
+        ("reach_eight_steps.cfg", "NeverReachesEightSteps"),
+    ):
+        if cases.get(config) != ("violation", 12, property_name):
+            problems.append(f"planner: {config} must show a violation of {property_name}")
+    partitions = []
+    for case in model["cases"]:
+        if case["expect"] == "no-violation":
+            config = folder / case["config"]
+            if not config.is_file():
+                continue
+            text = config.read_text(encoding="utf-8")
+            names = ("Granularity", "InitialShape", "FirstAction", "SecondAction")
+            constants = dict(re.findall(r'^\s*(\w+)\s*=\s*"(\w+)"', text, re.M))
+            partitions.append(tuple(constants.get(name) for name in names))
+    required = {(granularity, shape, first, second)
+                for granularity in ("definition", "file")
+                for shape in ("chain", "diamond")
+                for first in ("edit", "other")
+                for second in (("any",) if granularity == "definition" else ("edit", "other"))}
+    if set(partitions) != required or len(partitions) != len(required):
+        problems.append("planner: the design must cover every initial shape and action partition for each granularity")
+
+
 def gap_kit_judge_is_strict() -> None:
     """The kit's judge must not accept a kernel that says nothing, or the wrong number of things."""
     scenario = {"steps": [{"do": {}, "expect": {"o1": {"status": "passed"}}}]}
@@ -2139,7 +2170,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_eslint_uses_locked_install, gap_clippy_is_pinned_and_strict, gap_owner_rule_review_is_exact,
               gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
-              gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
+              gap_every_modelled_case_has_a_scenario, gap_planner_keeps_artifact_and_depth_cases, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
               gap_js_planted_defect_anchors_exist, gap_rust_planted_defect_anchors_exist, gap_js_status_exercises_retained_ledger_work,

@@ -21,19 +21,79 @@
     "13": "temporal property violated",
     "other": "did not complete; counts as neither outcome"
   },
-  "bounds": "five definitions, the relation one of two shapes (a chain three steps deep, a diamond), two hash values, a compiler and a test runner; every behaviour of at most six steps",
+  "bounds": "five definitions, the relation one of two shapes (a chain three steps deep, a diamond), two hash values, a compiler and a test runner; every behaviour of at most eight steps",
   "cases": [
     {
       "config": "design_definition.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "With per-definition identity: nothing stale is reused, nothing current is rerun, and everything without a right result is planned, for both shapes of the relation."
+      "purpose": "Definition identities, chain dependencies, first source edit, second any action."
+    },
+    {
+      "config": "design_definition_chain_other.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "Definition identities, chain dependencies, first another action, second any action."
+    },
+    {
+      "config": "design_definition_diamond_edit.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "Definition identities, diamond dependencies, first source edit, second any action."
+    },
+    {
+      "config": "design_definition_diamond_other.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "Definition identities, diamond dependencies, first another action, second any action."
     },
     {
       "config": "design_file.cfg",
       "expect": "no-violation",
       "expect_exit": 0,
-      "purpose": "With file-level fallback identity: nothing stale is reused, and everything without a right result is planned."
+      "purpose": "File identities, chain dependencies, first source edit, second source edit."
+    },
+    {
+      "config": "design_file_chain_edit_other.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "File identities, chain dependencies, first source edit, second another action."
+    },
+    {
+      "config": "design_file_chain_other_edit.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "File identities, chain dependencies, first another action, second source edit."
+    },
+    {
+      "config": "design_file_chain_other_other.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "File identities, chain dependencies, first another action, second another action."
+    },
+    {
+      "config": "design_file_diamond_edit_edit.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "File identities, diamond dependencies, first source edit, second source edit."
+    },
+    {
+      "config": "design_file_diamond_edit_other.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "File identities, diamond dependencies, first source edit, second another action."
+    },
+    {
+      "config": "design_file_diamond_other_edit.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "File identities, diamond dependencies, first another action, second source edit."
+    },
+    {
+      "config": "design_file_diamond_other_other.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0,
+      "purpose": "File identities, diamond dependencies, first another action, second another action."
     },
     {
       "config": "file_costs_reruns.cfg",
@@ -111,6 +171,27 @@
       "expect_exit": 12,
       "purpose": "Planted defect: the planner plans nothing, which reuses nothing wrongly and is useless.",
       "of": "PlanComplete"
+    },
+    {
+      "config": "mutant_lookup_wrong_key.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "Planted defect. The current key exists, but the test consumes an older artifact whose compiler differs.",
+      "of": "TestUsesCurrentArtifact"
+    },
+    {
+      "config": "reach_test_with_competing_artifact.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A test can consume the current artifact while an older artifact for the same sources exists under another compiler.",
+      "of": "NeverTestedCurrentWithCompetingArtifact"
+    },
+    {
+      "config": "reach_eight_steps.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "purpose": "A trace reaches all eight steps allowed by the bound.",
+      "of": "NeverReachesEightSteps"
     }
   ]
 }

@@ -10,9 +10,11 @@
 (*                                                                         *)
 (* Two descriptions are kept apart on purpose. The SPECIFICATION finds     *)
 (* what d1 depends on by following the relation until nothing new turns   *)
-(* up, and the truth of a test is the artifact it actually ran on. The     *)
+(* up, and observes the identity of the artifact a test consumed. The    *)
 (* KERNEL builds its key from an index that follows the relation in a      *)
-(* fixed number of passes, and looks the artifact up by key. The           *)
+(* fixed number of passes, and looks the artifact up by key. Each build   *)
+(* assigns a fresh identity and records its inputs under that identity.   *)
+(* The artifact observation uses this provenance without a key lookup.    *)
 (* properties compare what the kernel would reuse and plan with what the   *)
 (* specification calls for, in both directions.                            *)
 (*                                                                         *)
@@ -21,16 +23,16 @@
 (***************************************************************************)
 EXTENDS Naturals, FiniteSets
 
-CONSTANTS Granularity, Mutant
+CONSTANTS Granularity, Mutant, InitialShape, FirstAction, SecondAction
 
-VARIABLES deps, defHash, compiler, runner, records, store, latest, steps
+VARIABLES deps, defHash, compiler, runner, records, store, artifacts, latest, tests, steps
 
-vars == <<deps, defHash, compiler, runner, records, store, latest, steps>>
+vars == <<deps, defHash, compiler, runner, records, store, artifacts, latest, tests, steps>>
 
 \* The search is bounded by depth: every behaviour of at most this many steps
 \* from one starting state. Bounding the number of records instead left a
 \* state space too large to finish.
-MaxSteps == 6
+MaxSteps == 8
 
 Defs        == {"d1", "d2", "d3", "d4", "d5"}
 Hashes      == {0, 1}
@@ -43,6 +45,9 @@ Chain   == [d \in Defs |-> CASE d = "d1" -> {"d2"} [] d = "d2" -> {"d4"} [] d = 
 \* In the diamond d5 is reached by two paths, and d3, d2's file-mate, is a dependency too; what d1
 \* depends on differs between the shapes ({d2, d4, d5} and {d2, d3, d5}).
 Diamond == [d \in Defs |-> CASE d = "d1" -> {"d2", "d3"} [] d = "d2" -> {"d5"} [] d = "d3" -> {"d5"} [] OTHER -> {}]
+Shapes == CASE InitialShape = "chain" -> {Chain}
+            [] InitialShape = "diamond" -> {Diamond}
+            [] OTHER -> {Chain, Diamond}
 
 (* The specification: everything d depends on, found by following the relation until nothing new
    turns up. *)
@@ -59,8 +64,12 @@ StepN(S, n) == IF n = 0 THEN S ELSE StepN(Step(S), n - 1)
 Closure(d) == StepN({d}, Passes)
 
 Mutants == {"none", "direct_deps_only", "no_deps", "closure_two_passes", "key_omits_producer",
-            "build_key_omits_compiler", "plan_everything", "plan_nothing", "test_without_build"}
-ASSUME Mutant \in Mutants /\ Granularity \in {"definition", "file"}
+            "build_key_omits_compiler", "plan_everything", "plan_nothing", "test_without_build",
+            "lookup_wrong_key"}
+ASSUME /\ Mutant \in Mutants /\ Granularity \in {"definition", "file"}
+       /\ InitialShape \in {"chain", "diamond", "both"}
+       /\ FirstAction \in {"edit", "other", "any"}
+       /\ SecondAction \in {"edit", "other", "any"}
 
 \* How the kernel identifies one definition.
 Ident(d) == IF Granularity = "file" THEN [x \in SameFile(d) |-> defHash[x]] ELSE defHash[d]
@@ -82,22 +91,31 @@ Key(o) ==
 \* What a source-level result really depends on: the true closure, now, found by the specification.
 Sources == [d \in TrueClosure("d1") |-> defHash[d]]
 
-\* The artifact a test run now would use: the one stored under the current
-\* build key. The planted defect takes whichever was built last.
+\* The kernel's lookup chooses an identity. The actual artifact is read by
+\* this identity, independently of the index key used to choose it.
 Stored == {s \in store : s.key = BuildKey}
-Tested == IF Mutant = "test_without_build" THEN latest
-          ELSE (CHOOSE s \in Stored : TRUE).content
+SameSources == {s \in store : s.key.defs = BuildKey.defs}
+Oldest(S) == CHOOSE s \in S : \A other \in S : s.id <= other.id
+TestedId == CASE Mutant = "test_without_build" -> latest
+               [] Mutant = "lookup_wrong_key" -> Oldest(SameSources).id
+               [] OTHER -> (CHOOSE s \in Stored : TRUE).id
+
+CurrentInputs == [sources |-> Sources, compiler |-> compiler]
+CompetingArtifact == \E id \in DOMAIN artifacts :
+    id < TestedId /\ artifacts[id].sources = Sources /\ artifacts[id].compiler # compiler
+TestObservation == [id |-> TestedId, wanted |-> CurrentInputs,
+                    competing |-> CompetingArtifact]
 
 \* What a result produced now would really rest on.
 TruthNow(o) ==
     CASE o = "check" -> [sources |-> Sources]
-      [] o = "build" -> [sources |-> Sources, compiler |-> compiler]
-      [] o = "test"  -> [artifact |-> Tested, runner |-> runner]
+      [] o = "build" -> CurrentInputs
+      [] o = "test"  -> [artifact |-> artifacts[TestedId], runner |-> runner]
 
 \* What a result for the current inputs ought to rest on. For the test that is
 \* an artifact built from the current sources by the current compiler.
 TruthWanted(o) ==
-    IF o = "test" THEN [artifact |-> [sources |-> Sources, compiler |-> compiler], runner |-> runner]
+    IF o = "test" THEN [artifact |-> CurrentInputs, runner |-> runner]
     ELSE TruthNow(o)
 
 Reusable(o) == {r \in records : r.ob = o /\ r.key = Key(o)}
@@ -107,52 +125,69 @@ Plan == CASE Mutant = "plan_everything" -> Obligations
           [] OTHER -> {o \in Obligations : Reusable(o) = {}}
 
 Init ==
-    /\ deps \in {Chain, Diamond}
+    /\ deps \in Shapes
     /\ defHash = [d \in Defs |-> 0]
     /\ compiler = 0
     /\ runner = 0
     /\ steps = 0
     /\ records = {}
     /\ store = {}
-    /\ latest = [sources |-> [d \in TrueClosure("d1") |-> 0], compiler |-> 0]  \* a placeholder; read only once something is built
+    /\ artifacts = [id \in {} |-> 0]
+    /\ latest = 0  \* read only once something has been built
+    /\ tests = {}
 
 Edit(d, h) ==
     /\ h # defHash[d]
     /\ defHash' = [defHash EXCEPT ![d] = h]
-    /\ UNCHANGED <<deps, compiler, runner, records, store, latest>>
+    /\ UNCHANGED <<deps, compiler, runner, records, store, artifacts, latest, tests>>
 
-RepinCompiler(h) == h # compiler /\ compiler' = h /\ UNCHANGED <<deps, defHash, runner, records, store, latest>>
-RepinRunner(h)   == h # runner /\ runner' = h /\ UNCHANGED <<deps, defHash, compiler, records, store, latest>>
+RepinCompiler(h) == h # compiler /\ compiler' = h /\ UNCHANGED <<deps, defHash, runner, records, store, artifacts, latest, tests>>
+RepinRunner(h)   == h # runner /\ runner' = h /\ UNCHANGED <<deps, defHash, compiler, records, store, artifacts, latest, tests>>
 
-\* A planned obligation runs. A build stores its artifact under its key. A
-\* test may run only when the build for the current inputs has been done, and
-\* takes that build's artifact. The planted defect runs the test on whatever
-\* was built last, current or not.
+\* A planned obligation runs. A build records immutable provenance under a
+\* fresh identity and associates its lookup key with that identity. A test
+\* observes the identity it used and the desired inputs at the time of use.
 Run(o) ==
     /\ o \in Plan
     /\ o = "test" => IF Mutant = "test_without_build" THEN store # {} ELSE Stored # {}
     /\ records' = records \cup {[ob |-> o, key |-> Key(o), truth |-> TruthNow(o)]}
-    /\ LET made == [sources |-> Sources, compiler |-> compiler]
-       IN  /\ store' = IF o = "build" THEN store \cup {[key |-> BuildKey, content |-> made]} ELSE store
-           /\ latest' = IF o = "build" THEN made ELSE latest
+    /\ LET id == Cardinality(DOMAIN artifacts) + 1
+       IN  /\ store' = IF o = "build" THEN store \cup {[key |-> BuildKey, id |-> id]} ELSE store
+           /\ artifacts' = IF o = "build"
+                            THEN [a \in DOMAIN artifacts \cup {id} |-> IF a = id THEN CurrentInputs ELSE artifacts[a]]
+                            ELSE artifacts
+           /\ latest' = IF o = "build" THEN id ELSE latest
+    /\ tests' = IF o = "test" THEN tests \cup {TestObservation} ELSE tests
     /\ UNCHANGED <<deps, defHash, compiler, runner>>
 
+ChangeSource == \E d \in Defs, h \in Hashes : Edit(d, h)
+OtherAction ==
+    \/ \E h \in Hashes : RepinCompiler(h) \/ RepinRunner(h)
+    \/ \E o \in Obligations : Run(o)
+
+\* The design partitions the initial shape and the first actions.
+\* Both action categories occur across the cases at each partitioned step.
+ActionKind == CASE steps = 0 -> FirstAction
+                [] steps = 1 -> SecondAction
+                [] OTHER -> "any"
 Next ==
     /\ steps < MaxSteps
     /\ steps' = steps + 1
-    /\ \/ \E d \in Defs, h \in Hashes : Edit(d, h)
-       \/ \E h \in Hashes : RepinCompiler(h) \/ RepinRunner(h)
-       \/ \E o \in Obligations : Run(o)
+    /\ \/ ActionKind # "other" /\ ChangeSource
+       \/ ActionKind # "edit" /\ OtherAction
 
 Spec == Init /\ [][Next]_vars
 
 ----------------------------------------------------------------------------
 TypeOK ==
-    /\ deps \in {Chain, Diamond}
+    /\ deps \in Shapes
     /\ defHash \in [Defs -> Hashes]
     /\ compiler \in Hashes /\ runner \in Hashes
     /\ steps \in 0..MaxSteps
     /\ \A r \in records : r.ob \in Obligations
+    /\ latest \in DOMAIN artifacts \cup {0}
+    /\ \A entry \in store : entry.id \in DOMAIN artifacts
+    /\ \A test \in tests : test.id \in DOMAIN artifacts
     /\ Granularity \in {"definition", "file"}
 
 \* Every record the kernel would reuse rests on what a result for the current
@@ -160,6 +195,11 @@ TypeOK ==
 \* artifact built from the current sources.
 NoWrongReuse ==
     \A o \in Obligations : \A r \in Reusable(o) : r.truth = TruthWanted(o)
+
+\* Read the provenance of the identity actually consumed. The verifier uses
+\* the desired inputs at the test step, with no input from the key index.
+TestUsesCurrentArtifact ==
+    \A test \in tests : artifacts[test.id] = test.wanted
 
 \* Nothing is planned that already has a result resting on the right things.
 \* Holds with definition granularity. With file granularity it is expected
@@ -174,4 +214,7 @@ PlanComplete ==
 
 \* Reachability: expected to be VIOLATED.
 NeverAllCurrent == Plan # {}
+NeverTestedCurrentWithCompetingArtifact ==
+    ~\E test \in tests : test.competing /\ artifacts[test.id] = test.wanted
+NeverReachesEightSteps == steps < 8
 =============================================================================
