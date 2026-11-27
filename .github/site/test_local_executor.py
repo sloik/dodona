@@ -12,6 +12,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+
+from local_executor import child_environment
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "tools"))
@@ -61,7 +64,7 @@ class LocalExecutor(unittest.TestCase):
 
     def test_a_test_is_run_and_its_output_kept(self):
         report, = self.answer(self.run_of())
-        self.assertEqual((report["end"], report["exit_status"]), ("exited", 0))
+        self.assertEqual((report["end"], report.get("exit_status")), ("exited", 0), self.captured(report))
         self.assertIn("ok 1 - passes", self.captured(report))
         self.assertEqual(report["tools_ran"], self.node)
         self.assertEqual(report["platform"], self.platform)
@@ -105,7 +108,14 @@ class LocalExecutor(unittest.TestCase):
 
     def test_a_run_past_its_limit_ends_timed_out(self):
         report, = self.answer(self.run_of(test="slow", wall=1500))
-        self.assertEqual(report["end"], "timed-out")
+        self.assertEqual(report["end"], "timed-out", self.captured(report))
+
+
+class ChildEnvironment(unittest.TestCase):
+    def test_windows_system_root_survives_the_allowlist(self):
+        allowed = {"PATH": "fixture-path", "SYSTEMROOT": "fixture-root"}
+        with patch.dict("os.environ", dict(allowed, NODE_OPTIONS="fixture-extra"), clear=True):
+            self.assertEqual(child_environment(), allowed)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,10 @@ import host  # noqa: E402
 KEPT = pathlib.Path("out") / "local-runs"
 
 
+def child_environment() -> dict[str, str]:
+    return {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "TMPDIR", "SYSTEMROOT") if key in os.environ}
+
+
 def identity(path: pathlib.Path) -> str | None:
     try:
         return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
@@ -132,7 +136,7 @@ def main() -> int:
                     try:
                         done = subprocess.run(argv, cwd=work / run.get("cwd", "."), capture_output=True,
                                               timeout=wall / 1000 if isinstance(wall, int) and wall > 0 else None,
-                                              env={k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "LANG", "TMPDIR", "SystemRoot")})
+                                              env=child_environment())
                         captured.write_bytes(done.stdout + done.stderr)
                         report.update(end="exited", exit_status=done.returncode)
                     except subprocess.TimeoutExpired as err:

@@ -18,6 +18,8 @@ Where dodona's own model checks run, for this repository only ([decision 0023](.
 
 The local executor measures the runtime's Node version, operating system and architecture. It also measures glibc when available on Linux. A request for a different platform is unavailable. It uses the configured floor's key only when the running version satisfies that floor. The qualification fixture uses this local executor. Its repository matrix installs Node 24.22.3 with a pinned setup action after the other checks.
 
+The child environment contains a limited set of runtime variables, including the Windows system root under the upper-case key Python uses. The executor tests also check that ambient Node options are excluded and include the captured test output when a pass or timeout is missing.
+
 Executor reports use the measured digest for a fixed pin and the site's floor key when the measured version meets that floor. The fake-queue tests check that a mismatched request cannot change either reported key.
 
 The driver applies the provider's individual wall limit when supplied. It records a timeout before continuing to the next case. The executor reports it only after the queue has confirmed completion of the batch. Partial kept artifacts are discarded and the case output remains available for diagnosis.
