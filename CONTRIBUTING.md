@@ -26,3 +26,7 @@ dodona is public while it is still a design, on purpose: it is cheapest to chang
 5. No shell scripts, absolute paths or platform-specific assumptions.
 6. Whoever does a piece of work does not approve exceptions to how it is judged.
 7. A change to code updates the documents that describe it ([docs/doc-map.toml](docs/doc-map.toml)), or a commit message says why none has to change. A pull request's description says what was verified and what was not. Both are checked ([how](docs/gap-checks.md#a-change-must-bring-its-documents)).
+
+## Before opening a pull request
+
+Identify the documentation rules for the paths you plan to change. Allow for owner review if the patch needs a new binding or changes an existing rule. Run the [documentation preflight](docs/gap-checks.md#check-before-opening-a-pull-request) with the exact PR body you plan to submit.
