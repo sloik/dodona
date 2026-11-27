@@ -27,16 +27,18 @@ A workflow of its own, [lint.yml](../.github/workflows/lint.yml), described in [
 | What | Tool | Rules |
 |---|---|---|
 | Python | ruff, lint only | [ruff.toml](../ruff.toml): syntax errors, pyflakes, and pycodestyle's likely-mistake rules (`E4`, `E7`, `E9`, `F`) |
-| JavaScript | ESLint | [eslint.config.mjs](../eslint.config.mjs): ESLint's recommended set, written out so no package is installed |
+| JavaScript | ESLint | [eslint.config.mjs](../eslint.config.mjs): ESLint's recommended set, written out with two changes |
 | Rust | clippy | default Clippy lints from Rust 1.100.0 with warnings treated as errors |
 | Workflows | actionlint, with the runner's shellcheck; zizmor | [.github/actionlint.yaml](../.github/actionlint.yaml), [.github/zizmor.yml](../.github/zizmor.yml) |
 | Editors | EditorConfig | [.editorconfig](../.editorconfig): only what the repository checks already require |
 
-The Python tools are installed from a list of exact versions and hashes ([.github/lint-tools.txt](../.github/lint-tools.txt)); actionlint is built at a tagged version through Go's checksum database; ESLint is run at an exact version with `npx`. Clippy runs on macOS, Linux and Windows, because the first kernel has code for one system only; the other tools read files and give the same answer on any system, so they run on Linux.
+The Python tools are installed from a list of exact versions and hashes ([.github/lint-tools.txt](../.github/lint-tools.txt)). Go's checksum database verifies the tagged actionlint build. ESLint is installed from its [tooling dependency lock](../.github/eslint/package-lock.json) with `npm ci`. Clippy runs on macOS, Linux and Windows, because the first kernel has code for one system only; the other tools read files and give the same answer on any system, so they run on Linux.
 
 A last job, `lint`, needs every other job of the workflow, runs whatever their outcome, and passes only if each of them succeeded: a job that failed, was skipped or was cancelled fails it. `lint` is the one name `main`'s ruleset is to require for this workflow. A required check is matched by its name, so requiring the jobs one by one would leave a required check waiting for ever once a job or a matrix entry is renamed; the jobs behind `lint` can change without touching the ruleset.
 
 A rule is left off only with its reason written next to it in the configuration, and listed below. The kernels name no tool: every configuration lives at the root of the repository or under `.github/`.
+
+The Ruff F401 waiver applies to the retained `fnmatch` import in `tools/metrics.py`.
 
 ESLint reports no-redeclare errors throughout the second kernel. The duplicate `isObject` implementation was removed with a new recorded comparison for C37.
 
@@ -47,9 +49,7 @@ Each of these breaks on the code as it is now, and is left off rather than met b
 - `ruff format`: 55 Python files would be reformatted.
 - ruff 0.17.6's own default selection, which is wider than the rules above: 191 findings, among them B023 (a function that uses a loop variable, nine times), PLW1510 (`subprocess.run` without `check`, 41 times) and many style rules. B023 is worth reading first, as it can be a real mistake.
 - ruff E701, E702, E731 and E741: statements on one line, lambdas assigned to names, and `l` as a name; style, in many places.
-- ruff F401 in `tools/metrics.py`: one unused import, `import fnmatch`, in a file another pull request (#55) is changing. It is off for that file until then, and is to become `# noqa: F401` on that one line once #55 has merged.
 - ruff F841 on one line of `tools/check_repo.py`: `problems_before` is set and never read in `gap_an_intent_reads_one_way_only`. It is dead code, not a defect: a review showed the check still fails as it should. It is marked `# noqa: F841` on that line and kept, because `tools/check_repo.py` is a judged file.
-- ESLint's own dependencies are not locked: ESLint runs at an exact version through `npx`, with no lock file.
 - `cargo fmt --check`: a formatting pass would need to preserve the exact textual anchors of planted defects in the first kernel.
 - Markdown style: links and anchors are already checked by `tools/check_docs.py`.
 - TLA+: no checker of the specifications runs outside the model queue.

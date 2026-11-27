@@ -1,0 +1,22 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module Planner
+Starting... (2026-11-27 12:55:30)
+Computing initial states...
+Error: Invariant PlanComplete is violated by the initial state:
+/\ tests = {}
+/\ steps = 0
+/\ deps = [d1 |-> {"d2"}, d2 |-> {"d4"}, d3 |-> {}, d4 |-> {"d5"}, d5 |-> {}]
+/\ runner = 0
+/\ store = {}
+/\ defHash = [d1 |-> 0, d2 |-> 0, d3 |-> 0, d4 |-> 0, d5 |-> 0]
+/\ latest = 0
+/\ artifacts = << >>
+/\ records = {}
+/\ compiler = 0
+
+Finished in 01s at (2026-11-27 12:55:30)

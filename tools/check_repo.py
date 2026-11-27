@@ -48,7 +48,7 @@ import run_vectors  # noqa: E402
 
 problems: list[str] = []
 
-SKIPPED_PARTS = {".git", "__pycache__", "target"}
+SKIPPED_PARTS = {".git", "__pycache__", "target", "node_modules"}
 
 
 def repo_files(pattern: str = "**/*"):
@@ -447,7 +447,7 @@ def gap_thin_coverage_is_shown() -> None:
 def gap_every_tool_compiles() -> None:
     """A syntax error in the status command reached the branch because nothing ran that file."""
     for path in sorted(list((ROOT / "tools").glob("*.py")) + list((ROOT / "providers").rglob("*.py"))
-                       + list((ROOT / "conformance").rglob("*.py")) + list((ROOT / ".github").rglob("*.py"))):
+                       + list((ROOT / "conformance").rglob("*.py")) + repo_files(".github/**/*.py")):
         try:
             compile(path.read_text(encoding="utf-8"), str(path), "exec")  # checks syntax, writes nothing
         except SyntaxError as err:
@@ -1352,6 +1352,38 @@ def lint_aggregate_and_name_problems(workflows: dict[str, str]) -> list[str]:
     return found
 
 
+
+def ruff_f401_problem(config: str) -> str | None:
+    lint = tomllib.loads(config).get("lint", {})
+
+    def covers_f401(rules):
+        return any(rule == "ALL" or "F401".startswith(rule) for rule in rules)
+
+    selected = lint.get("select", ["F"]) + lint.get("extend-select", [])
+    ignored = lint.get("ignore", []) + lint.get("extend-ignore", [])
+    for setting in ("per-file-ignores", "extend-per-file-ignores"):
+        for rules in lint.get(setting, {}).values():
+            ignored.extend(rules)
+    if not covers_f401(selected) or covers_f401(ignored):
+        return "ruff F401 must stay enabled outside a source-line waiver"
+    return None
+
+
+def gap_ruff_f401_stays_enabled() -> None:
+    """Keep unused-import coverage after retiring the metrics file waiver."""
+    problem = ruff_f401_problem((ROOT / "ruff.toml").read_text(encoding="utf-8"))
+    if problem:
+        problems.append(problem)
+    enabled = '[lint]\nselect = ["F"]\n'
+    plants = (
+        enabled.replace('"F"', '"E4"'),
+        enabled + 'ignore = ["F4"]\n',
+        enabled + '[lint.per-file-ignores]\n"tools/metrics.py" = ["F401"]\n',
+    )
+    if ruff_f401_problem(enabled) or not all(map(ruff_f401_problem, plants)):
+        problems.append("the Ruff guard did not distinguish enabled F401 from its planted faults")
+
+
 def eslint_scope_problem(config: str) -> str | None:
     redeclare = r"""['"]no-redeclare['"]\s*\]?\s*:\s*\[?\s*([^,}\]\r\n]+)"""
     declarations = re.findall(redeclare, config)
@@ -1372,6 +1404,39 @@ def gap_eslint_no_redeclare_stays_enabled() -> None:
         problems.append("the lint scope check did not distinguish an error from a file-wide waiver")
 
 
+
+def gap_eslint_uses_locked_install() -> None:
+    """The hosted JavaScript lint must install and use the locked ESLint tree."""
+    try:
+        reader = pinned_workflow_reader()
+        workflow = (ROOT / ".github/workflows/lint.yml").read_text(encoding="utf-8")
+        steps = workflow_jobs(reader().load(workflow))["javascript"]["steps"]
+        run_steps = [step for step in steps if "run" in step]
+    except Exception as err:  # noqa: BLE001 - an unreadable lint job leaves its install unjudged
+        problems.append(f"cannot read the JavaScript lint job: {err}")
+    else:
+        commands = [
+            "npm ci --prefix .github/eslint --ignore-scripts --no-audit --no-fund",
+            "node .github/eslint/node_modules/eslint/bin/eslint.js kernel2",
+        ]
+        if [step["run"] for step in run_steps] != commands or any("if" in step for step in run_steps):
+            problems.append("JavaScript lint must install and use ESLint from the committed dependency lock")
+
+    tooling = ROOT / ".github/eslint"
+    try:
+        manifest = json.loads((tooling / "package.json").read_text(encoding="utf-8"))
+        lock = json.loads((tooling / "package-lock.json").read_text(encoding="utf-8"))
+        version = manifest["devDependencies"]["eslint"]
+        packages = lock["packages"]
+        locked_version = packages["node_modules/eslint"]["version"]
+        locked_dependencies = packages[""]["devDependencies"]
+        integrity = all(item.get("integrity") for name, item in packages.items() if name)
+    except (OSError, KeyError, AttributeError, TypeError, ValueError) as err:
+        problems.append(f"cannot read the ESLint dependency lock: {err}")
+        return
+    exact = isinstance(version, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version)
+    if not exact or locked_version != version or locked_dependencies != manifest["devDependencies"] or not integrity:
+        problems.append("ESLint needs a matching exact version and integrity hashes in its dependency lock")
 
 def clippy_lint_steps_problem(steps) -> str | None:
     run_steps = [step for step in steps if isinstance(step, dict) and isinstance(step.get("run"), str)]
@@ -1940,6 +2005,37 @@ def gap_every_modelled_case_has_a_scenario() -> None:
         problems.append(f"model case {case} is both covered by a scenario and listed as not covered")
 
 
+def gap_planner_keeps_artifact_and_depth_cases() -> None:
+    """Keep the independent artifact plant and both reachability controls in the model inventory."""
+    folder = ROOT / "spec/planner"
+    model = json.loads((folder / "expected.json").read_text(encoding="utf-8"))
+    cases = {case["config"]: (case["expect"], case["expect_exit"], case.get("of")) for case in model["cases"]}
+    for config, property_name in (
+        ("mutant_lookup_wrong_key.cfg", "TestUsesCurrentArtifact"),
+        ("reach_test_with_competing_artifact.cfg", "NeverTestedCurrentWithCompetingArtifact"),
+        ("reach_eight_steps.cfg", "NeverReachesEightSteps"),
+    ):
+        if cases.get(config) != ("violation", 12, property_name):
+            problems.append(f"planner: {config} must show a violation of {property_name}")
+    partitions = []
+    for case in model["cases"]:
+        if case["expect"] == "no-violation":
+            config = folder / case["config"]
+            if not config.is_file():
+                continue
+            text = config.read_text(encoding="utf-8")
+            names = ("Granularity", "InitialShape", "FirstAction", "SecondAction")
+            constants = dict(re.findall(r'^\s*(\w+)\s*=\s*"(\w+)"', text, re.M))
+            partitions.append(tuple(constants.get(name) for name in names))
+    required = {(granularity, shape, first, second)
+                for granularity in ("definition", "file")
+                for shape in ("chain", "diamond")
+                for first in ("edit", "other")
+                for second in (("any",) if granularity == "definition" else ("edit", "other"))}
+    if set(partitions) != required or len(partitions) != len(required):
+        problems.append("planner: the design must cover every initial shape and action partition for each granularity")
+
+
 def gap_kit_judge_is_strict() -> None:
     """The kit's judge must not accept a kernel that says nothing, or the wrong number of things."""
     scenario = {"steps": [{"do": {}, "expect": {"o1": {"status": "passed"}}}]}
@@ -2014,14 +2110,14 @@ def gap_evidence_strength_follows_kind() -> None:
 
 
 def gap_no_generated_files_are_tracked() -> None:
-    """Compiled caches were once committed by mistake."""
+    """Compiled caches and installed dependency trees are generated files."""
     import shutil
     import subprocess
     if not shutil.which("git") or not (ROOT / ".git").exists():
         return
     listed = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
     for path in listed:
-        if "__pycache__" in path or path.endswith(".pyc") or path.startswith("kernel/target/"):
+        if "__pycache__" in path or path.endswith(".pyc") or path.startswith("kernel/target/") or "node_modules" in path.split("/"):
             problems.append(f"{path}: a generated file is under version control")
 
 
@@ -2088,11 +2184,12 @@ def gap_documents_follow_the_code() -> None:
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
-              gap_workflows_are_safe, gap_lint_aggregate_needs_every_job, gap_eslint_no_redeclare_stays_enabled,
-              gap_clippy_is_pinned_and_strict, gap_owner_rule_review_is_exact,
+              gap_workflows_are_safe, gap_lint_aggregate_needs_every_job, gap_ruff_f401_stays_enabled,
+              gap_eslint_no_redeclare_stays_enabled,
+              gap_eslint_uses_locked_install, gap_clippy_is_pinned_and_strict, gap_owner_rule_review_is_exact,
               gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
-              gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
+              gap_every_modelled_case_has_a_scenario, gap_planner_keeps_artifact_and_depth_cases, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
               gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
               gap_js_plant_cli_uses_supervisor, gap_rust_plant_cli_uses_supervisor,

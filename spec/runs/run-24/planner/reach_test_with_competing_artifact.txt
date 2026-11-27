@@ -1,0 +1,125 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module Planner
+Starting... (2026-11-27 12:46:25)
+Computing initial states...
+Finished computing initial states: 2 distinct states generated at 2026-11-27 12:46:25.
+Error: Invariant NeverTestedCurrentWithCompetingArtifact is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ tests = {}
+/\ steps = 0
+/\ deps = [d1 |-> {"d2"}, d2 |-> {"d4"}, d3 |-> {}, d4 |-> {"d5"}, d5 |-> {}]
+/\ runner = 0
+/\ store = {}
+/\ defHash = [d1 |-> 0, d2 |-> 0, d3 |-> 0, d4 |-> 0, d5 |-> 0]
+/\ latest = 0
+/\ artifacts = << >>
+/\ records = {}
+/\ compiler = 0
+
+State 2: <Next line 174, col 5 to line 177, col 44 of module Planner>
+/\ tests = {}
+/\ steps = 1
+/\ deps = [d1 |-> {"d2"}, d2 |-> {"d4"}, d3 |-> {}, d4 |-> {"d5"}, d5 |-> {}]
+/\ runner = 0
+/\ store = { [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 0],
+    id |-> 1 ] }
+/\ defHash = [d1 |-> 0, d2 |-> 0, d3 |-> 0, d4 |-> 0, d5 |-> 0]
+/\ latest = 1
+/\ artifacts = <<[compiler |-> 0, sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0]]>>
+/\ records = { [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 0],
+    ob |-> "build",
+    truth |->
+        [ compiler |-> 0,
+          sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0] ] ] }
+/\ compiler = 0
+
+State 3: <Next line 174, col 5 to line 177, col 44 of module Planner>
+/\ tests = {}
+/\ steps = 2
+/\ deps = [d1 |-> {"d2"}, d2 |-> {"d4"}, d3 |-> {}, d4 |-> {"d5"}, d5 |-> {}]
+/\ runner = 0
+/\ store = { [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 0],
+    id |-> 1 ] }
+/\ defHash = [d1 |-> 0, d2 |-> 0, d3 |-> 0, d4 |-> 0, d5 |-> 0]
+/\ latest = 1
+/\ artifacts = <<[compiler |-> 0, sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0]]>>
+/\ records = { [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 0],
+    ob |-> "build",
+    truth |->
+        [ compiler |-> 0,
+          sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0] ] ] }
+/\ compiler = 1
+
+State 4: <Next line 174, col 5 to line 177, col 44 of module Planner>
+/\ tests = {}
+/\ steps = 3
+/\ deps = [d1 |-> {"d2"}, d2 |-> {"d4"}, d3 |-> {}, d4 |-> {"d5"}, d5 |-> {}]
+/\ runner = 0
+/\ store = { [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 0],
+    id |-> 1 ],
+  [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 1],
+    id |-> 2 ] }
+/\ defHash = [d1 |-> 0, d2 |-> 0, d3 |-> 0, d4 |-> 0, d5 |-> 0]
+/\ latest = 2
+/\ artifacts = << [compiler |-> 0, sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0]],
+   [compiler |-> 1, sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0]] >>
+/\ records = { [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 0],
+    ob |-> "build",
+    truth |->
+        [ compiler |-> 0,
+          sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0] ] ],
+  [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 1],
+    ob |-> "build",
+    truth |->
+        [ compiler |-> 1,
+          sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0] ] ] }
+/\ compiler = 1
+
+State 5: <Next line 174, col 5 to line 177, col 44 of module Planner>
+/\ tests = { [ id |-> 2,
+    wanted |->
+        [compiler |-> 1, sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0]],
+    competing |-> TRUE ] }
+/\ steps = 4
+/\ deps = [d1 |-> {"d2"}, d2 |-> {"d4"}, d3 |-> {}, d4 |-> {"d5"}, d5 |-> {}]
+/\ runner = 0
+/\ store = { [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 0],
+    id |-> 1 ],
+  [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 1],
+    id |-> 2 ] }
+/\ defHash = [d1 |-> 0, d2 |-> 0, d3 |-> 0, d4 |-> 0, d5 |-> 0]
+/\ latest = 2
+/\ artifacts = << [compiler |-> 0, sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0]],
+   [compiler |-> 1, sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0]] >>
+/\ records = { [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 0],
+    ob |-> "build",
+    truth |->
+        [ compiler |-> 0,
+          sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0] ] ],
+  [ key |-> [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 1],
+    ob |-> "build",
+    truth |->
+        [ compiler |-> 1,
+          sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0] ] ],
+  [ key |->
+        [ tool |-> 0,
+          producer |->
+              [defs |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0], tool |-> 1] ],
+    ob |-> "test",
+    truth |->
+        [ runner |-> 0,
+          artifact |->
+              [ compiler |-> 1,
+                sources |-> [d1 |-> 0, d2 |-> 0, d4 |-> 0, d5 |-> 0] ] ] ] }
+/\ compiler = 1
+
+2778 states generated, 1381 distinct states found, 1064 states left on queue.
+The depth of the complete state graph search is 5.
+The average outdegree of the complete state graph is 4 (minimum is 1, the maximum 9 and the 95th percentile is 6).
+Finished in 01s at (2026-11-27 12:46:26)

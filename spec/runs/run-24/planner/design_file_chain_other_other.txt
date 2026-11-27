@@ -1,0 +1,20 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module Planner
+Starting... (2026-11-27 12:52:00)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-11-27 12:52:00.
+Progress(8) at 2026-11-27 12:52:03: 23,568 states generated (23,568 s/min), 12,502 distinct states found (12,502 ds/min), 9,814 states left on queue.
+Model checking completed. No error has been found.
+  Estimates of the probability that TLC did not check all reachable states
+  because two distinct states had the same fingerprint:
+  calculated (optimistic):  val = 1.5E-9
+  based on the actual fingerprints:  val = 2.4E-9
+330329 states generated, 169993 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 9.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 9 and the 95th percentile is 6).
+Finished in 32s at (2026-11-27 12:52:32)

@@ -1,5 +1,7 @@
 # Metrics
 
+Ruff checks the metrics tool with the repository's other Python files. The retained `fnmatch` import has a source-line F401 waiver, so another unused import in the checker fails static analysis.
+
 How complete the project is and how much of it is checked, in numbers, and which of them may only go up.
 
 `tools/metrics.py` counts what files in this repository state. Every number names the file it comes from, so a reader can open that file and count again. The tool runs no kernel, no model and no checker. A number says what a file states, not that the statement is true. For example, a claim marked checked in `spec/CLAIMS.md` is counted as marked checked; whether the mark is earned is for `tools/check_repo.py` and the recorded runs to show.

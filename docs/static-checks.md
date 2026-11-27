@@ -15,7 +15,7 @@ The last job, `lint`, needs every job above and passes only if each one succeede
 
 The repository checker reads jobs in both workflow extensions with the existing hash-pinned YAML wheel. It verifies the pin and unpacks the wheel outside the checkout before importing the reader. It reserves the `lint` check name for the aggregate job and refuses ambiguous computed names that could resolve to `lint`. The parsed job map also accounts for quoted, anchored, commented and flow-style dependency jobs. [GitHub guidance on required check names](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 
-ruff and zizmor are installed from [.github/lint-tools.txt](../.github/lint-tools.txt), which pins each version with the hash of every file published for it. actionlint is built at its tag with Go, whose checksum database verifies what it fetches. ESLint runs at its exact version through `npx`; what ESLint itself depends on is not locked. zizmor is given the job's read-only token, so that it can ask GitHub whether each pinned commit belongs to the action it names.
+ruff and zizmor are installed from [.github/lint-tools.txt](../.github/lint-tools.txt), which pins each version with the hash of every file published for it. actionlint is built at its tag with Go, whose checksum database verifies what it fetches. The JavaScript lint installs ESLint with `npm ci` from the [tooling manifest](../.github/eslint/package.json) and its [dependency lock](../.github/eslint/package-lock.json). The lock records the exact versions and package integrity hashes. The lint job runs the installed executable from the tooling directory. zizmor is given the job's read-only token, so that it can ask GitHub whether each pinned commit belongs to the action it names.
 
 [.editorconfig](../.editorconfig) tells editors what the repository checks already require: UTF-8 and line feeds. It leaves the kit's data and the saved run outputs alone, because their bytes are hashed as they are.
 
@@ -28,12 +28,13 @@ python -m pip install --no-deps --require-hashes -r .github/lint-tools.txt
 ruff check .
 zizmor .github/workflows
 actionlint
-npx --yes eslint@10.15.0 kernel2
+npm ci --prefix .github/eslint --ignore-scripts --no-audit --no-fund
+node .github/eslint/node_modules/eslint/bin/eslint.js kernel2
 rustup toolchain install 1.100.0 --profile minimal --component clippy --no-self-update
 cargo +1.100.0 clippy --locked --all-targets --manifest-path kernel/Cargo.toml -- -D warnings
 ```
 
-A rule is turned off only for the exact place it excuses, with its reason beside it: a `# noqa` comment on the line for ruff, a line and column in `.github/zizmor.yml` for zizmor. Ruff's file-wide F401 waiver in `tools/metrics.py` is scheduled to move to the `fnmatch` import after owner review of the judging file. ESLint checks no-redeclare throughout the second kernel. A zizmor exception named by position stops matching once lines above it move, and the job then fails until the position is updated. Every rule left off is listed under "Left for later" in decision 0037 until it is turned on.
+A rule is turned off only for the exact place it excuses, with its reason beside it: a `# noqa` comment on the line for ruff, a line and column in `.github/zizmor.yml` for zizmor. The retained `fnmatch` import in `tools/metrics.py` carries the F401 waiver on its own line. ESLint checks no-redeclare throughout the second kernel. A zizmor exception named by position stops matching once lines above it move, and the job then fails until the position is updated. Every rule left off is listed under "Left for later" in decision 0037 until it is turned on.
 
 The ESLint configuration reads `.js`, `.mjs` and `.cjs` files under `kernel2/`.
 

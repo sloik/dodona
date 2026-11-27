@@ -128,7 +128,8 @@ why = "Every check is listed there with the gap behind it, and how the checks ru
 [[rule]]
 id = "static-checks"
 code = [".github/workflows/lint.yml", ".github/lint-tools.txt", ".github/actionlint.yaml", ".github/zizmor.yml",
-        "ruff.toml", "eslint.config.mjs", ".editorconfig"]
+        "ruff.toml", "eslint.config.mjs", ".github/eslint/package.json", ".github/eslint/package-lock.json",
+        ".editorconfig"]
 docs = ["docs/static-checks.md"]
 why = "Which linter reads what, at which version and with which rules, and how to run them, is written there."
 
