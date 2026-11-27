@@ -30,7 +30,7 @@ The kernel answers every step. A step that has nothing to act on changes nothing
 
 - Grading an act is `acts::grade`. Acts scenarios report it; status scenarios count with it.
 - The status of an obligation from the verdicts that count is `evidence::status`, for evidence scenarios, `states` and status scenarios.
-- The status of an intent, and whether a criterion is met, are in `intent.rs`, for intent scenarios, `states` and status scenarios. A criterion that nothing checks is never met.
+- Standalone intent scenarios and `states` use `intent.rs`. The status scenario uses the same criterion check and folds the individual results over each subtree in `status.rs`. A criterion that nothing checks is never met.
 - `tree.rs` validates the parent links in a tree scenario, counts hard gates over each subtree and removes a branch with all its descendants.
 - The separation levels are `acts::LEVELS`; the assurance scale is `assurance::SCALE`. The level a status report shows for an intent is on that scale, and an exception in it is graded by `acts::grade` like every other act.
 - Identity, core keys and hexadecimal are in `canonical.rs`. A preimage with a field of its own that the definition does not have is refused as `unknown-field`; the contract names no reason for that case. In status scenarios an evidence record whose preimage cannot be keyed is rejected, and an entry that is not a record at all is neither counted nor rejected.
@@ -45,6 +45,8 @@ JSON from a provider or an executor is read by `jsonread.rs`, without recursion,
 The host's own input, the manifest, the numbered rules for a run and the rules for a final are pure functions in `host.rs` (`read_input`, `manifest`, `run_fault`, `report_fault`, `final_verdict`), each rule on its own line in the contract's order. The executor is started in `root` as the root of a process tree of its own, ended when it returns, and waited for the run's `wall_ms` and a minute more, at most 24 hours; its report is its first line, ended by a line feed alone. After `shutdown` a provider has a second to exit and is then ended, its answer standing. On Windows a process that cannot be put in a job of its own, or let run once it is in it, is ended and the command fails: nothing runs unconfined. Where the contract leaves a choice: a check reads lines of at most 1 MiB; a manifest that declares no strength for `obligation.check` has no ceiling, so any `passed` or `failed` is above it; a check whose input is not JSON at all is refused as `bad-input`, like one that is JSON but not an object.
 
 ## A project's status
+
+The native report uses the policy hard-gate floor at each root. Every child needs one hard gate in its own subtree. The report includes the root, counts and floor behind a child's verdict. A failed hard check in a required subtree fails the project. An undefined descendant leaves a project doubt. [Tree floor decision](../decisions/0030-the-hard-gate-floor-is-counted-over-the-tree.md).
 
 `status` follows conformance/README.md, "How a project's status is judged", step by step, in `project_status.rs` ([decision 0034](../decisions/0034-a-kernel-runs-a-project-and-reports-its-status.md)). It answers every input with one JSON object and exit status 0, a refusal included. The first rule broken gives the reason and nothing after it is done: every provider's code and every claimed file is read before any provider is started, and a session that said `hello` always ends with `shutdown` and every process of the provider ended.
 

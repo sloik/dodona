@@ -29684,19 +29684,18 @@
      }
     ]
    },
-   "name": "a required intent with children is not stated passed",
-   "why": "The policy requires i1 over all its descendants; no status rule reads descendants yet, so a project the report shows passed is stated unknown.",
+   "name": "an uncovered descendant prevents its required parent from passing",
+   "why": "The required parent has passing evidence. Its child has a criterion without an obligation.",
    "expect": {
     "status": {
      "intents": {
-      "i1": "fulfilled"
+      "i1": "uncovered",
+      "i2": "draft"
      },
-     "project": "passed"
+     "project": "unknown"
     },
     "project_status": "unknown",
-    "project_doubts": [
-     "a required intent has children, and no status rule reads descendants yet"
-    ]
+    "project_doubts": []
    }
   },
   {
@@ -34240,7 +34239,7 @@
     },
     "project_status": "unknown",
     "project_doubts": [
-     "a required intent has children, and no status rule reads descendants yet"
+     "a required intent has an undefined descendant"
     ]
    }
   },
@@ -34812,7 +34811,7 @@
     },
     "project_status": "unknown",
     "project_doubts": [
-     "a required intent has children, and no status rule reads descendants yet"
+     "a required intent has an undefined descendant"
     ]
    }
   },
@@ -37174,6 +37173,492 @@
    "why": "Nothing but one line feed may follow the object.",
    "expect": {
     "refused": "bad-input"
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n",
+    "intents/2.md": "the moveable intent\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [
+          "i2"
+         ],
+         "touches": []
+        },
+        {
+         "name": "i2",
+         "file": "intents/2.md",
+         "statement": "s",
+         "text": "the moveable intent",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i2"
+    ],
+    "min_hard_gates": 2,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "entries": [
+      {
+       "kind": "evidence",
+       "body": {
+        "obligation": "o1",
+        "preimage": "$preimage:o1",
+        "core_key": "$key:o1",
+        "platform": "linux/x86_64",
+        "verdict": "passed",
+        "writer": "w"
+       }
+      }
+     ]
+    }
+   ],
+   "owner_ledger": {
+    "entries": [
+     {
+      "kind": "act",
+      "body": {
+       "ticket": "t-1",
+       "kind": "confirm-baseline",
+       "target": "$baseline:i1",
+       "lineage": {
+        "intent": "i1",
+        "kind": "confirm-baseline"
+       },
+       "result": "agreed",
+       "actor": {
+        "id": "owner"
+       },
+       "worker": {
+        "id": "worker"
+       }
+      }
+     },
+     {
+      "kind": "act",
+      "body": {
+       "ticket": "t-2",
+       "kind": "confirm-baseline",
+       "target": "$baseline:i2",
+       "lineage": {
+        "intent": "i2",
+        "kind": "confirm-baseline"
+       },
+       "result": "agreed",
+       "actor": {
+        "id": "owner"
+       },
+       "worker": {
+        "id": "worker"
+       }
+      }
+     }
+    ]
+   },
+   "name": "a child meets the policy floor through its tree",
+   "why": "The child contributes one hard gate toward the tree\u2019s floor of two.",
+   "expect": {
+    "status": {
+     "obligations": {
+      "o1": "passed"
+     },
+     "intents": {
+      "i2": "fulfilled"
+     },
+     "project": "passed"
+    },
+    "project_status": "passed",
+    "project_doubts": [],
+    "coverage": {
+     "i2": {
+      "own_hard": 1,
+      "subtree_hard": 1,
+      "root": "i1",
+      "tree_hard": 2,
+      "floor": 2,
+      "floor_met_only_over_tree": true
+     }
+    }
+   }
+  },
+  {
+   "files": {
+    "dodona.toml": "# a small project\n[project]\nname = \"p\"\nconfig = \"0.2\"\n\n[[binding]]\nname = \"checks\"\ncapabilities = [\"obligation.enumerate\", \"obligation.check\"]\nprovider = \"t.check\"\nmatch = [\"m/*.txt\"]   # the files checked\n\n[[binding]]\nname = \"intents\"\ncapabilities = [\"intent.index\"]\nprovider = \"t.intents\"\nmatch = [\"intents/[0-9]*.md\"]\n\n[[binding]]\nname = \"executor\"\ncapabilities = [\"run.submit\"]\nprovider = \"@site\"\n",
+    "m/a.txt": "a\n",
+    "m/b.txt": "b\n",
+    "m/notes.md": "not claimed\n",
+    "intents/1.md": "one\n",
+    "code/check.py": "print(1)\n",
+    "code/intents.py": "print(2)\n",
+    "intents/2.md": "the moveable intent\n"
+   },
+   "providers": {
+    "t.check": {
+     "code": [
+      "code/check.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.check",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "obligation.enumerate",
+         "determinism": "deterministic"
+        },
+        {
+         "capability": "obligation.check",
+         "determinism": "deterministic",
+         "strength": {
+          "class": "c",
+          "rank": "bounded"
+         }
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "obligation.enumerate": {
+       "obligations": [
+        {
+         "name": "o1",
+         "kind": "check",
+         "specified_by": [
+          "m/a.txt"
+         ],
+         "targets": [
+          "m/b.txt"
+         ],
+         "expect": "holds",
+         "config": {
+          "n": 1
+         },
+         "inputs": [
+          "m/a.txt",
+          "m/b.txt"
+         ]
+        }
+       ],
+       "rejected": []
+      }
+     }
+    },
+    "t.intents": {
+     "code": [
+      "code/intents.py"
+     ],
+     "answers": {
+      "manifest": {
+       "protocol": "0.2",
+       "name": "t.intents",
+       "version": "1.0.0",
+       "capabilities": [
+        {
+         "capability": "intent.index",
+         "determinism": "deterministic"
+        }
+       ],
+       "tools": [],
+       "trusted_base": []
+      },
+      "intent.index": {
+       "intents": [
+        {
+         "name": "i1",
+         "file": "intents/1.md",
+         "statement": "s",
+         "text": "the intent as written",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        },
+        {
+         "name": "i2",
+         "file": "intents/2.md",
+         "statement": "s",
+         "text": "the moveable intent",
+         "owner": {
+          "id": "owner"
+         },
+         "worker": {
+          "id": "worker"
+         },
+         "criteria": [
+          {
+           "id": "1",
+           "statement": "c",
+           "gate": "hard",
+           "links": [
+            {
+             "binding": "checks",
+             "obligation": "o1"
+            }
+           ]
+          }
+         ],
+         "children": [],
+         "touches": []
+        }
+       ],
+       "amendments": [],
+       "rejected": []
+      }
+     }
+    }
+   },
+   "policy": {
+    "required": [
+     "i2"
+    ],
+    "min_hard_gates": 2,
+    "floors": {
+     "grant-amendment": "apart",
+     "change-policy": "apart",
+     "close-deferred": "helper"
+    },
+    "not_applied": []
+   },
+   "ledgers": [
+    {
+     "path": "l/run.ledger",
+     "entries": [
+      {
+       "kind": "evidence",
+       "body": {
+        "obligation": "o1",
+        "preimage": "$preimage:o1",
+        "core_key": "$key:o1",
+        "platform": "linux/x86_64",
+        "verdict": "passed",
+        "writer": "w"
+       }
+      }
+     ]
+    }
+   ],
+   "owner_ledger": {
+    "entries": [
+     {
+      "kind": "act",
+      "body": {
+       "ticket": "t-1",
+       "kind": "confirm-baseline",
+       "target": "$baseline:i1",
+       "lineage": {
+        "intent": "i1",
+        "kind": "confirm-baseline"
+       },
+       "result": "agreed",
+       "actor": {
+        "id": "owner"
+       },
+       "worker": {
+        "id": "worker"
+       }
+      }
+     },
+     {
+      "kind": "act",
+      "body": {
+       "ticket": "t-2",
+       "kind": "confirm-baseline",
+       "target": "$baseline:i2",
+       "lineage": {
+        "intent": "i2",
+        "kind": "confirm-baseline"
+       },
+       "result": "agreed",
+       "actor": {
+        "id": "owner"
+       },
+       "worker": {
+        "id": "worker"
+       }
+      }
+     }
+    ]
+   },
+   "name": "a promoted child has to meet the policy floor as root",
+   "why": "The unchanged child is now a root with one hard gate against the floor of two.",
+   "expect": {
+    "status": {
+     "obligations": {
+      "o1": "passed"
+     },
+     "intents": {
+      "i2": "unguarded"
+     },
+     "project": "unknown"
+    },
+    "project_status": "unknown",
+    "project_doubts": [],
+    "coverage": {
+     "i2": {
+      "own_hard": 1,
+      "subtree_hard": 1,
+      "root": "i2",
+      "tree_hard": 1,
+      "floor": 2,
+      "floor_met_only_over_tree": false
+     }
+    }
    }
   }
  ]

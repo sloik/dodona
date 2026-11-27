@@ -2156,10 +2156,10 @@
       "replace": ""
     },
     {
-      "name": "status step 10: a required intent with children is not a doubt",
+      "name": "status step 10: an undefined descendant of a required intent is not a doubt",
       "model_case": "(project status)",
       "file": "project-status.js",
-      "find": "  if (policy.required.some((name) => intents.has(name) && intents.get(name).children.length > 0)) doubts.push(DOUBTS.children);\n",
+      "find": "  if (requiredTreeHasUndefinedChild(policy.required, intents)) doubts.push(DOUBTS.children);\n",
       "replace": ""
     },
     {
@@ -2173,7 +2173,7 @@
       "name": "status step 11: a root is said to meet its floor only over its tree",
       "model_case": "(project status)",
       "file": "project-status.js",
-      "find": "floor_met_only_over_tree: name !== root && subtree < floor,",
+      "find": "floor_met_only_over_tree: name !== root && subtree < floor && tree >= floor,",
       "replace": "floor_met_only_over_tree: subtree < floor,"
     },
     {
@@ -2194,7 +2194,7 @@
       "name": "status step 11: the tree's count is the intent's own subtree",
       "model_case": "(project status)",
       "file": "project-status.js",
-      "find": "tree_hard: subtreeHard(root),",
+      "find": "tree_hard: tree,",
       "replace": "tree_hard: subtree,"
     },
     {
@@ -2253,6 +2253,20 @@
       "file": "tree.js",
       "find": "node.gate = gate;\n        confirmed = false;",
       "replace": "node.gate = gate;\n        if (step.edit.node === 'root' || node.parent === 'root') confirmed = false;"
+    },
+    {
+      "name": "status: a child must meet the policy floor on its own",
+      "model_case": "(status tree)",
+      "file": "status.js",
+      "find": "const minimum = parents.has(id) ? 1 : Math.max(1, state.policy.min_hard_gates);",
+      "replace": "const minimum = Math.max(1, state.policy.min_hard_gates);"
+    },
+    {
+      "name": "status: a failed descendant is ignored by the project",
+      "model_case": "(status tree)",
+      "file": "status.js",
+      "find": "['uncovered', 'open', 'unguarded', 'failed']",
+      "replace": "['uncovered', 'open', 'unguarded']"
     }
   ]
 }

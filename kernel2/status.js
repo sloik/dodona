@@ -5,7 +5,7 @@ const { identityOf, coreKey } = require('./identity');
 const vocabulary = require('./vocabulary');
 const { SCALE } = require('./assurance');
 const { gradeAct } = require('./acts');
-const { LEVELS, rank, intentStatus } = require('./intent');
+const { LEVELS, rank } = require('./intent');
 
 const CONFIRM = 'confirm-baseline';
 const MATCH = 'match-check';
@@ -126,21 +126,14 @@ function judgeIntent(id, intent, obligations, levels, ledger, state) {
   const floor = (policy.floors || {})[CONFIRM] || 'self';
   const confirmed = confirmLevels.some((level) => rank(level) >= rank(floor));
 
-  // Intent status, by the same rule as intent scenarios.
-  const criteria = {};
-  const hasObligation = {};
-  for (const [name, criterion] of Object.entries(intent.criteria)) {
+  // Checks of this intent's criteria. Descendant totals are folded separately.
+  const all = Object.values(intent.criteria).map((criterion) => {
     const states = criterion.checked_by.map((obligation) => statusOf(obligations, obligation));
-    hasObligation[name] = criterion.checked_by.length > 0;
     // A criterion is met only if something checks it and every obligation passed.
     const met = states.length > 0 && states.every((state) => state === 'passed');
-    criteria[name] = { gate: effectiveGate(criterion.gate), check: met ? 'passed' : 'unknown', met, states };
-  }
-  const uncovered = Object.keys(criteria).some((name) => !hasObligation[name]);
-  let status;
-  if (!confirmed) status = 'draft';
-  else if (uncovered) status = 'uncovered';
-  else status = intentStatus(policy, true, criteria);
+    return { gate: effectiveGate(criterion.gate), met, states };
+  });
+  const uncovered = all.some((criterion) => criterion.states.length === 0);
 
   // The level shown: the weakest criterion, each the weakest of its obligations.
   const criterionLevels = Object.keys(intent.criteria).sort().map((name) => {
@@ -159,7 +152,6 @@ function judgeIntent(id, intent, obligations, levels, ledger, state) {
   const counted = grants.filter((act) => (act.actor || {}).id === intent.owner && rank(levelFor(act, intent, policy)) >= rank(grantFloor));
   const exceptions = { counted: counted.length, below_floor: grants.length - counted.length };
 
-  const all = Object.values(criteria);
   const gates = {
     hard: all.filter((c) => c.gate === 'hard').length,
     soft: all.filter((c) => c.gate === 'soft').length,
@@ -186,7 +178,9 @@ function judgeIntent(id, intent, obligations, levels, ledger, state) {
     apart_or_better: everyLevel.filter((level) => rank(level) >= rank('apart')).length,
     of: everyLevel.length,
   };
-  return { status, baseline, gates, score, shown, exceptions, separation, criteria, uncovered };
+  const open = !confirmed || all.some((c) => c.gate === 'hard' && !c.met);
+  const failed = all.some((c) => c.gate === 'hard' && c.states.some((s) => s === 'failed' || s === 'conflict'));
+  return { baseline, gates, score, shown, exceptions, separation, confirmed, uncovered, open, failed, unguarded: false, complete: false };
 }
 
 // The highest of some levels; `self` if there are none.
@@ -199,12 +193,47 @@ function statusOf(obligations, name) {
   return Object.hasOwn(obligations, name) ? obligations[name].status : 'unknown';
 }
 
-// The project status from the intent reports.
-function projectStatus(policy, intents, reports, obligations) {
+// The defined intents in postorder, from leaves towards their roots.
+function treeOrder(intents) {
+  const parents = new Map();
+  const remaining = new Map(Object.keys(intents).map((name) => [name, 0]));
+  for (const name of [...remaining.keys()].sort()) {
+    for (const child of intents[name].children) {
+      if (!remaining.has(child) || parents.has(child)) continue;
+      parents.set(child, name);
+      remaining.set(name, remaining.get(name) + 1);
+    }
+  }
+  const order = [...remaining.keys()].filter((name) => remaining.get(name) === 0);
+  for (const name of order) {
+    if (!parents.has(name)) continue;
+    const parent = parents.get(name);
+    const left = remaining.get(parent) - 1;
+    remaining.set(parent, left);
+    if (left === 0) order.push(parent);
+  }
+  return { parents, order };
+}
+
+function includeChild(parent, child) {
+  for (const count of ['hard', 'soft', 'deferred', 'deferred_open']) parent.gates[count] += child.gates[count];
+  parent.score.met += child.score.met;
+  parent.score.of += child.score.of;
+  for (const flag of ['uncovered', 'open', 'unguarded', 'failed']) parent[flag] ||= child[flag];
+}
+
+function treeStatus(intent, minimum) {
+  if (!intent.confirmed) return 'draft';
+  if (intent.uncovered) return 'uncovered';
+  if (intent.unguarded || intent.gates.hard < minimum) return 'unguarded';
+  if (!intent.complete || intent.open) return 'open';
+  return intent.gates.deferred_open > 0 ? 'delivered' : 'fulfilled';
+}
+
+// The project status from the intent reports over their respective subtrees.
+function projectStatus(policy, reports) {
   if (policy.required.length === 0) return 'nothing-required';
-  const defined = policy.required.filter((id) => Object.hasOwn(intents, id));
-  const failing = defined.some((id) => Object.values(intents[id].criteria).some((criterion) => (
-    effectiveGate(criterion.gate) === 'hard' && criterion.checked_by.some((o) => ['failed', 'conflict'].includes(statusOf(obligations, o))))));
+  const failing = policy.required.some((id) => Object.hasOwn(reports, id) && reports[id].failed);
   if (failing) return 'failed';
   // A required intent the scenario does not define counts as not delivered.
   if (policy.required.every((id) => Object.hasOwn(reports, id) && ['delivered', 'fulfilled'].includes(reports[id].status))) return 'passed';
@@ -228,19 +257,29 @@ function report(state, ledger) {
     put(levels, name, obligationLevel(judged.status, records));
   }
   const reports = {};
-  const shown = {};
+  const { parents, order } = treeOrder(state.intents);
   for (const [id, intent] of Object.entries(state.intents)) {
-    const judged = judgeIntent(id, intent, obligations, levels, ledger, state);
-    reports[id] = judged;
-    shown[id] = {
+    put(reports, id, judgeIntent(id, intent, obligations, levels, ledger, state));
+  }
+  for (const id of order) {
+    const judged = reports[id];
+    judged.complete = true;
+    judged.unguarded ||= judged.gates.hard === 0;
+    if (parents.has(id)) includeChild(reports[parents.get(id)], judged);
+  }
+  const shown = {};
+  for (const [id, judged] of Object.entries(reports)) {
+    const minimum = parents.has(id) ? 1 : Math.max(1, state.policy.min_hard_gates);
+    judged.status = treeStatus(judged, minimum);
+    put(shown, id, {
       status: judged.status, baseline: judged.baseline, gates: judged.gates, score: judged.score, shown: judged.shown, exceptions: judged.exceptions, separation: judged.separation,
-    };
+    });
   }
   const rejected = checked.filter((record) => record.rejected).length;
   return {
     obligations,
     intents: shown,
-    project: { status: projectStatus(state.policy, state.intents, reports, obligations) },
+    project: { status: projectStatus(state.policy, reports) },
     rejected,
   };
 }

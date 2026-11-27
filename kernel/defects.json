@@ -1910,7 +1910,7 @@
       "name": "status step 11: a root is said to meet the floor only over its tree",
       "model_case": null,
       "file": "src/project_status.rs",
-      "find": "                    Value::Bool(*name != root && subtree < floor),\n",
+      "find": "                    Value::Bool(*name != root && subtree < floor && tree >= floor),\n",
       "replace": "                    Value::Bool(subtree < floor),\n"
     },
     {
@@ -1947,6 +1947,20 @@
       "file": "src/tree.rs",
       "find": "node.gate = to;\n                        confirmed = false;",
       "replace": "node.gate = to;\n                        if e.text(\"node\").is_some_and(|name| name == \"root\" || children[name].parent == \"root\") {\n                            confirmed = false;\n                        }"
+    },
+    {
+      "name": "status: a child must meet the policy floor on its own",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "let minimum = if parents.contains_key(name.as_str()) {\n                1\n            } else {\n                min\n            };",
+      "replace": "let minimum = min;"
+    },
+    {
+      "name": "status: a failed descendant is ignored by the project",
+      "model_case": null,
+      "file": "src/status.rs",
+      "find": "        self.failed |= child.failed;\n",
+      "replace": ""
     }
   ]
 }

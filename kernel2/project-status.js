@@ -40,7 +40,7 @@ const NOTHING = { do: { set_gate: { intent: '', criterion: '', to: 'hard' } } };
 
 const DOUBTS = {
   policy: 'policy no status rule applies',
-  children: 'a required intent has children, and no status rule reads descendants yet',
+  children: 'a required intent has an undefined descendant',
   unchecked: 'obligations the provider could not make into checks',
   unread: "criteria declare what no status rule reads yet: a deferred gate's limit, runs that must agree, or evidence not applicable",
   torn: 'a ledger ends in an entry cut short',
@@ -735,8 +735,10 @@ function coverageOf(intents, parent, floor) {
   for (const name of intents.keys()) {
     const root = rootOf(name);
     const subtree = subtreeHard(name);
+    const tree = subtreeHard(root);
     put(out, name, {
-      own_hard: ownHard.get(name), subtree_hard: subtree, root, tree_hard: subtreeHard(root), floor, floor_met_only_over_tree: name !== root && subtree < floor,
+      own_hard: ownHard.get(name), subtree_hard: subtree, root, tree_hard: tree, floor,
+      floor_met_only_over_tree: name !== root && subtree < floor && tree >= floor,
     });
   }
   const thinnest = {};
@@ -835,11 +837,24 @@ async function snapshotOf(asked, digests, kept = null, record = null) {
   return { judged, report, policy, obligations, intents, parent, unread, read, notServed };
 }
 
+function requiredTreeHasUndefinedChild(required, intents) {
+  const seen = new Set();
+  const todo = required.filter((name) => intents.has(name));
+  while (todo.length > 0) {
+    const name = todo.pop();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    if (!intents.has(name)) return true;
+    for (const child of intents.get(name).children) todo.push(child);
+  }
+  return false;
+}
+
 // The output, from a snapshot: doubts, coverage (step 11) and the status as stated.
 function reportOf(asked, { judged, report, policy, obligations, intents, parent, unread, read, notServed }) {
   const doubts = [];
   if (asked.policy.not_applied.length > 0) doubts.push(DOUBTS.policy);
-  if (policy.required.some((name) => intents.has(name) && intents.get(name).children.length > 0)) doubts.push(DOUBTS.children);
+  if (requiredTreeHasUndefinedChild(policy.required, intents)) doubts.push(DOUBTS.children);
   if (obligations.unchecked.length > 0) doubts.push(DOUBTS.unchecked);
   if (unread) doubts.push(DOUBTS.unread);
   if (read.note.torn) doubts.push(DOUBTS.torn);

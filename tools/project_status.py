@@ -489,7 +489,7 @@ def coverage(intents: dict, floor: int) -> dict:
         root = root_of(ident)
         out[ident] = {"own_hard": own[ident], "subtree_hard": sum(own[i] for i in below(ident)), "root": root,
                       "tree_hard": sum(own[i] for i in below(root)), "floor": floor}
-        out[ident]["floor_met_only_over_tree"] = ident != root and out[ident]["subtree_hard"] < floor
+        out[ident]["floor_met_only_over_tree"] = ident != root and out[ident]["subtree_hard"] < floor <= out[ident]["tree_hard"]
     thinnest = {}
     for ident in sorted(out, key=sort_key):
         best = thinnest.get(out[ident]["root"])
@@ -498,13 +498,27 @@ def coverage(intents: dict, floor: int) -> dict:
     return {"intents": out, "thinnest": thinnest}
 
 
+def required_tree_has_undefined_child(required: list, intents: dict) -> bool:
+    seen = set()
+    todo = [name for name in required if name in intents]
+    while todo:
+        name = todo.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        if name not in intents:
+            return True
+        todo.extend(intents[name]["children"])
+    return False
+
+
 def doubts(out: dict, absent: list) -> list[str]:
     """What keeps the report's passed or nothing-required from being the project's: each could hide a failure."""
     found = []
     if out["policy_not_applied"]:
         found.append("policy no status rule applies")
-    if any(out["judged"]["intents"].get(name, {}).get("children") for name in out["judged"]["policy"]["required"]):
-        found.append("a required intent has children, and no status rule reads descendants yet")
+    if required_tree_has_undefined_child(out["judged"]["policy"]["required"], out["judged"]["intents"]):
+        found.append("a required intent has an undefined descendant")
     if out["not_checkable"]:
         found.append("obligations the provider could not make into checks")
     if UNREAD_CRITERIA:

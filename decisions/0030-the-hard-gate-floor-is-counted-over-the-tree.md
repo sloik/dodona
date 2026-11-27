@@ -44,7 +44,7 @@ Trees, as the kernel conformance kit describes them, know two gates, `hard` and 
 - The tree model checks this rule, and has a planted defect for the reading it rejects (each child held to the policy's number).
 - The kernel conformance kit states it in its tree section and has a scenario in which a floor of two is met by a root and a child with one hard gate each.
 - An intent that is not part of a tree is its own root, so nothing changes for it.
-- The depth-two model and tree scenarios cover a hard gate held by a grandchild. [Decision 0039](0039-tree-scenarios-name-a-parent.md) states the empty-intent rule. Both native project-status commands report tree coverage. Applying the root's floor to native verdicts and explaining promotion are tracked in [issue 73](https://github.com/sloik/dodona/issues/73).
+- The depth-two model and tree scenarios cover a hard gate held by a grandchild. [Decision 0039](0039-tree-scenarios-name-a-parent.md) states the empty-intent rule. Both native project-status commands apply the root floor to verdicts over the tree. The promotion fixture keeps the child’s baseline and passing evidence fixed while removing its parent link. Coverage shows the child as its new root and the floor it must now meet. [Issue 73](https://github.com/sloik/dodona/issues/73).
 
 ## What would show this wrong
 
