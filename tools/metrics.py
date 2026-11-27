@@ -29,7 +29,7 @@ import argparse
 import ast
 import concurrent.futures
 import contextlib
-import fnmatch
+import fnmatch  # noqa: F401
 import hashlib
 import io
 import json

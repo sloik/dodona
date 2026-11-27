@@ -33,7 +33,7 @@ rustup toolchain install 1.100.0 --profile minimal --component clippy --no-self-
 cargo +1.100.0 clippy --locked --all-targets --manifest-path kernel/Cargo.toml -- -D warnings
 ```
 
-A rule is turned off only for the exact place it excuses, with its reason beside it: a `# noqa` comment on the line for ruff, a line and column in `.github/zizmor.yml` for zizmor. Ruff's file-wide F401 waiver in `tools/metrics.py` is scheduled to move to the `fnmatch` import after owner review of the judging file. ESLint checks no-redeclare throughout the second kernel. A zizmor exception named by position stops matching once lines above it move, and the job then fails until the position is updated. Every rule left off is listed under "Left for later" in decision 0037 until it is turned on.
+A rule is turned off only for the exact place it excuses, with its reason beside it: a `# noqa` comment on the line for ruff, a line and column in `.github/zizmor.yml` for zizmor. The retained `fnmatch` import in `tools/metrics.py` carries the F401 waiver on its own line. ESLint checks no-redeclare throughout the second kernel. A zizmor exception named by position stops matching once lines above it move, and the job then fails until the position is updated. Every rule left off is listed under "Left for later" in decision 0037 until it is turned on.
 
 The ESLint configuration reads `.js`, `.mjs` and `.cjs` files under `kernel2/`.
 
