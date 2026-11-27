@@ -1,6 +1,6 @@
-// Static analysis of the second kernel's JavaScript, run by .github/workflows/lint.yml with an exact
-// ESLint version and nothing installed in the repository (decision 0037). The rules are those of ESLint's
-// recommended set, listed here so the configuration needs no package, with two changes:
+// Static analysis of the second kernel's JavaScript, run by .github/workflows/lint.yml with the
+// ESLint dependency lock under .github/eslint (decision 0037). This is ESLint's recommended
+// rule set with two changes:
 // - an unused name bound by `catch` is allowed: the kernel catches to turn any failure into a refusal;
 // - no-control-regex is off: the kernel's input checks match control characters on purpose;
 const node = Object.fromEntries([

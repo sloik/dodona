@@ -1,0 +1,8 @@
+{
+  "name": "dodona-eslint-tools",
+  "version": "0.0.0",
+  "private": true,
+  "devDependencies": {
+    "eslint": "10.15.0"
+  }
+}
