@@ -32,7 +32,7 @@ npx --yes eslint@10.15.0 kernel2
 cargo clippy --locked --all-targets --manifest-path kernel/Cargo.toml
 ```
 
-A rule is turned off only for the exact place it excuses, with its reason beside it: a `# noqa` comment on the line for ruff, a line and column in `.github/zizmor.yml` for zizmor. Two are wider, each because the file it would need cannot be changed now: ruff's F401 for all of `tools/metrics.py`, until another pull request (#55) that changes it has merged, and ESLint's no-redeclare for all of `kernel2/status.js`, whose bytes a recorded run pins and whose line ESLint's configuration cannot name. A zizmor exception named by position stops matching once lines above it move, and the job then fails until the position is updated. Every rule left off is listed under "Left for later" in decision 0037 until it is turned on.
+A rule is turned off only for the exact place it excuses, with its reason beside it: a `# noqa` comment on the line for ruff, a line and column in `.github/zizmor.yml` for zizmor. Ruff's file-wide F401 waiver in `tools/metrics.py` is scheduled to move to the `fnmatch` import after owner review of the judging file. ESLint checks no-redeclare throughout the second kernel. A zizmor exception named by position stops matching once lines above it move, and the job then fails until the position is updated. Every rule left off is listed under "Left for later" in decision 0037 until it is turned on.
 
 The ESLint configuration reads `.js`, `.mjs` and `.cjs` files under `kernel2/`.
 

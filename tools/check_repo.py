@@ -1352,6 +1352,26 @@ def lint_aggregate_and_name_problems(workflows: dict[str, str]) -> list[str]:
     return found
 
 
+def eslint_scope_problem(config: str) -> str | None:
+    redeclare = r"""['"]no-redeclare['"]\s*\]?\s*:\s*\[?\s*([^,}\]\r\n]+)"""
+    declarations = re.findall(redeclare, config)
+    if not declarations or any(value.strip() not in ("'error'", '"error"', "2") for value in declarations):
+        return "ESLint no-redeclare must report an error without a file-wide override"
+    return None
+
+
+def gap_eslint_no_redeclare_stays_enabled() -> None:
+    """Keep the duplicate declaration rule active after retiring its broad waiver."""
+    config = (ROOT / "eslint.config.mjs").read_text(encoding="utf-8")
+    problem = eslint_scope_problem(config)
+    if problem:
+        problems.append(problem)
+    enabled = "const rules = {'no-redeclare': 'error'};"
+    disabled = enabled + "const waived = {'no-redeclare': 'off'};"
+    if eslint_scope_problem(enabled) or not eslint_scope_problem(disabled):
+        problems.append("the lint scope check did not distinguish an error from a file-wide waiver")
+
+
 def gap_lint_aggregate_needs_every_job() -> None:
     """A lint job left out of the needs of `lint`, the one the ruleset requires, could fail and block nothing."""
     workflows = {path.name: path.read_text(encoding="utf-8") for path in repo_files(".github/workflows/*")
@@ -2008,7 +2028,7 @@ def gap_documents_follow_the_code() -> None:
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
-              gap_workflows_are_safe, gap_lint_aggregate_needs_every_job, gap_owner_rule_review_is_exact,
+              gap_workflows_are_safe, gap_lint_aggregate_needs_every_job, gap_eslint_no_redeclare_stays_enabled, gap_owner_rule_review_is_exact,
               gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,
