@@ -19,6 +19,8 @@ Behind `draft`, most criteria are also uncovered in the kernel's eyes. Many are 
 
 The project commands obtain intents from the Markdown provider. The provider shares its reader with `tools/intents.py`, so the command-line check and the provider apply the same rules to criteria and their displayed table.
 
+An attached child can be fulfilled with one hard gate in its subtree. Promoting it makes it a root, with the full policy floor. The status report names the root and shows the count against that floor. The child's own confirmation and check identities still match if only the parent link changed. [Tree floor decision](../decisions/0030-the-hard-gate-floor-is-counted-over-the-tree.md).
+
 The project intent criteria schema describes the decoded JSON in that one line, including criterion IDs written as strings of ASCII digits. The Markdown reader also checks plain text, number spelling, repeated keys, unique criterion IDs and agreement with the displayed table. The provider's `intent.index` result uses a separate wire schema. [Project intent criteria schema](../protocol/project-intent-criteria.schema.json), [Protocol messages](../protocol/messages.schema.json).
 
 Each intent has an issue where work on it is discussed: [0001](https://github.com/sloik/dodona/issues/3), [0002](https://github.com/sloik/dodona/issues/4), [0003](https://github.com/sloik/dodona/issues/5), [0004](https://github.com/sloik/dodona/issues/6), [0005](https://github.com/sloik/dodona/issues/7), [0006](https://github.com/sloik/dodona/issues/8). Current pieces of work carry the [`step` label](https://github.com/sloik/dodona/issues?q=is%3Aissue+label%3Astep).
