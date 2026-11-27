@@ -1372,6 +1372,47 @@ def gap_eslint_no_redeclare_stays_enabled() -> None:
         problems.append("the lint scope check did not distinguish an error from a file-wide waiver")
 
 
+
+def clippy_lint_steps_problem(steps) -> str | None:
+    run_steps = [step for step in steps if isinstance(step, dict) and isinstance(step.get("run"), str)]
+    expected = "Rust lint must install a pinned Clippy and run it with warnings as errors"
+    if len(run_steps) != 2 or any("if" in step for step in run_steps):
+        return expected
+    install, lint = (step["run"] for step in run_steps)
+    pin = re.fullmatch(
+        r"rustup toolchain install ([0-9]+\.[0-9]+\.[0-9]+) --profile minimal --component clippy --no-self-update",
+        install,
+    )
+    if pin is None:
+        return expected
+    command = f"cargo +{pin[1]} clippy --locked --all-targets --manifest-path kernel/Cargo.toml -- -D warnings"
+    return None if lint == command else expected
+
+
+def gap_clippy_is_pinned_and_strict() -> None:
+    """Rust lint uses the same exact toolchain and fatal warnings on every runner."""
+    try:
+        reader = pinned_workflow_reader()
+        workflow = (ROOT / ".github/workflows/lint.yml").read_text(encoding="utf-8")
+        steps = workflow_jobs(reader().load(workflow))["rust"]["steps"]
+        problem = clippy_lint_steps_problem(steps)
+    except Exception as err:  # noqa: BLE001 - an unreadable lint job leaves its compiler unjudged
+        problem = f"cannot read the Rust lint job: {err}"
+    if problem:
+        problems.append(problem)
+
+    install = "rustup toolchain install 1.2.3 --profile minimal --component clippy --no-self-update"
+    lint = "cargo +1.2.3 clippy --locked --all-targets --manifest-path kernel/Cargo.toml -- -D warnings"
+    plants = [
+        [{"run": install.replace("1.2.3", "stable")}, {"run": lint}],
+        [{"run": install}, {"run": lint.replace("+1.2.3", "+1.2.4")}],
+        [{"run": install}, {"run": lint.removesuffix(" -- -D warnings")}],
+        [{"run": install}, {"run": lint, "if": "false"}],
+    ]
+    if clippy_lint_steps_problem([{"run": install}, {"run": lint}]) or not all(map(clippy_lint_steps_problem, plants)):
+        problems.append("the Clippy guard did not distinguish a pinned strict run from its planted faults")
+
+
 def gap_lint_aggregate_needs_every_job() -> None:
     """A lint job left out of the needs of `lint`, the one the ruleset requires, could fail and block nothing."""
     workflows = {path.name: path.read_text(encoding="utf-8") for path in repo_files(".github/workflows/*")
@@ -2028,7 +2069,8 @@ def gap_documents_follow_the_code() -> None:
 GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_properties,
               gap_every_property_has_a_defect, gap_decisions_are_well_formed,
               gap_vocabulary_is_the_same_everywhere, gap_nothing_private_or_unportable,
-              gap_workflows_are_safe, gap_lint_aggregate_needs_every_job, gap_eslint_no_redeclare_stays_enabled, gap_owner_rule_review_is_exact,
+              gap_workflows_are_safe, gap_lint_aggregate_needs_every_job, gap_eslint_no_redeclare_stays_enabled,
+              gap_clippy_is_pinned_and_strict, gap_owner_rule_review_is_exact,
               gap_path_check_matches_its_vectors, gap_path_vector_judge_is_strict,
               gap_repository_paths_are_portable, gap_lock_platform_pins_are_unique, gap_canonical_vectors_are_consistent,
               gap_every_modelled_case_has_a_scenario, gap_kit_judge_is_strict,

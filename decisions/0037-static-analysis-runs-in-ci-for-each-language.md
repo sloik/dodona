@@ -28,7 +28,7 @@ A workflow of its own, [lint.yml](../.github/workflows/lint.yml), described in [
 |---|---|---|
 | Python | ruff, lint only | [ruff.toml](../ruff.toml): syntax errors, pyflakes, and pycodestyle's likely-mistake rules (`E4`, `E7`, `E9`, `F`) |
 | JavaScript | ESLint | [eslint.config.mjs](../eslint.config.mjs): ESLint's recommended set, written out so no package is installed |
-| Rust | clippy | clippy's defaults; a lint that is an error by default fails the job, a warning does not |
+| Rust | clippy | default Clippy lints from Rust 1.100.0 with warnings treated as errors |
 | Workflows | actionlint, with the runner's shellcheck; zizmor | [.github/actionlint.yaml](../.github/actionlint.yaml), [.github/zizmor.yml](../.github/zizmor.yml) |
 | Editors | EditorConfig | [.editorconfig](../.editorconfig): only what the repository checks already require |
 
@@ -50,7 +50,7 @@ Each of these breaks on the code as it is now, and is left off rather than met b
 - ruff F401 in `tools/metrics.py`: one unused import, `import fnmatch`, in a file another pull request (#55) is changing. It is off for that file until then, and is to become `# noqa: F401` on that one line once #55 has merged.
 - ruff F841 on one line of `tools/check_repo.py`: `problems_before` is set and never read in `gap_an_intent_reads_one_way_only`. It is dead code, not a defect: a review showed the check still fails as it should. It is marked `# noqa: F841` on that line and kept, because `tools/check_repo.py` is a judged file.
 - ESLint's own dependencies are not locked: ESLint runs at an exact version through `npx`, with no lock file.
-- `cargo fmt --check` and clippy's warnings as errors: eight formatting hunks and six warnings in the first kernel (eight with the hosted runners' newer Rust). Its source is the anchor of planted defects that replace exact text, and clippy's warnings change with the runner's Rust, so both wait for a pinned toolchain. The Rust toolchain is not pinned: clippy is the runner's.
+- `cargo fmt --check`: a formatting pass would need to preserve the exact textual anchors of planted defects in the first kernel.
 - Markdown style: links and anchors are already checked by `tools/check_docs.py`.
 - TLA+: no checker of the specifications runs outside the model queue.
 

@@ -143,9 +143,9 @@ Bounds: one obligation, which can or cannot be checked, fixed from the start; at
 
 | # | Claim | Decision | Check | Planted defect that must fail | Status |
 |---|---|---|---|---|---|
-| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 20 |
+| C37 | Both kernels give the model's own answer on every state the two dump models reach: the status of each obligation, and for an intent whether it is delivered or fulfilled and how each exception request is graded | [0025](../decisions/0025-the-first-seed-kernel.md) | `tools/check_states.py` over the model checker's list of states; recorded from a development machine, and repeated in CI on every change to main | Each of five defects planted in the first kernel made between 1,515 and 34,020 states disagree (an earlier run, [review](../docs/reviews/2026-11-17-kit-and-seed.md)); not repeated for this record | **checked**, run 21 |
 
-Run 19 records the current comparison. Runs 9 and 11 through 18 remain the records for earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
+Run 21 records the current comparison. Runs 9 and 11 through 20 record earlier input bundles. The comparison ties the code to the models for all states within the bounds of the dump models, which are smaller than the main ones: for evidence, two obligations, one run in flight and at most three records; for intents, two criteria and one exception. It says nothing about what the models do not cover.
 
 ## Shown by the conformance kit, not by a model
 
@@ -765,13 +765,17 @@ In a self replay, both native run commands submitted 121 cases to a stand-in for
 
 On 2026-11-26 both kernels agreed on all 71,744 evidence states and 78,894 intent states after the batch wait change. This self comparison used the same retained dumps as Run 18. [Comparison record](runs/run-19/every-state/).
 
+The prior successful collection took 39 minutes and 24 seconds. The previous native wait for a batch with a 30-minute maximum individual limit was 31 minutes. The JavaScript control reproduced that shorter wait. Removing the new floor from the Rust scheduler reproduced it in the Rust control. The repository check also failed on the old reference. The revised implementations apply a longer floor and preserve the original wait when the floor is shorter. The controls keep the day limit when a run states no limit. [Prior collection](https://github.com/sloik/dodona/actions/runs/45819303936/job/139916265665).
+
+The Python reference and both kernels matched all 108 project-run cases, with zero skips and zero unfinished. The original implementations accepted five invalid floor requests. All three revised commands refused them before sending a provider request or starting an executor.
+
 ### Run 20 — Evidence reuse and intent delivery, every state
 
 On 2026-11-27, both kernels agreed on all 71,744 evidence states and 78,894 intent states after the duplicate JavaScript object predicate was removed. This self comparison used the retained dumps from the successful hosted native workflow. The receipt records the dump and source identities. [Comparison record](runs/run-20/every-state/) · [Hosted source run](https://github.com/sloik/dodona/actions/runs/45872164786).
 
-The prior successful collection took 39 minutes and 24 seconds. The previous native wait for a batch with a 30-minute maximum individual limit was 31 minutes. The JavaScript control reproduced that shorter wait. Removing the new floor from the Rust scheduler reproduced it in the Rust control. The repository check also failed on the old reference. The revised implementations apply a longer floor and preserve the original wait when the floor is shorter. The controls keep the day limit when a run states no limit. [Prior collection](https://github.com/sloik/dodona/actions/runs/45819303936/job/139916265665).
+### Run 21 — Evidence reuse and intent delivery, every state
 
-The Python reference and both kernels matched all 108 project-run cases, with zero skips and zero unfinished. The original implementations accepted five invalid floor requests. All three revised commands refused them before sending a provider request or starting an executor.
+On 2026-11-27, both kernels agreed on all 71,744 evidence states and 78,894 intent states after the Rust lint fixes. This self comparison used the same Oracle dumps as Run 20, as kept by the subsequent successful workflow. [Comparison record](runs/run-21/every-state/) · [Hosted source run](https://github.com/sloik/dodona/actions/runs/45922081260).
 
 ### Individual case wall limit
 

@@ -32,14 +32,13 @@ pub fn parse(text: &str, strict: bool) -> Result<(Value, usize), &'static str> {
     members(text, strict).map(|(v, deepest, _)| (v, deepest))
 }
 
+type ParsedMembers = (Value, usize, Vec<(String, usize)>);
+
 /// The value of a JSON text, how deeply it nests, and, when it is an object, how
 /// deeply the text nests under each of its members, counted from the object
 /// itself as the first level. A member whose value holds no list or object is
 /// not listed. Measured on the text, so it holds below `KEPT` too.
-pub fn members(
-    text: &str,
-    strict: bool,
-) -> Result<(Value, usize, Vec<(String, usize)>), &'static str> {
+pub fn members(text: &str, strict: bool) -> Result<ParsedMembers, &'static str> {
     let mut p = Parser {
         s: text,
         pos: 0,

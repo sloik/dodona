@@ -21,7 +21,7 @@ pub fn identity(v: &Value) -> String {
 /// a sign, an uppercase digit, an odd number of digits.
 pub fn unhex(s: &str) -> Option<Vec<u8>> {
     let digit = |b: u8| b.is_ascii_digit() || (b'a'..=b'f').contains(&b);
-    if s.len() % 2 != 0 || !s.bytes().all(digit) {
+    if !s.len().is_multiple_of(2) || !s.bytes().all(digit) {
         return None;
     }
     (0..s.len())
@@ -56,10 +56,10 @@ pub fn digest(input: &[u8]) -> [u8; 32] {
         data.push(0)
     }
     data.extend(bits.to_be_bytes());
-    for chunk in data.chunks_exact(64) {
+    for chunk in data.as_chunks::<64>().0 {
         let mut w = [0u32; 64];
-        for (i, part) in chunk.chunks_exact(4).enumerate() {
-            w[i] = u32::from_be_bytes([part[0], part[1], part[2], part[3]])
+        for (i, &part) in chunk.as_chunks::<4>().0.iter().enumerate() {
+            w[i] = u32::from_be_bytes(part)
         }
         for i in 16..64 {
             let a = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
