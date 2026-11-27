@@ -11,6 +11,14 @@ Where dodona's own model checks run, for this repository only ([decision 0023](.
 | [model_request.py](model_request.py) | Prepares the policy at the workflow's push commit and builds native `run` and `status` requests from that policy |
 | [model_results.py](model_results.py) | Checks the independently read ledger, the complete expected model inventory and the raw outcome of every newly run case |
 | [test_kernel_executor.py](test_kernel_executor.py) | Exercises the batch executor against a fake queue. The fixture hashes the exact input bytes it writes on each platform |
+| [local-executor.json](local-executor.json) | The Node program and version floor for this site's test executor |
+| [local_executor.py](local_executor.py) | Stages the bound inputs and reports the exact Node runtime result |
+| [test_local_executor.py](test_local_executor.py) | Checks the local executor's inputs, pin and missing-tool behavior |
+| [test_node_project.py](test_node_project.py) | Exercises a pass, failure and skip through both kernels, including ledger reuse |
+
+The local executor measures the runtime's Node version, operating system and architecture. It also measures glibc when available on Linux. A request for a different platform is unavailable. It uses the configured floor's key only when the running version satisfies that floor. The qualification fixture uses this local executor. Its repository matrix installs Node 24.22.3 with a pinned setup action after the other checks.
+
+The child environment contains a limited set of runtime variables, including the Windows system root under the upper-case key Python uses. The executor tests also check that ambient Node options are excluded and include the captured test output when a pass or timeout is missing.
 
 Executor reports use the measured digest for a fixed pin and the site's floor key when the measured version meets that floor. The fake-queue tests check that a mismatched request cannot change either reported key.
 

@@ -2135,6 +2135,29 @@ def gap_no_generated_files_are_tracked() -> None:
             problems.append(f"{path}: a generated file is under version control")
 
 
+def gap_node_provider_controls_run() -> None:
+    """Require the provider and its native project acceptance on every hosted platform."""
+    workflow = (ROOT / ".github/workflows/checks.yml").read_text(encoding="utf-8")
+    commands = run_blocks(workflow)
+    checks = (
+        "providers/node-test/test_provider.py",
+        ".github/site/test_local_executor.py",
+        ".github/site/test_node_project.py --kernel ${{ matrix.rust_kernel }}",
+    )
+    for command in checks:
+        line = "${{ matrix.python }} " + command
+        if line not in commands.splitlines():
+            problems.append(f"checks.yml: missing platform test for {command}")
+
+
+def gap_site_executor_keeps_system_root() -> None:
+    """The local executor's child environment keeps the Windows runtime root."""
+    tests = ROOT / ".github" / "site" / "test_local_executor.py"
+    result = subprocess.run([sys.executable, str(tests), "ChildEnvironment"], cwd=ROOT, capture_output=True, text=True)
+    if result.returncode:
+        problems.append("site executor child environment failed: " + result.stderr.strip())
+
+
 def gap_provider_cases_match_the_provider() -> None:
     """A case naming a mode the provider does not have would silently test the well-behaved path."""
     cases = json.loads((ROOT / "conformance" / "provider" / "cases.json").read_text(encoding="utf-8"))["cases"]
@@ -2206,7 +2229,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_every_modelled_case_has_a_scenario, gap_tree_depth_plants_are_registered,
               gap_planner_keeps_artifact_and_depth_cases, gap_kit_judge_is_strict,
               gap_own_policy_fits_the_schema, gap_evidence_strength_follows_kind, gap_no_generated_files_are_tracked,
-              gap_provider_cases_match_the_provider, gap_enumeration_transcript_keeps_inputs,
+              gap_provider_cases_match_the_provider, gap_node_provider_controls_run, gap_site_executor_keeps_system_root,
+              gap_enumeration_transcript_keeps_inputs,
               gap_js_plant_cli_uses_supervisor, gap_rust_plant_cli_uses_supervisor,
               gap_js_planted_defect_anchors_exist,
               gap_rust_planted_defect_anchors_exist, gap_js_status_exercises_retained_ledger_work,

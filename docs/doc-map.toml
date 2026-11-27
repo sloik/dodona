@@ -27,6 +27,12 @@ docs = ["spec/README.md", "spec/CLAIMS.md"]
 why = "How the models are run, judged and reused, and what the results count for, is told in the models' README and the claims."
 
 [[rule]]
+id = "node-test-provider"
+code = ["providers/node-test/*.py"]
+docs = ["providers/README.md", "decisions/0035-a-test-runner-provider.md"]
+why = "The test provider's input order, verdict and limits are described with the adapter and its proposed decision."
+
+[[rule]]
 id = "site"
 code = [".github/site/*.py", ".github/site/*.json"]
 docs = [".github/site/README.md"]
