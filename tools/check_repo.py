@@ -2289,7 +2289,11 @@ class ToolPinTests(unittest.TestCase):
 
 def kit_worker_control(argv, owned, sender):
     """A real started worker writes only into its parent-owned directory."""
-    copied = pathlib.Path(owned) / "kernel"
+    work = pathlib.Path(owned)
+    marker = json.loads((work.parent / "batch-owner.json").read_text(encoding="utf-8"))
+    if marker["worker"] != os.getpid() or marker["batch"] != work.parent.name:
+        raise RuntimeError("worker was released before ownership was recorded")
+    copied = work / "kernel"
     copied.mkdir()
     (copied / "planted").write_text("partial copy", encoding="utf-8")
     if argv == ["crash"]:
@@ -2312,6 +2316,27 @@ class KitSupervisorTests(unittest.TestCase):
             status = kit_adequacy.supervise([mode], tmp=tmp, worker=kit_worker_control, **options)
             self.assertEqual(neighbor.read_text(encoding="utf-8"), "preserve")
             return status, output.getvalue().splitlines(), sorted(path.name for path in tmp.iterdir())
+
+    def test_worker_exits_without_touching_scratch_when_admission_closes(self):
+        context = kit_adequacy.get_context("spawn")
+        with tempfile.TemporaryDirectory() as directory:
+            work = pathlib.Path(directory)
+            admission, release = context.Pipe(duplex=False)
+            reader, sender = context.Pipe(duplex=False)
+            with admission, release, reader, sender:
+                child = context.Process(target=kit_adequacy.run_admitted_worker,
+                                        args=(admission, kit_worker_control, [], work, sender))
+                child.start()
+                try:
+                    release.close()
+                    child.join(10)
+                    self.assertEqual(child.exitcode, 2)
+                    self.assertEqual(list(work.iterdir()), [])
+                finally:
+                    if child.is_alive():
+                        child.kill()
+                        child.join()
+                    child.close()
 
     def test_crashed_worker_copy_is_removed_without_publishing_success(self):
         status, lines, remaining = self.supervise("crash")
@@ -2366,6 +2391,124 @@ class KitSupervisorTests(unittest.TestCase):
         self.assertEqual(status, 2)
         self.assertEqual(len(remaining), 2)
         self.assertEqual([line.split(":")[0] for line in lines], ["UNFINISHED"])
+
+
+class PlantRecoveryTests(unittest.TestCase):
+    def setUp(self):
+        import recover_plant_batches
+        self.recovery = recover_plant_batches
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = pathlib.Path(directory.name)
+
+    def batch(self, name, supervisor, worker, *, with_copy=True):
+        batch = self.root / name
+        batch.mkdir(mode=0o700)
+        self.recovery.record_owner(batch, supervisor, worker)
+        if with_copy:
+            work = batch / self.recovery.WORK
+            work.mkdir(mode=0o700)
+            (work / "planted").write_text("partial", encoding="utf-8")
+        return batch
+
+    def test_command_removes_a_killed_pair_and_preserves_a_live_batch(self):
+        with contextlib.ExitStack() as stack:
+            def process():
+                command = [sys.executable, "-c", "import time; time.sleep(60)"]
+                child = stack.enter_context(subprocess.Popen(command, stdin=subprocess.DEVNULL,
+                                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+                def stop():
+                    if child.poll() is None:
+                        child.kill()
+                    child.wait(timeout=10)
+                stack.callback(stop)
+                return child
+
+            supervisor, worker, live_worker = process(), process(), process()
+            dead = self.batch("dodona-rust-plant-batch-abandon1", supervisor.pid, worker.pid)
+            live = self.batch("dodona-plant-batch-Live12", worker.pid, live_worker.pid)
+            neighbor = self.root / "unrelated"
+            neighbor.mkdir()
+            (neighbor / "keep").write_text("keep", encoding="utf-8")
+            for child in (supervisor, worker):
+                child.kill()
+                child.wait(timeout=10)
+            result = subprocess.run([sys.executable, str(ROOT / "tools/recover_plant_batches.py"),
+                                     "--root", str(self.root)], capture_output=True, text=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads(result.stdout)
+            self.assertEqual(report["removed"], [dead.name], report)
+            self.assertEqual(report["kept"], {live.name: "live-or-unknown"}, report)
+            self.assertFalse(dead.exists())
+            self.assertEqual((live / self.recovery.WORK / "planted").read_text(encoding="utf-8"), "partial")
+            self.assertEqual((neighbor / "keep").read_text(encoding="utf-8"), "keep")
+            self.assertIsNone(live_worker.poll())
+
+    def test_unadmitted_unknown_and_ambiguous_workspaces_are_distinguished(self):
+        prepared = self.batch("dodona-plant-batch-Prep12", 2000010020, None, with_copy=False)
+        unknown = self.batch("dodona-plant-batch-Unkn12", 2000010030, 2000010031)
+        malformed = self.batch("dodona-plant-batch-Wrong1", 2000010040, 2000010041)
+        marker = malformed / self.recovery.MARKER
+        marker.write_text(marker.read_text(encoding="utf-8").replace(malformed.name, "wrong"), encoding="utf-8")
+        duplicate = self.batch("dodona-plant-batch-Dup123", 2000010060, 2000010061)
+        repeated = duplicate / self.recovery.MARKER
+        repeated.write_text(repeated.read_text(encoding="utf-8").replace("{", '{"worker": 2000010061, ', 1),
+                            encoding="utf-8")
+        extra = self.batch("dodona-plant-batch-Extra1", 2000010050, 2000010051)
+        (extra / "neighbor").write_text("keep", encoding="utf-8")
+        legacy = self.root / "dodona-rust-plant-batch-legacy12"
+        legacy.mkdir()
+        result = self.recovery.recover(self.root, look=lambda pid, _: "unknown" if pid == 2000010031 else "gone")
+        self.assertEqual(result["removed"], [prepared.name], result)
+        self.assertEqual(result["kept"], {unknown.name: "live-or-unknown", malformed.name: "invalid-ownership",
+                                          extra.name: "unrecognized-layout", duplicate.name: "invalid-ownership",
+                                          legacy.name: "invalid-ownership"})
+        self.assertFalse(prepared.exists())
+        for path in (unknown, malformed, extra, duplicate, legacy):
+            self.assertTrue(path.is_dir(), path)
+        self.assertEqual((extra / "neighbor").read_text(encoding="utf-8"), "keep")
+
+    def test_replaced_record_and_work_directory_remain_in_place(self):
+        replaced_record = self.batch("dodona-plant-batch-Rec123", 2000010310, 2000010311)
+        replaced_work = self.batch("dodona-plant-batch-Work12", 2000010320, 2000010321)
+        original_work = self.root / "preserved-work"
+        marker = replaced_record / self.recovery.MARKER
+        work = replaced_work / self.recovery.WORK
+
+        def replace_during_observation(pid, _):
+            if pid == 2000010310:
+                new_owner = marker.with_suffix(".replaced")
+                new_owner.write_bytes(marker.read_bytes())
+                new_owner.replace(marker)
+            if pid == 2000010320:
+                work.rename(original_work)
+                work.mkdir(mode=0o700)
+                (work / "unrelated").write_text("keep", encoding="utf-8")
+            return "gone"
+
+        result = self.recovery.recover(self.root, look=replace_during_observation)
+        self.assertEqual(result["removed"], [], result)
+        self.assertEqual(result["kept"], {replaced_record.name: "invalid-ownership",
+                                          replaced_work.name: "unrecognized-layout"})
+        self.assertTrue((replaced_record / self.recovery.WORK / "planted").is_file())
+        self.assertTrue((original_work / "planted").is_file())
+        self.assertEqual((work / "unrelated").read_text(encoding="utf-8"), "keep")
+
+    def test_partial_removal_keeps_ownership_and_can_be_retried(self):
+        path = self.batch("dodona-rust-plant-batch-retry123", 2000010120, 2000010121)
+        work = path / self.recovery.WORK
+
+        def partially_remove(directory):
+            self.assertEqual(directory, work)
+            (directory / "planted").unlink()
+            raise PermissionError("fixture interrupted cleanup")
+
+        failed = self.recovery.recover(self.root, look=lambda *_: "gone", remove=partially_remove)
+        self.assertEqual(failed["removed"], [])
+        self.assertIn(path.name, failed["failed"])
+        self.assertTrue((path / self.recovery.MARKER).is_file())
+        self.assertEqual(self.recovery.recover(self.root, look=lambda *_: "gone")["removed"], [path.name])
+        self.assertFalse(path.exists())
 
 
 class KitAdequacyTests(unittest.TestCase):
@@ -4557,6 +4700,7 @@ def main() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(JudgeTests)
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ToolPinTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitSupervisorTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantRecoveryTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitAdequacyTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(LedgerJudgeTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(InputJudgeTests))
