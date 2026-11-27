@@ -70,3 +70,4 @@ Every record ends with **What would show this wrong**: an observable outcome tha
 | [0036](0036-pull-requests-open-ready-and-merge-after-checks-pass.md) | Reviewable pull requests open ready and merge automatically once their checks pass | proposed, owner direction |
 | [0037](0037-static-analysis-runs-in-ci-for-each-language.md) | Static analysis runs in CI for each language and format the repository holds | proposed |
 | [0038](0038-a-site-can-set-a-minimum-batch-wait.md) | A site can set a minimum batch wait | proposed |
+| [0039](0039-tree-scenarios-name-a-parent.md) | Tree scenarios name a parent for each branch below the root | proposed, owner direction |

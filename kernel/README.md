@@ -31,6 +31,7 @@ The kernel answers every step. A step that has nothing to act on changes nothing
 - Grading an act is `acts::grade`. Acts scenarios report it; status scenarios count with it.
 - The status of an obligation from the verdicts that count is `evidence::status`, for evidence scenarios, `states` and status scenarios.
 - The status of an intent, and whether a criterion is met, are in `intent.rs`, for intent scenarios, `states` and status scenarios. A criterion that nothing checks is never met.
+- `tree.rs` validates the parent links in a tree scenario, counts hard gates over each subtree and removes a branch with all its descendants.
 - The separation levels are `acts::LEVELS`; the assurance scale is `assurance::SCALE`. The level a status report shows for an intent is on that scale, and an exception in it is graded by `acts::grade` like every other act.
 - Identity, core keys and hexadecimal are in `canonical.rs`. A preimage with a field of its own that the definition does not have is refused as `unknown-field`; the contract names no reason for that case. In status scenarios an evidence record whose preimage cannot be keyed is rejected, and an entry that is not a record at all is neither counted nor rejected.
 - An act record that is malformed is graded `self`. Nothing above `helper` is granted unless the check value also covers `kind`, `target`, `result` and `lineage`.

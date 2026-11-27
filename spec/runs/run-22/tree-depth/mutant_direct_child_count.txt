@@ -1,0 +1,55 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Semantic processing of module Naturals
+Semantic processing of module Integers
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module GrandchildTree
+Starting... (2026-11-27 12:08:03)
+Computing initial states...
+Computed 2 initial states...
+Computed 4 initial states...
+Finished computing initial states: 8 distinct states generated at 2026-11-27 12:08:03.
+Error: Invariant DeliveryMatches is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ lastConfirm = 0
+/\ kcount = [kid |-> 2, grand |-> 1, root |-> 1]
+/\ chk = [kid |-> "unknown", grand |-> "unknown", root |-> "unknown"]
+/\ confirmed = FALSE
+/\ gate = [kid |-> "hard", grand |-> "hard", root |-> "soft"]
+/\ lastChange = 0
+/\ events = 0
+
+State 2: <CheckChange line 56, col 5 to line 57, col 77 of module GrandchildTree>
+/\ lastConfirm = 0
+/\ kcount = [kid |-> 2, grand |-> 1, root |-> 1]
+/\ chk = [kid |-> "passed", grand |-> "unknown", root |-> "unknown"]
+/\ confirmed = FALSE
+/\ gate = [kid |-> "hard", grand |-> "hard", root |-> "soft"]
+/\ lastChange = 0
+/\ events = 0
+
+State 3: <CheckChange line 56, col 5 to line 57, col 77 of module GrandchildTree>
+/\ lastConfirm = 0
+/\ kcount = [kid |-> 2, grand |-> 1, root |-> 1]
+/\ chk = [kid |-> "passed", grand |-> "passed", root |-> "unknown"]
+/\ confirmed = FALSE
+/\ gate = [kid |-> "hard", grand |-> "hard", root |-> "soft"]
+/\ lastChange = 0
+/\ events = 0
+
+State 4: <Confirm line 59, col 5 to line 60, col 50 of module GrandchildTree>
+/\ lastConfirm = 1
+/\ kcount = [kid |-> 2, grand |-> 1, root |-> 1]
+/\ chk = [kid |-> "passed", grand |-> "passed", root |-> "unknown"]
+/\ confirmed = TRUE
+/\ gate = [kid |-> "hard", grand |-> "hard", root |-> "soft"]
+/\ lastChange = 0
+/\ events = 1
+
+1205 states generated, 447 distinct states found, 326 states left on queue.
+The depth of the complete state graph search is 4.
+The average outdegree of the complete state graph is 4 (minimum is 1, the maximum 10 and the 95th percentile is 8).
+Finished in 01s at (2026-11-27 12:08:04)

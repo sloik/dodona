@@ -75,7 +75,7 @@ code = ["tools/run_kit.py", "tools/run_vectors.py", "tools/run_path_vectors.py",
         "tools/run_ledger_cases.py", "tools/run_input_cases.py", "tools/run_provider_cases.py",
         "tools/run_check_cases.py", "tools/run_status_cases.py", "tools/run_run_cases.py",
         "tools/kernel_differential.py", "tools/path_differential.py",
-        "tools/kit_adequacy.py"]
+        "tools/kit_adequacy.py", "tools/recover_plant_batches.py"]
 docs = ["conformance/README.md", "docs/gap-checks.md"]
 why = "How a kernel or host is judged is written in the kit's README, and the judges that run as their own tools are listed with the gap behind each."
 
@@ -113,7 +113,7 @@ why = "The schemas and the prose of the protocol describe the same shapes."
 [[rule]]
 id = "models"
 code = ["spec/assurance/**", "spec/attempts/**", "spec/decisions/**", "spec/intent/**", "spec/kernel/**",
-        "spec/liveness/**", "spec/planner/**", "spec/platforms/**", "spec/tree/**"]
+        "spec/liveness/**", "spec/planner/**", "spec/platforms/**", "spec/tree/**", "spec/tree-depth/**"]
 docs = ["spec/CLAIMS.md", "spec/README.md"]
 why = "The claims say what each model checks and whether a recorded run of it as it is now exists."
 

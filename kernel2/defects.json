@@ -166,15 +166,15 @@
       "name": "removing a child keeps the tree confirmed",
       "model_case": "tree/mutant_remove_keeps_confirmation",
       "file": "tree.js",
-      "find": "if (children.delete(step.remove.child)) confirmed = false;",
-      "replace": "children.delete(step.remove.child);"
+      "find": "if (removeBranch(children, step.remove.child)) confirmed = false;",
+      "replace": "removeBranch(children, step.remove.child);"
     },
     {
       "name": "adding a child keeps it confirmed",
       "model_case": "tree/mutant_add_keeps_confirmation",
       "file": "tree.js",
-      "find": "check: 'unknown' });\n        confirmed = false;\n      }\n    }",
-      "replace": "check: 'unknown' });\n      }\n    }"
+      "find": "children.set(name, { parent, gate, check: 'unknown' });\n        confirmed = false;",
+      "replace": "children.set(name, { parent, gate, check: 'unknown' });"
     },
     {
       "name": "root delivered whatever its children",
@@ -187,7 +187,7 @@
       "name": "a child with no hard gate is accepted",
       "model_case": "tree/mutant_soft_child_is_delivered",
       "file": "tree.js",
-      "find": "  if (children.some((child) => child.gate !== 'hard')) return 'unguarded';\n",
+      "find": "  if ([...children.keys()].some((name) => counts.get(name) === 0)) return 'unguarded';\n",
       "replace": ""
     },
     {
@@ -313,22 +313,22 @@
       "name": "tree counts hard gates on the root only",
       "model_case": "tree/mutant_floor_counts_root_only",
       "file": "tree.js",
-      "find": "const hard = nodes.filter((node) => node.gate === 'hard');",
-      "replace": "const hard = [root].filter((node) => node.gate === 'hard');"
+      "find": "const treeHard = counts.get('root');",
+      "replace": "const treeHard = Number(root.gate === 'hard');"
     },
     {
       "name": "tree ignores the policy's number",
       "model_case": "(decision 0030 kit)",
       "file": "tree.js",
-      "find": "hard.length < floor",
-      "replace": "hard.length < 1"
+      "find": "treeHard < floor",
+      "replace": "treeHard < 1"
     },
     {
       "name": "tree unguarded only with no hard gate at all",
       "model_case": "tree/mutant_ignores_floor",
       "file": "tree.js",
-      "find": "  if (hard.length < floor) return 'unguarded';\n  if (children.some((child) => child.gate !== 'hard')) return 'unguarded';\n",
-      "replace": "  if (hard.length < 1) return 'unguarded';\n"
+      "find": "  if (treeHard < floor) return 'unguarded';\n  if ([...children.keys()].some((name) => counts.get(name) === 0)) return 'unguarded';\n",
+      "replace": "  if (treeHard < 1) return 'unguarded';\n"
     },
     {
       "name": "attempts close ignores the ticket and closes the latest open attempt",
@@ -1063,8 +1063,8 @@
       "name": "the floor held against each child on its own",
       "model_case": "tree/mutant_floor_applied_to_each_child",
       "file": "tree.js",
-      "find": "  if (children.some((child) => child.gate !== 'hard')) return 'unguarded';\n",
-      "replace": "  if (children.some((child) => (child.gate === 'hard' ? 1 : 0) < floor)) return 'unguarded';\n"
+      "find": "  if ([...children.keys()].some((name) => counts.get(name) === 0)) return 'unguarded';\n",
+      "replace": "  if ([...children.keys()].some((name) => counts.get(name) < floor)) return 'unguarded';\n"
     },
     {
       "name": "only refused attempts count toward the limit, not open ones",
@@ -1098,8 +1098,8 @@
       "name": "a tree's starting gates read as written",
       "model_case": "(tree gates kit)",
       "file": "tree.js",
-      "find": "children.set(name, { gate: gateCountsAs(details.gate), check: 'unknown' });",
-      "replace": "children.set(name, { gate: details.gate, check: 'unknown' });"
+      "find": "const gate = gateCountsAs(details?.gate);",
+      "replace": "const gate = details?.gate;"
     },
     {
       "name": "check: the host's input need not have its shape",
@@ -2239,6 +2239,20 @@
       "file": "project-status.js",
       "find": "    } catch (error) {\n      return 'missing';\n    }",
       "replace": "    } catch (error) {\n      return error.code === 'EACCES' ? 'file' : 'missing';\n    }"
+    },
+    {
+      "name": "tree counts direct children alone",
+      "model_case": "tree-depth/mutant_direct_child_count",
+      "file": "tree.js",
+      "find": "const treeHard = counts.get('root');",
+      "replace": "const treeHard = Number(root.gate === 'hard') + [...children.values()].filter((child) => child.parent === 'root' && child.gate === 'hard').length;"
+    },
+    {
+      "name": "editing a grandchild keeps the tree confirmed",
+      "model_case": "tree-depth/mutant_grandchild_edit_keeps_confirmation",
+      "file": "tree.js",
+      "find": "node.gate = gate;\n        confirmed = false;",
+      "replace": "node.gate = gate;\n        if (step.edit.node === 'root' || node.parent === 'root') confirmed = false;"
     }
   ]
 }

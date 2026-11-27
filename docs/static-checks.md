@@ -7,7 +7,7 @@ Linters that read the code without running it, one for each language and format 
 | `lint (Python and workflows)` | ruff 0.17.6 | [ruff.toml](../ruff.toml) | every Python file |
 | `lint (Python and workflows)` | actionlint 1.7.12, built with Go 1.27.4 and run with the runner image's shellcheck | [.github/actionlint.yaml](../.github/actionlint.yaml) | `.github/workflows/` |
 | `lint (Python and workflows)` | zizmor 1.32.0 | [.github/zizmor.yml](../.github/zizmor.yml) | `.github/workflows/` |
-| `lint (JavaScript)` | ESLint 10.15.0 | [eslint.config.mjs](../eslint.config.mjs) | `kernel2/` |
+| `lint (JavaScript)` | ESLint 10.16.0 | [eslint.config.mjs](../eslint.config.mjs) | `kernel2/` |
 | `lint (Rust, macos)`, `(linux)`, `(windows)` | Clippy from Rust 1.100.0 | default lints with warnings treated as errors | `kernel/` |
 | `lint` | none | every job above succeeded | the results of the jobs above |
 

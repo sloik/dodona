@@ -135,17 +135,20 @@ test('shown level is the weakest link', () => {
 test('tree status', () => {
   const policy = { min_hard_gates: 1 };
   const node = (gate, check) => ({ gate, check });
-  assert.equal(tree.treeStatus(policy, true, node('hard', 'passed'), [node('hard', 'passed')]), 'delivered');
-  assert.equal(tree.treeStatus(policy, true, node('hard', 'passed'), [node('hard', 'unknown')]), 'open');
-  assert.equal(tree.treeStatus(policy, true, node('hard', 'passed'), [node('soft', 'passed')]), 'unguarded'); // every child needs a hard gate
-  assert.equal(tree.treeStatus(policy, false, node('hard', 'passed'), []), 'draft');
-  assert.equal(tree.treeStatus(policy, true, node('soft', 'passed'), []), 'unguarded');
-  assert.equal(tree.treeStatus(policy, true, node('soft', 'passed'), [node('hard', 'passed')]), 'delivered');
+  const status = (p, confirmed, root, children) => tree.treeStatus(p, confirmed, root, new Map(
+    children.map((child, n) => [String(n), { parent: 'root', ...child }]),
+  ));
+  assert.equal(status(policy, true, node('hard', 'passed'), [node('hard', 'passed')]), 'delivered');
+  assert.equal(status(policy, true, node('hard', 'passed'), [node('hard', 'unknown')]), 'open');
+  assert.equal(status(policy, true, node('hard', 'passed'), [node('soft', 'passed')]), 'unguarded');
+  assert.equal(status(policy, false, node('hard', 'passed'), []), 'draft');
+  assert.equal(status(policy, true, node('soft', 'passed'), []), 'unguarded');
+  assert.equal(status(policy, true, node('soft', 'passed'), [node('hard', 'passed')]), 'delivered');
   // The floor is counted over the whole tree, not held against each child.
   const two = { min_hard_gates: 2 };
-  assert.equal(tree.treeStatus(two, true, node('hard', 'passed'), [node('hard', 'passed')]), 'delivered');
-  assert.equal(tree.treeStatus(two, true, node('hard', 'passed'), []), 'unguarded');
-  assert.equal(tree.treeStatus({ min_hard_gates: 0 }, true, node('soft', 'passed'), []), 'unguarded'); // below 1 is 1
+  assert.equal(status(two, true, node('hard', 'passed'), [node('hard', 'passed')]), 'delivered');
+  assert.equal(status(two, true, node('hard', 'passed'), []), 'unguarded');
+  assert.equal(status({ min_hard_gates: 0 }, true, node('soft', 'passed'), []), 'unguarded');
   // A string gate other than exactly hard or soft counts as hard; a gate that is not a string changes nothing.
   assert.equal(tree.gateCountsAs('soft'), 'soft');
   assert.equal(tree.gateCountsAs('Hard'), 'hard');

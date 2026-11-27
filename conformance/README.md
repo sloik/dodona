@@ -120,15 +120,17 @@ A scenario gives a `root` and `children`, each with the gate of its one criterio
 
 The unreadable-gate mutation now targets an edit. The scenario for an unreadable starting gate still runs with the same expectations.
 
+Each entry of `children` may have a string `parent`. Omitting it means `root`. Every parent chain must end at `root`. A missing parent target, a non-string parent, a cycle or an entry named `root` makes the scenario invalid. [Decision 0039](../decisions/0039-tree-scenarios-name-a-parent.md).
+
 | Step | Meaning |
 |---|---|
 | `{"confirm": {}}` | The owner confirms the tree as it stands |
 | `{"check": {"node": N, "status": S}}` | The check behind N's criterion now has status S, one of `unknown`, `passed`, `failed` or `conflict`. N is `root` or a child |
 | `{"edit": {"node": N, "to": G}}` | N's gate is changed directly |
-| `{"remove": {"child": K}}` | Child K is removed |
-| `{"add": {"child": K, "gate": G}}` | Child K is added, its check unknown |
+| `{"remove": {"child": K}}` | Child K and every descendant of K are removed |
+| `{"add": {"child": K, "gate": G, "parent": P}}` | Add child K under P with an unknown check. P defaults to `root`. A missing parent target or invalid name or parent leaves the tree unchanged |
 
-The result has `"status"`, the first of these that applies: `draft` if the owner has not confirmed, or anything was edited, added or removed since; `unguarded` if the tree counts fewer hard gates than `min_hard_gates`, or fewer than one, counting the root and every child; or if any child has no hard gate (decision 0030). A child is not held to the policy's number on its own: moving a criterion into a child loses nothing (decision 0017). `open` if any hard gate's check is not `passed`; otherwise `delivered`.
+The result has `"status"`. It is `draft` before confirmation and after an edit, addition or removal. A confirmed tree is `unguarded` when its whole count falls below `min_hard_gates` or one, whichever is greater, or when any child has no hard gate in its own subtree (decision 0030). The full policy floor applies at the root (decision 0017). A guarded, confirmed tree is `open` when any hard gate at any depth has a check whose status differs from `passed`. It is `delivered` when every hard check passes.
 
 ### Attempts scenarios
 
@@ -249,6 +251,8 @@ The result has `obligations` and `intents`, each an object with one entry per na
 
 **Intent status** is the first of these that applies: `draft` if not confirmed; `uncovered` if a criterion has no obligation; `unguarded` if there are fewer hard gates than `min_hard_gates`; `open` if some hard criterion has an obligation that is not `passed`; `delivered` if some deferred criterion has one that is not `passed`; otherwise `fulfilled`.
 
+An empty intent is valid. It can be confirmed and then reports `unguarded` with zero hard gates.
+
 Each intent also reports:
 
 - `baseline`: the baseline of the intent as things stand, the identity defined above. It is what a confirmation must name.
@@ -339,6 +343,14 @@ For a `final`, in this order, each rule over every attachment before the next: i
 Nothing may be reported as passed except in the controls, and where a run would have been dangerous it must not have started.
 
 **How the judge reads a run.** The host reads its standard input from a private file holding the exact text of the case and writes its standard output to another, which the judge reads back up to 1 MiB; it is given 120 seconds and, if it takes longer, is ended through the judge's own handle on the process it started, and nothing else is ended. Only an answer completed with exit 0 that is one JSON object with a string `outcome` is judged. A host that could not be started, ran out of time, exited other than 0 (even after printing a valid refusal) or printed anything else gave no answer, and the case is `UNFINISHED`. So is a case whose records cannot be read: a transcript, run record or process-id file that is gone, not a regular file, too large or malformed. The judge creates those files empty, so an empty run record shows that no run was given. Only the ten cases whose curated expectation is `refused` with `bad-input` or `unknown-file` and no runs may leave the provider's transcript and process ids empty; this is read from the case, never from the answer. Processes left behind are told by the same cooperative probe and stop file as for sessions (`watch_fixture` in `tools/run_provider_cases.py`): one that acknowledges the probe is a `MISMATCH`, one whose state cannot be told is `UNFINISHED`, and no recorded id is ever signalled. Each case is named by its mode, how its run ended and a digest of its whole content, since several cases share a mode. The last line is `{"cases", "judged", "skipped", "matched", "all_matched", "unfinished", "rejected"}`, `rejected` naming each completed mismatch; a case skipped on a platform is counted as skipped, never as matched. The judge exits 0 when every judged case matched, 1 when the run completed with mismatches, and 2 when any case did not finish or none was judged.
+
+## Recovering a stopped batch
+
+Both mutation supervisors record the current batch's name, their own process ID and the admitted worker's process ID. The worker can write to its scratch only after receiving admission.
+
+Run `python tools/recover_plant_batches.py` to recover abandoned batches under the current user's temporary directory. Use `--root SCRATCH` for another scratch directory that your runners used. The command reports removed, kept and failed batches. It returns 2 if a removal or observation of the scratch directory failed.
+
+Recovery requires the matching ownership record and evidence that every admitted process is gone. A live, reused or unobservable process ID keeps its directory. Legacy batches, unexpected layouts and ambiguous ownership records also stay in place. Only a recorded work directory is removed. If removal fails partway, the ownership record remains for a retry. Recovery does not stop processes or report defect catches.
 
 ## How a project's status is judged
 

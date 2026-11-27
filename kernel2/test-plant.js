@@ -658,11 +658,18 @@ async function supervisedBatch(t, childSource, options = {}) {
   fs.writeFileSync(worker, `
     const fs = require('node:fs');
     const path = require('node:path');
-    const owned = process.argv[2];
-    const copy = path.join(owned, 'copy');
-    fs.mkdirSync(copy);
-    fs.writeFileSync(path.join(copy, 'planted'), 'partial batch');
-    ${childSource}
+    const work = process.argv[2];
+    process.once('message', (command) => {
+      const owned = path.dirname(work);
+      const marker = JSON.parse(fs.readFileSync(path.join(owned, 'batch-owner.json'), 'utf8'));
+      if (command !== 'start' || marker.worker !== process.pid || marker.batch !== path.basename(owned)) {
+        throw new Error('worker was released before ownership was recorded');
+      }
+      const copy = path.join(work, 'copy');
+      fs.mkdirSync(copy);
+      fs.writeFileSync(path.join(copy, 'planted'), 'partial batch');
+      ${childSource}
+    });
   `);
   const output = [];
   const status = await plant.supervise({
@@ -678,6 +685,20 @@ async function supervisedBatch(t, childSource, options = {}) {
   assert.equal(fs.readFileSync(marker, 'utf8'), 'preserve this');
   return { output, status, remaining: fs.readdirSync(tmp).sort() };
 }
+
+test('an abandoned admission channel never starts the worker', { timeout: 5000 }, async (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dodona-admission-test-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const worker = fork(path.join(__dirname, 'plant.js'), ['--dodona-plant-worker', tmp],
+    { execArgv: [], stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
+  const stopped = new Promise((resolve, reject) => {
+    worker.once('exit', resolve);
+    worker.once('error', reject);
+  });
+  worker.disconnect();
+  assert.equal(await stopped, 2);
+  assert.deepEqual(fs.readdirSync(tmp), []);
+});
 
 test('the supervisor removes a crashed worker copy and publishes no success', async (t) => {
   const result = await supervisedBatch(t, 'process.exit(71);');
