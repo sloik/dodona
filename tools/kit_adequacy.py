@@ -24,7 +24,8 @@ checks the unchanged kernel and must catch every defect assigned to it.
 Only the unsharded invocation can report all_caught. The CLI supervisor
 owns the batch directory and publishes the worker's summary after removal.
 A worker crash, an invalid receipt or a cleanup failure exits 2. An abrupt
-kill of the supervisor can leave the directory.
+kill of the supervisor can leave the owned directory for recovery by
+tools/recover_plant_batches.py.
 
 This measures the kit against defects someone thought of. It says nothing
 about defects nobody thought of.
@@ -33,12 +34,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import shutil
 import subprocess
 import sys
 import tempfile
 from multiprocessing import get_context
+
+from recover_plant_batches import WORK, record_owner
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -282,14 +286,32 @@ def receive_batch_receipt(receiver):
     return None
 
 
+def run_admitted_worker(admission, start_worker, argv, work, sender):
+    with admission:
+        try:
+            allowed = admission.recv() is True
+        except EOFError:
+            allowed = False
+    if not allowed:
+        sys.exit(2)
+    start_worker(argv, work, sender)
+
+
 def run_owned_batch(argv, owned, start_worker):
     context = get_context("spawn")
     receiver, sender = context.Pipe(duplex=False)
-    with receiver, sender:
-        worker = context.Process(target=start_worker, args=(argv, owned, sender))
+    admission, release = context.Pipe(duplex=False)
+    work = owned / WORK
+    with receiver, sender, admission, release:
+        worker = context.Process(target=run_admitted_worker, args=(admission, start_worker, argv, work, sender))
         worker.start()
         try:
             sender.close()
+            admission.close()
+            record_owner(owned, os.getpid(), worker.pid)
+            work.mkdir(mode=0o700)
+            release.send(True)
+            release.close()
             worker.join()
             return worker.exitcode, receive_batch_receipt(receiver)
         finally:
@@ -327,6 +349,7 @@ def supervise(argv: list[str], *, tmp=None, worker=run_batch_worker, cleanup=shu
     try:
         owned = pathlib.Path(tempfile.mkdtemp(prefix="dodona-rust-plant-batch-", dir=tmp))
         try:
+            record_owner(owned, os.getpid())
             status, receipt = run_owned_batch(argv, owned, worker)
         finally:
             cleanup(owned)
