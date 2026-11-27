@@ -1,0 +1,62 @@
+{
+  "model": "Checkout.tla",
+  "arguments": [
+    "-workers",
+    "1",
+    "-seed",
+    "1",
+    "-fp",
+    "1",
+    "-config",
+    "<config>",
+    "Checkout.tla"
+  ],
+  "bounds": "One fake order, one first attempt and at most one retry, one processing and one reply per attempt.",
+  "cases": [
+    {
+      "config": "BaselineSafety.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0
+    },
+    {
+      "config": "BaselineReachable.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "of": "NoPaidAfterRetryLateReply"
+    },
+    {
+      "config": "DuplicateCharge.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "of": "AtMostOneCharge"
+    },
+    {
+      "config": "NeverChargeSafety.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0
+    },
+    {
+      "config": "NeverChargeReachability.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "of": "NoPaidAfterRetryLateReply"
+    },
+    {
+      "config": "NeverSettleSafety.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0
+    },
+    {
+      "config": "NeverSettleReachability.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "of": "NoPaidAfterRetryLateReply"
+    },
+    {
+      "config": "NeverSettlePending.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "of": "NoChargedPendingAfterRetryLateReply"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "required": [
     "0001"
   ],
-  "min_hard_gates": 3,
+  "min_hard_gates": 4,
   "floors": {
     "confirm-baseline": "helper"
   },

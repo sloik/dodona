@@ -302,5 +302,33 @@
         "status": "pending"
       }
     }
-  ]
+  ],
+  "published_artifacts": {
+    "evidence/fresh-drift.patch": "0db8f5738fb37db5bb11d8d5bfcc85620034e33c597481b9fc49f4d65a2cccf2",
+    "evidence/fresh-model-ledger.txt": "df7d1494cb624313a9e6df23d88ea4adf9aa7e0b35953747d3c5bbced63a6513",
+    "evidence/fresh-model-witnesses.txt": "d2faf3b787f40433510954c2f78c64b1f47cd669c744666851b989730b744289",
+    "evidence/fresh-native-reports.json": "0b7f16f1cb9ba177f949a69e3bbb73fa3358592bd982fbdbc63d696522df481e",
+    "evidence/fresh-replay.json": "ae71df2f6390c24c3288f128ac3014b1539f0153abd117eddbe75f020287cd4a",
+    "evidence/fresh-sample-ledger.txt": "3471978c1745cb87e765857972cf0bada512a1b54d84f3af6879a6cf8ae840d4",
+    "evidence/fresh-samples-before-drift.txt": "6e35670be0ce107a34bd9d9bada27453f68625c269ca4a709aa372a0ef3e894f",
+    "evidence/linked-reachability-status.json": "20cd770fdcda2130106349bd8e895a8c849aa17bac2591b96a028cf87e090162",
+    "evidence/replay-input.json": "98483206489ac3343f1fd6745f78b14c4a72d99a71fc788ae09310b2111eef95",
+    "fresh-trial/checkout/checkout.js": "3bfec46b9d6a94505431b300a36bc083bdb09ccbfbe6e8ac8eff3db078ceac3d",
+    "fresh-trial/checkout/progress.test.js": "536d7ffe5d21e12d003e984a9106335c4b62efe5d39a15d13888e7a6d9457147",
+    "fresh-trial/checkout/retry-late.json": "f34b4391363482187c58a3111b00935f70065a7bcf11380fbe1b180abe2dcc98",
+    "fresh-trial/checkout/safety.test.js": "1f586bbbf23732c3a1ac59ba72b59e40cc39ee5664f92ed4c49307c3f398364e",
+    "fresh-trial/dodona.toml": "784cd5a1aa47888767fad088c280637ccec668972ab47601965a95e68b9c4ad1",
+    "fresh-trial/formal/BaselineReachable.cfg": "16d3678a4354ad262ec876f4dc5c548839ef98358b25daaebdd854c668157232",
+    "fresh-trial/formal/BaselineSafety.cfg": "c6cd8b79a5fdda78b5c06a154a0cc467e34213a27974a7c730ff571d6c2b3784",
+    "fresh-trial/formal/Checkout.tla": "de9c505b74c179a2f7ed1c9f520557b9e6b5f242c3114cf86afdfc2897212d0b",
+    "fresh-trial/formal/DuplicateCharge.cfg": "5062db90e57d841ea3c2a9282d2bd47c00b7e73defe6e4378ab03a33deedc82b",
+    "fresh-trial/formal/NeverChargeReachability.cfg": "1f1782c1a3a6bf404c814982f355865b16fcacd47b207a03063bbbd95b31a815",
+    "fresh-trial/formal/NeverChargeSafety.cfg": "313581d42f2fedde4c65c340e7dbec4aba08887dc86f0b89a39304398881689c",
+    "fresh-trial/formal/NeverSettlePending.cfg": "0d33a000076e1362839c8ce5ee5d87b1191aae1e91d39bfc99f99c503e4b8a4b",
+    "fresh-trial/formal/NeverSettleReachability.cfg": "3f480172fc297d91d35c6c625482f17e960e1f67c79ab5f1e958faf047f3a521",
+    "fresh-trial/formal/NeverSettleSafety.cfg": "d2c0354f53c26f323dcc8b2b2a5392bc3cab5fdce5aba254a5f1d9eba6593f51",
+    "fresh-trial/formal/expected.json": "67f5c17acf9e2b4297f21f95b82a26029e441ca8ec77293a2d354b59e3d68112",
+    "fresh-trial/intents/0001-checkout.md": "eef20ad8ce0b241de373861c7d10057545dab871d1d52097ae451c803bbff855",
+    "fresh-trial/policy.toml": "332f21f653a3ca46f4c4138fa0809e3054665311fa104eb7090814b7b648adeb"
+  }
 }

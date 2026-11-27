@@ -1,0 +1,367 @@
+{
+  "reference": {
+    "commit": "6548de441fde2759ee9dcfc75d8e81b3672c4985",
+    "path": "checkout/checkout.js",
+    "sha256": "3bfec46b9d6a94505431b300a36bc083bdb09ccbfbe6e8ac8eff3db078ceac3d"
+  },
+  "candidate": {
+    "commit": "c3d07ff13e7ab0afb9ba60a9fd005ca7df0a5646",
+    "path": "checkout/checkout.js",
+    "sha256": "6460f59a9e7d52d7455073765f0ea90a1423601e581350ba34596c8e41bcd2c7"
+  },
+  "replayInput": {
+    "commit": "6548de441fde2759ee9dcfc75d8e81b3672c4985",
+    "path": "checkout/retry-late.json",
+    "sha256": "f34b4391363482187c58a3111b00935f70065a7bcf11380fbe1b180abe2dcc98",
+    "schedule": [
+      {
+        "action": "submit",
+        "attempt": 1
+      },
+      {
+        "action": "process",
+        "attempt": 1
+      },
+      {
+        "action": "timeout",
+        "attempt": 1
+      },
+      {
+        "action": "submit",
+        "attempt": 2
+      },
+      {
+        "action": "process",
+        "attempt": 2
+      },
+      {
+        "action": "reply",
+        "attempt": 2
+      },
+      {
+        "action": "reply",
+        "attempt": 1
+      }
+    ]
+  },
+  "comparedFields": [
+    "action",
+    "attempt",
+    "late",
+    "attemptCharge",
+    "charges",
+    "status"
+  ],
+  "comparisons": [
+    {
+      "environment": "ordinary defaults",
+      "options": {
+        "chargingAvailable": true
+      },
+      "match": false,
+      "referenceMeetsProgress": true,
+      "candidateMeetsProgress": false,
+      "differences": [
+        {
+          "index": 5,
+          "field": "status"
+        },
+        {
+          "index": 6,
+          "field": "status"
+        }
+      ],
+      "referenceTrace": [
+        {
+          "action": "submit",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": null,
+          "charges": [],
+          "status": "pending"
+        },
+        {
+          "action": "process",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "timeout",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "submit",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": null,
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "process",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "reply",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "settled"
+        },
+        {
+          "action": "reply",
+          "attempt": 1,
+          "late": true,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "settled"
+        }
+      ],
+      "candidateTrace": [
+        {
+          "action": "submit",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": null,
+          "charges": [],
+          "status": "pending"
+        },
+        {
+          "action": "process",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "timeout",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "submit",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": null,
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "process",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "reply",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "reply",
+          "attempt": 1,
+          "late": true,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "environment": "settlement unavailable for both",
+      "options": {
+        "chargingAvailable": true,
+        "settlementAvailable": false
+      },
+      "match": true,
+      "referenceMeetsProgress": false,
+      "candidateMeetsProgress": false,
+      "differences": [],
+      "referenceTrace": [
+        {
+          "action": "submit",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": null,
+          "charges": [],
+          "status": "pending"
+        },
+        {
+          "action": "process",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "timeout",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "submit",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": null,
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "process",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "reply",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "reply",
+          "attempt": 1,
+          "late": true,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        }
+      ],
+      "candidateTrace": [
+        {
+          "action": "submit",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": null,
+          "charges": [],
+          "status": "pending"
+        },
+        {
+          "action": "process",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "timeout",
+          "attempt": 1,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "submit",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": null,
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "process",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "reply",
+          "attempt": 2,
+          "late": false,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        },
+        {
+          "action": "reply",
+          "attempt": 1,
+          "late": true,
+          "attemptCharge": "fake-charge-1",
+          "charges": [
+            "fake-charge-1"
+          ],
+          "status": "pending"
+        }
+      ]
+    }
+  ]
+}

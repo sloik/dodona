@@ -1,0 +1,155 @@
+{
+  "draft": {
+    "project": "unknown",
+    "intent": "draft",
+    "obligations": {
+      "checkout/design": {
+        "status": "passed"
+      },
+      "checkout/disable_debit_safety": {
+        "status": "passed"
+      },
+      "checkout/disable_settlement_safety": {
+        "status": "passed"
+      },
+      "checkout/mutant_never_settles": {
+        "status": "passed"
+      },
+      "checkout/mutant_no_idempotency": {
+        "status": "passed"
+      },
+      "checkout/reach_paid_after_retry": {
+        "status": "passed"
+      },
+      "tests/safety.test.js::retry and late reply debit at most once": {
+        "status": "passed"
+      },
+      "tests/settlement.test.js::a paid retry settles and a late reply leaves it settled": {
+        "status": "passed"
+      }
+    }
+  },
+  "baseline": {
+    "project": "passed",
+    "intent": "fulfilled",
+    "obligations": {
+      "checkout/design": {
+        "status": "passed"
+      },
+      "checkout/disable_debit_safety": {
+        "status": "passed"
+      },
+      "checkout/disable_settlement_safety": {
+        "status": "passed"
+      },
+      "checkout/mutant_never_settles": {
+        "status": "passed"
+      },
+      "checkout/mutant_no_idempotency": {
+        "status": "passed"
+      },
+      "checkout/reach_paid_after_retry": {
+        "status": "passed"
+      },
+      "tests/safety.test.js::retry and late reply debit at most once": {
+        "status": "passed"
+      },
+      "tests/settlement.test.js::a paid retry settles and a late reply leaves it settled": {
+        "status": "passed"
+      }
+    }
+  },
+  "missing-reachability": {
+    "project": "unknown",
+    "intent": "open",
+    "obligations": {
+      "checkout/design": {
+        "status": "passed"
+      },
+      "checkout/disable_debit_safety": {
+        "status": "passed"
+      },
+      "checkout/disable_settlement_safety": {
+        "status": "passed"
+      },
+      "checkout/mutant_never_settles": {
+        "status": "passed"
+      },
+      "checkout/mutant_no_idempotency": {
+        "status": "passed"
+      },
+      "checkout/reach_paid_after_retry": {
+        "reason": "never-run",
+        "status": "unknown"
+      },
+      "tests/safety.test.js::retry and late reply debit at most once": {
+        "status": "passed"
+      },
+      "tests/settlement.test.js::a paid retry settles and a late reply leaves it settled": {
+        "status": "passed"
+      }
+    }
+  },
+  "code-drift": {
+    "project": "unknown",
+    "intent": "open",
+    "obligations": {
+      "checkout/design": {
+        "status": "passed"
+      },
+      "checkout/disable_debit_safety": {
+        "status": "passed"
+      },
+      "checkout/disable_settlement_safety": {
+        "status": "passed"
+      },
+      "checkout/mutant_never_settles": {
+        "status": "passed"
+      },
+      "checkout/mutant_no_idempotency": {
+        "status": "passed"
+      },
+      "checkout/reach_paid_after_retry": {
+        "status": "passed"
+      },
+      "tests/safety.test.js::retry and late reply debit at most once": {
+        "reason": "never-run",
+        "status": "unknown"
+      },
+      "tests/settlement.test.js::a paid retry settles and a late reply leaves it settled": {
+        "reason": "never-run",
+        "status": "unknown"
+      }
+    }
+  },
+  "after-recorded-code-rerun": {
+    "project": "failed",
+    "intent": "open",
+    "obligations": {
+      "checkout/design": {
+        "status": "passed"
+      },
+      "checkout/disable_debit_safety": {
+        "status": "passed"
+      },
+      "checkout/disable_settlement_safety": {
+        "status": "passed"
+      },
+      "checkout/mutant_never_settles": {
+        "status": "passed"
+      },
+      "checkout/mutant_no_idempotency": {
+        "status": "passed"
+      },
+      "checkout/reach_paid_after_retry": {
+        "status": "passed"
+      },
+      "tests/safety.test.js::retry and late reply debit at most once": {
+        "status": "passed"
+      },
+      "tests/settlement.test.js::a paid retry settles and a late reply leaves it settled": {
+        "status": "failed"
+      }
+    }
+  }
+}
