@@ -38,6 +38,8 @@ A last job, `lint`, needs every other job of the workflow, runs whatever their o
 
 A rule is left off only with its reason written next to it in the configuration, and listed below. The kernels name no tool: every configuration lives at the root of the repository or under `.github/`.
 
+ESLint reports no-redeclare errors throughout the second kernel. The duplicate `isObject` implementation was removed with a new recorded comparison for C37.
+
 ## Left for later
 
 Each of these breaks on the code as it is now, and is left off rather than met by rewriting it:
@@ -47,7 +49,6 @@ Each of these breaks on the code as it is now, and is left off rather than met b
 - ruff E701, E702, E731 and E741: statements on one line, lambdas assigned to names, and `l` as a name; style, in many places.
 - ruff F401 in `tools/metrics.py`: one unused import, `import fnmatch`, in a file another pull request (#55) is changing. It is off for that file until then, and is to become `# noqa: F401` on that one line once #55 has merged.
 - ruff F841 on one line of `tools/check_repo.py`: `problems_before` is set and never read in `gap_an_intent_reads_one_way_only`. It is dead code, not a defect: a review showed the check still fails as it should. It is marked `# noqa: F841` on that line and kept, because `tools/check_repo.py` is a judged file.
-- ESLint's no-redeclare in `kernel2/status.js`: `isObject` is declared twice there, with the same body. The file's exact bytes are an input of the recorded run behind claim C37 (`spec/runs/index.json`), so neither removing the copy nor a disable comment on its line is possible without a new run, and ESLint's configuration cannot name a line. The rule is off for that one file until a change that records a new run removes the copy.
 - ESLint's own dependencies are not locked: ESLint runs at an exact version through `npx`, with no lock file.
 - `cargo fmt --check` and clippy's warnings as errors: eight formatting hunks and six warnings in the first kernel (eight with the hosted runners' newer Rust). Its source is the anchor of planted defects that replace exact text, and clippy's warnings change with the runner's Rust, so both wait for a pinned toolchain. The Rust toolchain is not pinned: clippy is the runner's.
 - Markdown style: links and anchors are already checked by `tools/check_docs.py`.

@@ -245,10 +245,6 @@ function report(state, ledger) {
   };
 }
 
-function isObject(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
 // Fills in the parts of an intent a scenario may leave out.
 function withDefaults(intents) {
   for (const intent of Object.values(intents)) {
