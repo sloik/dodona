@@ -2281,6 +2281,8 @@ def kit_worker_control(argv, owned, sender):
         os._exit(71)
     summary = {"defects": 1, "caught": 1, "unfinished": 0, "all_caught": True}
     sender.send((0, summary, False))
+    if argv == ["duplicate"]:
+        sender.send((0, summary, False))
     sender.close()
     if argv == ["contradictory"]:
         raise SystemExit(1)
@@ -2304,7 +2306,7 @@ class KitSupervisorTests(unittest.TestCase):
 
     def test_completed_worker_summary_is_preserved_after_cleanup(self):
         status, lines, remaining = self.supervise("success")
-        self.assertEqual(status, 0)
+        self.assertEqual(status, 0, lines)
         self.assertEqual(remaining, ["unrelated"])
         self.assertEqual([json.loads(line) for line in lines],
                          [{"defects": 1, "caught": 1, "unfinished": 0, "all_caught": True}])
@@ -2314,6 +2316,32 @@ class KitSupervisorTests(unittest.TestCase):
         self.assertEqual(status, 2)
         self.assertEqual(remaining, ["unrelated"])
         self.assertEqual([line.split(":")[0] for line in lines], ["UNFINISHED"])
+
+    def test_duplicate_receipts_withhold_success(self):
+        status, lines, remaining = self.supervise("duplicate")
+        self.assertEqual(status, 2, lines)
+        self.assertEqual(remaining, ["unrelated"])
+        self.assertEqual([line.split(":")[0] for line in lines], ["UNFINISHED"])
+
+    def test_reader_accepts_eof_when_peeking_after_the_receipt_would_fail(self):
+        receipt = (0, {"defects": 1, "caught": 1, "unfinished": 0, "all_caught": True}, False)
+
+        class ClosedPipe:
+            received = False
+
+            def poll(self):
+                # Windows named pipes can raise while peeking after the writer closes.
+                if self.received:
+                    raise BrokenPipeError("peeking at the closed pipe")
+                return True
+
+            def recv(self):
+                if self.received:
+                    raise EOFError
+                self.received = True
+                return receipt
+
+        self.assertEqual(kit_adequacy.receive_batch_receipt(ClosedPipe()), receipt)
 
     def test_cleanup_failure_withholds_worker_success(self):
         def fail_cleanup(_):

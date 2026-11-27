@@ -269,19 +269,17 @@ def run_batch_worker(argv, owned, sender) -> None:
 
 
 def receive_batch_receipt(receiver):
-    if not receiver.poll():
-        return None
+    # The worker has exited and both copies of the sender are closed. Reading
+    # cannot wait for another message. Peeking at EOF can raise on Windows.
     try:
         receipt = receiver.recv()
     except EOFError:
         return None
-    if receiver.poll():
-        try:
-            receiver.recv()
-        except EOFError:
-            return receipt
-        return None
-    return receipt
+    try:
+        receiver.recv()
+    except EOFError:
+        return receipt
+    return None
 
 
 def run_owned_batch(argv, owned, start_worker):

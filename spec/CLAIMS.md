@@ -805,7 +805,7 @@ Both required aggregates and all 16 shards completed successfully on 2026-11-22.
 
 ### Serial planted-defect inventories at `9225a1b`
 
-On 2026-11-27 the exact Rust inventory of 275 defects finished before the exact JavaScript inventory of 319 defects began. Both CLI commands exited 0 after cleaning their owned scratch. Each inventory name has a named judge witness, in manifest order. Neither run had unfinished defects. The [serial witness record](../docs/reviews/2026-11-27-serial-defect-witnesses.md) preserves the per-defect evidence, timestamps and input and transcript hashes. Separation is `self`.
+On 2026-11-27 the exact Rust inventory of 275 defects finished before the exact JavaScript inventory of 319 defects began. Both CLI commands exited 0 after cleaning their owned scratch. Each inventory name has a named judge witness, in manifest order. Neither run had unfinished defects. The [serial witness record](../docs/reviews/2026-11-27-serial-defect-witnesses.md) preserves the per-defect evidence, timestamps and input and transcript hashes. Separation is `self`. A later Windows portability fix changed how the supervisor reads the end of the receipt pipe. It kept the manifests, judges and recorded serial inputs fixed.
 
 The worker-crash controls produced an unfinished result and removed only the interrupted worker's copy when its supervisor survived. Removing the supervisor's cleanup made those controls fail. Killing both processes left an owned directory and no success summary in each fixture. Recovery after that hard stop is tracked in [issue 71](https://github.com/sloik/dodona/issues/71).
 
