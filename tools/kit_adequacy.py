@@ -21,7 +21,10 @@ otherwise the scenario's label is wrong. Exit status is 0 only if the
 unchanged kernel passes and every planted defect is caught, by the right
 scenario where one is named. With --shard, INDEX is zero-based. Each shard
 checks the unchanged kernel and must catch every defect assigned to it.
-Only the unsharded invocation can report all_caught.
+Only the unsharded invocation can report all_caught. The CLI supervisor
+owns the batch directory and publishes the worker's summary after removal.
+A worker crash, an invalid receipt or a cleanup failure exits 2. An abrupt
+kill of the supervisor can leave the directory.
 
 This measures the kit against defects someone thought of. It says nothing
 about defects nobody thought of.
@@ -35,6 +38,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from multiprocessing import get_context
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -182,7 +186,7 @@ def select_shard(defects: list, index: int, count: int) -> list:
     return defects[index::count]
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, tmp=None, emit_summary=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--shard", nargs=2, type=int, metavar=("INDEX", "COUNT"),
                         help="judge one zero-based shard of the defect manifest")
@@ -198,8 +202,8 @@ def main(argv: list[str] | None = None) -> int:
     for path in sorted(ROOT.glob("conformance/kernel/*/*.json")):
         for case in json.loads(path.read_text(encoding="utf-8")).get("covers", []):
             covers.setdefault(case, set()).add(f"{path.parent.name}/{path.stem}")
-    with tempfile.TemporaryDirectory() as tmp:
-        copy = pathlib.Path(tmp) / "kernel"
+    with tempfile.TemporaryDirectory(dir=tmp) as directory:
+        copy = pathlib.Path(directory) / "kernel"
         shutil.copytree(ROOT / "kernel", copy, ignore=shutil.ignore_patterns("target"))
         clean, failing = passes_kit(copy)
         if not clean:
@@ -239,9 +243,107 @@ def main(argv: list[str] | None = None) -> int:
     if args.shard is not None:
         index, count = args.shard
         summary.update(shard_index=index, shard_count=count, inventory_count=inventory_count, shard_caught=complete)
-    print(json.dumps(summary))
+    if emit_summary is None:
+        print(json.dumps(summary))
+    else:
+        emit_summary(summary)
     return 0 if complete else 1
 
 
+def run_batch_worker(argv, owned, sender) -> None:
+    sys.stdout.reconfigure(line_buffering=True)
+    summary = None
+
+    def remember(record):
+        nonlocal summary
+        summary = record
+
+    with sender:
+        try:
+            status = main(argv, tmp=owned, emit_summary=remember)
+        except SystemExit as err:
+            sender.send((err.code, None, True))
+            raise
+        sender.send((status, summary, False))
+    sys.exit(status)
+
+
+def receive_batch_receipt(receiver):
+    if not receiver.poll():
+        return None
+    try:
+        receipt = receiver.recv()
+    except EOFError:
+        return None
+    if receiver.poll():
+        try:
+            receiver.recv()
+        except EOFError:
+            return receipt
+        return None
+    return receipt
+
+
+def run_owned_batch(argv, owned, start_worker):
+    context = get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    with receiver, sender:
+        worker = context.Process(target=start_worker, args=(argv, owned, sender))
+        worker.start()
+        try:
+            sender.close()
+            worker.join()
+            return worker.exitcode, receive_batch_receipt(receiver)
+        finally:
+            if worker.is_alive():
+                worker.terminate()
+                worker.join()
+            worker.close()
+
+
+def receipt_matches_exit(receipt, status) -> bool:
+    if not isinstance(receipt, tuple) or len(receipt) != 3 or status not in (0, 1, 2):
+        return False
+    reported, summary, argument_exit = receipt
+    if type(reported) is not int or reported != status:
+        return False
+    if summary is None:
+        return status != 0 or argument_exit is True
+    if argument_exit or not isinstance(summary, dict) or type(summary.get("all_caught")) is not bool:
+        return False
+    if any(type(summary.get(key)) is not int for key in ("defects", "caught", "unfinished")):
+        return False
+    if status != 0:
+        return not summary["all_caught"] and summary.get("shard_caught") is not True
+    if summary["caught"] != summary["defects"] or summary["unfinished"]:
+        return False
+    if summary["all_caught"]:
+        return "shard_caught" not in summary
+    index, count, inventory = (summary.get(key) for key in ("shard_index", "shard_count", "inventory_count"))
+    return (summary.get("shard_caught") is True
+            and all(type(value) is int for value in (index, count, inventory))
+            and 0 <= index < count <= inventory)
+
+
+def supervise(argv: list[str], *, tmp=None, worker=run_batch_worker, cleanup=shutil.rmtree) -> int:
+    try:
+        owned = pathlib.Path(tempfile.mkdtemp(prefix="dodona-rust-plant-batch-", dir=tmp))
+        try:
+            status, receipt = run_owned_batch(argv, owned, worker)
+        finally:
+            cleanup(owned)
+            if owned.exists():
+                raise OSError("the batch directory is still present after cleanup")
+    except OSError as err:
+        print(f"UNFINISHED: the planted-defect batch could not run or clean up ({err})")
+        return 2
+    if not receipt_matches_exit(receipt, status):
+        print(f"UNFINISHED: the planted-defect worker produced no valid completion receipt (exit {status})")
+        return 2
+    if receipt[1] is not None:
+        print(json.dumps(receipt[1]))
+    return status
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(supervise(sys.argv[1:]))
