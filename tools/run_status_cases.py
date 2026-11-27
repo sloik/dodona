@@ -327,6 +327,9 @@ def expected_differences(out: dict, report: dict, headline: str, expect: dict) -
     for field in ("not_served", "not_checkable", "ledger", "policy_not_applied", "project_doubts"):
         if field in expect and not same(out[field], expect[field]):
             problems.append(f"{field}: expected {expect[field]}, got {out[field]}")
+    for name, want in expect.get("coverage", {}).items():
+        if not same(out["coverage"]["intents"].get(name), want):
+            problems.append(f"coverage {name}: expected {want}")
     return problems
 
 

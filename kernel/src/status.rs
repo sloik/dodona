@@ -235,13 +235,98 @@ fn gate_of<'a>(intents: &'a mut Value, step: &Value) -> Option<&'a mut Value> {
 fn count(n: usize) -> Value {
     Value::Number(n as i64)
 }
+
+#[derive(Default)]
+struct Subtree {
+    hard: usize,
+    soft: usize,
+    deferred: usize,
+    deferred_open: usize,
+    met: usize,
+    uncovered: bool,
+    unguarded: bool,
+    open: bool,
+    failed: bool,
+    complete: bool,
+}
+
+impl Subtree {
+    fn include(&mut self, child: &Self) {
+        self.hard += child.hard;
+        self.soft += child.soft;
+        self.deferred += child.deferred;
+        self.deferred_open += child.deferred_open;
+        self.met += child.met;
+        self.uncovered |= child.uncovered;
+        self.unguarded |= child.unguarded;
+        self.open |= child.open;
+        self.failed |= child.failed;
+    }
+
+    fn status(&self, confirmed: bool, minimum: i64) -> &'static str {
+        if !confirmed {
+            "draft"
+        } else if self.uncovered {
+            "uncovered"
+        } else if self.unguarded || (self.hard as i64) < minimum {
+            "unguarded"
+        } else if !self.complete || self.open {
+            "open"
+        } else if self.deferred_open > 0 {
+            "delivered"
+        } else {
+            "fulfilled"
+        }
+    }
+}
+
+// A postorder of the defined intents, from leaves toward their roots. The native
+// reader refuses competing parents and cycles. For a direct scenario only fold
+// the linked intents that can be reached from the leaves.
+fn tree_order(intents: &Value) -> (BTreeMap<&str, &str>, Vec<&str>) {
+    let mut parents = BTreeMap::new();
+    let mut remaining: BTreeMap<_, _> = intents
+        .object()
+        .iter()
+        .map(|(name, _)| (name.as_str(), 0))
+        .collect();
+    for (name, intent) in intents.object() {
+        for child in list(intent.opt("children")).iter().filter_map(|v| match v {
+            Value::String(s) => Some(s.as_str()),
+            _ => None,
+        }) {
+            if remaining.contains_key(child) && !parents.contains_key(child) {
+                parents.insert(child, name.as_str());
+                *remaining.get_mut(name.as_str()).unwrap() += 1;
+            }
+        }
+    }
+    let mut order: Vec<_> = remaining
+        .iter()
+        .filter_map(|(name, n)| (*n == 0).then_some(*name))
+        .collect();
+    let mut next = 0;
+    while let Some(child) = order.get(next) {
+        if let Some(parent) = parents.get(child) {
+            let left = remaining.get_mut(parent).unwrap();
+            *left -= 1;
+            if *left == 0 {
+                order.push(parent);
+            }
+        }
+        next += 1;
+    }
+    (parents, order)
+}
+
 pub fn run(v: &Value) -> Vec<Value> {
     let mut obligations = v.get("obligations").clone();
     let mut intents = v.get("intents").clone();
     let policy = v.get("policy");
     let own = v.get("self");
     let floor = floor(policy, "confirm-baseline");
-    let min = policy.get("min_hard_gates").number();
+    let min = policy.get("min_hard_gates").number().max(1);
+    let (parents, tree_order) = tree_order(v.get("intents"));
     let mut ledger: Vec<(String, Value)> = Vec::new();
     let mut out = Vec::new();
     for step in v.get("steps").array() {
@@ -288,8 +373,8 @@ pub fn run(v: &Value) -> Vec<Value> {
             }
             obligations_out.push((name.clone(), json::object(f)));
         }
-        let mut intents_out = Vec::new();
-        let mut reports: BTreeMap<&str, (&'static str, bool)> = BTreeMap::new();
+        let mut details = Vec::new();
+        let mut totals = BTreeMap::new();
         for (name, i) in intents.object() {
             let base = baseline(i);
             let confirmations = confirmations(&ledger, name, i, &base, policy);
@@ -330,26 +415,24 @@ pub fn run(v: &Value) -> Vec<Value> {
                 .filter(|c| c.gate == "deferred" && !c.met())
                 .count();
             let met = criteria.iter().filter(|c| c.met()).count();
-            let status = intent::status(confirmed, &criteria.iter().collect::<Vec<_>>(), min);
-            reports.insert(name, (status, hard_failure(&criteria)));
-            intents_out.push((
-                name.clone(),
-                json::object(vec![
-                    ("status", json::string(status)),
+            let subtotal = Subtree {
+                hard: gates("hard"),
+                soft: gates("soft"),
+                deferred: gates("deferred"),
+                deferred_open,
+                met,
+                uncovered: criteria.iter().any(|c| c.checks.is_empty()),
+                unguarded: false,
+                open: !confirmed || criteria.iter().any(|c| c.gate == "hard" && !c.met()),
+                failed: hard_failure(&criteria),
+                complete: false,
+            };
+            totals.insert(name.as_str(), subtotal);
+            details.push((
+                name,
+                confirmed,
+                vec![
                     ("baseline", json::string(&base)),
-                    (
-                        "gates",
-                        json::object(vec![
-                            ("hard", count(gates("hard"))),
-                            ("soft", count(gates("soft"))),
-                            ("deferred", count(gates("deferred"))),
-                            ("deferred_open", count(deferred_open)),
-                        ]),
-                    ),
-                    (
-                        "score",
-                        json::object(vec![("met", count(met)), ("of", count(criteria.len()))]),
-                    ),
                     (
                         "shown",
                         json::object(vec![
@@ -368,8 +451,54 @@ pub fn run(v: &Value) -> Vec<Value> {
                         ]),
                     ),
                     ("separation", separation(&levels)),
-                ]),
+                ],
             ));
+        }
+        // Only a root uses the policy's full floor. Any subtree with no hard
+        // gate blocks its ancestors, even when the root total meets the floor.
+        for name in &tree_order {
+            let mut subtotal = totals.remove(name).unwrap();
+            subtotal.complete = true;
+            subtotal.unguarded |= subtotal.hard == 0;
+            if let Some(parent) = parents.get(name) {
+                totals.get_mut(parent).unwrap().include(&subtotal);
+            }
+            totals.insert(name, subtotal);
+        }
+        let mut reports = BTreeMap::new();
+        let mut intents_out = Vec::new();
+        for (name, confirmed, mut fields) in details {
+            let subtotal = &totals[name.as_str()];
+            let minimum = if parents.contains_key(name.as_str()) {
+                1
+            } else {
+                min
+            };
+            let status = subtotal.status(confirmed, minimum);
+            reports.insert(name.as_str(), (status, subtotal.failed));
+            fields.extend([
+                ("status", json::string(status)),
+                (
+                    "gates",
+                    json::object(vec![
+                        ("hard", count(subtotal.hard)),
+                        ("soft", count(subtotal.soft)),
+                        ("deferred", count(subtotal.deferred)),
+                        ("deferred_open", count(subtotal.deferred_open)),
+                    ]),
+                ),
+                (
+                    "score",
+                    json::object(vec![
+                        ("met", count(subtotal.met)),
+                        (
+                            "of",
+                            count(subtotal.hard + subtotal.soft + subtotal.deferred),
+                        ),
+                    ]),
+                ),
+            ]);
+            intents_out.push((name.clone(), json::object(fields)));
         }
         let required: Vec<_> = list(policy.opt("required"))
             .iter()

@@ -22,6 +22,7 @@ use crate::session::{hello, manifest_ok};
 use crate::status;
 use crate::wire::{self, Log, Peer};
 use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -1800,17 +1801,18 @@ fn coverage(intents: &[(String, Value)], floor: i64) -> Value {
     for (name, _) in intents {
         let root = root_of(name);
         let subtree = below(name);
+        let tree = below(&root);
         each.push((
             name.clone(),
             json::object(vec![
                 ("own_hard", Value::Number(own(name))),
                 ("subtree_hard", Value::Number(subtree)),
                 ("root", json::string(&root)),
-                ("tree_hard", Value::Number(below(&root))),
+                ("tree_hard", Value::Number(tree)),
                 ("floor", Value::Number(floor)),
                 (
                     "floor_met_only_over_tree",
-                    Value::Bool(*name != root && subtree < floor),
+                    Value::Bool(*name != root && subtree < floor && tree >= floor),
                 ),
             ]),
         ));
@@ -2001,6 +2003,28 @@ fn run(raw: &[u8]) -> Step<Value> {
     Ok(output(&input, snapshot))
 }
 
+fn required_tree_has_undefined_child(required: &[String], intents: &[(String, Value)]) -> bool {
+    let children: BTreeMap<_, _> = intents
+        .iter()
+        .map(|(name, intent)| (name.as_str(), children_of(intent)))
+        .collect();
+    let mut seen = BTreeSet::new();
+    let mut todo: Vec<&str> = required
+        .iter()
+        .map(String::as_str)
+        .filter(|name| children.contains_key(name))
+        .collect();
+    while let Some(name) = todo.pop() {
+        if seen.insert(name) {
+            let Some(next) = children.get(name) else {
+                return true;
+            };
+            todo.extend(next.iter().map(String::as_str));
+        }
+    }
+    false
+}
+
 /// Step 11 and the answer, from what steps 2 to 10 read and judged. The run
 /// command's report (its step 14) is made here too, from a snapshot judged
 /// again after the ledgers are read again.
@@ -2016,17 +2040,11 @@ fn output(input: &Input, snapshot: Snapshot) -> Value {
     // Step 11.
     let coverage = coverage(&intents.judged, input.min_hard_gates);
     // What could hide a failure the report does not show, in the contract's order and words.
-    let required_with_children = input.required.iter().any(|r| {
-        intents
-            .judged
-            .iter()
-            .any(|(n, i)| n == r && !children_of(i).is_empty())
-    });
     let doubts: Vec<&str> = [
         (!input.not_applied.is_empty(), "policy no status rule applies"),
         (
-            required_with_children,
-            "a required intent has children, and no status rule reads descendants yet",
+            required_tree_has_undefined_child(&input.required, &intents.judged),
+            "a required intent has an undefined descendant",
         ),
         (
             !obligations.not_checkable.is_empty(),

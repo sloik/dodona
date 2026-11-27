@@ -174,7 +174,7 @@ def coverage(intents: dict, floor: int) -> dict:
         root = root_of(ident)
         out[ident] = {"own_hard": own[ident], "subtree_hard": sum(own[i] for i in below(ident)),
                       "root": root, "tree_hard": sum(own[i] for i in below(root)), "floor": floor}
-        out[ident]["floor_met_only_over_tree"] = ident != root and out[ident]["subtree_hard"] < floor
+        out[ident]["floor_met_only_over_tree"] = ident != root and out[ident]["subtree_hard"] < floor <= out[ident]["tree_hard"]
     thinnest = {}
     for ident, item in out.items():
         best = thinnest.get(item["root"])
@@ -207,6 +207,8 @@ def render(report: dict, torn: bool, entries: int, note: str) -> str:
         if mine and mine["floor_met_only_over_tree"]:
             lines[-1] += (f" · floor: {mine['subtree_hard']} hard of its own and below, under the floor of {mine['floor']};"
                           f" met only over tree {mine['root']} ({mine['tree_hard']} hard)")
+        elif mine and mine["root"] == ident and mine["tree_hard"] < mine["floor"]:
+            lines[-1] += f" · root {ident} has {mine['tree_hard']} hard against the floor of {mine['floor']}"
     return "\n".join(lines)
 
 

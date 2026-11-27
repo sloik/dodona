@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import copy
 import errno
 from functools import cache
 import io
@@ -442,6 +443,37 @@ def gap_thin_coverage_is_shown() -> None:
     text = status.render(report, False, 0, "")
     if "thinnest in tree r: intent a" not in text or "met only over tree r" not in text:
         problems.append("the status report does not show where a tree's hard gates are thin")
+
+
+def gap_native_tree_promotion_is_exercised() -> None:
+    """A native verdict must respond to moving a child, with its evidence held fixed."""
+    cases = json.loads((ROOT / "conformance" / "project" / "cases.json").read_text(encoding="utf-8"))["cases"]
+    by_name = {case["name"]: case for case in cases}
+    attached = by_name.get("a child meets the policy floor through its tree")
+    promoted = by_name.get("a promoted child has to meet the policy floor as root")
+    if attached is None or promoted is None:
+        problems.append("project conformance needs both placements of the same child")
+        return
+    before, after = (copy.deepcopy(case) for case in (attached, promoted))
+    for case in (before, after):
+        for key in ("name", "why", "expect"):
+            case.pop(key)
+    parent = before["providers"]["t.intents"]["answers"]["intent.index"]["intents"][0]
+    if parent["children"] != ["i2"]:
+        problems.append("the attached promotion fixture must put i2 below i1")
+    parent["children"] = []
+    if before != after:
+        problems.append("the promotion fixture must change only its parent's child link")
+    for case, status in ((attached, "fulfilled"), (promoted, "unguarded")):
+        if case["expect"]["status"]["intents"].get("i2") != status:
+            problems.append(f"the promotion fixture must expect i2 to be {status}")
+    for directory in ("kernel", "kernel2"):
+        plants = json.loads((ROOT / directory / "defects.json").read_text(encoding="utf-8"))["defects"]
+        names = {plant["name"] for plant in plants}
+        for name in ("status: a child must meet the policy floor on its own",
+                     "status: a failed descendant is ignored by the project"):
+            if name not in names:
+                problems.append(f"{directory} has no planted defect named {name}")
 
 
 def gap_every_tool_compiles() -> None:
@@ -2222,7 +2254,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
               gap_status_keeps_literal_obligation_names, gap_batch_wait_respects_site_and_run_limits,
-              gap_thin_coverage_is_shown, gap_status_report_names_policy_on_pass,
+              gap_thin_coverage_is_shown, gap_native_tree_promotion_is_exercised, gap_status_report_names_policy_on_pass,
               gap_project_intent_criteria_have_a_schema, gap_documents_follow_the_code]
 
 
