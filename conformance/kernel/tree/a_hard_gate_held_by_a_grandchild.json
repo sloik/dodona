@@ -1,0 +1,77 @@
+{
+  "kind": "tree",
+  "name": "a_hard_gate_held_by_a_grandchild",
+  "claim": "C34",
+  "covers": [
+    "tree-depth/mutant_direct_child_count",
+    "tree-depth/mutant_grandchild_edit_keeps_confirmation",
+    "tree-depth/reach_delivered_soft_middle"
+  ],
+  "why": "The root needs two hard gates. The middle intent is guarded by the grandchild in its subtree. After both hard checks pass and the owner confirms, a failed grandchild check reopens the tree.",
+  "policy": {
+    "min_hard_gates": 2
+  },
+  "root": {
+    "gate": "hard"
+  },
+  "children": {
+    "k1": {
+      "gate": "soft"
+    },
+    "g1": {
+      "gate": "hard",
+      "parent": "k1"
+    }
+  },
+  "steps": [
+    {
+      "do": {
+        "check": {
+          "node": "root",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "g1",
+          "status": "passed"
+        }
+      },
+      "expect": {
+        "status": "draft"
+      }
+    },
+    {
+      "do": {
+        "confirm": {}
+      },
+      "expect": {
+        "status": "delivered"
+      }
+    },
+    {
+      "do": {
+        "check": {
+          "node": "g1",
+          "status": "failed"
+        }
+      },
+      "expect": {
+        "status": "open"
+      }
+    },
+    {
+      "do": {"edit": {"node": "g1", "to": "soft"}},
+      "expect": {"status": "draft"}
+    },
+    {
+      "do": {"confirm": {}},
+      "expect": {"status": "unguarded"}
+    }
+  ]
+}

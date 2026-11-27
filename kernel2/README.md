@@ -43,6 +43,8 @@ From the repository root:
 
 The `run` command uses the status command's project snapshot, keeps only checking provider sessions open and records completed verdicts in the selected ledger. The project-run judge compares its report with the subsequent `status` report and verifies that current results are reused. Focused tests for the scheduling and ledger paths run with `node --test kernel2/test-run.js`.
 
+The tree scenario runner validates parent links before answering any step. It counts hard gates through each subtree and forgets every descendant when a branch is removed.
+
 A site can set `batch_wait_floor_ms` in the run request to extend the wait for the executor. The kernel applies the 24-hour cap and preserves the run limits supplied by the provider.
 
 Each status report validates the preimage of an evidence record once, then applies the existing obligation, writer, platform and key rules to select records for each obligation. The unit suite checks both the bounded validation work and the rejected-record count.

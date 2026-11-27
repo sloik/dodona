@@ -107,7 +107,7 @@ why = "The schemas and the prose of the protocol describe the same shapes."
 [[rule]]
 id = "models"
 code = ["spec/assurance/**", "spec/attempts/**", "spec/decisions/**", "spec/intent/**", "spec/kernel/**",
-        "spec/liveness/**", "spec/planner/**", "spec/platforms/**", "spec/tree/**"]
+        "spec/liveness/**", "spec/planner/**", "spec/platforms/**", "spec/tree/**", "spec/tree-depth/**"]
 docs = ["spec/CLAIMS.md", "spec/README.md"]
 why = "The claims say what each model checks and whether a recorded run of it as it is now exists."
 

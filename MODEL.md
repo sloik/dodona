@@ -136,6 +136,8 @@ Policy sets the floor that an owner's choices cannot go below without it showing
 
 A parent needs its children delivered and its own criteria met. Gate counts and scores are totalled over all descendants, so moving a criterion into a child changes nothing in the total. A tree in which any intent is unguarded is itself unguarded.
 
+An intent with no criteria and no children is allowed. It has zero hard gates and is `unguarded` once confirmed.
+
 **The status word is never reported alone.** Every result for an intent leads with the same line, in this order:
 
 ```
