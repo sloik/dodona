@@ -275,7 +275,7 @@ A ledger may hold entries of other kinds, and an evidence body may carry more fi
 
 A step that names an obligation, intent or criterion that does not exist changes nothing. A kernel answers every step and never stops on one: not on a body that is empty or is not an object, not on an act with no actor, not on a name nothing defines. The floor for `match-check` is read by no rule yet: a pairing's level is reported, and nothing is withheld for it.
 
-Intent scenarios cover what an exception changes. Status scenarios cover defined descendants. The native commands additionally resolve doubts about undefined descendants. Deferred time limits remain outside this scenario.
+Intent scenarios cover what an exception changes. Status scenarios cover defined descendants. The native commands report a doubt for an undefined descendant under a required intent. Deferred time limits remain outside this scenario.
 
 ## The ledger, and core keys
 
