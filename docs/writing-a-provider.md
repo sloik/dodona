@@ -267,7 +267,8 @@ The kernel sends that report in `run.result`, where `check` names the original s
 | The manifest | [provider-manifest.schema.json](../protocol/provider-manifest.schema.json) |
 | Names, verdicts, platforms, strength | [common.schema.json](../protocol/common.schema.json) |
 | What gets pinned for your tools | [lock.schema.json](../protocol/lock.schema.json) |
-| What the kernel writes after you answer | [evidence-record.schema.json](../protocol/evidence-record.schema.json) |
+| The evidence body native project `run` writes after a completed check | [project-evidence.schema.json](../protocol/project-evidence.schema.json) |
+| The richer draft evidence record | [evidence-record.schema.json](../protocol/evidence-record.schema.json) |
 | How a project is configured to use you | [configuration.md](configuration.md) |
 | What the project requires to pass | [policy.schema.json](../protocol/policy.schema.json) and the [policy configuration](configuration.md#policy) |
 

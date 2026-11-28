@@ -12,6 +12,8 @@ An entry is an object with three fields:
 | `kind` | A name for what the entry is: any non-empty string. `evidence` and `act` take part in status; a reader keeps entries of every other kind and gives them no meaning |
 | `body` | The content. Its shape depends on the kind |
 
+An evidence body written by project `run` follows the [native schema](project-evidence.schema.json). The older model host recorded an executor, provider summary and unpinned tools in its [Stage-0 evidence body](stage0-evidence.schema.json). It later recorded measured tool files and versions as well. A retained ledger can contain both kinds of body under `evidence`.
+
 An entry has exactly these three fields. An object with a fourth field, or without one of the three, is not an entry, and neither is anything that is not an object.
 
 The **identity** of an entry is the identity of that object under the [canonical encoding](canonical-encoding.md). Because each entry names the one before it, changing, removing or reordering any entry breaks every identity after it.
