@@ -1,6 +1,6 @@
 """Judge a command that runs a project's checks and reports its status (decision 0034).
 
-    python tools/run_run_cases.py --kernel KERNEL... --status "STATUS COMMAND" [--jobs N] -- RUN COMMAND...
+    python tools/run_run_cases.py --kernel KERNEL... --status "STATUS COMMAND" [--jobs N] [--record-schema-check] -- RUN COMMAND...
 
 Each case in conformance/project/run-cases.json is a small project, set up afresh, with a provider that enumerates
 and takes checks as the case scripts them (conformance/project/fixture_provider.py) and an executor that answers
@@ -15,6 +15,8 @@ reference, tools/project_run.py, run on their own copies. Most of what is judged
 - run a second time, the command must send the executor nothing and check nothing;
 - what it judged, the ledger it wrote and what it asked its providers must equal the reference's;
 - the report must be what KERNEL's `scenario` command gives for what it judged (KERNEL other than the one judged).
+
+With --record-schema-check, evidence newly appended to the ledger also has to match the native record schema.
 """
 from __future__ import annotations
 
@@ -71,14 +73,33 @@ def batches(aux: pathlib.Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()] if path.exists() else []
 
 
+def ledger_entries(root: pathlib.Path, rel: str) -> list | None:
+    try:
+        return ledger.read(root / rel)["entries"]
+    except ledger.Corrupt:
+        return None
+
+
 def recorded(root: pathlib.Path, rel: str) -> dict:
     """The verdicts in the run's ledger, by obligation, as the reference reader reads them."""
-    try:
-        read = ledger.read(root / rel)
-    except ledger.Corrupt:
+    entries = ledger_entries(root, rel)
+    if entries is None:
         return {"unreadable": True}
-    return {e["body"]["obligation"]: e["body"]["verdict"] for e in read["entries"]
-            if e["kind"] == "evidence" and isinstance(e["body"], dict) and "obligation" in e["body"]}
+    verdicts = {}
+    for entry in entries:
+        body = entry["body"]
+        if (entry["kind"] == "evidence" and isinstance(body, dict)
+                and isinstance(body.get("obligation"), str) and "verdict" in body):
+            verdicts[body["obligation"]] = body["verdict"]
+    return verdicts
+
+
+def evidence_appended(before: list | None, after: list | None) -> list:
+    if before is None and after is None:
+        return []
+    if before is None or after is None or after[:len(before)] != before:
+        raise Unfinished("the run's newly appended ledger entries could not be identified")
+    return [entry["body"] for entry in after[len(before):] if entry["kind"] == "evidence"]
 
 
 def normal_transcript(kept) -> list:
@@ -115,10 +136,12 @@ def provider_records(aux: pathlib.Path) -> list[dict]:
     return found
 
 
-def run_case(command: list[str], status: list[str], case: dict, site: dict, role: str) -> dict:
+def run_case(command: list[str], status: list[str], case: dict, site: dict, role: str,
+             capture_evidence: bool = False) -> dict:
     with tempfile.TemporaryDirectory() as tmp:
         stdin, status_input, root, aux = set_up(case, site, pathlib.Path(tmp))
         try:
+            prior = ledger_entries(root, json.loads(stdin)["ledger"]) if capture_evidence else None
             before = tree_digest(root)
             first = rsc.answer(command, stdin, role, timeout=TIMEOUT)
             after_first = tree_digest(root)
@@ -144,12 +167,17 @@ def run_case(command: list[str], status: list[str], case: dict, site: dict, role
                                    f"{role}'s second run", timeout=TIMEOUT)
             sent_again = batches(aux)[len(sent):]
             ledger_rel = json.loads(stdin)["ledger"]
-            return {"first": first, "sent": sent, "after": after, "again": again,
-                    "sent_again": sent_again, "recorded": recorded(root, ledger_rel), "asked": rsc.requests(aux),
-                    "transcript": transcript, "provider_records": records_first, "changed_files": changed_files,
-                    "after_first": after_first, "locks_left": locks_left,
-                    "described": described_first,
-                    "ledger_bytes": (root / ledger_rel).read_bytes() if (root / ledger_rel).exists() else b""}
+            result = {
+                "first": first, "sent": sent, "after": after, "again": again,
+                "sent_again": sent_again, "recorded": recorded(root, ledger_rel), "asked": rsc.requests(aux),
+                "transcript": transcript, "provider_records": records_first, "changed_files": changed_files,
+                "after_first": after_first, "locks_left": locks_left,
+                "described": described_first,
+                "ledger_bytes": (root / ledger_rel).read_bytes() if (root / ledger_rel).exists() else b"",
+            }
+            if capture_evidence:
+                result["appended_evidence"] = evidence_appended(prior, ledger_entries(root, ledger_rel))
+            return result
         finally:
             for rel in list(case.get("unreadable", [])) + list(case.get("unreadable_mode", {})):
                 try:
@@ -270,11 +298,20 @@ def reference_report(case: dict, ref: dict, kernel: list[str]) -> dict:
     return report
 
 
-def judge(case: dict, site: dict, command: list[str], status: list[str], kernel: list[str]) -> list[str]:
-    got = run_case(command, status, case, site, "run command")
+def judge(case: dict, site: dict, command: list[str], status: list[str], kernel: list[str],
+          schema_validator=None) -> list[str]:
+    got = run_case(command, status, case, site, "run command", capture_evidence=schema_validator is not None)
     ref = run_case(REFERENCE + ["--kernel"] + kernel, REFERENCE_STATUS + ["--kernel"] + kernel, case, site, "reference run")
     expect, problems = case["expect"], []
     first = got["first"]
+    if schema_validator is not None:
+        evidence = got["appended_evidence"]
+        counts = first.get("counts", {})
+        if not evidence and isinstance(counts, dict) and (counts.get("passed", 0) or counts.get("failed", 0)):
+            problems.append("the run reports verdicts but there is no appended evidence to validate")
+        for number, body in enumerate(evidence, 1):
+            if not schema_validator.is_valid(body):
+                problems.append(f"appended evidence {number} does not match protocol/project-evidence.schema.json")
     if "refused" in expect:
         if not rsc.refusal(ref["first"]) or ref["first"]["refused"] != expect["refused"] or ref["locks_left"]:
             raise Unfinished(f"the reference did not give the fixture's refusal {expect['refused']} and release its locks")
@@ -293,8 +330,8 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
         return problems
     report = reference_report(case, ref, kernel)
     if "refused" in first:
-        return [f"refused {first['refused']} ({first.get('detail')}), expected a report"]
-    problems = observations(case, got)
+        return problems + [f"refused {first['refused']} ({first.get('detail')}), expected a report"]
+    problems.extend(observations(case, got))
     if "transcript" in json.dumps(case.get("run_input_edit", [])) and \
             normal_transcript(got["transcript"]) != normal_transcript(ref["transcript"]):
         problems.append("the transcript is not the reference's, in order and in both directions (ids aside)")
@@ -321,6 +358,8 @@ def main() -> int:
     ap.add_argument("--kernel", nargs="+", required=True)
     ap.add_argument("--status", required=True, help="the status command of the same kernel, as one string split as a shell would")
     ap.add_argument("--jobs", type=int, default=2)
+    ap.add_argument("--record-schema-check", action="store_true",
+                    help="validate evidence newly appended by the run command")
     ap.add_argument("command", nargs=argparse.REMAINDER)
     args = ap.parse_args()
     kernel, command = args.kernel, args.command[1:] if args.command[:1] == ["--"] else args.command
@@ -329,7 +368,7 @@ def main() -> int:
 
     def one(case: dict) -> list[str] | Exception:
         try:
-            return judge(case, spec["site"], command, status, kernel)
+            return judge(case, spec["site"], command, status, kernel, schema_validator=schema_validator)
         except Exception as err:  # fixture and process failures need a result too
             return err
 
@@ -337,6 +376,11 @@ def main() -> int:
         status = shlex.split(args.status)
         if not kernel or not command or not status:
             raise ValueError("the run, status and independent kernel commands must be given")
+        schema_validator = None
+        if args.record_schema_check:
+            from check_examples import protocol_validator
+
+            schema_validator = protocol_validator("project-evidence.schema.json")
         spec = json.loads(CASES.read_text(encoding="utf-8"))
         cases = spec["cases"]
         names = [case["name"] for case in cases]

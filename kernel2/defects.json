@@ -700,7 +700,8 @@
       "model_case": "(round 3)",
       "file": "ledger-file.js",
       "find": "const deadline = Date.now() + waitMs;",
-      "replace": "const deadline = 0;"
+      "replace": "const deadline = 0;",
+      "witness": "run_ledger_cases: a held lock refuses an append"
     },
     {
       "name": "ledger: an unknown first field is accepted",

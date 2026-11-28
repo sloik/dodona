@@ -1883,9 +1883,9 @@ def gap_rust_defect_shards_cover_the_inventory() -> None:
 
 
 def gap_ledger_judge_keeps_held_lock_result() -> None:
-    """A defective append may remove the judge's lock before the judge cleans up."""
+    """The held-lock witness must catch a premature refusal and keep the original result if the marker changes."""
     import run_ledger_cases
-    for mode in ("intact", "removed", "changed"):
+    for mode in ("intact", "removed", "changed", "premature"):
         output = io.StringIO()
 
         def answer(command, subcommand, request):
@@ -1903,6 +1903,7 @@ def gap_ledger_judge_keeps_held_lock_result() -> None:
 
         with contextlib.redirect_stdout(output), mock.patch.object(sys, "argv", ["judge", "--", "kernel"]), \
                 mock.patch.object(run_ledger_cases, "ask", side_effect=answer), \
+                mock.patch.object(run_ledger_cases, "monotonic", side_effect=[0.0, 0.05 if mode == "premature" else 2.0]), \
                 mock.patch.object(subprocess, "Popen", return_value=mock.Mock(wait=lambda timeout: run_ledger_cases.WRITER_MISMATCH)):
             try:
                 result = run_ledger_cases.main()
@@ -2149,6 +2150,77 @@ def gap_status_report_names_policy_on_pass() -> None:
         problems.append("status.schema.json: a passed project must require policy.identity")
 
 
+def gap_status_reports_missing_evidence_honestly() -> None:
+    """The status contract must preserve absence without raising the shown grade."""
+    schema = json.loads((ROOT / "protocol" / "status.schema.json").read_text(encoding="utf-8"))
+    intent = schema["$defs"]["intent_status"]["properties"]
+    shown = intent["shown"]
+    link_condition = {
+        "if": {"properties": {"level": {"not": {"const": "none"}}}},
+        "then": {"properties": {"weakest_link": {"type": "string"}}},
+    }
+    if ({"type": "null"} not in shown["properties"]["weakest_link"].get("anyOf", [])
+            or link_condition not in shown.get("allOf", [])):
+        problems.append("status.schema.json: a missing weakest link is allowed only at shown level none")
+    separation = intent["separation"]
+    source = separation["properties"]["weakest"]["properties"]["source"]
+    source_condition = {
+        "if": {"anyOf": [{"required": ["act"]},
+                         {"properties": {"weakest": {"properties": {"level": {"not": {"const": "self"}}}}}}]},
+        "then": {"properties": {"weakest": {"properties": {"source": {"type": "string"}}}}},
+    }
+    if {"type": "null"} not in source.get("anyOf", []) or source_condition not in separation.get("allOf", []):
+        problems.append("status.schema.json: a missing separation source is allowed only for a default self grade")
+
+
+def gap_native_status_schema_is_exercised() -> None:
+    """The schema for the native status command must be exercised against both actual kernels."""
+    path = ROOT / "protocol" / "project-status.schema.json"
+    if not path.is_file():
+        problems.append("the native project status command has no schema")
+    else:
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        output = schema.get("$defs", {}).get("output", {})
+        if set(output.get("required", [])) != run_status_cases.OUT_KEYS:
+            problems.append("the native status schema must require the exact status output fields")
+    commands = {
+        ".venv-examples/bin/python tools/run_status_cases.py --schema-check --jobs 2 "
+        "--kernel node kernel2/dodona-kernel2.js -- ${{ matrix.rust_kernel }} status",
+        ".venv-examples/bin/python tools/run_status_cases.py --schema-check --jobs 2 "
+        "--kernel ${{ matrix.rust_kernel }} -- node kernel2/dodona-kernel2.js status",
+    }
+    if commands - linux_schema_check_commands():
+        problems.append("the Linux repository job must validate the native status schema against both kernels")
+
+
+def linux_schema_check_commands() -> set[str]:
+    workflow = (ROOT / ".github/workflows/checks.yml").read_text(encoding="utf-8")
+    jobs = workflow_jobs(pinned_workflow_reader()().load(workflow))
+    condition = "${{ !cancelled() && matrix.os == 'ubuntu-26.04' && steps.build_seed.outcome == 'success' }}"
+    return {step["run"] for step in jobs["checks"]["steps"]
+            if step.get("if") == condition and "continue-on-error" not in step and isinstance(step.get("run"), str)}
+
+
+def gap_native_evidence_schema_is_exercised() -> None:
+    """New native verdict records have a distinct schema and both kernels exercise it."""
+    path = ROOT / "protocol" / "project-evidence.schema.json"
+    if not path.is_file():
+        problems.append("the native project's newly written evidence has no schema")
+    else:
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        fields = {"obligation", "preimage", "core_key", "platform", "verdict", "writer", "strength", "level"}
+        if set(schema.get("required", [])) != fields:
+            problems.append("the native evidence schema must require the eight written fields")
+    commands = {
+        '.venv-examples/bin/python tools/run_run_cases.py --record-schema-check --jobs 2 --kernel node kernel2/dodona-kernel2.js '
+        '--status "${{ matrix.rust_kernel }} status" -- ${{ matrix.rust_kernel }} run',
+        '.venv-examples/bin/python tools/run_run_cases.py --record-schema-check --jobs 2 --kernel ${{ matrix.rust_kernel }} '
+        '--status "node kernel2/dodona-kernel2.js status" -- node kernel2/dodona-kernel2.js run',
+    }
+    if commands - linux_schema_check_commands():
+        problems.append("the Linux repository job must validate newly written evidence from both native kernels")
+
+
 def _fits(value, schema: dict, defs: dict, where: str) -> None:
     """A small structural check of data against the subset of JSON Schema the policy schema uses."""
     if "$ref" in schema:
@@ -2322,7 +2394,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
               gap_status_keeps_literal_obligation_names, gap_batch_wait_respects_site_and_run_limits,
-              gap_thin_coverage_is_shown, gap_native_tree_promotion_is_exercised, gap_status_report_names_policy_on_pass,
+              gap_thin_coverage_is_shown, gap_native_tree_promotion_is_exercised, gap_status_report_names_policy_on_pass, gap_status_reports_missing_evidence_honestly,
+              gap_native_status_schema_is_exercised, gap_native_evidence_schema_is_exercised,
               gap_project_intent_criteria_have_a_schema, gap_documents_follow_the_code]
 
 
@@ -3096,7 +3169,8 @@ class LedgerJudgeTests(unittest.TestCase):
         self.addCleanup(fixture.cleanup)
         held = pathlib.Path(fixture.name) / "held.ledger"
         lock = held.with_suffix(".ledger.lock")
-        request = json.dumps({"ledger": str(held), "kind": "evidence", "body": {}, "wait_ms": 300}).encode("utf-8")
+        request = json.dumps({"ledger": str(held), "kind": "evidence", "body": {},
+                              "wait_ms": run_ledger_cases.HELD_WAIT_MS}).encode("utf-8")
         answered = 0
 
         def run(command, **kwargs):
@@ -3110,7 +3184,8 @@ class LedgerJudgeTests(unittest.TestCase):
             reply = answer(held, lock)
             return subprocess.CompletedProcess(command, 0, json.dumps(reply).encode(), b"")
 
-        with patch.object(run_ledger_cases.tempfile, "TemporaryDirectory", return_value=fixture):
+        with patch.object(run_ledger_cases.tempfile, "TemporaryDirectory", return_value=fixture), \
+                patch.object(run_ledger_cases, "monotonic", side_effect=[0.0, 2.0]):
             code, receipt = self.judge(run, [FakeWriter(0), FakeWriter(0)], output=output)
         self.assertEqual(answered, 1, "\n".join(output.getvalue().splitlines()[-3:-1]))
         return code, receipt, output.getvalue()
@@ -4623,8 +4698,10 @@ class RunJudgeTests(unittest.TestCase):
     case = StatusJudgeTests.case
     answered = staticmethod(StatusJudgeTests.answered)
 
-    def exercise(self, answers, cases=None):
+    def exercise(self, answers, cases=None, *, record_schema=False):
         argv = ["run_run_cases.py", "--jobs", "1", "--kernel", "peer", "--status", "kernel status", "--", "kernel", "run"]
+        if record_schema:
+            argv.insert(1, "--record-schema-check")
         with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_run_cases.sys, "argv", argv), \
                 patch.object(run_run_cases, "CASES") as spec, patch.object(run_status_cases.subprocess, "run", side_effect=answers):
             spec.read_text.return_value = json.dumps({"cases": [self.case] if cases is None else cases, "site": {}})
@@ -4711,6 +4788,42 @@ class RunJudgeTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 self.assertEqual((summary["matched"], summary["unfinished"], summary["rejected"]), (0, 0, [self.case["name"]]))
                 self.assertIn("MISMATCH " + self.case["name"], lines[0])
+
+    def test_record_schema_check_keeps_malformed_counts_a_named_mismatch(self):
+        import check_examples
+
+        replies = self.report_answers()
+        replies[0] = self.answered(dict(StatusJudgeTests.right, counts=None))
+        with patch.object(check_examples, "protocol_validator", return_value=mock.Mock()):
+            code, summary, lines = self.exercise(replies, record_schema=True)
+        self.assertEqual(code, 1, lines)
+        self.assertEqual((summary["unfinished"], summary["rejected"]), (0, [self.case["name"]]))
+        self.assertIn("counts must hold exactly", lines[0])
+
+    def test_bad_body_in_a_complete_ledger_is_a_named_schema_mismatch(self):
+        import check_examples
+
+        for body in ({"obligation": "one"}, {"obligation": [], "verdict": "passed"}):
+            with self.subTest(body=body):
+                replies = iter(self.report_answers())
+
+                def answer(command, *, input, **kwargs):
+                    if command == ["kernel", "run"]:
+                        request = json.loads(input)
+                        path = pathlib.Path(request["root"]) / request["ledger"]
+                        if not path.exists():
+                            path.parent.mkdir(parents=True, exist_ok=True)
+                            path.write_bytes(run_status_cases.ledger_bytes([{"kind": "evidence", "body": body}]))
+                    return next(replies)
+
+                validator = mock.Mock()
+                validator.is_valid.return_value = False
+                with patch.object(check_examples, "protocol_validator", return_value=validator):
+                    code, summary, lines = self.exercise(answer, record_schema=True)
+                self.assertEqual(code, 1, lines)
+                self.assertEqual((summary["unfinished"], summary["rejected"]), (0, [self.case["name"]]))
+                self.assertIn("appended evidence 1", lines[0])
+                validator.is_valid.assert_called_once_with(body)
 
     def test_unfinished_takes_precedence_but_keeps_completed_names(self):
         rejected = dict(self.case, expect={"refused": "bad-input"})

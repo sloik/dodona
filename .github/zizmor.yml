@@ -14,7 +14,7 @@ rules:
   # JavaScript planted-defect shards.
   template-injection:
     ignore:
-      - checks.yml:185:59
-      - checks.yml:185:85
-      - checks.yml:215:48
-      - checks.yml:215:74
+      - checks.yml:197:59
+      - checks.yml:197:85
+      - checks.yml:227:48
+      - checks.yml:227:74

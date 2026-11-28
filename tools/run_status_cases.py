@@ -1,6 +1,6 @@
 """Judge a command that reports a project's status (decision 0034).
 
-    python tools/run_status_cases.py --kernel KERNEL... [--jobs N] [--variants] -- STATUS COMMAND...
+    python tools/run_status_cases.py --kernel KERNEL... [--jobs N] [--variants] [--schema-check] -- STATUS COMMAND...
 
 Each case in conformance/project/cases.json is a small project, set up afresh in a directory of
 its own, with providers that answer from a file of the case (conformance/project/fixture_provider.py)
@@ -17,6 +17,7 @@ tools/project_status.py, are each run on their own copy. A case matches when:
 The curated refusals and statuses are never taken from a kernel. KERNEL recomputes the report
 from the reference's scenario, which must equal what the command says it judged.
 An incomplete process or broken reference premise leaves the case unfinished.
+With --schema-check, the command's actual answer also has to match the native status schema.
 """
 from __future__ import annotations
 
@@ -333,7 +334,8 @@ def expected_differences(out: dict, report: dict, headline: str, expect: dict) -
     return problems
 
 
-def judge(case: dict, site: dict, command: list[str], kernel: list[str], generated: bool = False) -> list[str]:
+def judge(case: dict, site: dict, command: list[str], kernel: list[str], generated: bool = False,
+          schema_validator=None) -> list[str]:
     # The current preimages, for ledgers that hold results under the current key: from the reference.
     needs_preimages = "$" in json.dumps(case["ledgers"]) + json.dumps(case.get("owner_ledger"))
     preimages = _preimages(case, site) if needs_preimages else {}
@@ -349,6 +351,8 @@ def judge(case: dict, site: dict, command: list[str], kernel: list[str], generat
         raise Unfinished("the reference refused to read the fixture's preimages")
 
     problems = []
+    if schema_validator is not None and not schema_validator.is_valid(got):
+        problems.append("the status answer does not match protocol/project-status.schema.json")
     deadline = dict(site, **case.get("site_edit", {})).get("deadline_ms")
     for path, value in case.get("input_edit", []):
         if path == ["site", "deadline_ms"]:
@@ -502,6 +506,8 @@ def main() -> int:
     ap.add_argument("--variants", action="store_true",
                     help="also judge every field of the reported cases' answers and policy taken away or of another kind, "
                          "against the reference's answer (slower)")
+    ap.add_argument("--schema-check", action="store_true",
+                    help="also validate the actual command's output with the native project status schema")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 2, help="cases judged at once, each in a folder of its own")
     ap.add_argument("command", nargs=argparse.REMAINDER)
     args = ap.parse_args()
@@ -511,11 +517,16 @@ def main() -> int:
         kernel, command = kernel[:kernel.index("--")], kernel[kernel.index("--") + 1:]
     def one(case: dict) -> list[str] | Exception:
         try:
-            return judge(case, spec["site"], command, kernel, generated=args.variants)
+            return judge(case, spec["site"], command, kernel, generated=args.variants, schema_validator=schema_validator)
         except Exception as err:  # fixture and process failures need a result too
             return err
 
     try:
+        schema_validator = None
+        if args.schema_check:
+            from check_examples import protocol_validator
+
+            schema_validator = protocol_validator("project-status.schema.json")
         spec = json.loads(CASES.read_text(encoding="utf-8"))
         cases = variants(spec) if args.variants else spec["cases"]
         names = [case["name"] for case in cases]

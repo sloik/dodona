@@ -6,7 +6,7 @@ Stage-0 helper (decision 0023). Unlike the other helpers this one needs a
 third-party package, `jsonschema`, because a JSON Schema validator is not in
 the standard library. It runs in CI with a pinned version. Without the package
 it says so and fails: a check that silently does nothing is not a check.
-Three status controls exercise the draft requirement that a project pass names its policy.
+Status controls exercise the policy identity requirement and absence of evidence or acts.
 
 Exit status is 0 only if the schemas, examples, policy and project criteria validate.
 The evidence-strength, status-policy, project criteria and draft lock controls
@@ -14,6 +14,7 @@ must also give the expected results.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import pathlib
 import sys
@@ -21,6 +22,26 @@ import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 INTENT_CRITERIA_SCHEMA = "project-intent-criteria.schema.json"
+
+
+def protocol_schemas() -> tuple[dict, object]:
+    """Read the repository's schema references into a local registry."""
+    from referencing import Registry, Resource
+
+    schemas = {path.name: json.loads(path.read_text(encoding="utf-8"))
+               for path in sorted((ROOT / "protocol").glob("*.schema.json"))}
+    registry = Registry().with_resources((schema["$id"], Resource.from_contents(schema))
+                                         for schema in schemas.values())
+    return schemas, registry
+
+
+def protocol_validator(filename: str):
+    from jsonschema import Draft202012Validator
+
+    schemas, registry = protocol_schemas()
+    schema = schemas[filename]
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema, registry=registry)
 
 
 def check_intent_criteria(validator) -> tuple[int, list[str]]:
@@ -138,23 +159,21 @@ def evidence_strength_problems(validator) -> list[str]:
 def main() -> int:
     try:
         import jsonschema
-        from referencing import Registry, Resource
     except ImportError:
         print("the jsonschema package is not installed; nothing was checked")
         return 1
     problems = []
-    registry = Registry()
-    schemas = {}
-    for path in sorted((ROOT / "protocol").glob("*.schema.json")):
-        schema = json.loads(path.read_text(encoding="utf-8"))
+    schemas, registry = protocol_schemas()
+    for name, schema in schemas.items():
         try:
             jsonschema.Draft202012Validator.check_schema(schema)
         except jsonschema.SchemaError as err:
-            problems.append(f"{path.name}: not a valid schema: {err.message}")
-        registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
-        schemas[path.name] = schema
+            problems.append(f"{name}: not a valid schema: {err.message}")
     status = jsonschema.Draft202012Validator(schemas["status.schema.json"], registry=registry)
     problems.extend(status_policy_problems(status))
+    problems.extend(status_absence_problems(status))
+    native_status = jsonschema.Draft202012Validator(schemas["project-status.schema.json"], registry=registry)
+    problems.extend(native_status_problems(native_status))
     messages = jsonschema.Draft202012Validator(schemas["messages.schema.json"], registry=registry)
     examples = 0
     for number, line in enumerate((ROOT / "docs" / "writing-a-provider.md").read_text(encoding="utf-8").splitlines(), 1):
@@ -178,6 +197,8 @@ def main() -> int:
         problems.append(f"policy.toml: {err.message[:160]}")
     evidence = jsonschema.Draft202012Validator(schemas["evidence-record.schema.json"], registry=registry)
     problems.extend(evidence_strength_problems(evidence))
+    native_evidence = jsonschema.Draft202012Validator(schemas["project-evidence.schema.json"], registry=registry)
+    problems.extend(native_evidence_problems(native_evidence))
     intent_files = 0
     if INTENT_CRITERIA_SCHEMA not in schemas:
         problems.append(f"{INTENT_CRITERIA_SCHEMA}: missing schema")
@@ -189,6 +210,113 @@ def main() -> int:
         print("PROBLEM", line)
     print(json.dumps({"schemas": len(schemas), "examples": examples, "intent_files": intent_files, "problems": len(problems)}))
     return 1 if problems else 0
+
+
+def native_evidence_problems(validator) -> list[str]:
+    """Only terminal native verdicts with their identity and declared strength belong in evidence."""
+    digest = "sha256:" + "0" * 64
+    body = {
+        "obligation": "check-one", "core_key": digest, "platform": "linux/x86_64",
+        "writer": "fixture", "verdict": "passed", "level": "bounded",
+        "strength": {"class": "fixture", "rank": "bounded", "note": "provider annotation"},
+        "preimage": {"obligation": digest, "kind": "check",
+                     "inputs": {"specified_by": [], "targets": [], "closure": [], "config": digest,
+                                "expect": "holds", "tools": []},
+                     "provider": {"name": "fixture-checks", "version": "1", "protocol": "0.2"}},
+    }
+    problems = []
+    for verdict in ("passed", "failed"):
+        if not validator.is_valid(dict(body, verdict=verdict)):
+            problems.append(f"native evidence {verdict}: rejected by project-evidence.schema.json")
+    no_strength = dict(body)
+    del no_strength["strength"]
+    for label, invalid, rule, path in (
+        ("missing strength", no_strength, "required", []),
+        ("malformed core identity", dict(body, core_key="invalid"), "pattern", ["core_key"]),
+        ("nonterminal verdict", dict(body, verdict="unavailable"), "enum", ["verdict"]),
+    ):
+        errors = list(validator.iter_errors(invalid))
+        if len(errors) != 1 or (errors[0].validator, list(errors[0].absolute_path)) != (rule, path):
+            problems.append(f"native evidence {label}: expected rejection at {'.'.join(path) or 'the root'}")
+    return problems
+
+
+def native_status_problems(validator) -> list[str]:
+    """Native status keeps both its policy source and unresolved project doubts visible."""
+    report = {
+        "judged": {"kind": "status", "name": "this-project", "self": {"writer": "fixture", "platform": "linux/x86_64"},
+                   "policy": {}, "obligations": {}, "intents": {}, "steps": [{"do": {}}]},
+        "report": {"obligations": {}, "intents": {}, "project": {"status": "nothing-required"}, "rejected": 0},
+        "coverage": {"intents": {}, "thinnest": {}},
+        "policy_source": "fixture policy", "ledger": {"entries": 0, "torn": False},
+        "not_served": [], "not_checkable": [], "policy_not_applied": [],
+        "project_doubts": [], "project_status": "nothing-required",
+    }
+    problems = []
+    for label, valid in (("empty native status", report), ("native refusal", {"refused": "bad-input", "detail": ""})):
+        if not validator.is_valid(valid):
+            problems.append(f"{label}: rejected by project-status.schema.json")
+
+    output = validator.evolve(schema={"$ref": validator.schema["$id"] + "#/$defs/output"})
+    no_policy = dict(report)
+    del no_policy["policy_source"]
+    negative_entries = dict(report, ledger={"entries": -1, "torn": False})
+    pass_with_doubt = dict(report, project_status="passed", project_doubts=["a ledger ends in an entry cut short"])
+    for label, invalid, rule, path in (
+        ("missing policy source", no_policy, "required", []),
+        ("negative ledger count", negative_entries, "minimum", ["ledger", "entries"]),
+        ("pass despite a project doubt", pass_with_doubt, "enum", ["project_status"]),
+    ):
+        errors = list(output.iter_errors(invalid))
+        if len(errors) != 1 or (errors[0].validator, list(errors[0].absolute_path)) != (rule, path):
+            problems.append(f"native status {label}: expected rejection at {'.'.join(path) or 'the root'}")
+    return problems
+
+
+def status_absence_problems(validator) -> list[str]:
+    """No evidence link or act has to be invented to report a supported state."""
+    confirmed_empty = {
+        "name": "empty", "status": "unguarded",
+        "gates": {"hard": 0, "soft": 0, "deferred": 0, "deferred_open": 0},
+        "shown": {"level": "none", "weakest_link": None},
+        "agreed": {"criteria_confirmed_by": "owner", "checks_matched_by": []},
+        "separation": {"weakest": {"level": "self", "source": "declared"},
+                       "act": "confirm-baseline", "acts_apart_or_better": 0, "acts_total": 1},
+        "exceptions": 0, "score": {"numerator": 0, "denominator": 0},
+    }
+    draft = dict(confirmed_empty, name="draft", status="draft",
+                 agreed={"criteria_confirmed_by": None, "checks_matched_by": []},
+                 shown={"level": "none", "weakest_link": "specification-code"},
+                 separation={"weakest": {"level": "self", "source": None},
+                             "acts_apart_or_better": 0, "acts_total": 1})
+
+    def errors(intent: dict) -> list:
+        report = {"status": "0.2", "policy": {"reference": "same"}, "project": {"status": "unknown"},
+                  "platforms": [{"os": "linux", "arch": "x86_64"}], "intents": [intent],
+                  "obligations": [], "errors": []}
+        return list(validator.iter_errors(report))
+
+    problems = []
+    for label, intent in (("empty intent without a weakest link", confirmed_empty), ("draft without an act", draft)):
+        found = errors(intent)
+        if found:
+            problems.append(f"status {label}: {found[0].message}")
+
+    sampled = deepcopy(confirmed_empty)
+    sampled["shown"]["level"] = "sampled"
+    recorded = deepcopy(draft)
+    recorded["separation"]["act"] = "confirm-baseline"
+    stronger = deepcopy(draft)
+    stronger["separation"]["weakest"]["level"] = "apart"
+    for label, intent, field in (
+        ("sampled assurance without a weakest link", sampled, ["shown", "weakest_link"]),
+        ("recorded act without a fact source", recorded, ["separation", "weakest", "source"]),
+        ("strong separation without a fact source", stronger, ["separation", "weakest", "source"]),
+    ):
+        found = errors(intent)
+        if len(found) != 1 or list(found[0].absolute_path) != ["intents", 0, *field]:
+            problems.append(f"status {label}: expected rejection for {'.'.join(field)}")
+    return problems
 
 
 def status_policy_problems(validator) -> list[str]:
