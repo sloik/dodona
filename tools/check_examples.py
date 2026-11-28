@@ -15,12 +15,9 @@ must also give the expected results.
 from __future__ import annotations
 
 from copy import deepcopy
-import hashlib
 import json
 import pathlib
-import subprocess
 import sys
-import tempfile
 import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -78,15 +75,12 @@ def check_intent_criteria(validator) -> tuple[int, list[str]]:
 
 
 def lock_platform_problems(lock: dict) -> list[str]:
-    """Report repeated exact platforms and contradictory emulation within lock entries."""
+    """Report repeated exact platforms within each structurally valid lock entry."""
     problems = []
     for entry in lock["entries"]:
         seen = set()
         for pin in entry["platforms"]:
-            fields = pin["platform"]
-            if fields.get("emulated_on") == fields["arch"]:
-                problems.append(f"{entry['kind']} {entry['name']}: emulated_on matches arch {fields['arch']}")
-            platform = json.dumps(fields, sort_keys=True)
+            platform = json.dumps(pin["platform"], sort_keys=True)
             if platform in seen:
                 problems.append(f"{entry['kind']} {entry['name']}: repeated platform {platform}")
             seen.add(platform)
@@ -102,18 +96,14 @@ def check_lock_platform_fixtures(validator=None) -> list[str]:
     windows = {"os": "windows", "arch": "x86_64"}
     duplicate = 'tool sample-tool: repeated platform {"arch": "x86_64", "libc": "gnu", "os": "linux"}'
     fixtures = [
-        ("different operating systems", linux_gnu, windows, [], True),
-        ("different libc values", linux_gnu, dict(linux, libc="musl"), [], True),
-        ("omitted libc", linux, linux_gnu, [], True),
-        ("omitted emulation", windows, dict(windows, emulated_on="aarch64"), [], True),
-        ("conflicting digests on one exact platform", linux_gnu, {"libc": "gnu", **linux}, [duplicate], True),
+        ("different operating systems", linux_gnu, windows, []),
+        ("different libc values", linux_gnu, dict(linux, libc="musl"), []),
+        ("omitted libc", linux, linux_gnu, []),
+        ("omitted emulation", windows, dict(windows, emulated_on="aarch64"), []),
+        ("conflicting digests on one exact platform", linux_gnu, {"libc": "gnu", **linux}, [duplicate]),
     ]
-    for arch in ("aarch64", "x86_64"):
-        contradictory = dict(windows, arch=arch, emulated_on=arch)
-        fixtures.append((f"same architecture emulation on {arch}", linux, contradictory,
-                         [f"tool sample-tool: emulated_on matches arch {arch}"], False))
     problems = []
-    for label, first, second, expected, schema_valid in fixtures:
+    for label, first, second, expected in fixtures:
         lock = {
             "lock": "0.2",
             "entries": [{
@@ -131,43 +121,13 @@ def check_lock_platform_fixtures(validator=None) -> list[str]:
         }
         if validator is not None:
             error = next(validator.iter_errors(lock), None)
-            if schema_valid and error is not None:
+            if error is not None:
                 problems.append(f"lock fixture {label}: draft schema rejects the shape: {error.message}")
-            elif not schema_valid and error is None:
-                problems.append(f"lock fixture {label}: draft schema accepts the invalid shape")
+                continue
         actual = lock_platform_problems(lock)
         if actual != expected:
             problems.append(f"lock fixture {label}: expected {expected}, got {actual}")
     return problems
-
-
-def check_generated_staged_lock(validator) -> list[str]:
-    """Validate a lock produced by resolving one staged release."""
-    with tempfile.TemporaryDirectory() as folder:
-        root = pathlib.Path(folder)
-        stage = root / "stage"
-        stage.mkdir()
-        artifact = stage / "runtime.exe"
-        content = b"sample runtime"
-        artifact.write_bytes(content)
-        artifact.chmod(0o755)
-        pin = {"platform": {"os": "windows", "arch": "x86_64"}, "tree": "stage", "entry": artifact.name,
-               "upstream": {"source": "https://example.invalid/runtime.exe",
-                            "published_digest": "sha256:" + hashlib.sha256(content).hexdigest()}}
-        source, output = root / "release.json", root / "lock.json"
-        source.write_text(json.dumps({"entries": [{
-            "kind": "tool", "name": "runtime", "version": "1.0", "requires": [], "platforms": [pin],
-        }]}), encoding="utf-8")
-        try:
-            result = subprocess.run([sys.executable, str(ROOT / "tools/resolve_staged_lock.py"), str(source), str(output)],
-                                    capture_output=True, text=True, timeout=10)
-            if result.returncode != 0:
-                return [f"staged lock generator exited {result.returncode}: {result.stderr.strip()}"]
-            lock = json.loads(output.read_text(encoding="utf-8"))
-        except (OSError, ValueError, subprocess.TimeoutExpired) as err:
-            return [f"staged lock fixture could not be read: {err}"]
-    schema_problems = [f"generated staged lock: {err.message}" for err in validator.iter_errors(lock)]
-    return schema_problems or lock_platform_problems(lock)
 
 
 def evidence_strength_problems(validator) -> list[str]:
@@ -232,7 +192,6 @@ def main() -> int:
         problems.append("docs/writing-a-provider.md: no examples found")
     lock_schema = jsonschema.Draft202012Validator(schemas["lock.schema.json"], registry=registry)
     problems.extend(check_lock_platform_fixtures(lock_schema))
-    problems.extend(check_generated_staged_lock(lock_schema))
     policy = tomllib.loads((ROOT / "policy.toml").read_text(encoding="utf-8"))
     for err in jsonschema.Draft202012Validator(schemas["policy.schema.json"], registry=registry).iter_errors(policy):
         problems.append(f"policy.toml: {err.message[:160]}")

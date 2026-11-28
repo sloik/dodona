@@ -8,7 +8,7 @@ Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with
 | [canonical.py](canonical.py) | Reference implementation of the [canonical encoding](../protocol/canonical-encoding.md) |
 | [metrics.py](metrics.py) | Counts how complete and how well checked dodona is, from its own files, and fails a change that takes a ratcheted item away ([metrics](../docs/metrics.md)) |
 | [check_docs.py](check_docs.py) | Checks that the documents still describe the code, across the repository and for one change ([gap checks](../docs/gap-checks.md)) |
-| [check_examples.py](check_examples.py) | Validates the schemas, provider guide examples, policy, project intent criteria and draft lock fixtures. It checks an actual generated lock and requires each draft lock entry to pin each platform at most once |
+| [check_examples.py](check_examples.py) | Validates the schemas, provider guide examples, policy, project intent criteria and draft lock fixtures. It also checks that each draft lock entry pins each platform at most once |
 | [check_intents_provider.py](check_intents_provider.py) | Checks how the Markdown intents provider reports criteria and the obligations that check them |
 | [check_models.py](check_models.py) | Judges every model-check case listed in `spec/*/expected.json` |
 | [check_repo.py](check_repo.py) | The repository checks that need no model checker; must pass before a push ([gap checks](../docs/gap-checks.md)) |
@@ -32,7 +32,6 @@ Stage-0 helpers ([decision 0023](../decisions/0023-stage-0-checks-run-in-ci-with
 | [project_run.py](project_run.py) | Reference command for running a project's checks and recording verdicts |
 | [project_status.py](project_status.py) | Reference command for reporting a project's status from providers, ledgers and policy |
 | [provider_host.py](provider_host.py) | A small reference host for one provider session |
-| [resolve_staged_lock.py](resolve_staged_lock.py) | Verifies staged single-file releases and generates draft locks with canonical tree digests and exact dependencies |
 | [run_attest_check.py](run_attest_check.py) | Has a kernel grade check values the reference signer makes at test time |
 | [run_check_cases.py](run_check_cases.py) | Judges `tools/host.py` against a checker that breaks one rule at a time |
 | [run_harness_check.py](run_harness_check.py) | Judges the reference harness and a kernel together |

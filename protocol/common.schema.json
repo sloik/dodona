@@ -22,13 +22,6 @@
         "arch"
       ],
       "additionalProperties": false,
-      "not": {
-        "required": ["emulated_on"],
-        "anyOf": [
-          {"properties": {"arch": {"const": "aarch64"}, "emulated_on": {"const": "aarch64"}}},
-          {"properties": {"arch": {"const": "x86_64"}, "emulated_on": {"const": "x86_64"}}}
-        ]
-      },
       "properties": {
         "os": {
           "enum": [

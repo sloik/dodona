@@ -87,42 +87,6 @@ version    = number { "." number }
 
 There is no *or*, no wildcard and no spaces. Which version the resolver picks when several satisfy the constraint is not decided. Whatever it picks is written to the lock as an exact version and does not change until the project asks to resolve again.
 
-### Generate a draft lock from staged releases
-
-`python tools/resolve_staged_lock.py RELEASES.json LOCK.json` writes a draft 0.2 lock for exact releases that have already been selected and staged. Each staged directory contains just the publisher's executable file. Paths are relative to the release declaration. On a filesystem with an owner-execute bit, set it on the staged file.
-
-For example, stage the official Windows x64 release of Node 24.22.3 at `node-win-x64/node.exe` beside this declaration. Copy the SHA-256 from the publisher's release checksum list. [Node 24.22.3 checksums](https://nodejs.org/dist/v24.22.3/SHASUMS256.txt)
-
-```json
-{
-  "entries": [
-    {
-      "kind": "tool",
-      "name": "node",
-      "version": "24.22.3",
-      "requires": [],
-      "platforms": [
-        {
-          "platform": {"os": "windows", "arch": "x86_64"},
-          "tree": "node-win-x64",
-          "entry": "node.exe",
-          "upstream": {
-            "source": "https://nodejs.org/dist/v24.22.3/win-x64/node.exe",
-            "published_digest": "sha256:86fc4785327db5f5c7558dc6156c543b433c313e813a222e088086222ab4afa6"
-          }
-        }
-      ]
-    }
-  ]
-}
-```
-
-List direct tool dependencies by name in `requires`. Each tool must have its own entry and an exact pin for each platform that needs it. Use the full platform object, including `libc` and `emulated_on` where they apply. An emulating host must have a different architecture. The generator checks the bytes against the supplied checksum, computes the tree digest, and writes the full dependency closure. Choose an output outside the staged trees and distinct from the release declaration, including other names for the same file. The generator runs offline and replaces the output atomically after all checks pass. [Draft lock schema](../protocol/lock.schema.json)
-
-For a platform extension, use `python tools/resolve_staged_lock.py --preserve PREVIOUS.json RELEASES.json LOCK.json`. Supply the complete set of staged releases and choose an output path distinct from the generated predecessor. The new lock must retain every previous exact version, requirement closure, platform digest and upstream source. A refusal leaves both files intact.
-
-This reference path covers staged single-file releases. Project runs still select their tools from the site's configuration.
-
 ## `[policy]`
 
 Points at the policy. The policy itself, what must pass and how strongly, lives in its own file so that the agent doing the work does not set the bar ([decision 0014](../decisions/0014-policy-is-separate-from-configuration.md)).
