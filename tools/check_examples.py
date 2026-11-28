@@ -301,8 +301,11 @@ def native_evidence_problems(validator, stage0) -> list[str]:
         ("missing executor", missing_executor, "required", []),
         ("unexpected field", dict(measured, unsupported_field={}), "additionalProperties", []),
         ("nonterminal result", dict(older, verdict="unavailable"), "enum", ["verdict"]),
-        ("wrong measured digest", dict(older, tools_measured={"java": {"digest": "wrong", "version": "25.0.1"}}),
+        ("wrong measured digest", dict(older, tools_measured={"java": {"digest": "z" * 64, "version": "25.0.1"}}),
          "pattern", ["tools_measured", "java", "digest"]),
+        ("trailing line break in measured digest",
+         dict(older, tools_measured={"java": {"digest": "0" * 64 + "\n", "version": "25.0.1"}}),
+         "maxLength", ["tools_measured", "java", "digest"]),
         ("absent measured version", dict(older, tools_measured={"java": {"digest": "0" * 64}}),
          "required", ["tools_measured", "java"]),
     )

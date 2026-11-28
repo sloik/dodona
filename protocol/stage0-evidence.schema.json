@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/sloik/dodona/protocol/stage0-evidence.schema.json",
   "title": "Stage-0 evidence body",
-  "description": "Evidence from the Stage-0 model host, including entries kept from before it recorded tool measurements.",
+  "description": "Stage-0 evidence carried forward in the protected model ledger, including entries kept before it recorded tool measurements.",
   "type": "object",
   "required": [
     "obligation", "preimage", "core_key", "platform", "verdict", "writer", "strength", "level",
@@ -33,7 +33,7 @@
         "required": ["digest", "version"],
         "additionalProperties": false,
         "properties": {
-          "digest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+          "digest": { "type": ["string", "null"], "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$" },
           "version": { "type": ["string", "null"] }
         }
       }

@@ -760,7 +760,14 @@ def gap_reuse_is_decided_by_a_kernel_and_checked() -> None:
                                ("model_results.py", "check_transcript.py out/model-transcript.json", "tools/keep.py finish")):
         problems.append(".github/workflows/models.yml: the kept artifact must follow the native result and transcript gates")
     evidence_gate = ".venv-examples/bin/python tools/check_examples.py --evidence-ledger out/dodona.ledger"
-    if evidence_gate not in commands or not 0 <= workflow.find(evidence_gate) < workflow.find("tools/keep.py finish"):
+    model_job = workflow_jobs(pinned_workflow_reader()().load(workflow))["kernel-on-every-state"]
+    steps = model_job["steps"]
+    keep_step = next((index for index, step in enumerate(steps) if "tools/keep.py finish" in step.get("run", "")), -1)
+    if "continue-on-error" in model_job or not any(
+        index < keep_step and step.get("run", "").strip().splitlines()[-1:] == [evidence_gate]
+        and "continue-on-error" not in step and step.get("if") in (None, "always()", "${{ always() }}")
+        for index, step in enumerate(steps)
+    ):
         problems.append(".github/workflows/models.yml: validate the evidence schemas before keeping the ledger")
     import keep
     with tempfile.TemporaryDirectory() as tmp:
