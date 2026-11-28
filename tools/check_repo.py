@@ -1883,9 +1883,9 @@ def gap_rust_defect_shards_cover_the_inventory() -> None:
 
 
 def gap_ledger_judge_keeps_held_lock_result() -> None:
-    """A defective append may remove the judge's lock before the judge cleans up."""
+    """The held-lock witness must catch a premature refusal and keep the original result if the marker changes."""
     import run_ledger_cases
-    for mode in ("intact", "removed", "changed"):
+    for mode in ("intact", "removed", "changed", "premature"):
         output = io.StringIO()
 
         def answer(command, subcommand, request):
@@ -1903,6 +1903,7 @@ def gap_ledger_judge_keeps_held_lock_result() -> None:
 
         with contextlib.redirect_stdout(output), mock.patch.object(sys, "argv", ["judge", "--", "kernel"]), \
                 mock.patch.object(run_ledger_cases, "ask", side_effect=answer), \
+                mock.patch.object(run_ledger_cases, "monotonic", side_effect=[0.0, 0.05 if mode == "premature" else 2.0]), \
                 mock.patch.object(subprocess, "Popen", return_value=mock.Mock(wait=lambda timeout: run_ledger_cases.WRITER_MISMATCH)):
             try:
                 result = run_ledger_cases.main()
@@ -3168,7 +3169,8 @@ class LedgerJudgeTests(unittest.TestCase):
         self.addCleanup(fixture.cleanup)
         held = pathlib.Path(fixture.name) / "held.ledger"
         lock = held.with_suffix(".ledger.lock")
-        request = json.dumps({"ledger": str(held), "kind": "evidence", "body": {}, "wait_ms": 300}).encode("utf-8")
+        request = json.dumps({"ledger": str(held), "kind": "evidence", "body": {},
+                              "wait_ms": run_ledger_cases.HELD_WAIT_MS}).encode("utf-8")
         answered = 0
 
         def run(command, **kwargs):
@@ -3182,7 +3184,8 @@ class LedgerJudgeTests(unittest.TestCase):
             reply = answer(held, lock)
             return subprocess.CompletedProcess(command, 0, json.dumps(reply).encode(), b"")
 
-        with patch.object(run_ledger_cases.tempfile, "TemporaryDirectory", return_value=fixture):
+        with patch.object(run_ledger_cases.tempfile, "TemporaryDirectory", return_value=fixture), \
+                patch.object(run_ledger_cases, "monotonic", side_effect=[0.0, 2.0]):
             code, receipt = self.judge(run, [FakeWriter(0), FakeWriter(0)], output=output)
         self.assertEqual(answered, 1, "\n".join(output.getvalue().splitlines()[-3:-1]))
         return code, receipt, output.getvalue()

@@ -26,12 +26,14 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+from time import monotonic
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import canonical  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 WRITER_MISMATCH = 3
+HELD_WAIT_MS = 1500
 
 
 class Deep(dict):
@@ -241,15 +243,20 @@ def main() -> int:
         lock = pathlib.Path(str(held) + ".lock")
         marker = b"held by the judge\n"
         lock.write_bytes(marker)
-        refused = ask(command, "ledger-append", {"ledger": str(held), "kind": "evidence", "body": {}, "wait_ms": 300})
+        started = monotonic()
+        refused = ask(command, "ledger-append", {"ledger": str(held), "kind": "evidence", "body": {}, "wait_ms": HELD_WAIT_MS})
+        elapsed_ms = (monotonic() - started) * 1000
+        # Allow for the kernel's millisecond clock. The marker stays held for the whole request.
+        waited = elapsed_ms + 20 >= HELD_WAIT_MS
         unchanged = held.read_bytes() == good
         try:
             observed_marker = lock.read_bytes()
         except FileNotFoundError:
             observed_marker = None
         intact = observed_marker == marker
-        check("a held lock refuses an append", refused == {"refused": "locked"} and unchanged and intact,
-              f"answered {refused}; ledger unchanged: {unchanged}; marker intact: {intact}")
+        check("a held lock refuses an append", refused == {"refused": "locked"} and waited and unchanged and intact,
+              f"answered {refused} after {elapsed_ms:.1f} ms on a {HELD_WAIT_MS} ms wait; "
+              f"ledger unchanged: {unchanged}; marker intact: {intact}")
         # A wrong answer may already have removed the fixture's marker.
         lock.unlink(missing_ok=observed_marker is None)
 
