@@ -183,17 +183,24 @@ A pull request's description must also have a `## Verified` section naming what 
 
 When planning the patch, look up each intended code path in [the documentation map](doc-map.toml). Choose a mapped document to update for each affected rule. Use a commit-message waiver when the existing description is still accurate. Prefer the existing binding when the new file belongs to its documented scope. Arrange owner review when a binding needs to change.
 
-From the candidate worktree, fetch `main` and check it out in a separate worktree. Use a new path for that checkout. Run its checker without `--head` for feedback on the working tree. After committing, copy the [PR template](../.github/pull_request_template.md) to a temporary file outside the worktree and fill in both evidence sections. Judge the committed head with that exact body before submitting it.
+From the candidate worktree, fetch `main` from the repository the PR targets. The example uses Dodona's upstream URL so it works from a fork too. Save that commit and use the same revision for the checker and `--base`. Use a new path for the detached checkout and run its checker without `--head` for feedback on the working tree.
 
 ```text
-git fetch origin refs/heads/main:refs/remotes/origin/main
-git worktree add --detach ../dodona-docs-base origin/main
-python3 -I ../dodona-docs-base/tools/check_docs.py diff --repo . --base origin/main
-python3 -I ../dodona-docs-base/tools/check_docs.py whole --repo . --head HEAD
-python3 -I ../dodona-docs-base/tools/check_docs.py diff --repo . --base origin/main --head HEAD --pr-body ../pr-body.md
+git fetch https://github.com/sloik/dodona.git refs/heads/main
+base=$(git rev-parse 'FETCH_HEAD^{commit}')
+git worktree add --detach ../dodona-docs-base "$base"
+python3 -I ../dodona-docs-base/tools/check_docs.py diff --repo . --base "$base"
 ```
 
-Submit the tested PR body, for example with `gh pr create --body-file ../pr-body.md`. Refresh the trusted checkout if `main` moves. If the patch touches workflows, also run the `jobs` check with the trusted YAML reader, using the arguments in [the hosted workflow](../.github/workflows/docs.yml).
+After committing, copy the [PR template](../.github/pull_request_template.md) to a temporary file outside the worktree and fill in both evidence sections. Judge the same committed head with that exact body before submitting it.
+
+```text
+head=$(git rev-parse 'HEAD^{commit}')
+python3 -I ../dodona-docs-base/tools/check_docs.py whole --repo . --head "$head"
+python3 -I ../dodona-docs-base/tools/check_docs.py diff --repo . --base "$base" --head "$head" --pr-body ../pr-body.md
+```
+
+Submit the tested PR body, for example with `gh pr create --body-file ../pr-body.md`. Refresh the base and trusted checkout if the target's `main` moves. If the patch touches workflows, also run the `jobs` check with the trusted YAML reader, using the arguments in [the hosted workflow](../.github/workflows/docs.yml).
 
 Fix missing documentation, binding coverage and PR-body findings before opening the PR. If the only remaining finding says the change affects how changes are judged, record it in `## Not verified` and route it to the owner.
 
