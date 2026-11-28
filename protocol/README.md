@@ -94,7 +94,7 @@ Validating a message against its schema is a first filter. The kernel also holds
 
 A tool is pinned as a whole tree. How the digest of a tree is computed, and which trees have none, is in [tool-tree-digest.md](tool-tree-digest.md), with vectors. A check request may carry the listing of a tool tree, and a run may declare a directory as an output. The stage-0 host passes neither yet.
 
-A draft lock entry lists one pin for each exact platform it covers. The offline fixtures check the full platform object, including whether `libc` or `emulated_on` is present. [Draft lock schema](lock.schema.json).
+A draft lock entry lists one pin for each exact platform it covers. The offline fixtures check the full platform object, including whether `libc` or `emulated_on` is present. The platform schema requires `emulated_on` to differ from `arch`. [Draft lock schema](lock.schema.json).
 
 The Stage-0 generator writes draft locks from staged single-file releases. Each pin records both the publisher's checksum and the canonical tree digest. The schema check validates a lock produced by the generator. [Configuration example](../docs/configuration.md#generate-a-draft-lock-from-staged-releases).
 

@@ -117,7 +117,7 @@ For example, stage the official Windows x64 release of Node 24.22.3 at `node-win
 }
 ```
 
-List direct tool dependencies by name in `requires`. Each tool must have its own entry and an exact pin for each platform that needs it. Use the full platform object, including `libc` and `emulated_on` where they apply. The generator checks the bytes against the supplied checksum, computes the tree digest, and writes the full dependency closure. It runs offline and replaces the output atomically after all checks pass. [Draft lock schema](../protocol/lock.schema.json)
+List direct tool dependencies by name in `requires`. Each tool must have its own entry and an exact pin for each platform that needs it. Use the full platform object, including `libc` and `emulated_on` where they apply. An emulating host must have a different architecture. The generator checks the bytes against the supplied checksum, computes the tree digest, and writes the full dependency closure. Choose an output outside the staged trees and distinct from the release declaration, including other names for the same file. The generator runs offline and replaces the output atomically after all checks pass. [Draft lock schema](../protocol/lock.schema.json)
 
 For a platform extension, use `python tools/resolve_staged_lock.py --preserve PREVIOUS.json RELEASES.json LOCK.json`. Supply the complete set of staged releases and choose an output path distinct from the generated predecessor. The new lock must retain every previous exact version, requirement closure, platform digest and upstream source. A refusal leaves both files intact.
 

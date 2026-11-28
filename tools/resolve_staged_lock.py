@@ -42,6 +42,8 @@ def platform_key(platform) -> tuple[str, ...]:
     if (not isinstance(platform, dict) or not {"os", "arch"} <= platform.keys()
             or any(field not in PLATFORM or value not in PLATFORM[field] for field, value in platform.items())):
         raise host.Refused("bad-source: expected an exact platform")
+    if platform.get("emulated_on") == platform["arch"]:
+        raise host.Refused("bad-source: emulated_on must name a different architecture")
     return tuple(platform.get(field, "") for field in PLATFORM)
 
 
@@ -63,6 +65,14 @@ def is_reparse_point(details: os.stat_result) -> bool:
     return bool(getattr(details, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT)
 
 
+def same_file(first: Path, second: Path) -> bool:
+    """Compare existing filesystem objects, allowing a new output path."""
+    try:
+        return first.samefile(second)
+    except FileNotFoundError:
+        return False
+
+
 def measured_pin(root: Path, pin, destination: Path) -> dict:
     if not has_fields(pin, "platform", "tree", "entry", "upstream"):
         raise host.Refused("bad-source: expected a staged platform pin")
@@ -82,7 +92,7 @@ def measured_pin(root: Path, pin, destination: Path) -> dict:
         details = directory.lstat()
         if not stat.S_ISDIR(details.st_mode) or is_reparse_point(details):
             raise host.Refused(f"not-a-plain-directory: {tree}")
-    if destination.is_relative_to(directory):
+    if any(same_file(directory, path) for path in (destination, *destination.parents)):
         raise host.Refused(f"output-in-staged-tree: {tree}")
     if [item.name for item in directory.iterdir()] != [entry]:
         raise host.Refused(f"unexpected-tree-contents: {tree}")
@@ -208,12 +218,12 @@ def main() -> int:
     try:
         source = asked.source.resolve(strict=True)
         destination = asked.output.resolve()
-        if source == destination:
+        if same_file(source, destination):
             raise host.Refused("output-is-source")
         lock = resolve(host.strict_load(source.read_bytes()), source.parent, destination)
         if asked.preserve is not None:
             predecessor = asked.preserve.resolve(strict=True)
-            if predecessor == destination:
+            if same_file(predecessor, destination):
                 raise host.Refused("output-is-preserved-lock")
             preserve_platforms(host.strict_load(predecessor.read_bytes()), lock)
         publish(asked.output, lock)

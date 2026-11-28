@@ -85,8 +85,13 @@ def recorded(root: pathlib.Path, rel: str) -> dict:
     entries = ledger_entries(root, rel)
     if entries is None:
         return {"unreadable": True}
-    return {e["body"]["obligation"]: e["body"]["verdict"] for e in entries
-            if e["kind"] == "evidence" and isinstance(e["body"], dict) and "obligation" in e["body"]}
+    verdicts = {}
+    for entry in entries:
+        body = entry["body"]
+        if (entry["kind"] == "evidence" and isinstance(body, dict)
+                and isinstance(body.get("obligation"), str) and "verdict" in body):
+            verdicts[body["obligation"]] = body["verdict"]
+    return verdicts
 
 
 def evidence_appended(before: list | None, after: list | None) -> list:
@@ -302,7 +307,7 @@ def judge(case: dict, site: dict, command: list[str], status: list[str], kernel:
     if schema_validator is not None:
         evidence = got["appended_evidence"]
         counts = first.get("counts", {})
-        if not evidence and (counts.get("passed", 0) or counts.get("failed", 0)):
+        if not evidence and isinstance(counts, dict) and (counts.get("passed", 0) or counts.get("failed", 0)):
             problems.append("the run reports verdicts but there is no appended evidence to validate")
         for number, body in enumerate(evidence, 1):
             if not schema_validator.is_valid(body):

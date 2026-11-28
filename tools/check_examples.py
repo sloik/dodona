@@ -78,12 +78,15 @@ def check_intent_criteria(validator) -> tuple[int, list[str]]:
 
 
 def lock_platform_problems(lock: dict) -> list[str]:
-    """Report repeated exact platforms within each structurally valid lock entry."""
+    """Report repeated exact platforms and contradictory emulation within lock entries."""
     problems = []
     for entry in lock["entries"]:
         seen = set()
         for pin in entry["platforms"]:
-            platform = json.dumps(pin["platform"], sort_keys=True)
+            fields = pin["platform"]
+            if fields.get("emulated_on") == fields["arch"]:
+                problems.append(f"{entry['kind']} {entry['name']}: emulated_on matches arch {fields['arch']}")
+            platform = json.dumps(fields, sort_keys=True)
             if platform in seen:
                 problems.append(f"{entry['kind']} {entry['name']}: repeated platform {platform}")
             seen.add(platform)
@@ -99,14 +102,18 @@ def check_lock_platform_fixtures(validator=None) -> list[str]:
     windows = {"os": "windows", "arch": "x86_64"}
     duplicate = 'tool sample-tool: repeated platform {"arch": "x86_64", "libc": "gnu", "os": "linux"}'
     fixtures = [
-        ("different operating systems", linux_gnu, windows, []),
-        ("different libc values", linux_gnu, dict(linux, libc="musl"), []),
-        ("omitted libc", linux, linux_gnu, []),
-        ("omitted emulation", windows, dict(windows, emulated_on="aarch64"), []),
-        ("conflicting digests on one exact platform", linux_gnu, {"libc": "gnu", **linux}, [duplicate]),
+        ("different operating systems", linux_gnu, windows, [], True),
+        ("different libc values", linux_gnu, dict(linux, libc="musl"), [], True),
+        ("omitted libc", linux, linux_gnu, [], True),
+        ("omitted emulation", windows, dict(windows, emulated_on="aarch64"), [], True),
+        ("conflicting digests on one exact platform", linux_gnu, {"libc": "gnu", **linux}, [duplicate], True),
     ]
+    for arch in ("aarch64", "x86_64"):
+        contradictory = dict(windows, arch=arch, emulated_on=arch)
+        fixtures.append((f"same architecture emulation on {arch}", linux, contradictory,
+                         [f"tool sample-tool: emulated_on matches arch {arch}"], False))
     problems = []
-    for label, first, second, expected in fixtures:
+    for label, first, second, expected, schema_valid in fixtures:
         lock = {
             "lock": "0.2",
             "entries": [{
@@ -124,9 +131,10 @@ def check_lock_platform_fixtures(validator=None) -> list[str]:
         }
         if validator is not None:
             error = next(validator.iter_errors(lock), None)
-            if error is not None:
+            if schema_valid and error is not None:
                 problems.append(f"lock fixture {label}: draft schema rejects the shape: {error.message}")
-                continue
+            elif not schema_valid and error is None:
+                problems.append(f"lock fixture {label}: draft schema accepts the invalid shape")
         actual = lock_platform_problems(lock)
         if actual != expected:
             problems.append(f"lock fixture {label}: expected {expected}, got {actual}")

@@ -4695,8 +4695,10 @@ class RunJudgeTests(unittest.TestCase):
     case = StatusJudgeTests.case
     answered = staticmethod(StatusJudgeTests.answered)
 
-    def exercise(self, answers, cases=None):
+    def exercise(self, answers, cases=None, *, record_schema=False):
         argv = ["run_run_cases.py", "--jobs", "1", "--kernel", "peer", "--status", "kernel status", "--", "kernel", "run"]
+        if record_schema:
+            argv.insert(1, "--record-schema-check")
         with contextlib.redirect_stdout(io.StringIO()) as output, patch.object(run_run_cases.sys, "argv", argv), \
                 patch.object(run_run_cases, "CASES") as spec, patch.object(run_status_cases.subprocess, "run", side_effect=answers):
             spec.read_text.return_value = json.dumps({"cases": [self.case] if cases is None else cases, "site": {}})
@@ -4783,6 +4785,42 @@ class RunJudgeTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 self.assertEqual((summary["matched"], summary["unfinished"], summary["rejected"]), (0, 0, [self.case["name"]]))
                 self.assertIn("MISMATCH " + self.case["name"], lines[0])
+
+    def test_record_schema_check_keeps_malformed_counts_a_named_mismatch(self):
+        import check_examples
+
+        replies = self.report_answers()
+        replies[0] = self.answered(dict(StatusJudgeTests.right, counts=None))
+        with patch.object(check_examples, "protocol_validator", return_value=mock.Mock()):
+            code, summary, lines = self.exercise(replies, record_schema=True)
+        self.assertEqual(code, 1, lines)
+        self.assertEqual((summary["unfinished"], summary["rejected"]), (0, [self.case["name"]]))
+        self.assertIn("counts must hold exactly", lines[0])
+
+    def test_bad_body_in_a_complete_ledger_is_a_named_schema_mismatch(self):
+        import check_examples
+
+        for body in ({"obligation": "one"}, {"obligation": [], "verdict": "passed"}):
+            with self.subTest(body=body):
+                replies = iter(self.report_answers())
+
+                def answer(command, *, input, **kwargs):
+                    if command == ["kernel", "run"]:
+                        request = json.loads(input)
+                        path = pathlib.Path(request["root"]) / request["ledger"]
+                        if not path.exists():
+                            path.parent.mkdir(parents=True, exist_ok=True)
+                            path.write_bytes(run_status_cases.ledger_bytes([{"kind": "evidence", "body": body}]))
+                    return next(replies)
+
+                validator = mock.Mock()
+                validator.is_valid.return_value = False
+                with patch.object(check_examples, "protocol_validator", return_value=validator):
+                    code, summary, lines = self.exercise(answer, record_schema=True)
+                self.assertEqual(code, 1, lines)
+                self.assertEqual((summary["unfinished"], summary["rejected"]), (0, [self.case["name"]]))
+                self.assertIn("appended evidence 1", lines[0])
+                validator.is_valid.assert_called_once_with(body)
 
     def test_unfinished_takes_precedence_but_keeps_completed_names(self):
         rejected = dict(self.case, expect={"refused": "bad-input"})
@@ -4887,9 +4925,9 @@ class StagedLockTests(unittest.TestCase):
                                "entry": artifact.name, "upstream": {"source": f"https://fixture.invalid/{name}",
                                "published_digest": "sha256:" + hashlib.sha256(content).hexdigest()}}]}
 
-    def resolve(self, entries, *, baseline=None):
+    def resolve(self, entries, *, baseline=None, output=None):
         self.source.write_text(json.dumps({"entries": entries}), encoding="utf-8")
-        command = [sys.executable, str(ROOT / "tools/resolve_staged_lock.py"), str(self.source), str(self.lock)]
+        command = [sys.executable, str(ROOT / "tools/resolve_staged_lock.py"), str(self.source), str(output or self.lock)]
         if baseline is not None:
             command.extend(("--preserve", str(baseline)))
         return subprocess.run(command, capture_output=True, text=True, timeout=10)
@@ -4955,6 +4993,53 @@ class StagedLockTests(unittest.TestCase):
         self.assertIn("output-is-preserved-lock", refusal.stderr)
         self.assertEqual(self.lock.read_bytes(), extended)
 
+    def file_alias(self, path):
+        alias = path.with_name(path.name.upper())
+        if not alias.exists():
+            alias.hardlink_to(path)
+        self.assertTrue(path.samefile(alias))
+        return alias
+
+    def test_output_cannot_alias_the_source(self):
+        entry = self.entry("checker")
+        original = json.dumps({"entries": [entry]}).encode("utf-8")
+        self.source.write_bytes(original)
+        alias = self.file_alias(self.source)
+        refused = self.resolve([entry], output=alias)
+        self.assertEqual(refused.returncode, 1, refused.stderr)
+        self.assertIn("output-is-source", refused.stderr)
+        self.assertEqual(self.source.read_bytes(), original)
+        self.assertEqual(alias.read_bytes(), original)
+
+    def test_output_cannot_alias_the_preserved_lock(self):
+        entry = self.entry("checker")
+        created = self.resolve([entry])
+        self.assertEqual(created.returncode, 0, created.stderr)
+        original = self.lock.read_bytes()
+        alias = self.file_alias(self.lock)
+        windows = self.entry("windows-artifact", platform={"os": "windows", "arch": "x86_64"})
+        entry["platforms"].extend(windows["platforms"])
+        refused = self.resolve([entry], baseline=self.lock, output=alias)
+        self.assertEqual(refused.returncode, 1, refused.stderr)
+        self.assertIn("output-is-preserved-lock", refused.stderr)
+        self.assertEqual(self.lock.read_bytes(), original)
+        self.assertEqual(alias.read_bytes(), original)
+
+    def test_output_cannot_land_in_the_staged_directory(self):
+        for name, output_name in (("existing", "program.exe"), ("new", "external-lock.json")):
+            with self.subTest(output=output_name):
+                entry = self.entry(name)
+                tree = self.root / "staged" / name
+                alias = tree.with_name(name.upper())
+                if not alias.exists():
+                    alias = tree
+                self.assertTrue(tree.samefile(alias))
+                refused = self.resolve([entry], output=alias / output_name)
+                self.assertEqual(refused.returncode, 1, refused.stderr)
+                self.assertIn("output-in-staged-tree", refused.stderr)
+                self.assertEqual((tree / "program.exe").read_bytes(), name.encode("utf-8"))
+                self.assertFalse((tree / "external-lock.json").exists())
+
     def test_unavailable_exact_platforms_and_invalid_dependencies_are_refused(self):
         provider = self.entry("checker", kind="provider", requires=("host",))
         host = self.entry("host", requires=("runtime",))
@@ -4987,6 +5072,19 @@ class StagedLockTests(unittest.TestCase):
         result = self.resolve([entry])
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("published-digest-mismatch", result.stderr)
+        self.assertEqual(self.lock.read_bytes(), before)
+
+    def test_emulation_uses_a_different_host_architecture(self):
+        emulated = dict(self.platform, emulated_on="aarch64")
+        entry = self.entry("checker", platform=emulated)
+        result = self.resolve([entry])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        before = self.lock.read_bytes()
+        self.assertEqual(json.loads(before)["entries"][0]["platforms"][0]["platform"], emulated)
+        entry["platforms"][0]["platform"] = dict(emulated, emulated_on=emulated["arch"])
+        refused = self.resolve([entry])
+        self.assertEqual(refused.returncode, 1, refused.stderr)
+        self.assertIn("emulated_on", refused.stderr)
         self.assertEqual(self.lock.read_bytes(), before)
 
     def test_duplicate_pins_and_nonportable_stage_paths_are_refused(self):
