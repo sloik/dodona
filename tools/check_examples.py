@@ -1,6 +1,7 @@
 """Validate the schemas, guide examples, policy, project criteria and draft lock fixtures.
 
     python tools/check_examples.py
+    python tools/check_examples.py --evidence-ledger PATH
 
 Stage-0 helper (decision 0023). Unlike the other helpers this one needs a
 third-party package, `jsonschema`, because a JSON Schema validator is not in
@@ -14,6 +15,7 @@ must also give the expected results.
 """
 from __future__ import annotations
 
+import argparse
 from copy import deepcopy
 import json
 import pathlib
@@ -156,7 +158,47 @@ def evidence_strength_problems(validator) -> list[str]:
     return problems
 
 
+def check_evidence_ledger(path: pathlib.Path, validators: dict) -> int:
+    """Judge every complete evidence body in the ledger that will be kept."""
+    import ledger
+
+    counts = {"native": 0, "stage0": 0}
+    problems = []
+    try:
+        data = ledger.read(path)
+    except (ledger.Corrupt, OSError) as err:
+        print(f"PROBLEM {path}: {err}")
+        return 1
+    if data["torn"]:
+        problems.append("the ledger ends in an incomplete entry")
+    bodies = 0
+    for index, entry in enumerate(data["entries"], 1):
+        if entry["kind"] != "evidence":
+            continue
+        bodies += 1
+        body = entry["body"]
+        errors = {kind: next(validator.iter_errors(body), None) for kind, validator in validators.items()}
+        accepted = [kind for kind, error in errors.items() if error is None]
+        if len(accepted) == 1:
+            counts[accepted[0]] += 1
+        elif accepted:
+            problems.append(f"#{index} evidence matches more than one schema")
+        else:
+            reasons = [f"{kind} {error.json_path}: {error.message[:160]}" for kind, error in errors.items()]
+            problems.append(f"#{index} evidence is invalid ({', '.join(reasons)})")
+    if not bodies:
+        problems.append("the ledger contains no evidence")
+    for message in problems:
+        print(f"PROBLEM {path}: {message}")
+    print(json.dumps({"evidence": counts, "problems": len(problems)}))
+    return 1 if problems else 0
+
+
 def main() -> int:
+    cli = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    cli.add_argument("--evidence-ledger", type=pathlib.Path, metavar="PATH",
+                     help="validate the evidence bodies in a complete native or retained ledger")
+    args = cli.parse_args()
     try:
         import jsonschema
     except ImportError:
@@ -164,6 +206,13 @@ def main() -> int:
         return 1
     problems = []
     schemas, registry = protocol_schemas()
+    if args.evidence_ledger is not None:
+        validators = {}
+        for kind, name in (("native", "project-evidence.schema.json"), ("stage0", "stage0-evidence.schema.json")):
+            schema = schemas[name]
+            jsonschema.Draft202012Validator.check_schema(schema)
+            validators[kind] = jsonschema.Draft202012Validator(schema, registry=registry)
+        return check_evidence_ledger(args.evidence_ledger, validators)
     for name, schema in schemas.items():
         try:
             jsonschema.Draft202012Validator.check_schema(schema)
@@ -198,7 +247,8 @@ def main() -> int:
     evidence = jsonschema.Draft202012Validator(schemas["evidence-record.schema.json"], registry=registry)
     problems.extend(evidence_strength_problems(evidence))
     native_evidence = jsonschema.Draft202012Validator(schemas["project-evidence.schema.json"], registry=registry)
-    problems.extend(native_evidence_problems(native_evidence))
+    stage0_evidence = jsonschema.Draft202012Validator(schemas["stage0-evidence.schema.json"], registry=registry)
+    problems.extend(native_evidence_problems(native_evidence, stage0_evidence))
     intent_files = 0
     if INTENT_CRITERIA_SCHEMA not in schemas:
         problems.append(f"{INTENT_CRITERIA_SCHEMA}: missing schema")
@@ -212,8 +262,8 @@ def main() -> int:
     return 1 if problems else 0
 
 
-def native_evidence_problems(validator) -> list[str]:
-    """Only terminal native verdicts with their identity and declared strength belong in evidence."""
+def native_evidence_problems(validator, stage0) -> list[str]:
+    """Distinguish native evidence from the two retained Stage-0 shapes."""
     digest = "sha256:" + "0" * 64
     body = {
         "obligation": "check-one", "core_key": digest, "platform": "linux/x86_64",
@@ -238,6 +288,30 @@ def native_evidence_problems(validator) -> list[str]:
         errors = list(validator.iter_errors(invalid))
         if len(errors) != 1 or (errors[0].validator, list(errors[0].absolute_path)) != (rule, path):
             problems.append(f"native evidence {label}: expected rejection at {'.'.join(path) or 'the root'}")
+    older = dict(body, executor="fixture-executor", summary={"states": 3}, unpinned_tools=[])
+    measured = dict(older, tools_measured={"java": {"digest": "0" * 64, "version": "25.0.1"},
+                                          "tla2tools": {"digest": "1" * 64, "version": None}})
+    for label, retained in (("without measurements", older), ("with measurements", measured)):
+        if not stage0.is_valid(retained) or validator.is_valid(retained):
+            problems.append(f"stage-0 evidence {label}: must pass only the stage-0 schema")
+    missing_executor = dict(measured)
+    del missing_executor["executor"]
+    invalid_stage0 = (
+        ("native body with no helper fields", body, "required", []),
+        ("missing executor", missing_executor, "required", []),
+        ("unexpected field", dict(measured, unsupported_field={}), "additionalProperties", []),
+        ("nonterminal result", dict(older, verdict="unavailable"), "enum", ["verdict"]),
+        ("wrong measured digest", dict(older, tools_measured={"java": {"digest": "z" * 64, "version": "25.0.1"}}),
+         "pattern", ["tools_measured", "java", "digest"]),
+        ("trailing line break in measured digest",
+         dict(older, tools_measured={"java": {"digest": "0" * 64 + "\n", "version": "25.0.1"}}),
+         "maxLength", ["tools_measured", "java", "digest"]),
+        ("absent measured version", dict(older, tools_measured={"java": {"digest": "0" * 64}}),
+         "required", ["tools_measured", "java"]),
+    )
+    for label, invalid, rule, path in invalid_stage0:
+        if not any((error.validator, list(error.absolute_path)) == (rule, path) for error in stage0.iter_errors(invalid)):
+            problems.append(f"stage-0 evidence {label}: expected rejection at {'.'.join(path) or 'the root'}")
     return problems
 
 

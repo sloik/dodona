@@ -759,6 +759,16 @@ def gap_reuse_is_decided_by_a_kernel_and_checked() -> None:
     if keep_receipt < 0 or any(workflow.find(gate) < 0 or workflow.find(gate) > keep_receipt for gate in
                                ("model_results.py", "check_transcript.py out/model-transcript.json", "tools/keep.py finish")):
         problems.append(".github/workflows/models.yml: the kept artifact must follow the native result and transcript gates")
+    evidence_gate = ".venv-examples/bin/python tools/check_examples.py --evidence-ledger out/dodona.ledger"
+    model_job = workflow_jobs(pinned_workflow_reader()().load(workflow))["kernel-on-every-state"]
+    steps = model_job["steps"]
+    keep_step = next((index for index, step in enumerate(steps) if "tools/keep.py finish" in step.get("run", "")), -1)
+    if "continue-on-error" in model_job or not any(
+        index < keep_step and step.get("run", "").strip().splitlines()[-1:] == [evidence_gate]
+        and "continue-on-error" not in step and step.get("if") in (None, "always()", "${{ always() }}")
+        for index, step in enumerate(steps)
+    ):
+        problems.append(".github/workflows/models.yml: validate the evidence schemas before keeping the ledger")
     import keep
     with tempfile.TemporaryDirectory() as tmp:
         report = pathlib.Path(tmp) / "status.json"
@@ -2211,6 +2221,13 @@ def gap_native_evidence_schema_is_exercised() -> None:
         fields = {"obligation", "preimage", "core_key", "platform", "verdict", "writer", "strength", "level"}
         if set(schema.get("required", [])) != fields:
             problems.append("the native evidence schema must require the eight written fields")
+        history = ROOT / "protocol" / "stage0-evidence.schema.json"
+        if not history.is_file():
+            problems.append("retained stage-0 evidence has no schema")
+        else:
+            stage0 = json.loads(history.read_text(encoding="utf-8"))
+            if set(stage0.get("required", [])) != fields | {"executor", "summary", "unpinned_tools"}:
+                problems.append("the stage-0 evidence schema must describe its distinct written fields")
     commands = {
         '.venv-examples/bin/python tools/run_run_cases.py --record-schema-check --jobs 2 --kernel node kernel2/dodona-kernel2.js '
         '--status "${{ matrix.rust_kernel }} status" -- ${{ matrix.rust_kernel }} run',

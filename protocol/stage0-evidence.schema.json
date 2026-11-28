@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sloik/dodona/protocol/stage0-evidence.schema.json",
+  "title": "Stage-0 evidence body",
+  "description": "Stage-0 evidence carried forward in the protected model ledger, including entries kept before it recorded tool measurements.",
+  "type": "object",
+  "required": [
+    "obligation", "preimage", "core_key", "platform", "verdict", "writer", "strength", "level",
+    "executor", "summary", "unpinned_tools"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "obligation": { "$ref": "project-evidence.schema.json#/properties/obligation" },
+    "preimage": { "$ref": "project-evidence.schema.json#/properties/preimage" },
+    "core_key": { "$ref": "project-evidence.schema.json#/properties/core_key" },
+    "platform": { "$ref": "project-evidence.schema.json#/properties/platform" },
+    "verdict": { "$ref": "project-evidence.schema.json#/properties/verdict" },
+    "writer": { "$ref": "project-evidence.schema.json#/properties/writer" },
+    "strength": { "$ref": "project-evidence.schema.json#/properties/strength" },
+    "level": { "$ref": "project-evidence.schema.json#/properties/level" },
+    "executor": { "type": "string", "description": "The executor that reported the completed run." },
+    "summary": { "type": "object", "description": "The provider's summary of the run." },
+    "unpinned_tools": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "tools_measured": {
+      "type": "object",
+      "description": "The measured files and versions, kept outside the evidence key.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["digest", "version"],
+        "additionalProperties": false,
+        "properties": {
+          "digest": { "type": ["string", "null"], "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$" },
+          "version": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

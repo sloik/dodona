@@ -160,12 +160,13 @@ jobs:
           test "$MODEL_JOB_RESULT" = success
           python3 .github/site/model_results.py out/native-run.json out/native-status.json out/model-transcript.json --report out/model-report.json > out/model-summary.txt
           cat out/model-summary.txt >> "$GITHUB_STEP_SUMMARY"
-      - name: Validate every message of both provider sessions against the schemas
+      - name: Validate both provider sessions and the model ledger against the schemas
         if: always()
         run: |
           python3 -m venv .venv-examples
           .venv-examples/bin/python -m pip install --quiet jsonschema==4.26.0
           .venv-examples/bin/python tools/check_transcript.py out/model-transcript.json out/runs/transcript-collect.json
+          .venv-examples/bin/python tools/check_examples.py --evidence-ledger out/dodona.ledger
       - name: Keep the ledger and the lists of states for the next run
         run: python3 tools/keep.py finish --plan plan.json --ledger out/dodona.ledger --into keep
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
