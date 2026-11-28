@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sloik/dodona/protocol/project-status.schema.json",
+  "title": "Native project status",
+  "description": "The implemented status command result, as defined by the project status conformance contract.",
+  "oneOf": [
+    { "$ref": "#/$defs/output" },
+    { "$ref": "#/$defs/refusal" }
+  ],
+  "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "names": { "type": "array", "items": { "type": "string" } },
+    "project_verdict": { "enum": ["passed", "failed", "unknown", "nothing-required"] },
+    "refusal": {
+      "type": "object",
+      "required": ["refused", "detail"],
+      "additionalProperties": false,
+      "properties": {
+        "refused": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string" }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": [
+        "judged", "report", "coverage", "policy_source", "ledger", "not_served",
+        "not_checkable", "policy_not_applied", "project_doubts", "project_status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "judged": { "$ref": "#/$defs/scenario" },
+        "report": { "$ref": "#/$defs/report" },
+        "coverage": { "$ref": "#/$defs/coverage" },
+        "policy_source": { "type": "string" },
+        "ledger": {
+          "type": "object",
+          "required": ["entries", "torn"],
+          "additionalProperties": false,
+          "properties": {
+            "entries": { "$ref": "#/$defs/count" },
+            "torn": { "type": "boolean" }
+          }
+        },
+        "not_served": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["binding", "capability"],
+            "additionalProperties": false,
+            "properties": {
+              "binding": { "type": "string" },
+              "capability": { "type": "string" }
+            }
+          }
+        },
+        "not_checkable": { "$ref": "#/$defs/names" },
+        "policy_not_applied": { "$ref": "#/$defs/names" },
+        "project_doubts": { "$ref": "#/$defs/names" },
+        "project_status": {
+          "$ref": "#/$defs/project_verdict",
+          "description": "The verdict the command states after accounting for doubts about the judged report."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "project_doubts": { "minItems": 1 } } },
+          "then": { "properties": { "project_status": { "enum": ["failed", "unknown"] } } }
+        }
+      ]
+    },
+    "scenario": {
+      "type": "object",
+      "required": ["kind", "name", "self", "policy", "obligations", "intents", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "status" },
+        "name": { "const": "this-project" },
+        "self": {
+          "type": "object",
+          "required": ["writer", "platform"],
+          "additionalProperties": false,
+          "properties": {
+            "writer": { "type": "string" },
+            "platform": { "type": "string" }
+          }
+        },
+        "policy": { "type": "object" },
+        "obligations": { "type": "object" },
+        "intents": { "type": "object" },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["do"],
+            "additionalProperties": false,
+            "properties": { "do": { "type": "object" } }
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["intents", "thinnest"],
+      "additionalProperties": false,
+      "properties": {
+        "intents": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["own_hard", "subtree_hard", "root", "tree_hard", "floor", "floor_met_only_over_tree"],
+            "additionalProperties": false,
+            "properties": {
+              "own_hard": { "$ref": "#/$defs/count" },
+              "subtree_hard": { "$ref": "#/$defs/count" },
+              "root": { "type": "string" },
+              "tree_hard": { "$ref": "#/$defs/count" },
+              "floor": { "type": "integer", "minimum": 1 },
+              "floor_met_only_over_tree": { "type": "boolean" }
+            }
+          }
+        },
+        "thinnest": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "report": {
+      "type": "object",
+      "required": ["obligations", "intents", "project", "rejected"],
+      "additionalProperties": false,
+      "properties": {
+        "obligations": { "type": "object", "additionalProperties": { "$ref": "#/$defs/obligation" } },
+        "intents": { "type": "object", "additionalProperties": { "$ref": "#/$defs/intent" } },
+        "project": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": { "status": { "$ref": "#/$defs/project_verdict" } }
+        },
+        "rejected": { "$ref": "#/$defs/count" }
+      }
+    },
+    "obligation": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["unknown", "passed", "failed", "conflict"] },
+        "reason": { "const": "never-run" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "unknown" } } },
+          "then": { "required": ["reason"] },
+          "else": { "not": { "required": ["reason"] } }
+        }
+      ]
+    },
+    "intent": {
+      "type": "object",
+      "required": ["status", "baseline", "gates", "score", "shown", "exceptions", "separation"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["draft", "uncovered", "unguarded", "open", "delivered", "fulfilled"] },
+        "baseline": { "$ref": "common.schema.json#/$defs/identity" },
+        "gates": {
+          "type": "object",
+          "required": ["hard", "soft", "deferred", "deferred_open"],
+          "additionalProperties": false,
+          "properties": {
+            "hard": { "$ref": "#/$defs/count" },
+            "soft": { "$ref": "#/$defs/count" },
+            "deferred": { "$ref": "#/$defs/count" },
+            "deferred_open": { "$ref": "#/$defs/count" }
+          }
+        },
+        "score": {
+          "type": "object",
+          "required": ["met", "of"],
+          "additionalProperties": false,
+          "properties": { "met": { "$ref": "#/$defs/count" }, "of": { "$ref": "#/$defs/count" } }
+        },
+        "shown": {
+          "type": "object",
+          "required": ["level", "criterion"],
+          "additionalProperties": false,
+          "properties": {
+            "level": { "$ref": "common.schema.json#/$defs/assurance" },
+            "criterion": { "type": ["string", "null"] }
+          }
+        },
+        "exceptions": {
+          "type": "object",
+          "required": ["counted", "below_floor"],
+          "additionalProperties": false,
+          "properties": {
+            "counted": { "$ref": "#/$defs/count" },
+            "below_floor": { "$ref": "#/$defs/count" }
+          }
+        },
+        "separation": {
+          "type": "object",
+          "required": ["weakest", "act", "apart_or_better", "of"],
+          "additionalProperties": false,
+          "properties": {
+            "weakest": { "$ref": "common.schema.json#/$defs/separation" },
+            "act": { "enum": ["confirm-baseline", "match-check"] },
+            "apart_or_better": { "$ref": "#/$defs/count" },
+            "of": { "$ref": "#/$defs/count" }
+          }
+        }
+      }
+    }
+  }
+}

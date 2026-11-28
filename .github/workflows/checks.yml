@@ -143,6 +143,12 @@ jobs:
       - name: Judge the second kernel's status command with the project cases (decision 0034)
         if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
         run: ${{ matrix.python }} tools/run_status_cases.py --jobs 2 --kernel ${{ matrix.rust_kernel }} -- node kernel2/dodona-kernel2.js status
+      - name: Validate the first kernel's native status schema
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-26.04' && steps.build_seed.outcome == 'success' }}
+        run: .venv-examples/bin/python tools/run_status_cases.py --schema-check --jobs 2 --kernel node kernel2/dodona-kernel2.js -- ${{ matrix.rust_kernel }} status
+      - name: Validate the second kernel's native status schema
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-26.04' && steps.build_seed.outcome == 'success' }}
+        run: .venv-examples/bin/python tools/run_status_cases.py --schema-check --jobs 2 --kernel ${{ matrix.rust_kernel }} -- node kernel2/dodona-kernel2.js status
       # The reference run and status commands, both driving the first kernel, judged with the run cases; each
       # report is recomputed by the second kernel, so the kernel that ran the project does not grade it.
       - name: Judge the reference run command with the run cases (decision 0034)
@@ -154,6 +160,12 @@ jobs:
       - name: Judge the second kernel's run command with the project cases
         if: ${{ !cancelled() && steps.build_seed.outcome == 'success' }}
         run: ${{ matrix.python }} tools/run_run_cases.py --jobs 2 --kernel ${{ matrix.rust_kernel }} --status "node kernel2/dodona-kernel2.js status" -- node kernel2/dodona-kernel2.js run
+      - name: Validate the first kernel's newly written evidence
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-26.04' && steps.build_seed.outcome == 'success' }}
+        run: .venv-examples/bin/python tools/run_run_cases.py --record-schema-check --jobs 2 --kernel node kernel2/dodona-kernel2.js --status "${{ matrix.rust_kernel }} status" -- ${{ matrix.rust_kernel }} run
+      - name: Validate the second kernel's newly written evidence
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-26.04' && steps.build_seed.outcome == 'success' }}
+        run: .venv-examples/bin/python tools/run_run_cases.py --record-schema-check --jobs 2 --kernel ${{ matrix.rust_kernel }} --status "node kernel2/dodona-kernel2.js status" -- node kernel2/dodona-kernel2.js run
       - name: Check the second kernel's run module
         run: node --test kernel2/test-run.js
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

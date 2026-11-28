@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sloik/dodona/protocol/project-evidence.schema.json",
+  "title": "Native project evidence body",
+  "description": "Evidence appended by a native project run. The ledger envelope adds its kind and previous identity.",
+  "type": "object",
+  "required": ["obligation", "preimage", "core_key", "platform", "verdict", "writer", "strength", "level"],
+  "additionalProperties": false,
+  "properties": {
+    "obligation": { "type": "string" },
+    "preimage": { "$ref": "#/$defs/preimage" },
+    "core_key": { "$ref": "common.schema.json#/$defs/identity" },
+    "platform": {
+      "type": "string",
+      "description": "The platform label used by the project verdict, in the form os/arch."
+    },
+    "verdict": { "enum": ["passed", "failed"] },
+    "writer": { "type": "string" },
+    "strength": {
+      "type": "object",
+      "description": "The strength object returned by the provider, which can carry its own annotations.",
+      "required": ["class", "rank"],
+      "properties": {
+        "class": { "type": "string" },
+        "rank": { "enum": ["documented", "sampled", "bounded", "exhaustive"] }
+      }
+    },
+    "level": { "enum": ["asserted", "sampled", "bounded", "proven"] }
+  },
+  "$defs": {
+    "identities": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/identity" } },
+    "preimage": {
+      "type": "object",
+      "required": ["obligation", "kind", "inputs", "provider"],
+      "additionalProperties": false,
+      "properties": {
+        "obligation": { "$ref": "common.schema.json#/$defs/identity" },
+        "kind": { "enum": ["check", "build", "conformance"] },
+        "inputs": {
+          "type": "object",
+          "required": ["specified_by", "targets", "closure", "config", "expect", "tools"],
+          "additionalProperties": false,
+          "properties": {
+            "specified_by": { "$ref": "#/$defs/identities" },
+            "targets": { "$ref": "#/$defs/identities" },
+            "closure": { "$ref": "#/$defs/identities" },
+            "config": { "$ref": "common.schema.json#/$defs/identity" },
+            "expect": { "type": "string" },
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "digest"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string" },
+                  "digest": { "$ref": "common.schema.json#/$defs/identity" }
+                }
+              }
+            }
+          }
+        },
+        "provider": {
+          "type": "object",
+          "required": ["name", "version", "protocol"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" },
+            "protocol": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

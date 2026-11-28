@@ -2149,6 +2149,77 @@ def gap_status_report_names_policy_on_pass() -> None:
         problems.append("status.schema.json: a passed project must require policy.identity")
 
 
+def gap_status_reports_missing_evidence_honestly() -> None:
+    """The status contract must preserve absence without raising the shown grade."""
+    schema = json.loads((ROOT / "protocol" / "status.schema.json").read_text(encoding="utf-8"))
+    intent = schema["$defs"]["intent_status"]["properties"]
+    shown = intent["shown"]
+    link_condition = {
+        "if": {"properties": {"level": {"not": {"const": "none"}}}},
+        "then": {"properties": {"weakest_link": {"type": "string"}}},
+    }
+    if ({"type": "null"} not in shown["properties"]["weakest_link"].get("anyOf", [])
+            or link_condition not in shown.get("allOf", [])):
+        problems.append("status.schema.json: a missing weakest link is allowed only at shown level none")
+    separation = intent["separation"]
+    source = separation["properties"]["weakest"]["properties"]["source"]
+    source_condition = {
+        "if": {"anyOf": [{"required": ["act"]},
+                         {"properties": {"weakest": {"properties": {"level": {"not": {"const": "self"}}}}}}]},
+        "then": {"properties": {"weakest": {"properties": {"source": {"type": "string"}}}}},
+    }
+    if {"type": "null"} not in source.get("anyOf", []) or source_condition not in separation.get("allOf", []):
+        problems.append("status.schema.json: a missing separation source is allowed only for a default self grade")
+
+
+def gap_native_status_schema_is_exercised() -> None:
+    """The schema for the native status command must be exercised against both actual kernels."""
+    path = ROOT / "protocol" / "project-status.schema.json"
+    if not path.is_file():
+        problems.append("the native project status command has no schema")
+    else:
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        output = schema.get("$defs", {}).get("output", {})
+        if set(output.get("required", [])) != run_status_cases.OUT_KEYS:
+            problems.append("the native status schema must require the exact status output fields")
+    commands = {
+        ".venv-examples/bin/python tools/run_status_cases.py --schema-check --jobs 2 "
+        "--kernel node kernel2/dodona-kernel2.js -- ${{ matrix.rust_kernel }} status",
+        ".venv-examples/bin/python tools/run_status_cases.py --schema-check --jobs 2 "
+        "--kernel ${{ matrix.rust_kernel }} -- node kernel2/dodona-kernel2.js status",
+    }
+    if commands - linux_schema_check_commands():
+        problems.append("the Linux repository job must validate the native status schema against both kernels")
+
+
+def linux_schema_check_commands() -> set[str]:
+    workflow = (ROOT / ".github/workflows/checks.yml").read_text(encoding="utf-8")
+    jobs = workflow_jobs(pinned_workflow_reader()().load(workflow))
+    condition = "${{ !cancelled() && matrix.os == 'ubuntu-26.04' && steps.build_seed.outcome == 'success' }}"
+    return {step["run"] for step in jobs["checks"]["steps"]
+            if step.get("if") == condition and "continue-on-error" not in step and isinstance(step.get("run"), str)}
+
+
+def gap_native_evidence_schema_is_exercised() -> None:
+    """New native verdict records have a distinct schema and both kernels exercise it."""
+    path = ROOT / "protocol" / "project-evidence.schema.json"
+    if not path.is_file():
+        problems.append("the native project's newly written evidence has no schema")
+    else:
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        fields = {"obligation", "preimage", "core_key", "platform", "verdict", "writer", "strength", "level"}
+        if set(schema.get("required", [])) != fields:
+            problems.append("the native evidence schema must require the eight written fields")
+    commands = {
+        '.venv-examples/bin/python tools/run_run_cases.py --record-schema-check --jobs 2 --kernel node kernel2/dodona-kernel2.js '
+        '--status "${{ matrix.rust_kernel }} status" -- ${{ matrix.rust_kernel }} run',
+        '.venv-examples/bin/python tools/run_run_cases.py --record-schema-check --jobs 2 --kernel ${{ matrix.rust_kernel }} '
+        '--status "node kernel2/dodona-kernel2.js status" -- node kernel2/dodona-kernel2.js run',
+    }
+    if commands - linux_schema_check_commands():
+        problems.append("the Linux repository job must validate newly written evidence from both native kernels")
+
+
 def _fits(value, schema: dict, defs: dict, where: str) -> None:
     """A small structural check of data against the subset of JSON Schema the policy schema uses."""
     if "$ref" in schema:
@@ -2322,7 +2393,8 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
               gap_status_keeps_literal_obligation_names, gap_batch_wait_respects_site_and_run_limits,
-              gap_thin_coverage_is_shown, gap_native_tree_promotion_is_exercised, gap_status_report_names_policy_on_pass,
+              gap_thin_coverage_is_shown, gap_native_tree_promotion_is_exercised, gap_status_report_names_policy_on_pass, gap_status_reports_missing_evidence_honestly,
+              gap_native_status_schema_is_exercised, gap_native_evidence_schema_is_exercised,
               gap_project_intent_criteria_have_a_schema, gap_documents_follow_the_code]
 
 
@@ -4793,12 +4865,149 @@ class JudgeTests(unittest.TestCase):
         self.assertFalse(check_models.judge(self.viol, 0, self.done)["match"])
 
 
+class StagedLockTests(unittest.TestCase):
+    platform = {"os": "linux", "arch": "x86_64", "libc": "gnu"}
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.root = pathlib.Path(folder.name)
+        self.source = self.root / "releases.json"
+        self.lock = self.root / "lock.json"
+
+    def entry(self, name, *, kind="tool", requires=(), platform=None):
+        tree = self.root / "staged" / name
+        tree.mkdir(parents=True)
+        artifact = tree / "program.exe"
+        content = name.encode("utf-8")
+        artifact.write_bytes(content)
+        artifact.chmod(0o755)
+        return {"kind": kind, "name": name, "version": "1.2.3", "requires": list(requires),
+                "platforms": [{"platform": platform or self.platform, "tree": tree.relative_to(self.root).as_posix(),
+                               "entry": artifact.name, "upstream": {"source": f"https://fixture.invalid/{name}",
+                               "published_digest": "sha256:" + hashlib.sha256(content).hexdigest()}}]}
+
+    def resolve(self, entries, *, baseline=None):
+        self.source.write_text(json.dumps({"entries": entries}), encoding="utf-8")
+        command = [sys.executable, str(ROOT / "tools/resolve_staged_lock.py"), str(self.source), str(self.lock)]
+        if baseline is not None:
+            command.extend(("--preserve", str(baseline)))
+        return subprocess.run(command, capture_output=True, text=True, timeout=10)
+
+    def test_measured_pins_are_sorted_and_contain_the_exact_transitive_requirements(self):
+        provider = self.entry("checker", kind="provider", requires=("host",))
+        host = self.entry("host", requires=("runtime",))
+        runtime = self.entry("runtime")
+        for entry in (provider, host, runtime):
+            pin = entry["platforms"][0]
+            entry["platforms"].insert(0, dict(pin, platform={"os": "windows", "arch": "x86_64"}))
+
+        result = self.resolve([runtime, provider, host])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        before = self.lock.read_bytes()
+        lock = json.loads(before)
+        self.assertEqual(lock["lock"], "0.2")
+        self.assertEqual([(entry["kind"], entry["name"]) for entry in lock["entries"]],
+                         [("provider", "checker"), ("tool", "host"), ("tool", "runtime")])
+        checker = lock["entries"][0]
+        self.assertEqual(checker["requires"], [{"name": "host", "version": "1.2.3"}, {"name": "runtime", "version": "1.2.3"}])
+        self.assertEqual([pin["platform"] for pin in checker["platforms"]], [self.platform, {"os": "windows", "arch": "x86_64"}])
+        self.assertEqual(checker["platforms"][0], {
+            "platform": self.platform, "entry": "program.exe",
+            "digest": "sha256:6e20c903230ec0c4de00b4fbc5c8f600d2d98e24c5ac92cee7810454e2252c1e",
+            "upstream": provider["platforms"][0]["upstream"],
+        })
+        for entry in (provider, host, runtime):
+            entry["platforms"].reverse()
+        result = self.resolve([host, provider, runtime])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.lock.read_bytes(), before)
+
+    def test_adding_a_platform_retains_the_existing_pin(self):
+        entry = self.entry("checker")
+        result = self.resolve([entry])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        original = self.lock.read_bytes()
+        baseline = self.root / "baseline.json"
+        baseline.write_bytes(original)
+        before, = json.loads(original)["entries"][0]["platforms"]
+        windows = self.entry("windows-artifact", platform={"os": "windows", "arch": "x86_64"})
+        entry["platforms"].extend(windows["platforms"])
+        result = self.resolve([entry], baseline=baseline)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        extended = self.lock.read_bytes()
+        prior, new = json.loads(extended)["entries"][0]["platforms"]
+        self.assertEqual(prior, before)
+        self.assertEqual(new["platform"], windows["platforms"][0]["platform"])
+        self.assertNotEqual(prior["digest"], new["digest"])
+
+        alternate = self.entry("alternate")
+        for changed in (windows["platforms"], alternate["platforms"] + windows["platforms"]):
+            with self.subTest(platforms=changed):
+                refusal = self.resolve([dict(entry, platforms=changed)], baseline=baseline)
+                self.assertNotEqual(refusal.returncode, 0)
+                self.assertIn("previous-pin-changed", refusal.stderr)
+                self.assertEqual(self.lock.read_bytes(), extended)
+                self.assertEqual(baseline.read_bytes(), original)
+
+        refusal = self.resolve([entry], baseline=self.lock)
+        self.assertNotEqual(refusal.returncode, 0)
+        self.assertIn("output-is-preserved-lock", refusal.stderr)
+        self.assertEqual(self.lock.read_bytes(), extended)
+
+    def test_unavailable_exact_platforms_and_invalid_dependencies_are_refused(self):
+        provider = self.entry("checker", kind="provider", requires=("host",))
+        host = self.entry("host", requires=("runtime",))
+        runtime = self.entry("runtime", platform={"os": "linux", "arch": "x86_64"})
+        cyclic_pin = dict(runtime["platforms"][0], platform=self.platform)
+        cyclic_runtime = dict(runtime, platforms=[cyclic_pin], requires=["host"])
+        for entries, reason in (([provider, host], "missing-requirement"), ([provider, host, runtime], "missing-platform"),
+                                ([provider, host, cyclic_runtime], "cyclic-requirement")):
+            with self.subTest(reason=reason):
+                self.lock = self.root / f"{reason}.json"
+                result = self.resolve(entries)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn(reason, result.stderr)
+                self.assertFalse(self.lock.exists())
+
+    def test_changed_bytes_and_extra_files_leave_the_previous_lock(self):
+        entry = self.entry("checker")
+        result = self.resolve([entry])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        before = self.lock.read_bytes()
+        tree = self.root / "staged/checker"
+        extra = tree / "extra.dll"
+        extra.write_bytes(b"unlisted")
+        result = self.resolve([entry])
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("unexpected-tree-contents", result.stderr)
+        self.assertEqual(self.lock.read_bytes(), before)
+        extra.unlink()
+        (tree / "program.exe").write_bytes(b"different")
+        result = self.resolve([entry])
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("published-digest-mismatch", result.stderr)
+        self.assertEqual(self.lock.read_bytes(), before)
+
+    def test_duplicate_pins_and_nonportable_stage_paths_are_refused(self):
+        entry = self.entry("checker")
+        pin = entry["platforms"][0]
+        for pins, reason in (([pin, pin], "duplicate-platform"), ([dict(pin, tree="../stage")], "bad-source")):
+            with self.subTest(reason=reason):
+                self.lock = self.root / f"{reason}.json"
+                result = self.resolve([dict(entry, platforms=pins)])
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn(reason, result.stderr)
+                self.assertFalse(self.lock.exists())
+
+
 def main() -> int:
     for check in [check_json_and_toml, check_links, check_line_endings, check_model_cases,
                   check_indexes] + GAP_CHECKS:
         check()
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(JudgeTests)
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(ToolPinTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(StagedLockTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitSupervisorTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(PlantRecoveryTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(KitAdequacyTests))

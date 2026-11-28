@@ -362,7 +362,11 @@
               "$ref": "common.schema.json#/$defs/assurance"
             },
             "weakest_link": {
-              "$ref": "messages.schema.json#/$defs/evidence_link"
+              "description": "The weakest evidence link, or null when the shown level is none and no link is known.",
+              "anyOf": [
+                { "$ref": "messages.schema.json#/$defs/evidence_link" },
+                { "type": "null" }
+              ]
             },
             "sample": {
               "type": "object",
@@ -383,7 +387,13 @@
                 }
               }
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "level": { "not": { "const": "none" } } } },
+              "then": { "properties": { "weakest_link": { "type": "string" } } }
+            }
+          ]
         },
         "agreed": {
           "type": "object",
@@ -432,7 +442,11 @@
                   "$ref": "common.schema.json#/$defs/separation"
                 },
                 "source": {
-                  "$ref": "common.schema.json#/$defs/fact_source"
+                  "description": "The source of the separation fact, or null for the default self grade when no act is recorded.",
+                  "anyOf": [
+                    { "$ref": "common.schema.json#/$defs/fact_source" },
+                    { "type": "null" }
+                  ]
                 }
               }
             },
@@ -454,7 +468,18 @@
               "type": "integer",
               "minimum": 0
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "anyOf": [
+                  { "required": ["act"] },
+                  { "properties": { "weakest": { "properties": { "level": { "not": { "const": "self" } } } } } }
+                ]
+              },
+              "then": { "properties": { "weakest": { "properties": { "source": { "type": "string" } } } } }
+            }
+          ]
         },
         "exceptions": {
           "type": "integer",
