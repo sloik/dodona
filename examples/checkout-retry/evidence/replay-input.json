@@ -1,0 +1,8 @@
+{
+  "order": "checkout-pilot-order",
+  "events": ["timeout-first", "retry", "reply-2", "reply-1"],
+  "cases": [
+    {"name": "acknowledged debit", "acknowledgeDebit": true},
+    {"name": "debit with no paid acknowledgement", "acknowledgeDebit": false}
+  ]
+}

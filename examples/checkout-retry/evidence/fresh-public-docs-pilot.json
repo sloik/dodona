@@ -1,0 +1,339 @@
+{
+  "review_grade": "helper",
+  "release": "fa51d4730718b8aac41c54e97d1e6dbb7f93e839",
+  "scratch_baseline": "6548de441fde2759ee9dcfc75d8e81b3672c4985",
+  "scratch_candidate": "c3d07ff13e7ab0afb9ba60a9fd005ca7df0a5646",
+  "changed_file": "checkout/checkout.js",
+  "runtime": {
+    "identity": "sha256:d4cd917f05a5730ffda8a203e32fb8f9b70f79213fff1fafb045e438db8a6c06",
+    "platform": {
+      "arch": "aarch64",
+      "os": "macos"
+    },
+    "version": "26.10.0"
+  },
+  "model": {
+    "bounds": {
+      "attempts": 2,
+      "orders": 1,
+      "replies_per_attempt": 1,
+      "timeouts": 1
+    },
+    "progress_assumptions": [
+      "Fake payments can charge and the model can advance processing",
+      "The scheduler sends the retry after the simulated timeout and delivers both processed replies",
+      "Settlement is enabled and responds to success",
+      "Existential witness. The model admits stuttering and asserts no fairness or unconditional liveness"
+    ],
+    "cases": {
+      "BaselineReachable": {
+        "case_job": "53bd558f7dfd4b31aeae46841b72fd4a",
+        "module_sha256": "sha256:de9c505b74c179a2f7ed1c9f520557b9e6b5f242c3114cf86afdfc2897212d0b",
+        "config_sha256": "sha256:16d3678a4354ad262ec876f4dc5c548839ef98358b25daaebdd854c668157232",
+        "native_exit": 12,
+        "named_invariant": "NoPaidAfterRetryLateReply",
+        "bounded_search": {
+          "depth": 8,
+          "distinct": 13,
+          "generated": 13,
+          "queued": 2
+        },
+        "raw_output_sha256": "sha256:798a55b3d8d73138db11503abc84779d6e9e3ac2efe3457d03c7842679c42e37",
+        "recorded_verdict": "passed",
+        "core_key": "sha256:49e7389644c5e2f47a19223a152bc35275202cfdb96e8de4b867d15aa2dba03a"
+      },
+      "BaselineSafety": {
+        "case_job": "e2ecd772fd1f4fd1aeb945367acfed12",
+        "module_sha256": "sha256:de9c505b74c179a2f7ed1c9f520557b9e6b5f242c3114cf86afdfc2897212d0b",
+        "config_sha256": "sha256:c6cd8b79a5fdda78b5c06a154a0cc467e34213a27974a7c730ff571d6c2b3784",
+        "native_exit": 0,
+        "named_invariant": null,
+        "bounded_search": {
+          "depth": 8,
+          "distinct": 14,
+          "generated": 15,
+          "queued": 0
+        },
+        "raw_output_sha256": "sha256:920162843cba9e52bebf3b3edcf6562e2783ffc4459aec6b4cf5ffca4173ae3b",
+        "recorded_verdict": "passed",
+        "core_key": "sha256:368d205039ecbbbe8f3fba17f629d76b9c82b2446627a33a46635bd0b02b1c46"
+      },
+      "DuplicateCharge": {
+        "case_job": "21025fff399448b39c345ec510c08486",
+        "module_sha256": "sha256:de9c505b74c179a2f7ed1c9f520557b9e6b5f242c3114cf86afdfc2897212d0b",
+        "config_sha256": "sha256:5062db90e57d841ea3c2a9282d2bd47c00b7e73defe6e4378ab03a33deedc82b",
+        "native_exit": 12,
+        "named_invariant": "AtMostOneCharge",
+        "bounded_search": {
+          "depth": 6,
+          "distinct": 8,
+          "generated": 8,
+          "queued": 1
+        },
+        "raw_output_sha256": "sha256:e6026e00c13c9b21cde8e427588f9dfd20083aa7a3399cb32cb231f295d31375",
+        "recorded_verdict": "passed",
+        "core_key": "sha256:cbd1447030f75c33e6f2240d4266746cf9df5df44c1ada039328b80d7f3a3f8c"
+      },
+      "NeverChargeReachability": {
+        "case_job": "24f34c764fac465e809fa491192ab7ef",
+        "module_sha256": "sha256:de9c505b74c179a2f7ed1c9f520557b9e6b5f242c3114cf86afdfc2897212d0b",
+        "config_sha256": "sha256:1f1782c1a3a6bf404c814982f355865b16fcacd47b207a03063bbbd95b31a815",
+        "native_exit": 0,
+        "named_invariant": null,
+        "bounded_search": {
+          "depth": 8,
+          "distinct": 14,
+          "generated": 15,
+          "queued": 0
+        },
+        "raw_output_sha256": "sha256:6cebf4908046ade3876c70c3834c17bfe40255352a6c4f9d259e15b1d3651983",
+        "recorded_verdict": "failed",
+        "core_key": "sha256:ba82209825777d4d6e1bdcb0c6aa3480d8e98adb3d169b97afe26d95cf881d16"
+      },
+      "NeverChargeSafety": {
+        "case_job": "92e9fcd3930d4fa3a1bb85cb4213987d",
+        "module_sha256": "sha256:de9c505b74c179a2f7ed1c9f520557b9e6b5f242c3114cf86afdfc2897212d0b",
+        "config_sha256": "sha256:313581d42f2fedde4c65c340e7dbec4aba08887dc86f0b89a39304398881689c",
+        "native_exit": 0,
+        "named_invariant": null,
+        "bounded_search": {
+          "depth": 8,
+          "distinct": 14,
+          "generated": 15,
+          "queued": 0
+        },
+        "raw_output_sha256": "sha256:cccaa3c778a2b0e5f9bd76bd19064d9a029bd07ff424613243492194adb24e52",
+        "recorded_verdict": "passed",
+        "core_key": "sha256:b38ea1aff5b2bb7f7770343131da05df82f331991d113354f6ddeb2ed73af68a"
+      },
+      "NeverSettlePending": {
+        "case_job": "508ba63edcb2401e86301d99c2f7ef06",
+        "module_sha256": "sha256:de9c505b74c179a2f7ed1c9f520557b9e6b5f242c3114cf86afdfc2897212d0b",
+        "config_sha256": "sha256:0d33a000076e1362839c8ce5ee5d87b1191aae1e91d39bfc99f99c503e4b8a4b",
+        "native_exit": 12,
+        "named_invariant": "NoChargedPendingAfterRetryLateReply",
+        "bounded_search": {
+          "depth": 8,
+          "distinct": 13,
+          "generated": 13,
+          "queued": 2
+        },
+        "raw_output_sha256": "sha256:5116f79bf7fd8c1f528e4c649b6b425520b969da3b3fbe6d1a99cca58acc80e5",
+        "recorded_verdict": "passed",
+        "core_key": "sha256:b79cace9b812a891b28986228b4a0854b31491f921007ce759c35f5ae2647915"
+      },
+      "NeverSettleReachability": {
+        "case_job": "95e8c8bbfc6f45da8ad441e092d34580",
+        "module_sha256": "sha256:de9c505b74c179a2f7ed1c9f520557b9e6b5f242c3114cf86afdfc2897212d0b",
+        "config_sha256": "sha256:3f480172fc297d91d35c6c625482f17e960e1f67c79ab5f1e958faf047f3a521",
+        "native_exit": 0,
+        "named_invariant": null,
+        "bounded_search": {
+          "depth": 8,
+          "distinct": 14,
+          "generated": 15,
+          "queued": 0
+        },
+        "raw_output_sha256": "sha256:dc9e722e1f537eefd28e3146d3eed8ae1aefab9ea390ade98d0b534291a86b12",
+        "recorded_verdict": "failed",
+        "core_key": "sha256:98119d519c4b02499333ee7eda924e0a4daf11bac4799bcac007cd6017e12fbf"
+      },
+      "NeverSettleSafety": {
+        "case_job": "d7aeafab510e470dbb8f56e9b6e4b536",
+        "module_sha256": "sha256:de9c505b74c179a2f7ed1c9f520557b9e6b5f242c3114cf86afdfc2897212d0b",
+        "config_sha256": "sha256:d2c0354f53c26f323dcc8b2b2a5392bc3cab5fdce5aba254a5f1d9eba6593f51",
+        "native_exit": 0,
+        "named_invariant": null,
+        "bounded_search": {
+          "depth": 8,
+          "distinct": 14,
+          "generated": 15,
+          "queued": 0
+        },
+        "raw_output_sha256": "sha256:a6da6703cc5d14843151a9063df6e608153af1d8d544abaea429853ab8bf9b6a",
+        "recorded_verdict": "passed",
+        "core_key": "sha256:c189201510fc66178da0bc44d804b62ad0106a2d923201cb299ba9eaf8afcdb7"
+      }
+    },
+    "ledger_sha256": "sha256:df7d1494cb624313a9e6df23d88ea4adf9aa7e0b35953747d3c5bbced63a6513",
+    "reuse_after_code_edit": {
+      "checked": 0,
+      "error": 0,
+      "failed": 0,
+      "not_checkable": 0,
+      "obligations": 8,
+      "passed": 0,
+      "refused": 0,
+      "reused": 8,
+      "unavailable": 0,
+      "unsupported": 0
+    }
+  },
+  "sample_phases": {
+    "baseline": {
+      "project_status": "unknown",
+      "intent_status": "draft",
+      "intent_shown": {
+        "criterion": "1",
+        "level": "sampled"
+      },
+      "checks": {
+        "checkout/progress.test.js::a successful fake capture leaves the checkout settled": {
+          "core_key": "sha256:4206478d194d92fdfd4a70bf42c90f083913c3192e43a58a5457ce0fbafca30e",
+          "status": "passed"
+        },
+        "checkout/safety.test.js::at most one fake capture through timeout retry and late reply": {
+          "core_key": "sha256:e156841a1b7bb6a714aacaa0a1aa76cd46eb3ef3525790466b538a08b71b7ddf",
+          "status": "passed"
+        }
+      },
+      "reader_report_sha256": {
+        "javascript": "sha256:eaa39040c5f05bbc5f779ef97b756b9190c2237aa4b4331a5b713b7142e4785b",
+        "rust": "sha256:08bdde6f6ea3ba5964b20dce8acbd245304d72e2410c487a39f5f9ea3cfabd2e"
+      }
+    },
+    "drift-after": {
+      "project_status": "failed",
+      "intent_status": "draft",
+      "intent_shown": {
+        "criterion": "2",
+        "level": "none"
+      },
+      "checks": {
+        "checkout/progress.test.js::a successful fake capture leaves the checkout settled": {
+          "core_key": "sha256:9432af25c15245e6231650b1309e4574a6f6d39d2713d3a31ef34b569f0088ac",
+          "status": "failed"
+        },
+        "checkout/safety.test.js::at most one fake capture through timeout retry and late reply": {
+          "core_key": "sha256:a00a86d41855aefd9a2f0ddccc6435cf9ad27edf577d008b87a02963eedac312",
+          "status": "passed"
+        }
+      },
+      "reader_report_sha256": {
+        "javascript": "sha256:d842726aef94e243ef37f4e3f66564d6f545c58cbde4aa98da01c0df988ca6db",
+        "rust": "sha256:16653c35aff3bf5c18ae74566b4b6c79aebc3a6fca8fe255f4cee4bcd2e13eaf"
+      }
+    },
+    "drift-before": {
+      "project_status": "unknown",
+      "intent_status": "draft",
+      "intent_shown": {
+        "criterion": "1",
+        "level": "none"
+      },
+      "checks": {
+        "checkout/progress.test.js::a successful fake capture leaves the checkout settled": {
+          "core_key": "sha256:9432af25c15245e6231650b1309e4574a6f6d39d2713d3a31ef34b569f0088ac",
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "checkout/safety.test.js::at most one fake capture through timeout retry and late reply": {
+          "core_key": "sha256:a00a86d41855aefd9a2f0ddccc6435cf9ad27edf577d008b87a02963eedac312",
+          "reason": "never-run",
+          "status": "unknown"
+        }
+      },
+      "reader_report_sha256": {
+        "javascript": "sha256:133155856c34941e836dc46f0016a3fe7f4aa8abb4c092032010ac384c010471",
+        "rust": "sha256:bf085dbd44b1c70bc39700a775d64ddf2cee48e61919c6d2457e3a972e36768a"
+      }
+    }
+  },
+  "sample_ledger_sha256": "sha256:3471978c1745cb87e765857972cf0bada512a1b54d84f3af6879a6cf8ae840d4",
+  "replay_sha256": "sha256:ae71df2f6390c24c3288f128ac3014b1539f0153abd117eddbe75f020287cd4a",
+  "archive_sha256": "sha256:4ea2115ac9fe47be1a69f6ff59aca3363a9e3f1548350f0822f563fa2ffa73a3",
+  "fresh_replay": [
+    {
+      "environment": "ordinary defaults",
+      "match": false,
+      "differences": [
+        {
+          "index": 5,
+          "field": "status"
+        },
+        {
+          "index": 6,
+          "field": "status"
+        }
+      ],
+      "reference_end": {
+        "action": "reply",
+        "attempt": 1,
+        "late": true,
+        "attemptCharge": "fake-charge-1",
+        "charges": [
+          "fake-charge-1"
+        ],
+        "status": "settled"
+      },
+      "candidate_end": {
+        "action": "reply",
+        "attempt": 1,
+        "late": true,
+        "attemptCharge": "fake-charge-1",
+        "charges": [
+          "fake-charge-1"
+        ],
+        "status": "pending"
+      }
+    },
+    {
+      "environment": "settlement unavailable for both",
+      "match": true,
+      "differences": [],
+      "reference_end": {
+        "action": "reply",
+        "attempt": 1,
+        "late": true,
+        "attemptCharge": "fake-charge-1",
+        "charges": [
+          "fake-charge-1"
+        ],
+        "status": "pending"
+      },
+      "candidate_end": {
+        "action": "reply",
+        "attempt": 1,
+        "late": true,
+        "attemptCharge": "fake-charge-1",
+        "charges": [
+          "fake-charge-1"
+        ],
+        "status": "pending"
+      }
+    }
+  ],
+  "published_artifacts": {
+    "evidence/fresh-drift.patch": "0db8f5738fb37db5bb11d8d5bfcc85620034e33c597481b9fc49f4d65a2cccf2",
+    "evidence/fresh-model-ledger.txt": "df7d1494cb624313a9e6df23d88ea4adf9aa7e0b35953747d3c5bbced63a6513",
+    "evidence/fresh-model-witnesses.txt": "d2faf3b787f40433510954c2f78c64b1f47cd669c744666851b989730b744289",
+    "evidence/fresh-native-reports.json": "0b7f16f1cb9ba177f949a69e3bbb73fa3358592bd982fbdbc63d696522df481e",
+    "evidence/fresh-replay.json": "ae71df2f6390c24c3288f128ac3014b1539f0153abd117eddbe75f020287cd4a",
+    "evidence/fresh-sample-ledger.txt": "3471978c1745cb87e765857972cf0bada512a1b54d84f3af6879a6cf8ae840d4",
+    "evidence/fresh-samples-before-drift.txt": "6e35670be0ce107a34bd9d9bada27453f68625c269ca4a709aa372a0ef3e894f",
+    "evidence/linked-baseline-ledger.txt": "ec981ef5d0c3fc26b6800d8406b963fad4fc302038d7a4253633f06f10090fef",
+    "evidence/linked-missing-witness-ledger.txt": "ae57f764671c76cf2c631bc43b974d2dde55051ed0dc8a92aad414b960259b95",
+    "evidence/linked-owner-ledger.txt": "7e11894d2296b010d6d04c59e82d6c21c7fb192cd8e99175d16f3c4ecc464707",
+    "evidence/linked-reachability-status.json": "de4c833728413f54236afacfff2d61b8f8d05445842e621afc0b544e9ddc47e0",
+    "evidence/linked-rerun-ledger.txt": "c8907116cbcc94fdc9f2e4af2e67bff4f697773ea0d62cbe3abb8e69755774bb",
+    "evidence/linked-status-request.json": "83005ec307dd2cf61bac444bdc7430e4739dc5c2cb36e724fd88a2c2a2f3bf1f",
+    "evidence/replay-input.json": "98483206489ac3343f1fd6745f78b14c4a72d99a71fc788ae09310b2111eef95",
+    "fresh-trial/checkout/checkout.js": "3bfec46b9d6a94505431b300a36bc083bdb09ccbfbe6e8ac8eff3db078ceac3d",
+    "fresh-trial/checkout/progress.test.js": "536d7ffe5d21e12d003e984a9106335c4b62efe5d39a15d13888e7a6d9457147",
+    "fresh-trial/checkout/retry-late.json": "f34b4391363482187c58a3111b00935f70065a7bcf11380fbe1b180abe2dcc98",
+    "fresh-trial/checkout/safety.test.js": "1f586bbbf23732c3a1ac59ba72b59e40cc39ee5664f92ed4c49307c3f398364e",
+    "fresh-trial/dodona.toml": "784cd5a1aa47888767fad088c280637ccec668972ab47601965a95e68b9c4ad1",
+    "fresh-trial/formal/BaselineReachable.cfg": "16d3678a4354ad262ec876f4dc5c548839ef98358b25daaebdd854c668157232",
+    "fresh-trial/formal/BaselineSafety.cfg": "c6cd8b79a5fdda78b5c06a154a0cc467e34213a27974a7c730ff571d6c2b3784",
+    "fresh-trial/formal/Checkout.tla": "de9c505b74c179a2f7ed1c9f520557b9e6b5f242c3114cf86afdfc2897212d0b",
+    "fresh-trial/formal/DuplicateCharge.cfg": "5062db90e57d841ea3c2a9282d2bd47c00b7e73defe6e4378ab03a33deedc82b",
+    "fresh-trial/formal/NeverChargeReachability.cfg": "1f1782c1a3a6bf404c814982f355865b16fcacd47b207a03063bbbd95b31a815",
+    "fresh-trial/formal/NeverChargeSafety.cfg": "313581d42f2fedde4c65c340e7dbec4aba08887dc86f0b89a39304398881689c",
+    "fresh-trial/formal/NeverSettlePending.cfg": "0d33a000076e1362839c8ce5ee5d87b1191aae1e91d39bfc99f99c503e4b8a4b",
+    "fresh-trial/formal/NeverSettleReachability.cfg": "3f480172fc297d91d35c6c625482f17e960e1f67c79ab5f1e958faf047f3a521",
+    "fresh-trial/formal/NeverSettleSafety.cfg": "d2c0354f53c26f323dcc8b2b2a5392bc3cab5fdce5aba254a5f1d9eba6593f51",
+    "fresh-trial/formal/expected.json": "67f5c17acf9e2b4297f21f95b82a26029e441ca8ec77293a2d354b59e3d68112",
+    "fresh-trial/intents/0001-checkout.md": "eef20ad8ce0b241de373861c7d10057545dab871d1d52097ae451c803bbff855",
+    "fresh-trial/policy.toml": "332f21f653a3ca46f4c4138fa0809e3054665311fa104eb7090814b7b648adeb"
+  }
+}

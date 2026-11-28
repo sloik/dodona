@@ -1,0 +1,23 @@
+[project]
+name = "checkout-retry-pilot"
+config = "0.2"
+eol = "lf"
+bom = "forbidden"
+
+[[binding]]
+name = "checkout-samples"
+provider = "dodona.node-test"
+capabilities = ["obligation.enumerate", "obligation.check"]
+match = ["checkout/*.js", "checkout/retry-late.json"]
+
+[[binding]]
+name = "checkout-intent"
+provider = "dodona.intent.markdown"
+capabilities = ["intent.index"]
+match = ["intents/*.md"]
+
+[[binding]]
+name = "checkout-model"
+provider = "dodona.tla"
+capabilities = ["obligation.enumerate", "obligation.check"]
+match = ["formal/Checkout.tla", "formal/*.cfg", "formal/expected.json"]

@@ -1,0 +1,45 @@
+{
+  "model": "Checkout.tla",
+  "arguments": [
+    "-config",
+    "<config>",
+    "-workers",
+    "1",
+    "Checkout.tla"
+  ],
+  "cases": [
+    {
+      "config": "design.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0
+    },
+    {
+      "config": "reach_paid_after_retry.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "of": "NeverSettledAfterRetry"
+    },
+    {
+      "config": "mutant_no_idempotency.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "of": "AtMostOneDebit"
+    },
+    {
+      "config": "disable_debit_safety.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0
+    },
+    {
+      "config": "disable_settlement_safety.cfg",
+      "expect": "no-violation",
+      "expect_exit": 0
+    },
+    {
+      "config": "mutant_never_settles.cfg",
+      "expect": "violation",
+      "expect_exit": 12,
+      "of": "NeverChargedPending"
+    }
+  ]
+}

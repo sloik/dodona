@@ -1,0 +1,193 @@
+State excerpts from the completed shared-queue searches.
+Each excerpt starts at the named invariant and retains the original trace and state counts.
+
+=== BaselineReachable ===
+Error: Invariant NoPaidAfterRetryLateReply is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = FALSE
+/\ first = "absent"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 0
+
+State 2: <SubmitFirst line 18, col 5 to line 20, col 78 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = FALSE
+/\ first = "submitted"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 0
+
+State 3: <ProcessFirst line 23, col 5 to line 26, col 69 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = FALSE
+/\ first = "processed"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 1
+
+State 4: <TimeoutFirst line 29, col 5 to line 32, col 75 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = TRUE
+/\ first = "processed"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 1
+
+State 5: <SubmitRetry line 35, col 5 to line 39, col 78 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = TRUE
+/\ first = "processed"
+/\ retry = "submitted"
+/\ settled = FALSE
+/\ charges = 1
+
+State 6: <ProcessRetry line 42, col 5 to line 45, col 69 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = TRUE
+/\ first = "processed"
+/\ retry = "processed"
+/\ settled = FALSE
+/\ charges = 1
+
+State 7: <ReceiveFirst line 50, col 5 to line 54, col 45 of module Checkout>
+/\ firstWasLateAfterRetry = TRUE
+/\ timedOut = TRUE
+/\ first = "replied"
+/\ retry = "processed"
+/\ settled = TRUE
+/\ charges = 1
+
+State 8: <ReceiveRetry line 57, col 5 to line 60, col 69 of module Checkout>
+/\ firstWasLateAfterRetry = TRUE
+/\ timedOut = TRUE
+/\ first = "replied"
+/\ retry = "replied"
+/\ settled = TRUE
+/\ charges = 1
+
+13 states generated, 13 distinct states found, 2 states left on queue.
+
+=== DuplicateCharge ===
+Error: Invariant AtMostOneCharge is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = FALSE
+/\ first = "absent"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 0
+
+State 2: <SubmitFirst line 18, col 5 to line 20, col 78 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = FALSE
+/\ first = "submitted"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 0
+
+State 3: <ProcessFirst line 23, col 5 to line 26, col 69 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = FALSE
+/\ first = "processed"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 1
+
+State 4: <TimeoutFirst line 29, col 5 to line 32, col 75 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = TRUE
+/\ first = "processed"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 1
+
+State 5: <SubmitRetry line 35, col 5 to line 39, col 78 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = TRUE
+/\ first = "processed"
+/\ retry = "submitted"
+/\ settled = FALSE
+/\ charges = 1
+
+State 6: <ProcessRetry line 42, col 5 to line 45, col 69 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = TRUE
+/\ first = "processed"
+/\ retry = "processed"
+/\ settled = FALSE
+/\ charges = 2
+
+8 states generated, 8 distinct states found, 1 states left on queue.
+
+=== NeverSettlePending ===
+Error: Invariant NoChargedPendingAfterRetryLateReply is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = FALSE
+/\ first = "absent"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 0
+
+State 2: <SubmitFirst line 18, col 5 to line 20, col 78 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = FALSE
+/\ first = "submitted"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 0
+
+State 3: <ProcessFirst line 23, col 5 to line 26, col 69 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = FALSE
+/\ first = "processed"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 1
+
+State 4: <TimeoutFirst line 29, col 5 to line 32, col 75 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = TRUE
+/\ first = "processed"
+/\ retry = "absent"
+/\ settled = FALSE
+/\ charges = 1
+
+State 5: <SubmitRetry line 35, col 5 to line 39, col 78 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = TRUE
+/\ first = "processed"
+/\ retry = "submitted"
+/\ settled = FALSE
+/\ charges = 1
+
+State 6: <ProcessRetry line 42, col 5 to line 45, col 69 of module Checkout>
+/\ firstWasLateAfterRetry = FALSE
+/\ timedOut = TRUE
+/\ first = "processed"
+/\ retry = "processed"
+/\ settled = FALSE
+/\ charges = 1
+
+State 7: <ReceiveFirst line 50, col 5 to line 54, col 45 of module Checkout>
+/\ firstWasLateAfterRetry = TRUE
+/\ timedOut = TRUE
+/\ first = "replied"
+/\ retry = "processed"
+/\ settled = FALSE
+/\ charges = 1
+
+State 8: <ReceiveRetry line 57, col 5 to line 60, col 69 of module Checkout>
+/\ firstWasLateAfterRetry = TRUE
+/\ timedOut = TRUE
+/\ first = "replied"
+/\ retry = "replied"
+/\ settled = FALSE
+/\ charges = 1
+
+13 states generated, 13 distinct states found, 2 states left on queue.

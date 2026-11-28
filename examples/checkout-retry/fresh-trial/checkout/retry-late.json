@@ -1,0 +1,9 @@
+[
+  {"action": "submit", "attempt": 1},
+  {"action": "process", "attempt": 1},
+  {"action": "timeout", "attempt": 1},
+  {"action": "submit", "attempt": 2},
+  {"action": "process", "attempt": 2},
+  {"action": "reply", "attempt": 2},
+  {"action": "reply", "attempt": 1}
+]

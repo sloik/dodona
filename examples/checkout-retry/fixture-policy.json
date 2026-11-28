@@ -1,0 +1,10 @@
+{
+  "required": [
+    "0001"
+  ],
+  "min_hard_gates": 4,
+  "floors": {
+    "confirm-baseline": "helper"
+  },
+  "not_applied": []
+}

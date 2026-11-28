@@ -1,0 +1,448 @@
+{
+  "baseline": {
+    "model": {
+      "intents": {
+        "0001": {
+          "baseline": "sha256:9aa3813679ba6171f883ea1f0f68930e15ade37650dcf1fb9190965726835b10",
+          "exceptions": {
+            "below_floor": 0,
+            "counted": 0
+          },
+          "gates": {
+            "deferred": 0,
+            "deferred_open": 0,
+            "hard": 2,
+            "soft": 0
+          },
+          "score": {
+            "met": 0,
+            "of": 2
+          },
+          "separation": {
+            "act": "confirm-baseline",
+            "apart_or_better": 0,
+            "of": 3,
+            "weakest": "self"
+          },
+          "shown": {
+            "criterion": "1",
+            "level": "none"
+          },
+          "status": "draft"
+        }
+      },
+      "obligations": {
+        "checkout/progress.test.js::a successful fake capture leaves the checkout settled": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "checkout/safety.test.js::at most one fake capture through timeout retry and late reply": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/BaselineReachable": {
+          "status": "passed"
+        },
+        "formal/BaselineSafety": {
+          "status": "passed"
+        },
+        "formal/DuplicateCharge": {
+          "status": "passed"
+        },
+        "formal/NeverChargeReachability": {
+          "status": "failed"
+        },
+        "formal/NeverChargeSafety": {
+          "status": "passed"
+        },
+        "formal/NeverSettlePending": {
+          "status": "passed"
+        },
+        "formal/NeverSettleReachability": {
+          "status": "failed"
+        },
+        "formal/NeverSettleSafety": {
+          "status": "passed"
+        }
+      },
+      "project": {
+        "status": "unknown"
+      },
+      "rejected": 0
+    },
+    "samples": {
+      "intents": {
+        "0001": {
+          "baseline": "sha256:9aa3813679ba6171f883ea1f0f68930e15ade37650dcf1fb9190965726835b10",
+          "exceptions": {
+            "below_floor": 0,
+            "counted": 0
+          },
+          "gates": {
+            "deferred": 0,
+            "deferred_open": 0,
+            "hard": 2,
+            "soft": 0
+          },
+          "score": {
+            "met": 2,
+            "of": 2
+          },
+          "separation": {
+            "act": "confirm-baseline",
+            "apart_or_better": 0,
+            "of": 3,
+            "weakest": "self"
+          },
+          "shown": {
+            "criterion": "1",
+            "level": "sampled"
+          },
+          "status": "draft"
+        }
+      },
+      "obligations": {
+        "checkout/progress.test.js::a successful fake capture leaves the checkout settled": {
+          "status": "passed"
+        },
+        "checkout/safety.test.js::at most one fake capture through timeout retry and late reply": {
+          "status": "passed"
+        },
+        "formal/BaselineReachable": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/BaselineSafety": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/DuplicateCharge": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverChargeReachability": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverChargeSafety": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverSettlePending": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverSettleReachability": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverSettleSafety": {
+          "reason": "never-run",
+          "status": "unknown"
+        }
+      },
+      "project": {
+        "status": "unknown"
+      },
+      "rejected": 0
+    }
+  },
+  "drift-before": {
+    "model": {
+      "intents": {
+        "0001": {
+          "baseline": "sha256:9aa3813679ba6171f883ea1f0f68930e15ade37650dcf1fb9190965726835b10",
+          "exceptions": {
+            "below_floor": 0,
+            "counted": 0
+          },
+          "gates": {
+            "deferred": 0,
+            "deferred_open": 0,
+            "hard": 2,
+            "soft": 0
+          },
+          "score": {
+            "met": 0,
+            "of": 2
+          },
+          "separation": {
+            "act": "confirm-baseline",
+            "apart_or_better": 0,
+            "of": 3,
+            "weakest": "self"
+          },
+          "shown": {
+            "criterion": "1",
+            "level": "none"
+          },
+          "status": "draft"
+        }
+      },
+      "obligations": {
+        "checkout/progress.test.js::a successful fake capture leaves the checkout settled": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "checkout/safety.test.js::at most one fake capture through timeout retry and late reply": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/BaselineReachable": {
+          "status": "passed"
+        },
+        "formal/BaselineSafety": {
+          "status": "passed"
+        },
+        "formal/DuplicateCharge": {
+          "status": "passed"
+        },
+        "formal/NeverChargeReachability": {
+          "status": "failed"
+        },
+        "formal/NeverChargeSafety": {
+          "status": "passed"
+        },
+        "formal/NeverSettlePending": {
+          "status": "passed"
+        },
+        "formal/NeverSettleReachability": {
+          "status": "failed"
+        },
+        "formal/NeverSettleSafety": {
+          "status": "passed"
+        }
+      },
+      "project": {
+        "status": "unknown"
+      },
+      "rejected": 0
+    },
+    "samples": {
+      "intents": {
+        "0001": {
+          "baseline": "sha256:9aa3813679ba6171f883ea1f0f68930e15ade37650dcf1fb9190965726835b10",
+          "exceptions": {
+            "below_floor": 0,
+            "counted": 0
+          },
+          "gates": {
+            "deferred": 0,
+            "deferred_open": 0,
+            "hard": 2,
+            "soft": 0
+          },
+          "score": {
+            "met": 0,
+            "of": 2
+          },
+          "separation": {
+            "act": "confirm-baseline",
+            "apart_or_better": 0,
+            "of": 3,
+            "weakest": "self"
+          },
+          "shown": {
+            "criterion": "1",
+            "level": "none"
+          },
+          "status": "draft"
+        }
+      },
+      "obligations": {
+        "checkout/progress.test.js::a successful fake capture leaves the checkout settled": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "checkout/safety.test.js::at most one fake capture through timeout retry and late reply": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/BaselineReachable": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/BaselineSafety": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/DuplicateCharge": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverChargeReachability": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverChargeSafety": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverSettlePending": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverSettleReachability": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverSettleSafety": {
+          "reason": "never-run",
+          "status": "unknown"
+        }
+      },
+      "project": {
+        "status": "unknown"
+      },
+      "rejected": 0
+    }
+  },
+  "drift-after": {
+    "model": {
+      "intents": {
+        "0001": {
+          "baseline": "sha256:9aa3813679ba6171f883ea1f0f68930e15ade37650dcf1fb9190965726835b10",
+          "exceptions": {
+            "below_floor": 0,
+            "counted": 0
+          },
+          "gates": {
+            "deferred": 0,
+            "deferred_open": 0,
+            "hard": 2,
+            "soft": 0
+          },
+          "score": {
+            "met": 0,
+            "of": 2
+          },
+          "separation": {
+            "act": "confirm-baseline",
+            "apart_or_better": 0,
+            "of": 3,
+            "weakest": "self"
+          },
+          "shown": {
+            "criterion": "1",
+            "level": "none"
+          },
+          "status": "draft"
+        }
+      },
+      "obligations": {
+        "checkout/progress.test.js::a successful fake capture leaves the checkout settled": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "checkout/safety.test.js::at most one fake capture through timeout retry and late reply": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/BaselineReachable": {
+          "status": "passed"
+        },
+        "formal/BaselineSafety": {
+          "status": "passed"
+        },
+        "formal/DuplicateCharge": {
+          "status": "passed"
+        },
+        "formal/NeverChargeReachability": {
+          "status": "failed"
+        },
+        "formal/NeverChargeSafety": {
+          "status": "passed"
+        },
+        "formal/NeverSettlePending": {
+          "status": "passed"
+        },
+        "formal/NeverSettleReachability": {
+          "status": "failed"
+        },
+        "formal/NeverSettleSafety": {
+          "status": "passed"
+        }
+      },
+      "project": {
+        "status": "unknown"
+      },
+      "rejected": 0
+    },
+    "samples": {
+      "intents": {
+        "0001": {
+          "baseline": "sha256:9aa3813679ba6171f883ea1f0f68930e15ade37650dcf1fb9190965726835b10",
+          "exceptions": {
+            "below_floor": 0,
+            "counted": 0
+          },
+          "gates": {
+            "deferred": 0,
+            "deferred_open": 0,
+            "hard": 2,
+            "soft": 0
+          },
+          "score": {
+            "met": 1,
+            "of": 2
+          },
+          "separation": {
+            "act": "confirm-baseline",
+            "apart_or_better": 0,
+            "of": 3,
+            "weakest": "self"
+          },
+          "shown": {
+            "criterion": "2",
+            "level": "none"
+          },
+          "status": "draft"
+        }
+      },
+      "obligations": {
+        "checkout/progress.test.js::a successful fake capture leaves the checkout settled": {
+          "status": "failed"
+        },
+        "checkout/safety.test.js::at most one fake capture through timeout retry and late reply": {
+          "status": "passed"
+        },
+        "formal/BaselineReachable": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/BaselineSafety": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/DuplicateCharge": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverChargeReachability": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverChargeSafety": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverSettlePending": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverSettleReachability": {
+          "reason": "never-run",
+          "status": "unknown"
+        },
+        "formal/NeverSettleSafety": {
+          "reason": "never-run",
+          "status": "unknown"
+        }
+      },
+      "project": {
+        "status": "failed"
+      },
+      "rejected": 0
+    }
+  }
+}

@@ -1,0 +1,254 @@
+{
+  "source": "e7cfc839c0253b31d040f4bc0025cac4ba8efa3395a9529214c0de88aed47456",
+  "tool": "TLC 1.7.4 via shared queue",
+  "separation": "self",
+  "cases": {
+    "design": {
+      "native_exit": 0,
+      "expected": "no-violation",
+      "expected_invariant": null,
+      "metrics": {
+        "depth": 6,
+        "distinct": 9,
+        "generated": 11,
+        "queued": 0
+      },
+      "trace": [],
+      "configuration_sha256": "75037f998fe6dab3f222cec1474c1dc0caef21dfde5f95dfb4a318782b27900f",
+      "transcript_sha256": "49248845038349b0ecb0cc984854d2938652ad2e433c08246b51f0bfc7374694"
+    },
+    "reach_paid_after_retry": {
+      "native_exit": 12,
+      "expected": "violation",
+      "expected_invariant": "NeverSettledAfterRetry",
+      "metrics": {
+        "depth": 6,
+        "distinct": 9,
+        "generated": 10,
+        "queued": 1
+      },
+      "trace": [
+        {
+          "header": "State 1: <Initial predicate>",
+          "state": {
+            "timedOut": "FALSE",
+            "attempts": "0",
+            "debits": "0",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 2: <FirstRequest line 17, col 5 to line 20, col 49 of module Checkout>",
+          "state": {
+            "timedOut": "FALSE",
+            "attempts": "1",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 3: <Timeout line 23, col 5 to line 28, col 57 of module Checkout>",
+          "state": {
+            "timedOut": "TRUE",
+            "attempts": "1",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 4: <Retry line 31, col 5 to line 36, col 49 of module Checkout>",
+          "state": {
+            "timedOut": "TRUE",
+            "attempts": "2",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 5: <Deliver line 39, col 5 to line 43, col 47 of module Checkout>",
+          "state": {
+            "timedOut": "TRUE",
+            "attempts": "2",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{1}"
+          }
+        },
+        {
+          "header": "State 6: <Deliver line 39, col 5 to line 43, col 47 of module Checkout>",
+          "state": {
+            "timedOut": "TRUE",
+            "attempts": "2",
+            "debits": "1",
+            "settled": "TRUE",
+            "delivered": "{1, 2}"
+          }
+        }
+      ],
+      "configuration_sha256": "5205e487a3b789188c3c367842b7e73ad35e2ef8c02f3cbbdc31eabbb579a519",
+      "transcript_sha256": "0e1f5589fb668f392870cbd1eea8e233e2d80730bb4b06facd3a985319c75cd3"
+    },
+    "mutant_no_idempotency": {
+      "native_exit": 12,
+      "expected": "violation",
+      "expected_invariant": "AtMostOneDebit",
+      "metrics": {
+        "depth": 4,
+        "distinct": 5,
+        "generated": 5,
+        "queued": 1
+      },
+      "trace": [
+        {
+          "header": "State 1: <Initial predicate>",
+          "state": {
+            "timedOut": "FALSE",
+            "attempts": "0",
+            "debits": "0",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 2: <FirstRequest line 17, col 5 to line 20, col 49 of module Checkout>",
+          "state": {
+            "timedOut": "FALSE",
+            "attempts": "1",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 3: <Timeout line 23, col 5 to line 28, col 57 of module Checkout>",
+          "state": {
+            "timedOut": "TRUE",
+            "attempts": "1",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 4: <Retry line 31, col 5 to line 36, col 49 of module Checkout>",
+          "state": {
+            "timedOut": "TRUE",
+            "attempts": "2",
+            "debits": "2",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        }
+      ],
+      "configuration_sha256": "776cc97eca9a8c9d5b8a0f91e4de896e8a037e63d8dd7fc7951dc6f4b9099ce4",
+      "transcript_sha256": "c71c8a90bbd0fb824c67a56322bd4862a0a5a2ac973a0c079011ebb19c79f004"
+    },
+    "disable_debit_safety": {
+      "native_exit": 0,
+      "expected": "no-violation",
+      "expected_invariant": null,
+      "metrics": {
+        "depth": 6,
+        "distinct": 9,
+        "generated": 11,
+        "queued": 0
+      },
+      "trace": [],
+      "configuration_sha256": "69f2094d84d890f3f2105f34a7eb43f8020983232e01c820dc711849afeba182",
+      "transcript_sha256": "adebc9230cbd6ee0b6e3447726bf7a71361c82672ff4b7656cfbd9acd3852a90"
+    },
+    "disable_settlement_safety": {
+      "native_exit": 0,
+      "expected": "no-violation",
+      "expected_invariant": null,
+      "metrics": {
+        "depth": 6,
+        "distinct": 9,
+        "generated": 11,
+        "queued": 0
+      },
+      "trace": [],
+      "configuration_sha256": "b0cf1f2f49b6e487efd8176840c242b041541a4a3d3a3acb8facbb46cedea5ea",
+      "transcript_sha256": "2e494140c0fac043927a4e62dcf750f088142668db15a87c08cab429663e7e6f"
+    },
+    "mutant_never_settles": {
+      "native_exit": 12,
+      "expected": "violation",
+      "expected_invariant": "NeverChargedPending",
+      "metrics": {
+        "depth": 6,
+        "distinct": 9,
+        "generated": 10,
+        "queued": 1
+      },
+      "trace": [
+        {
+          "header": "State 1: <Initial predicate>",
+          "state": {
+            "timedOut": "FALSE",
+            "attempts": "0",
+            "debits": "0",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 2: <FirstRequest line 17, col 5 to line 20, col 49 of module Checkout>",
+          "state": {
+            "timedOut": "FALSE",
+            "attempts": "1",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 3: <Timeout line 23, col 5 to line 28, col 57 of module Checkout>",
+          "state": {
+            "timedOut": "TRUE",
+            "attempts": "1",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 4: <Retry line 31, col 5 to line 36, col 49 of module Checkout>",
+          "state": {
+            "timedOut": "TRUE",
+            "attempts": "2",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{}"
+          }
+        },
+        {
+          "header": "State 5: <Deliver line 39, col 5 to line 43, col 47 of module Checkout>",
+          "state": {
+            "timedOut": "TRUE",
+            "attempts": "2",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{1}"
+          }
+        },
+        {
+          "header": "State 6: <Deliver line 39, col 5 to line 43, col 47 of module Checkout>",
+          "state": {
+            "timedOut": "TRUE",
+            "attempts": "2",
+            "debits": "1",
+            "settled": "FALSE",
+            "delivered": "{1, 2}"
+          }
+        }
+      ],
+      "configuration_sha256": "7cd2ceb0407ee891825f4d6f99d2e9debe531a13d67158eeb16bcb969acb3c6d",
+      "transcript_sha256": "f10c192075b00ee9bbdcbd6812249d6d0fae4aea731e77a1e4978eb761b08ce7"
+    }
+  }
+}

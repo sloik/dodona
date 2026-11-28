@@ -1,0 +1,13 @@
+diff --git a/checkout/checkout.js b/checkout/checkout.js
+index 1d73c73..af93a34 100644
+--- a/checkout/checkout.js
++++ b/checkout/checkout.js
+@@ -3,7 +3,7 @@
+ function runCheckout(events, {
+   idempotent = true,
+   chargingAvailable = true,
+-  settlementAvailable = true,
++  settlementAvailable = false,
+ } = {}) {
+   const captures = new Map();
+   const attempts = new Map();

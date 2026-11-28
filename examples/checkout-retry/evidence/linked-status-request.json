@@ -1,0 +1,77 @@
+{
+  "root": ".",
+  "project": "dodona.toml",
+  "policy_source": "checkout pilot fixture policy",
+  "policy": {
+    "required": [
+      "0001"
+    ],
+    "min_hard_gates": 4,
+    "floors": {
+      "confirm-baseline": "helper"
+    },
+    "not_applied": []
+  },
+  "owner_ledger": "evidence/linked-owner-ledger.txt",
+  "ledgers": [
+    "evidence/linked-baseline-ledger.txt"
+  ],
+  "site": {
+    "platform": {
+      "os": "linux",
+      "arch": "aarch64",
+      "libc": "gnu"
+    },
+    "writer": "checkout-fixture",
+    "runner": "checkout-fixture",
+    "tools": [
+      {
+        "digest": "sha256:650afccdf7a8c9ee53a1435e2a987703588d561fce0097e23feefca2da604d6e",
+        "name": "java",
+        "version": ">=21.0.13"
+      },
+      {
+        "digest": "sha256:93b3134af8cd68f0a1c81b560eb8e24472e1e47bbe2893159f77874df380cb20",
+        "name": "node",
+        "version": ">=24.0.0"
+      },
+      {
+        "digest": "sha256:936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88",
+        "name": "tla2tools",
+        "version": "1.7.4"
+      }
+    ],
+    "deadline_ms": 30000,
+    "providers": {
+      "dodona.tla": {
+        "command": [
+          "python3",
+          "providers/tlc/provider.py"
+        ],
+        "code": [
+          "providers/tlc/provider.py",
+          "providers/tlc/judge.py"
+        ]
+      },
+      "dodona.node-test": {
+        "command": [
+          "python3",
+          "providers/node-test/provider.py"
+        ],
+        "code": [
+          "providers/node-test/provider.py"
+        ]
+      },
+      "dodona.intent.markdown": {
+        "command": [
+          "python3",
+          "providers/intents/provider.py"
+        ],
+        "code": [
+          "providers/intents/provider.py",
+          "providers/intents/intents_md.py"
+        ]
+      }
+    }
+  }
+}

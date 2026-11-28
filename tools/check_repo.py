@@ -486,6 +486,49 @@ def gap_every_tool_compiles() -> None:
             problems.append(f"{path.relative_to(ROOT)} does not compile: line {err.lineno}: {err.msg}")
 
 
+def gap_checkout_requires_paid_reachability() -> None:
+    """The checkout intent could be fulfilled with no evidence that payment was reachable."""
+    import intents
+    fixture = ROOT / "examples" / "checkout-retry"
+    try:
+        _, criteria, _ = intents.read(fixture / "intents" / "0001-checkout.md")
+    except (OSError, intents.Unreadable) as err:
+        problems.append(f"checkout intent: {err}")
+        return
+    witness = "checkout/reach_paid_after_retry"
+    if not any(criterion["gate"] == "hard" and criterion.get("checks") == [witness]
+               for criterion in criteria):
+        problems.append("the checkout intent needs an independent hard gate for paid reachability")
+
+
+def gap_checkout_evidence_is_available() -> None:
+    """A digest of a private artifact did not let readers audit the checkout trial."""
+    fixture = ROOT / "examples" / "checkout-retry"
+    evidence = fixture / "evidence"
+    receipt = json.loads((evidence / "fresh-public-docs-pilot.json").read_text(encoding="utf-8"))
+    required = {evidence / name for name in ("fresh-model-ledger.txt", "fresh-sample-ledger.txt",
+                                            "fresh-samples-before-drift.txt", "fresh-model-witnesses.txt",
+                                            "fresh-replay.json", "fresh-drift.patch", "replay-input.json",
+                                            "fresh-native-reports.json", "linked-reachability-status.json",
+                                            "linked-status-request.json", "linked-owner-ledger.txt",
+                                            "linked-baseline-ledger.txt", "linked-missing-witness-ledger.txt",
+                                            "linked-rerun-ledger.txt")}
+    source = fixture / "fresh-trial"
+    required.update(source / name for name in ("dodona.toml", "policy.toml", "intents/0001-checkout.md",
+                                               "checkout/checkout.js", "checkout/progress.test.js",
+                                               "checkout/retry-late.json", "checkout/safety.test.js",
+                                               "formal/Checkout.tla", "formal/expected.json"))
+    model_inventory = source / "formal" / "expected.json"
+    if model_inventory.is_file():
+        cases = json.loads(model_inventory.read_text(encoding="utf-8"))["cases"]
+        required.update(model_inventory.with_name(case["config"]) for case in cases)
+    artifacts = receipt.get("published_artifacts", {})
+    for artifact in sorted(required):
+        relative = artifact.relative_to(fixture).as_posix()
+        if not artifact.is_file() or hashlib.sha256(artifact.read_bytes()).hexdigest() != artifacts.get(relative):
+            problems.append(f"checkout receipt cannot be audited against {relative}")
+
+
 def gap_an_intent_reads_one_way_only() -> None:
     """Free-form criteria tables could always be written so that a person and the reader saw different things,
     and results written by hand into the owner's ledger counted as passed."""
@@ -2275,6 +2318,7 @@ GAP_CHECKS = [check_claims_match_runs, gap_readme_counts, gap_claims_name_real_p
               gap_driver_refuses_outside_the_queue, gap_one_reader_of_checker_output,
               gap_an_unfinished_job_proves_nothing, gap_tool_tree_digest_matches_its_vectors,
               gap_tool_tree_refuses_an_incomplete_listing, gap_every_tool_compiles,
+              gap_checkout_requires_paid_reachability, gap_checkout_evidence_is_available,
               gap_an_intent_reads_one_way_only, gap_runner_versions_agree,
               gap_reuse_is_decided_by_a_kernel_and_checked, gap_run_refuses_ambiguous_write_paths,
               gap_status_keeps_literal_obligation_names, gap_batch_wait_respects_site_and_run_limits,

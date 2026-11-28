@@ -1,0 +1,96 @@
+{
+  "head": "488090f0fd9d94007beb995d002bb807d8a17517",
+  "separation": "self",
+  "model_sha256": {
+    "design.cfg": "75037f998fe6dab3f222cec1474c1dc0caef21dfde5f95dfb4a318782b27900f",
+    "mutant_no_idempotency.cfg": "776cc97eca9a8c9d5b8a0f91e4de896e8a037e63d8dd7fc7951dc6f4b9099ce4",
+    "reach_paid_after_retry.cfg": "5205e487a3b789188c3c367842b7e73ad35e2ef8c02f3cbbdc31eabbb579a519",
+    "expected.json": "33b14cc65032fed2da157204240596e2679aa54ff4d54cab1ba9eb5ec1232326",
+    "disable_debit_safety.cfg": "69f2094d84d890f3f2105f34a7eb43f8020983232e01c820dc711849afeba182",
+    "disable_settlement_safety.cfg": "b0cf1f2f49b6e487efd8176840c242b041541a4a3d3a3acb8facbb46cedea5ea",
+    "Checkout.tla": "e7cfc839c0253b31d040f4bc0025cac4ba8efa3395a9529214c0de88aed47456",
+    "mutant_never_settles.cfg": "7cd2ceb0407ee891825f4d6f99d2e9debe531a13d67158eeb16bcb969acb3c6d"
+  },
+  "receipts": {
+    "baseline": {
+      "exit": 0,
+      "checks": {
+        "retry and late reply debit at most once": true,
+        "a paid retry settles and a late reply leaves it settled": true
+      },
+      "trace": {
+        "debits": 1,
+        "checkout": {
+          "status": "settled",
+          "attempts": 2,
+          "delivered": [
+            2,
+            1
+          ]
+        },
+        "afterRetry": "settled"
+      },
+      "modified": null
+    },
+    "without-idempotency": {
+      "exit": 1,
+      "checks": {
+        "retry and late reply debit at most once": false,
+        "a paid retry settles and a late reply leaves it settled": true
+      },
+      "trace": {
+        "debits": 2,
+        "checkout": {
+          "status": "settled",
+          "attempts": 2,
+          "delivered": [
+            2,
+            1
+          ]
+        },
+        "afterRetry": "settled"
+      },
+      "modified": "tests/fixture.cjs"
+    },
+    "with-no-debit": {
+      "exit": 1,
+      "checks": {
+        "retry and late reply debit at most once": true,
+        "a paid retry settles and a late reply leaves it settled": false
+      },
+      "trace": {
+        "debits": 0,
+        "checkout": {
+          "status": "pending",
+          "attempts": 2,
+          "delivered": [
+            2,
+            1
+          ]
+        },
+        "afterRetry": "pending"
+      },
+      "modified": "tests/fixture.cjs"
+    },
+    "charged-but-pending": {
+      "exit": 1,
+      "checks": {
+        "retry and late reply debit at most once": true,
+        "a paid retry settles and a late reply leaves it settled": false
+      },
+      "trace": {
+        "debits": 1,
+        "checkout": {
+          "status": "pending",
+          "attempts": 2,
+          "delivered": [
+            2,
+            1
+          ]
+        },
+        "afterRetry": "pending"
+      },
+      "modified": "checkout.cjs"
+    }
+  }
+}

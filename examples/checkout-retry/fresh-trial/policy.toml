@@ -1,0 +1,7 @@
+policy = "0.2"
+
+[required]
+intents = ["0001"]
+
+[gates]
+min_hard = 2
